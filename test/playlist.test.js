@@ -131,9 +131,17 @@ Deno.test("a normal live playlist is left unchanged", () => {
   assertEquals(stripped.text, playlistText);
 });
 
-Deno.test("blank segment is a short mpeg-ts null packet run", () => {
+Deno.test("blank segment is a short mpeg-ts with a pat, pmt, and pts", () => {
   const bytes = playlist.blankSegmentBytes();
-  assertEquals(bytes.length, 188 * 8);
+  assertEquals(bytes.length, 188 * 3);
   assertEquals(bytes[0], 0x47);
+  assertEquals(bytes[1] & 0x1f, 0x00);
   assertEquals(bytes[188], 0x47);
+  assertEquals(bytes[189], 0x41);
+  assertEquals(bytes[376], 0x47);
+  assertEquals(bytes[bytes.length - 15], 0x00);
+  assertEquals(bytes[bytes.length - 14], 0x00);
+  assertEquals(bytes[bytes.length - 13], 0x01);
+  assertEquals(bytes[bytes.length - 12], 0xe0);
+  assertEquals(bytes[bytes.length - 6], 0x21);
 });

@@ -212,14 +212,65 @@ function installTwitchAdblockPlaylist(target) {
     return { text: kept.join("\n"), adUrls, stripped: true };
   }
 
-  function blankSegmentBytes() {
+  function mpegCrc32(bytes) {
+    let crc = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) {
+      crc ^= bytes[i] << 24;
+      for (let bit = 0; bit < 8; bit++) {
+        if (crc & 0x80000000) crc = ((crc << 1) ^ 0x04c11db7) >>> 0;
+        else crc = (crc << 1) >>> 0;
+      }
+    }
+    return crc >>> 0;
+  }
+
+  function withCrc(section) {
+    const crc = mpegCrc32(section);
+    const full = new Uint8Array(section.length + 4);
+    full.set(section);
+    full[section.length] = (crc >>> 24) & 0xff;
+    full[section.length + 1] = (crc >>> 16) & 0xff;
+    full[section.length + 2] = (crc >>> 8) & 0xff;
+    full[section.length + 3] = crc & 0xff;
+    return full;
+  }
+
+  function sectionPacket(pid, section) {
     const packet = new Uint8Array(188);
     packet[0] = 0x47;
-    packet[1] = 0x1f;
-    packet[2] = 0xff;
+    packet[1] = 0x40 | ((pid >> 8) & 0x1f);
+    packet[2] = pid & 0xff;
     packet[3] = 0x10;
-    const packets = new Uint8Array(188 * 8);
-    for (let i = 0; i < 8; i++) packets.set(packet, i * 188);
+    packet[4] = 0x00;
+    packet.set(section, 5);
+    packet.fill(0xff, 5 + section.length);
+    return packet;
+  }
+
+  function blankSegmentBytes() {
+    const pat = withCrc(Uint8Array.from([
+      0x00, 0xb0, 0x0d, 0x00, 0x01, 0xc1, 0x00, 0x00, 0x00, 0x01, 0xe1, 0x00,
+    ]));
+    const pmt = withCrc(Uint8Array.from([
+      0x02, 0xb0, 0x12, 0x00, 0x01, 0xc1, 0x00, 0x00, 0xe1, 0x01, 0xf0, 0x00, 0x1b, 0xe1, 0x01, 0xf0, 0x00,
+    ]));
+    const pes = Uint8Array.from([
+      0x00, 0x00, 0x01, 0xe0, 0x00, 0x09, 0x80, 0x80, 0x05, 0x21, 0x00, 0x01, 0x00, 0x01, 0x00,
+    ]);
+    const video = new Uint8Array(188);
+    video[0] = 0x47;
+    video[1] = 0x41;
+    video[2] = 0x01;
+    video[3] = 0x30;
+    const adaptationLength = 188 - 5 - pes.length;
+    video[4] = adaptationLength;
+    video[5] = 0x00;
+    video.fill(0xff, 6, 5 + adaptationLength);
+    video.set(pes, 5 + adaptationLength);
+    const packets = new Uint8Array(188 * 3);
+    packets.set(sectionPacket(0x0000, pat), 0);
+    packets.set(sectionPacket(0x0100, pmt), 188);
+    packets.set(video, 376);
     return packets;
   }
 
