@@ -166,6 +166,17 @@ function installTwitchAdblockPlaylist(target) {
     return url.includes("/adsquared/") || url.includes("/_404/") || url.includes("/processing/");
   }
 
+  function hasAdBreak(text) {
+    const lines = linesOf(text);
+    for (let i = 0; i < lines.length - 1; i++) {
+      if (!lines[i].startsWith("#EXTINF")) continue;
+      const next = lines[i + 1].trim();
+      if (!next || next.startsWith("#")) continue;
+      if (isAdInf(lines[i]) || isAdSegmentUrl(next)) return true;
+    }
+    return false;
+  }
+
   function stripAds(text) {
     const lines = linesOf(text);
     const marked = lines.some((line, index) => {
@@ -186,6 +197,7 @@ function installTwitchAdblockPlaylist(target) {
 
     const adUrls = [];
     const kept = [];
+    let replaced = false;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
         .replaceAll(/(X-TV-TWITCH-AD-URL=")[^"]*(")/g, "$1https://twitch.tv$2")
@@ -195,6 +207,7 @@ function installTwitchAdblockPlaylist(target) {
       const nextUrl = lines[i + 1] && !lines[i + 1].startsWith("#") ? lines[i + 1].trim() : "";
       const adSegment = line.startsWith("#EXTINF") && Boolean(nextUrl) && (isAdInf(line) || isAdSegmentUrl(nextUrl));
       if (adSegment) {
+        replaced = true;
         const duration = line.slice("#EXTINF:".length).split(",")[0];
         const adUrl = nextUrl;
         kept.push(`#EXTINF:${duration},live`);
@@ -209,7 +222,7 @@ function installTwitchAdblockPlaylist(target) {
       }
       kept.push(line);
     }
-    return { text: kept.join("\n"), adUrls, stripped: true };
+    return { text: kept.join("\n"), adUrls, stripped: replaced };
   }
 
   function mpegCrc32(bytes) {
@@ -277,6 +290,7 @@ function installTwitchAdblockPlaylist(target) {
   Object.assign(target, {
     parseAttributes,
     hasStitchedAd,
+    hasAdBreak,
     isMidroll,
     isMasterPlaylist,
     isLivePlaylistUrl,

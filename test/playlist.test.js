@@ -124,6 +124,19 @@ Deno.test("an ad path marked live is not reused as the clean segment", () => {
   assertEquals(replaced.text.includes("https://video.example/real.ts"), true);
 });
 
+Deno.test("a leftover ad tag with only live segments does not count as an ad break", () => {
+  const playlistText = [
+    "#EXTM3U",
+    '#EXT-X-DATERANGE:ID="stitched-ad-old",CLASS="twitch-stitched-ad"',
+    "#EXTINF:2.0,live",
+    "https://video.example/live1.ts",
+  ].join("\n");
+  assertEquals(playlist.hasAdBreak(playlistText), false);
+  const stripped = playlist.stripAds(playlistText);
+  assertEquals(stripped.stripped, false);
+  assertEquals(stripped.text.includes("https://video.example/live1.ts"), true);
+});
+
 Deno.test("a normal live playlist is left unchanged", () => {
   const playlistText = "#EXTM3U\n#EXTINF:2.0,live\nhttps://video.example/live1.ts";
   const stripped = playlist.stripAds(playlistText);

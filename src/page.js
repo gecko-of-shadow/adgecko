@@ -364,12 +364,11 @@ function createPlaylistGuard(env) {
   }
 
   async function sampleHasAds(masterText, masterUrl) {
-    if (playlist.hasStitchedAd(masterText)) return true;
     const sample = playlist.pickVariant(masterText, null);
-    if (!sample) return false;
+    if (!sample) return playlist.hasAdBreak(masterText);
     const response = await env.fetch(new URL(sample, masterUrl).href);
     if (!response.ok) return null;
-    return playlist.hasStitchedAd(await response.text());
+    return playlist.hasAdBreak(await response.text());
   }
 
   async function backupMaster(masterUrl, liveText) {
@@ -444,7 +443,7 @@ function createPlaylistGuard(env) {
       }
       const stripped = playlist.stripAds(text);
       if (stripped.adUrls.length) rememberBlocked(stripped.adUrls);
-      if (stripped.stripped) env.status(true);
+      env.status(stripped.stripped);
       return textResponse(stripped.text);
     } catch (error) {
       console.log("twitch-adblock playlist failed", error);
