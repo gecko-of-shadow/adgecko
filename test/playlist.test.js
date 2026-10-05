@@ -105,6 +105,25 @@ Deno.test("an all-ad playlist records the segment urls when no live segment exis
   assertEquals(stripped.text.includes("https://ads.example/only.ts"), true);
 });
 
+Deno.test("an ad path marked live is not reused as the clean segment", () => {
+  const onlyAd = "#EXTM3U\n#EXTINF:2.0,live\nhttps://video.example/adsquared/only.ts";
+  const stripped = playlist.stripAds(onlyAd);
+  assertEquals(stripped.stripped, true);
+  assertEquals(stripped.adUrls, ["https://video.example/adsquared/only.ts"]);
+
+  const mixed = [
+    "#EXTM3U",
+    "#EXTINF:2.0,live",
+    "https://video.example/_404/ad.ts",
+    "#EXTINF:2.0,live",
+    "https://video.example/real.ts",
+  ].join("\n");
+  const replaced = playlist.stripAds(mixed);
+  assertEquals(replaced.adUrls, []);
+  assertEquals(replaced.text.includes("https://video.example/_404/ad.ts"), false);
+  assertEquals(replaced.text.includes("https://video.example/real.ts"), true);
+});
+
 Deno.test("a normal live playlist is left unchanged", () => {
   const playlistText = "#EXTM3U\n#EXTINF:2.0,live\nhttps://video.example/live1.ts";
   const stripped = playlist.stripAds(playlistText);

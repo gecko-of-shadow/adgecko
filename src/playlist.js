@@ -179,6 +179,7 @@ function installTwitchAdblockPlaylist(target) {
     for (let i = 0; i < lines.length - 1; i++) {
       if (!lines[i].startsWith("#EXTINF") || !lines[i].includes(",live") || lines[i].includes("Amazon")) continue;
       if (!lines[i + 1] || lines[i + 1].startsWith("#")) continue;
+      if (isAdSegmentUrl(lines[i + 1].trim())) continue;
       anchor = lines[i + 1].trim();
       break;
     }
