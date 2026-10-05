@@ -16,6 +16,13 @@ const master = [
   "https://video.example/360.m3u8",
 ].join("\n");
 
+Deno.test("live playlist urls include media playlists that have no m3u8 suffix", () => {
+  assertEquals(playlist.isLivePlaylistUrl("https://video-weaver.pop02.hls.ttvnw.net/v1/playlist/abc"), true);
+  assertEquals(playlist.isLivePlaylistUrl("https://usher.ttvnw.net/api/v2/channel/hls/name.m3u8"), true);
+  assertEquals(playlist.isLivePlaylistUrl("https://usher.ttvnw.net/vod/v2/123.m3u8"), false);
+  assertEquals(playlist.isLivePlaylistUrl("https://gql.twitch.tv/gql"), false);
+});
+
 Deno.test("channel names come from live usher paths", () => {
   assertEquals(
     playlist.channelFromPlaylistUrl("https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=1"),

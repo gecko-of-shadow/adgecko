@@ -35,6 +35,12 @@ function installTwitchAdblockPlaylist(target) {
     return String(text || "").includes("#EXT-X-STREAM-INF");
   }
 
+  function isLivePlaylistUrl(url) {
+    const value = String(url || "");
+    if (value.includes("/vod/")) return false;
+    return value.includes(".m3u8") || value.includes("/playlist/") || value.includes("/channel/hls/");
+  }
+
   function channelFromPlaylistUrl(url) {
     try {
       const path = new URL(url, "https://usher.ttvnw.net").pathname;
@@ -221,6 +227,7 @@ function installTwitchAdblockPlaylist(target) {
     hasStitchedAd,
     isMidroll,
     isMasterPlaylist,
+    isLivePlaylistUrl,
     channelFromPlaylistUrl,
     readServerTime,
     writeServerTime,

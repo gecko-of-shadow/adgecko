@@ -314,10 +314,10 @@ function createPlaylistGuard(env) {
     return "";
   }
 
-  function textResponse(body) {
+  function textResponse(body, contentType) {
     return new Response(body, {
       status: 200,
-      headers: { "Content-Type": "application/vnd.apple.mpegurl" },
+      headers: { "Content-Type": contentType || "application/vnd.apple.mpegurl" },
     });
   }
 
@@ -366,7 +366,7 @@ function createPlaylistGuard(env) {
     const sample = playlist.pickVariant(masterText, null);
     if (!sample) return false;
     const response = await env.fetch(new URL(sample, masterUrl).href);
-    if (!response.ok) return true;
+    if (!response.ok) return false;
     return playlist.hasStitchedAd(await response.text());
   }
 
@@ -428,6 +428,9 @@ function createPlaylistGuard(env) {
     const response = await env.fetch(url, init);
     if (!response.ok) return response;
     const text = await response.text();
+    if (!text.startsWith("#EXTM3U")) {
+      return textResponse(text, response.headers.get("content-type") || "text/plain");
+    }
     try {
       if (playlist.channelFromPlaylistUrl(url) && playlist.isMasterPlaylist(text)) {
         const replacement = await backupMaster(url, text);
@@ -454,8 +457,7 @@ function createPlaylistGuard(env) {
         headers: { "Content-Type": "video/mp2t" },
       });
     }
-    if (!url.includes(".m3u8")) return env.fetch(input, init);
-    if (url.includes("/vod/")) return env.fetch(input, init);
+    if (!playlist.isLivePlaylistUrl(url)) return env.fetch(input, init);
     if (url.includes("/channel/hls/")) {
       const parentless = new URL(url);
       parentless.searchParams.delete("parent_domains");
