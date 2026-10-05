@@ -62,8 +62,7 @@
   function workerPrelude() {
     return [
       installTwitchAdblockPlaylist.toString(),
-      "const TwitchAdblockPlaylist = {};",
-      "installTwitchAdblockPlaylist(TwitchAdblockPlaylist);",
+      "installTwitchAdblockPlaylist(globalThis.TwitchAdblockPlaylist = {});",
       createPlaylistGuard.toString(),
       startTwitchAdblockWorker.toString(),
       "startTwitchAdblockWorker();",
@@ -75,9 +74,10 @@
     if (!data || data.source !== "twitch-adblock") return;
     event.stopImmediatePropagation();
     if (data.type === "gql") {
+      const worker = event.currentTarget;
       pageGql(data.body).then(
-        (text) => event.currentTarget.postMessage({ source: "twitch-adblock", type: "gql-result", id: data.id, ok: true, text }),
-        (error) => event.currentTarget.postMessage({ source: "twitch-adblock", type: "gql-result", id: data.id, ok: false, error: String(error) }),
+        (text) => worker.postMessage({ source: "twitch-adblock", type: "gql-result", id: data.id, ok: true, text }),
+        (error) => worker.postMessage({ source: "twitch-adblock", type: "gql-result", id: data.id, ok: false, error: String(error) }),
       );
       return;
     }
