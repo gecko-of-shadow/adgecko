@@ -29,10 +29,11 @@
   });
 
   window.fetch = function (input, init) {
+    const replay = input instanceof Request ? input.clone() : input;
     const request = rewritePlaybackRequest(input, init);
     return guard(request.input, request.init).catch((error) => {
       console.log("twitch-adblock failed open", error);
-      return nativeFetch(input, init);
+      return nativeFetch(replay, init);
     });
   };
 
@@ -288,9 +289,10 @@ function startTwitchAdblockWorker() {
     },
   });
   self.fetch = function (input, init) {
+    const replay = typeof Request !== "undefined" && input instanceof Request ? input.clone() : input;
     return guard(input, init).catch((error) => {
       console.log("twitch-adblock failed open", error);
-      return nativeFetch(input, init);
+      return nativeFetch(replay, init);
     });
   };
 }
@@ -366,7 +368,7 @@ function createPlaylistGuard(env) {
     const sample = playlist.pickVariant(masterText, null);
     if (!sample) return false;
     const response = await env.fetch(new URL(sample, masterUrl).href);
-    if (!response.ok) return false;
+    if (!response.ok) return null;
     return playlist.hasStitchedAd(await response.text());
   }
 
@@ -380,7 +382,7 @@ function createPlaylistGuard(env) {
     }
 
     const ads = await sampleHasAds(liveText, masterUrl);
-    if (!ads) {
+    if (ads === false) {
       if (session.usingBackup) env.reload();
       session.usingBackup = false;
       session.served = "";
@@ -388,6 +390,7 @@ function createPlaylistGuard(env) {
       env.status(false);
       return null;
     }
+    if (ads === null) return session.usingBackup ? session.served : null;
 
     env.status(true);
     if (session.usingBackup && session.served && Date.now() < session.retryAt) return session.served;
@@ -409,11 +412,13 @@ function createPlaylistGuard(env) {
         const response = await env.fetch(url.href);
         if (!response.ok) continue;
         const master = await response.text();
-        const clean = !(await sampleHasAds(master, url.href));
-        if (!clean && playerType !== backupTypes[backupTypes.length - 1]) continue;
+        const probe = await sampleHasAds(master, url.href);
+        if (probe === null) continue;
+        if (probe === true && playerType !== backupTypes[backupTypes.length - 1]) continue;
         session.served = playlist.mapVariantsToBackup(liveText, master, url.href);
         session.usingBackup = true;
         session.retryAt = Date.now() + 30000;
+        session.tried.clear();
         return session.served;
       } catch (error) {
         console.log("twitch-adblock backup failed", playerType, error);
