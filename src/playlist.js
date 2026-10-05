@@ -80,6 +80,7 @@ function installTwitchAdblockPlaylist(target) {
         resolution: attrs.RESOLUTION || "",
         frameRate: attrs["FRAME-RATE"] || "",
         codecs: attrs.CODECS || "",
+        video: attrs.VIDEO || "",
         url,
       });
     }
@@ -104,7 +105,15 @@ function installTwitchAdblockPlaylist(target) {
   function pickVariant(text, wanted) {
     const variants = listVariants(text);
     if (!variants.length) return null;
-    if (!wanted || !wanted.resolution) return variants[0].url;
+    if (!wanted) return variants[0].url;
+    if (!wanted.resolution) {
+      if (wanted.video) {
+        const named = variants.find((variant) => variant.video === wanted.video);
+        if (named) return named.url;
+      }
+      const unresolved = variants.find((variant) => !variant.resolution);
+      return unresolved ? unresolved.url : null;
+    }
     let exact = null;
     let exactRate = false;
     let closest = variants[0];
@@ -139,6 +148,7 @@ function installTwitchAdblockPlaylist(target) {
       const backupUrl = pickVariant(backupText, {
         resolution: attrs.RESOLUTION,
         frameRate: attrs["FRAME-RATE"],
+        video: attrs.VIDEO,
       });
       if (!backupUrl) continue;
       const backupVariant = backupVariants.find((item) => item.url === backupUrl);
@@ -166,50 +176,113 @@ function installTwitchAdblockPlaylist(target) {
     return url.includes("/adsquared/") || url.includes("/_404/") || url.includes("/processing/");
   }
 
+  function adWindows(lines) {
+    const windows = [];
+    for (const line of lines) {
+      if (!line.startsWith("#EXT-X-DATERANGE:") || !hasStitchedAd(line)) continue;
+      const attrs = parseAttributes(line);
+      const start = Date.parse(attrs["START-DATE"] || "");
+      if (!Number.isFinite(start)) continue;
+      let end = Date.parse(attrs["END-DATE"] || "");
+      if (!Number.isFinite(end)) {
+        const duration = Number(attrs.DURATION);
+        if (Number.isFinite(duration) && duration > 0) end = start + Math.round(duration * 1000);
+      }
+      if (!Number.isFinite(end) || end <= start) continue;
+      windows.push([start, end]);
+    }
+    return windows;
+  }
+
+  function segmentTimes(lines) {
+    const times = new Map();
+    let cursor = NaN;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.startsWith("#EXT-X-PROGRAM-DATE-TIME:")) {
+        const parsed = Date.parse(line.slice("#EXT-X-PROGRAM-DATE-TIME:".length).trim());
+        if (Number.isFinite(parsed)) cursor = parsed;
+        continue;
+      }
+      if (!line.startsWith("#EXTINF")) continue;
+      const next = (lines[i + 1] || "").trim();
+      if (!next || next.startsWith("#")) continue;
+      if (Number.isFinite(cursor)) times.set(i, cursor);
+      const duration = Number(line.slice("#EXTINF:".length).split(",")[0]);
+      if (Number.isFinite(cursor) && Number.isFinite(duration)) cursor += Math.round(duration * 1000);
+    }
+    return times;
+  }
+
+  function inAdWindow(time, windows) {
+    return windows.some(([start, end]) => time >= start && time < end);
+  }
+
+  function isAdSegmentLine(lines, index, windows, times) {
+    const line = lines[index];
+    if (!line || !line.startsWith("#EXTINF")) return false;
+    const next = (lines[index + 1] || "").trim();
+    if (!next || next.startsWith("#")) return false;
+    if (isAdInf(line) || isAdSegmentUrl(next)) return true;
+    const time = times.get(index);
+    return Number.isFinite(time) && inAdWindow(time, windows);
+  }
+
   function hasAdBreak(text) {
     const lines = linesOf(text);
+    const windows = adWindows(lines);
+    const times = segmentTimes(lines);
     for (let i = 0; i < lines.length - 1; i++) {
-      if (!lines[i].startsWith("#EXTINF")) continue;
-      const next = lines[i + 1].trim();
-      if (!next || next.startsWith("#")) continue;
-      if (isAdInf(lines[i]) || isAdSegmentUrl(next)) return true;
+      if (isAdSegmentLine(lines, i, windows, times)) return true;
     }
     return false;
   }
 
   function stripAds(text) {
     const lines = linesOf(text);
+    const windows = adWindows(lines);
+    const times = segmentTimes(lines);
     const marked = lines.some((line, index) => {
       if (hasStitchedAd(line) || (line.startsWith("#EXTINF") && line.includes("Amazon"))) return true;
-      const next = lines[index + 1] || "";
-      return line.startsWith("#EXTINF") && isAdSegmentUrl(next);
+      return isAdSegmentLine(lines, index, windows, times);
     });
     if (!marked) return { text: lines.join("\n"), adUrls: [], stripped: false };
 
-    let anchor = "";
-    for (let i = 0; i < lines.length - 1; i++) {
-      if (!lines[i].startsWith("#EXTINF") || !lines[i].includes(",live") || lines[i].includes("Amazon")) continue;
-      if (!lines[i + 1] || lines[i + 1].startsWith("#")) continue;
-      if (isAdSegmentUrl(lines[i + 1].trim())) continue;
-      anchor = lines[i + 1].trim();
-      break;
+    function cleanLiveUrl(index) {
+      const line = lines[index] || "";
+      if (!line.startsWith("#EXTINF") || !line.includes(",live") || line.includes("Amazon")) return "";
+      if (!lines[index + 1] || lines[index + 1].startsWith("#")) return "";
+      if (isAdSegmentLine(lines, index, windows, times)) return "";
+      return lines[index + 1].trim();
+    }
+
+    const followingClean = new Array(lines.length).fill("");
+    let upcoming = "";
+    for (let i = lines.length - 1; i >= 0; i--) {
+      followingClean[i] = upcoming;
+      const clean = cleanLiveUrl(i);
+      if (clean) upcoming = clean;
     }
 
     const adUrls = [];
     const kept = [];
     let replaced = false;
+    let previousClean = "";
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
         .replaceAll(/(X-TV-TWITCH-AD-URL=")[^"]*(")/g, "$1https://twitch.tv$2")
         .replaceAll(/(X-TV-TWITCH-AD-CLICK-TRACKING-URL=")[^"]*(")/g, "$1https://twitch.tv$2");
       if (line.startsWith("#EXT-X-TWITCH-PREFETCH:")) continue;
       if (line.startsWith("#") && hasStitchedAd(line)) continue;
+      const clean = cleanLiveUrl(i);
+      if (clean) previousClean = clean;
       const nextUrl = lines[i + 1] && !lines[i + 1].startsWith("#") ? lines[i + 1].trim() : "";
-      const adSegment = line.startsWith("#EXTINF") && Boolean(nextUrl) && (isAdInf(line) || isAdSegmentUrl(nextUrl));
+      const adSegment = isAdSegmentLine(lines, i, windows, times);
       if (adSegment) {
         replaced = true;
         const duration = line.slice("#EXTINF:".length).split(",")[0];
         const adUrl = nextUrl;
+        const anchor = previousClean || followingClean[i];
         kept.push(`#EXTINF:${duration},live`);
         if (anchor) {
           kept.push(anchor);

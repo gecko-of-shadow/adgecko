@@ -27,6 +27,19 @@ Deno.test("fail-open clones a Request before the body is used", () => {
 
 Deno.test("a failed variant probe does not count as a clean backup", () => {
   assert(source.includes("if (!response.ok) return null;"), "unknown probe result");
+  assert(source.includes('if (!body.startsWith("#EXTM3U")) return null;'), "a non-playlist body is not a clean stream");
+  assert(source.includes("return playlist.hasAdBreak(masterText) || null;"), "a master with no variant is not a clean stream");
   assert(source.includes("if (probe === null) continue;"), "skip a backup whose playlist did not load");
   assert(source.includes("session.tried.clear();"), "a good backup can be chosen again after the retry window");
+});
+
+Deno.test("backup graphql uses only headers gql.twitch.tv allows", () => {
+  assert(!source.includes("X-Twitch-Adblock"), "that header is not in Access-Control-Allow-Headers");
+  assert(!source.includes('defineProperty(document, "visibilityState"'), "Twitch reads document.hidden, not this spoof");
+});
+
+Deno.test("the blocking label follows the media playlist, not the live master", () => {
+  assert(!source.includes("env.status(true)"), "a live master must not latch the label on");
+  assert(source.includes("env.status(stripped.stripped)"), "media playlists show the label only while a segment was replaced");
+  assert(source.includes("if (!session.usingBackup) env.status(false);"), "an unknown probe clears the label when no backup is playing");
 });

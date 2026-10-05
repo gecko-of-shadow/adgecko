@@ -73,6 +73,28 @@ Deno.test("backup master keeps the quality list and points each rung at a backup
   assertEquals(variants[1].codecs, "avc1.4D401E");
 });
 
+Deno.test("audio-only rungs stay on the backup audio playlist", () => {
+  const main = [
+    "#EXTM3U",
+    '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,CODECS="avc1.64002A,mp4a.40.2",VIDEO="chunked",FRAME-RATE=60.000',
+    "https://live.example/1080.m3u8",
+    '#EXT-X-STREAM-INF:BANDWIDTH=160000,CODECS="mp4a.40.2",VIDEO="audio_only"',
+    "https://live.example/audio.m3u8",
+  ].join("\n");
+  const backup = [
+    "#EXTM3U",
+    '#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080,CODECS="avc1.64002A,mp4a.40.2",VIDEO="chunked",FRAME-RATE=60.000',
+    "https://backup.example/1080.m3u8",
+    '#EXT-X-STREAM-INF:BANDWIDTH=160000,CODECS="mp4a.40.2",VIDEO="audio_only"',
+    "https://backup.example/audio.m3u8",
+  ].join("\n");
+  const mapped = playlist.mapVariantsToBackup(main, backup, "https://backup.example/master.m3u8");
+  const variants = playlist.listVariants(mapped);
+  assertEquals(variants[0].url, "https://backup.example/1080.m3u8#tab2");
+  assertEquals(variants[1].url, "https://backup.example/audio.m3u8#tab4");
+  assertEquals(variants[1].codecs, "mp4a.40.2");
+});
+
 Deno.test("ad playlists repeat the live segment and drop stitched metadata", () => {
   const playlistText = [
     "#EXTM3U",
@@ -105,6 +127,37 @@ Deno.test("an all-ad playlist records the segment urls when no live segment exis
   assertEquals(stripped.text.includes("https://ads.example/only.ts"), true);
 });
 
+Deno.test("an ad between live segments repeats the newest preceding segment", () => {
+  const playlistText = [
+    "#EXTM3U",
+    "#EXTINF:2.0,live",
+    "https://video.example/live1.ts",
+    "#EXTINF:2.0,live",
+    "https://video.example/live2.ts",
+    '#EXT-X-DATERANGE:ID="stitched-ad-1",CLASS="twitch-stitched-ad"',
+    "#EXTINF:2.0,",
+    "https://ads.example/ad.ts",
+    "#EXTINF:2.0,",
+    "https://ads.example/ad2.ts",
+    "#EXTINF:2.0,live",
+    "https://video.example/live3.ts",
+    "#EXTINF:2.0,",
+    "https://ads.example/ad3.ts",
+  ].join("\n");
+  const stripped = playlist.stripAds(playlistText);
+  assertEquals(stripped.adUrls, []);
+  assertEquals(stripped.text.includes("https://ads.example/"), false);
+  const urls = stripped.text.split("\n").filter((line) => line.startsWith("https://"));
+  assertEquals(urls, [
+    "https://video.example/live1.ts",
+    "https://video.example/live2.ts",
+    "https://video.example/live2.ts",
+    "https://video.example/live2.ts",
+    "https://video.example/live3.ts",
+    "https://video.example/live3.ts",
+  ]);
+});
+
 Deno.test("an ad path marked live is not reused as the clean segment", () => {
   const onlyAd = "#EXTM3U\n#EXTINF:2.0,live\nhttps://video.example/adsquared/only.ts";
   const stripped = playlist.stripAds(onlyAd);
@@ -122,6 +175,38 @@ Deno.test("an ad path marked live is not reused as the clean segment", () => {
   assertEquals(replaced.adUrls, []);
   assertEquals(replaced.text.includes("https://video.example/_404/ad.ts"), false);
   assertEquals(replaced.text.includes("https://video.example/real.ts"), true);
+});
+
+Deno.test("a stitched range covers live-titled segments inside its window", () => {
+  const playlistText = [
+    "#EXTM3U",
+    '#EXT-X-DATERANGE:ID="stitched-ad-1704658240",CLASS="twitch-stitched-ad",START-DATE="2024-01-07T20:10:40.960Z",DURATION=15.050',
+    "#EXT-X-PROGRAM-DATE-TIME:2024-01-07T20:10:40.960Z",
+    "#EXTINF:2.002,live",
+    "https://video.example/ad.ts",
+    "#EXT-X-PROGRAM-DATE-TIME:2024-01-07T20:10:56.010Z",
+    "#EXTINF:2.002,live",
+    "https://video.example/live.ts",
+  ].join("\n");
+  assertEquals(playlist.hasAdBreak(playlistText), true);
+  const stripped = playlist.stripAds(playlistText);
+  assertEquals(stripped.stripped, true);
+  assertEquals(stripped.adUrls, []);
+  assertEquals(stripped.text.includes("https://video.example/ad.ts"), false);
+  assertEquals(stripped.text.includes("https://video.example/live.ts"), true);
+  assertEquals(stripped.text.includes("stitched-ad"), false);
+});
+
+Deno.test("a stitched range that already ended is not an ad break", () => {
+  const playlistText = [
+    "#EXTM3U",
+    '#EXT-X-DATERANGE:ID="stitched-ad-old",CLASS="twitch-stitched-ad",START-DATE="2024-01-07T20:00:00.000Z",DURATION=15',
+    "#EXT-X-PROGRAM-DATE-TIME:2024-01-07T20:10:40.960Z",
+    "#EXTINF:2.002,live",
+    "https://video.example/live.ts",
+  ].join("\n");
+  assertEquals(playlist.hasAdBreak(playlistText), false);
+  assertEquals(playlist.stripAds(playlistText).stripped, false);
 });
 
 Deno.test("a leftover ad tag with only live segments does not count as an ad break", () => {

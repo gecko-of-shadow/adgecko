@@ -9,17 +9,6 @@
   let clientIntegrity = "";
   let authorization = "";
 
-  try {
-    Object.defineProperty(document, "visibilityState", {
-      configurable: true,
-      get() {
-        return "visible";
-      },
-    });
-  } catch {
-    // Leave the page's own visibility state in place when it cannot be redefined.
-  }
-
   const nativeFetch = window.fetch.bind(window);
   const guard = createPlaylistGuard({
     fetch: nativeFetch,
@@ -90,7 +79,6 @@
     const headers = {
       "Client-Id": CLIENT_ID,
       "Content-Type": "text/plain; charset=UTF-8",
-      "X-Twitch-Adblock": "1",
     };
     if (deviceId) {
       headers["Device-ID"] = deviceId;
@@ -112,7 +100,6 @@
     if (!init || typeof init.body !== "string" || !url.includes("gql") || !init.body.includes("PlaybackAccessToken")) {
       return { input, init };
     }
-    if (headerValue(init.headers, "X-Twitch-Adblock")) return { input, init };
     try {
       const parsed = JSON.parse(init.body);
       const items = Array.isArray(parsed) ? parsed : [parsed];
@@ -365,10 +352,16 @@ function createPlaylistGuard(env) {
 
   async function sampleHasAds(masterText, masterUrl) {
     const sample = playlist.pickVariant(masterText, null);
-    if (!sample) return playlist.hasAdBreak(masterText);
-    const response = await env.fetch(new URL(sample, masterUrl).href);
-    if (!response.ok) return null;
-    return playlist.hasAdBreak(await response.text());
+    if (!sample) return playlist.hasAdBreak(masterText) || null;
+    try {
+      const response = await env.fetch(new URL(sample, masterUrl).href);
+      if (!response.ok) return null;
+      const body = await response.text();
+      if (!body.startsWith("#EXTM3U")) return null;
+      return playlist.hasAdBreak(body);
+    } catch {
+      return null;
+    }
   }
 
   async function backupMaster(masterUrl, liveText) {
@@ -389,9 +382,11 @@ function createPlaylistGuard(env) {
       env.status(false);
       return null;
     }
-    if (ads === null) return session.usingBackup ? session.served : null;
+    if (ads === null) {
+      if (!session.usingBackup) env.status(false);
+      return session.usingBackup ? session.served : null;
+    }
 
-    env.status(true);
     if (session.usingBackup && session.served && Date.now() < session.retryAt) return session.served;
     if (session.tried.size >= backupTypes.length) {
       if (Date.now() < session.retryAt) return session.served || null;

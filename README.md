@@ -18,5 +18,5 @@ The toolbar icon says the filter is active. A small "Blocking ads" label appears
 Playlist checks:
 
 ```
-deno test --no-lock test/playlist.test.js
+deno test --no-lock test/playlist.test.js test/page.test.js
 ```
