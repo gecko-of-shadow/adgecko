@@ -259,7 +259,7 @@
       console.log("twitch-adblock could not find the player");
       return;
     }
-    // A stalled midroll player often reports paused. Skipping reload left gecko
+    // A stalled midroll player often reports paused. Skipping reload left the viewer
     // stuck on the buffering spinner after the ad ended — always refresh.
     const muted = safeGet("video-muted");
     const volume = safeGet("volume");
