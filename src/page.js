@@ -684,7 +684,6 @@ function createPlaylistGuard(env) {
 
   function leaveBackup(session) {
     const wasUsing = session.usingBackup;
-    const wasFailOpen = session.failOpen;
     // video-swap-new IsMovingOffBackupEncodings: ignore ad tags until the next
     // master poll so leave+reload cannot immediately re-enter backup.
     if (wasUsing) session.movingOffBackup = true;
@@ -698,27 +697,23 @@ function createPlaylistGuard(env) {
     session.requestedAds.clear();
     session.mainProbeFails = 0;
     env.status(false);
-    // Always reload when leaving a latched backup OR clearing a prior fail-open
-    // freeze — otherwise Chrome can stay on a blanked midroll forever.
-    if (wasUsing || wasFailOpen) scheduleReload();
+    // Reload only when leaving a latched backup (0.1.15). Clearing fail-open
+    // alone must not thrash the player — forced reloads starved buffers on
+    // ad-heavy live channels into a permanent spinner while chat kept moving.
+    if (wasUsing) scheduleReload();
   }
 
-  // Match video-swap-new when BackupEncodingsStatus is exhausted: serve the real
-  // ad playlist (do not strip) and force one player reload so Twitch midroll UI
-  // can play instead of a permanent spinner. Also helps when another extension
-  // already hooked fetch/Worker and backups cannot latch cleanly.
+  // When every backup type is dirty/dead: latch fail-open and pass real ads
+  // through (do not strip into a blank playlist). Do NOT force a player reload
+  // here — 0.1.16's enter/exit reloads froze ad-heavy streams at ~0 buffer.
   function failOpenShowAds(session) {
-    const already = session.failOpen;
     session.failOpen = true;
+    session.failOpenReloaded = true;
     session.usingBackup = false;
     session.served = "";
     session.backupUrls.clear();
     session.reloadedForBackup = false;
     env.status(false);
-    if (!already || !session.failOpenReloaded) {
-      session.failOpenReloaded = true;
-      scheduleReload();
-    }
   }
 
   async function maybeReturnToMain(session) {
@@ -756,13 +751,10 @@ function createPlaylistGuard(env) {
       }
     }
 
-    // Fail open: leave the dead-main backup path, reload, and allow real ads through
-    // if the next main poll is still midroll (avoids a permanent spinner).
+    // Fail open: leave the dead-main backup path (0.1.15). If the next main poll
+    // is still midroll with no clean backup, runBackup latches fail-open pass-through.
     session.mainProbeFails += 1;
-    if (session.mainProbeFails >= 3) {
-      leaveBackup(session);
-      failOpenShowAds(session);
-    }
+    if (session.mainProbeFails >= 3) leaveBackup(session);
   }
 
   async function playbackToken(channel, playerType) {
@@ -1021,17 +1013,16 @@ function createPlaylistGuard(env) {
       const channel = streamByUrl.get(url);
       const session = channel ? sessions.get(channel) : null;
       const swapped = await backupMedia(url, text);
-      // Midroll ended after fail-open: clear the latch and reload so playback
-      // does not stay on a stuck spinner from the blanked ad pod.
+      // Midroll ended after fail-open: clear the latch quietly. No reload —
+      // the live playlist is already clean; a forced setSrc starved buffers.
       if (session && session.failOpen && !swapped && !playlist.hasAdBreak(text)) {
         session.failOpen = false;
         session.failOpenReloaded = false;
         env.status(false);
-        scheduleReload();
         return textResponse(text);
       }
       // Still in fail-open midroll with no backup: pass ads through unmodified
-      // (video-swap-new returns textStr when every backup type is exhausted).
+      // so A/V stay muxed (stripping/blanking here caused segment loops).
       if (session && session.failOpen && !swapped) {
         env.status(false);
         return textResponse(text);

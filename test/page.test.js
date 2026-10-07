@@ -207,11 +207,15 @@ Deno.test("leaveBackup uses video-swap-new moving-off guard", () => {
   assert(source.includes('const backupTypes = ["autoplay", "picture-by-picture", "embed"]'), "backup try order matches video-swap-new");
 });
 
-Deno.test("fail-open after exhausted backups skips strip and forces reload", () => {
+Deno.test("fail-open after exhausted backups skips strip without forced reload", () => {
   assert(source.includes("function failOpenShowAds"), "shared fail-open helper exists");
   assert(source.includes("session.failOpen"), "session tracks fail-open like gold exhausted BackupEncodingsStatus");
   assert(source.includes("failOpenShowAds(session)"), "exhausted backups enter fail-open");
   assert(source.includes("if (session && session.failOpen && !swapped)"), "fail-open media passes ads through");
   assert(source.includes("if (session && session.failOpen && !replacement)"), "fail-open master keeps the live ladder");
-  assert(source.includes("if (wasUsing || wasFailOpen) scheduleReload()"), "leaveBackup reloads after fail-open too");
+  assert(source.includes("if (wasUsing) scheduleReload()"), "leaveBackup reloads only after a latched backup");
+  const failOpenStart = source.indexOf("function failOpenShowAds");
+  const failOpenEnd = source.indexOf("async function maybeReturnToMain", failOpenStart);
+  const failOpenBody = source.slice(failOpenStart, failOpenEnd);
+  assert(!failOpenBody.includes("scheduleReload"), "enter fail-open must not force reload (play-like-15)");
 });
