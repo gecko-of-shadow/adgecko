@@ -494,8 +494,8 @@ function createPlaylistGuard(env) {
   const variantLimit = 64;
   const sessionLimit = 8;
   const sessionTtl = 120000;
-  // Prefer typically-clean player types first; autoplay often still carries ads.
-  const backupTypes = ["picture-by-picture", "embed", "autoplay"];
+  // Match TwitchAdSolutions video-swap-new try order (lower quality while blocked is OK).
+  const backupTypes = ["autoplay", "picture-by-picture", "embed"];
   const handoffGraceMs = env.handoffGraceMs == null ? 150 : Number(env.handoffGraceMs);
   const playbackHash = "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9";
   const playbackQuery = "query PlaybackAccessToken($login: String!, $isLive: Boolean!, $vodID: ID!, $isVod: Boolean!, $playerType: String!, $platform: String!) { streamPlaybackAccessToken(channelName: $login, params: {platform: $platform, playerBackend: \"mediaplayer\", playerType: $playerType}) @include(if: $isLive) { value signature __typename } }";
@@ -631,6 +631,7 @@ function createPlaylistGuard(env) {
         tried: new Set(),
         retryAt: 0,
         usingBackup: false,
+        movingOffBackup: false,
         served: "",
         reloadedForBackup: false,
         requestedAds: new Set(),
@@ -707,6 +708,9 @@ function createPlaylistGuard(env) {
 
   function leaveBackup(session) {
     const wasUsing = session.usingBackup;
+    // video-swap-new IsMovingOffBackupEncodings: ignore ad tags until the next
+    // master poll so leave+reload cannot immediately re-enter backup.
+    if (wasUsing) session.movingOffBackup = true;
     session.usingBackup = false;
     session.served = "";
     session.backupUrls.clear();
@@ -852,6 +856,10 @@ function createPlaylistGuard(env) {
 
   async function runBackup(session, channel, masterUrl, liveText, knownUrl, knownBody) {
     rememberMain(session, channel, masterUrl, liveText);
+    if (session.movingOffBackup) {
+      if (!session.usingBackup) env.status(false);
+      return null;
+    }
     const ads = await sampleHasAds(liveText, masterUrl, knownUrl, knownBody);
     if (ads === false) {
       leaveBackup(session);
@@ -956,6 +964,7 @@ function createPlaylistGuard(env) {
       await maybeReturnToMain(session);
       return session.usingBackup ? text : null;
     }
+    if (session.movingOffBackup) return null;
     if (!playlist.hasAdBreak(text)) return null;
     const mapped = await backupMaster(session.masterUrl, session.liveMaster, url, text);
     if (!mapped || !session.usingBackup) return null;
@@ -980,15 +989,23 @@ function createPlaylistGuard(env) {
     }
     try {
       if (playlist.channelFromPlaylistUrl(url) && playlist.isMasterPlaylist(text)) {
+        const channel = playlist.channelFromPlaylistUrl(url);
+        // Same reset point as video-swap-new after encodings m3u8: handoff complete.
+        const existing = channel ? sessions.get(channel) : null;
+        if (existing) existing.movingOffBackup = false;
         const replacement = await backupMaster(url, text);
         const timed = playlist.writeServerTime(replacement || text, playlist.readServerTime(text));
+        const session = channel ? sessions.get(channel) : null;
+        if (session) env.status(Boolean(session.usingBackup));
         return textResponse(playlist.stripAds(timed).text);
       }
       const swapped = await backupMedia(url, text);
       const stripped = playlist.stripAds(swapped || text);
       if (stripped.adUrls.length) rememberBlocked(stripped.adUrls);
-      env.status(stripped.stripped);
-      if (swapped) env.status(Boolean(swapped));
+      // Gold banner is !!BackupEncodings — only while we are on a backup stream.
+      const channel = streamByUrl.get(url);
+      const session = channel ? sessions.get(channel) : null;
+      env.status(Boolean(session && session.usingBackup));
       return textResponse(stripped.text);
     } catch (error) {
       console.log("twitch-adblock playlist failed", error);

@@ -64,10 +64,10 @@ Deno.test("backup graphql uses only headers gql.twitch.tv allows", () => {
   assert(!source.includes('defineProperty(document, "visibilityState"'), "Twitch reads document.hidden, not this spoof");
 });
 
-Deno.test("backup player types prefer typically clean streams", () => {
+Deno.test("backup player types match video-swap-new try order", () => {
   assert(
-    source.includes('const backupTypes = ["picture-by-picture", "embed", "autoplay"];'),
-    "try picture-by-picture and embed before autoplay",
+    source.includes('const backupTypes = ["autoplay", "picture-by-picture", "embed"];'),
+    "try autoplay then picture-by-picture then embed",
   );
   assert(!source.includes("mobile_web"), "does not request a mobile web backup");
   assert(
@@ -174,9 +174,10 @@ Deno.test("player maps and worker waits do not live for the whole tab", () => {
   assert(source.includes("clearTimeout(waiter.timer)"), "a graphql reply cancels the wait");
 });
 
-Deno.test("the blocking label follows the media playlist, not the live master", () => {
+Deno.test("the blocking label follows backup stay, like video-swap-new", () => {
   assert(!source.includes("env.status(true)"), "a live master must not latch the label on");
-  assert(source.includes("env.status(stripped.stripped)"), "media playlists show the label only while a segment was replaced");
+  assert(!source.includes("env.status(stripped.stripped)"), "strip-only must not drive the notice");
+  assert(source.includes("env.status(Boolean(session && session.usingBackup))"), "media notice matches BackupEncodings-style stay");
   assert(source.includes("if (!session.usingBackup) env.status(false);"), "an unknown probe clears the label when no backup is playing");
 });
 
@@ -188,4 +189,11 @@ Deno.test("return-to-main refreshes a rotated live ladder and fails open", () =>
   assert(body.includes("sampleHasAds"), "a stale mainVariantUrl re-probes via the live master");
   assert(body.includes("mainProbeFails"), "unreachable main/master probes are counted");
   assert(body.includes("mainProbeFails >= 3"), "fail open after repeated probe failures");
+});
+
+Deno.test("leaveBackup uses video-swap-new moving-off guard", () => {
+  assert(source.includes("movingOffBackup"), "session tracks IsMovingOffBackupEncodings");
+  assert(source.includes("if (wasUsing) session.movingOffBackup = true"), "leave sets the guard before reload");
+  assert(source.includes("movingOffBackup = false"), "master poll clears the guard");
+  assert(source.includes('const backupTypes = ["autoplay", "picture-by-picture", "embed"]'), "backup try order matches video-swap-new");
 });

@@ -239,7 +239,8 @@ Deno.test("a stale main variant still returns to main and clears Blocking ads", 
   const masterUrl = "https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live";
   await guard(masterUrl);
   await guard("https://video.example/live-variant.m3u8");
-  await guard("https://video.example/pip-variant.m3u8");
+  // video-swap-new tries autoplay first; that clean backup is what we stay on.
+  await guard("https://video.example/autoplay-variant.m3u8");
   assert(statuses.includes(true), "blocking label turns on while on backup");
 
   // Main is clean again, but the cached mainVariantUrl rotated off the CDN.
@@ -247,7 +248,7 @@ Deno.test("a stale main variant still returns to main and clears Blocking ads", 
   rotated = true;
   statuses.length = 0;
   reloads.length = 0;
-  await guard("https://video.example/pip-variant.m3u8");
+  await guard("https://video.example/autoplay-variant.m3u8");
   await flushReload();
 
   assertEquals(statuses.at(-1), false, "Blocking ads clears once main is clean again");
@@ -269,13 +270,13 @@ Deno.test("failed main probes while on backup fail open instead of freezing", as
         return playlistResponse(masterFor("https://video.example/live-variant.m3u8"));
       }
       if (value.includes("/channel/hls/")) {
-        return playlistResponse(masterFor("https://video.example/pip-variant.m3u8"));
+        return playlistResponse(masterFor("https://video.example/autoplay-variant.m3u8"));
       }
       if (value.includes("live-variant")) {
         if (mastersDead) return new Response("gone", { status: 404 });
         return playlistResponse(adMedia);
       }
-      if (value.includes("pip-variant")) return playlistResponse(cleanMedia);
+      if (value.includes("autoplay-variant")) return playlistResponse(cleanMedia);
       return new Response("missing", { status: 404 });
     },
     async gql(body) {
@@ -293,15 +294,15 @@ Deno.test("failed main probes while on backup fail open instead of freezing", as
 
   const masterUrl = "https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live";
   await guard(masterUrl);
-  await guard("https://video.example/pip-variant.m3u8");
+  await guard("https://video.example/autoplay-variant.m3u8");
 
   mastersDead = true;
   statuses.length = 0;
   reloads.length = 0;
   // Several backup polls with no reachable main/master should not stay latched forever.
-  await guard("https://video.example/pip-variant.m3u8");
-  await guard("https://video.example/pip-variant.m3u8");
-  await guard("https://video.example/pip-variant.m3u8");
+  await guard("https://video.example/autoplay-variant.m3u8");
+  await guard("https://video.example/autoplay-variant.m3u8");
+  await guard("https://video.example/autoplay-variant.m3u8");
   await flushReload();
 
   assertEquals(statuses.at(-1), false, "fail open clears the blocking label");
