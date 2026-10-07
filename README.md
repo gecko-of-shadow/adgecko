@@ -4,7 +4,7 @@
   <img src="media/readme-hero.jpg" alt="twitch-adblock — always-on ad blocking for Twitch and YouTube" width="900">
 </p>
 
-**[Download twitch-adblock-0.1.14.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.14/twitch-adblock-0.1.14.zip)** · Always on · No popup · Twitch live + YouTube
+**[Download twitch-adblock-0.1.15.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.15/twitch-adblock-0.1.15.zip)** · Always on · No popup · Twitch live + YouTube
 
 ---
 
@@ -22,30 +22,30 @@
   <img src="media/readme-install.jpg" alt="Install in 5 steps" width="900">
 </p>
 
-1. Download the [release zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.14/twitch-adblock-0.1.14.zip) (not a random git checkout).
+1. Download the [release zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.15/twitch-adblock-0.1.15.zip) (not a random git checkout).
 2. Unzip → `chrome://extensions` → Developer mode → **Load unpacked** → pick the folder with `manifest.json`.
 3. While this is loaded, turn off uBlock’s `twitch.tv##+js(twitch-videoad)` / video-swap-new (and any other YouTube-player patcher). **One ad script per page.**
 
 ---
 
-## What’s new in 0.1.14
+## What’s new in 0.1.15
 
 Closer to TwitchAdSolutions video-swap-new midroll handoff: moving-off guard so leave+reload cannot re-enter backup, notice only while on backup, same backup try order. Still Chrome-safe (no visibility stopPropagation; player-worker gate).
 
-## What’s new in 0.1.13
+## What’s new in 0.1.15
 
 Smoother handoff after a midroll: delay player reload until the clean playlist arrives, always refresh source, pin quality, and nudge playback so the spinner is less likely to stick.
 
-## What’s new in 0.1.12
+## What’s new in 0.1.15
 
 Fixes the post-ad freeze: video spinner + stuck **Blocking ads** label, and chat stopping after a midroll. Returns to the live stream when the ad ends (or fails open instead of freezing).
 
 ---
 
-## What’s new in 0.1.11
+## What’s new in 0.1.15
 
 <p align="center">
-  <img src="media/whats-new.jpg" alt="v0.1.11 leaner Twitch playlist probes, GQL gate, YouTube buffer skip" width="900">
+  <img src="media/whats-new.jpg" alt="v0.1.15 leaner Twitch playlist probes, GQL gate, YouTube buffer skip" width="900">
 </p>
 
 ---
