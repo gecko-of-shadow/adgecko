@@ -78,8 +78,8 @@ Deno.test("backup player types match video-swap-new try order", () => {
   assert(source.includes("backupMatchScore"), "a clean backup is scored against the live ladder");
   assert(source.includes("handoffGraceMs"), "a short grace window can pick a better quality peer");
   assert(source.includes("scheduleReload"), "reload waits for the clean playlist response");
-  assert(source.includes("Pin settings before setSrc"), "quality is pinned before the usher reset");
-  assert(source.includes("}, 1000);"), "quality is re-applied after the new instance boots");
+  assert(source.includes('setSrc({ isNewMediaPlayerInstance: true, refreshAccessToken: true })'), "usher switches via setSrc");
+  assert(source.includes("}, 800);"), "settings are restored after the new instance boots");
 });
 
 Deno.test("a conflict with another Twitch ad script is logged once", () => {
@@ -161,7 +161,7 @@ Deno.test("reloadPlayer always resets src after a midroll handoff", () => {
   const block = source.slice(start, end);
   assert(block.includes('setSrc({ isNewMediaPlayerInstance: true, refreshAccessToken: true })'), "usher switches via setSrc");
   assert(!block.includes("isPaused()"), "a paused buffering spinner must still reset");
-  assert(block.includes("getHTMLVideoElement"), "playback is nudged on the new media element");
+  assert(block.includes("found.player.play"), "playback is nudged immediately after setSrc");
 });
 
 Deno.test("player maps and worker waits do not live for the whole tab", () => {

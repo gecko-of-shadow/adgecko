@@ -476,10 +476,12 @@ function createPlaylistGuard(env) {
   function scheduleReload() {
     if (reloadQueued) return;
     reloadQueued = true;
-    queueMicrotask(() => {
+    // Macrotask: the clean playlist Response must reach the player before setSrc
+    // resets usher. A microtask can run reload too early and leave a spinner.
+    setTimeout(() => {
       reloadQueued = false;
       env.reload();
-    });
+    }, 0);
   }
 
 
