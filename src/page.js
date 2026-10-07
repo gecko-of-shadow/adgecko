@@ -27,6 +27,15 @@
   };
 
   const NativeWorker = window.Worker;
+  const workerBlobs = typeof FinalizationRegistry === "function"
+    ? new FinalizationRegistry((heldUrl) => {
+        try {
+          URL.revokeObjectURL(heldUrl);
+        } catch {
+          // The blob URL was already revoked.
+        }
+      })
+    : null;
   function TwitchAdblockWorker(url, options) {
     const scriptUrl = String(url || "");
     if (!isTwitchWorker(scriptUrl) || (options && options.type === "module")) {
@@ -41,7 +50,28 @@
     if (!source) return new NativeWorker(url, options);
     const blobUrl = URL.createObjectURL(new Blob([workerPrelude() + "\n" + source], { type: "text/javascript" }));
     const worker = new NativeWorker(blobUrl, options);
+    let released = false;
+    function releaseWorker() {
+      if (released) return;
+      released = true;
+      URL.revokeObjectURL(blobUrl);
+      worker.removeEventListener("message", onWorkerMessage, true);
+    }
     worker.addEventListener("message", onWorkerMessage, true);
+    worker.addEventListener("error", releaseWorker);
+    const nativeTerminate = worker.terminate;
+    worker.terminate = function () {
+      releaseWorker();
+      return nativeTerminate.call(worker);
+    };
+    // The worker reads the blob during construction. Drop the URL after that
+    // so a replaced player does not keep the bytes for the life of the tab.
+    setTimeout(releaseBlobOnly, 1000);
+    function releaseBlobOnly() {
+      if (released) return;
+      URL.revokeObjectURL(blobUrl);
+    }
+    if (workerBlobs) workerBlobs.register(worker, blobUrl);
     return worker;
   }
   TwitchAdblockWorker.prototype = NativeWorker.prototype;
@@ -290,6 +320,7 @@
 
 function startTwitchAdblockWorker() {
   const pending = new Map();
+  const gqlWaitMs = 15000;
   self.addEventListener("message", (event) => {
     const data = event.data;
     if (!data || data.source !== "twitch-adblock" || data.type !== "gql-result") return;
@@ -297,6 +328,7 @@ function startTwitchAdblockWorker() {
     const waiter = pending.get(data.id);
     if (!waiter) return;
     pending.delete(data.id);
+    clearTimeout(waiter.timer);
     if (data.ok) waiter.resolve(data.text);
     else waiter.reject(new Error(data.error || "gql failed"));
   });
@@ -307,7 +339,12 @@ function startTwitchAdblockWorker() {
     gql(body) {
       const id = Math.random().toString(36).slice(2);
       return new Promise((resolve, reject) => {
-        pending.set(id, { resolve, reject });
+        const timer = setTimeout(() => {
+          if (!pending.has(id)) return;
+          pending.delete(id);
+          reject(new Error("gql timed out"));
+        }, gqlWaitMs);
+        pending.set(id, { timer, resolve, reject });
         postMessage({ source: "twitch-adblock", type: "gql", id, body });
       });
     },
@@ -332,6 +369,9 @@ function createPlaylistGuard(env) {
   const sessions = new Map();
   const streamByUrl = new Map();
   const blockedSegments = new Map();
+  const variantLimit = 64;
+  const sessionLimit = 8;
+  const sessionTtl = 120000;
   const backupTypes = ["autoplay", "picture-by-picture", "embed"];
   const playbackHash = "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9";
   const playbackQuery = "query PlaybackAccessToken($login: String!, $isLive: Boolean!, $vodID: ID!, $isVod: Boolean!, $playerType: String!, $platform: String!) { streamPlaybackAccessToken(channelName: $login, params: {platform: $platform, playerBackend: \"mediaplayer\", playerType: $playerType}) @include(if: $isLive) { value signature __typename } }";
@@ -380,6 +420,45 @@ function createPlaylistGuard(env) {
     }
   }
 
+  function sessionIsFinished(session) {
+    return !session.usingBackup && !session.served && session.requestedAds.size === 0 && session.tried.size === 0;
+  }
+
+  function forgetChannelUrls(channel) {
+    for (const [url, owner] of streamByUrl) {
+      if (owner === channel) streamByUrl.delete(url);
+    }
+  }
+
+  function dropSession(channel) {
+    if (!sessions.has(channel)) return;
+    sessions.delete(channel);
+    forgetChannelUrls(channel);
+  }
+
+  function evictSessions(now, keepChannel) {
+    for (const [channel, session] of [...sessions]) {
+      if (channel === keepChannel) continue;
+      if (now - session.seenAt >= sessionTtl) dropSession(channel);
+    }
+    if (sessions.size <= sessionLimit) return;
+    const ranked = [];
+    for (const [channel, session] of sessions) {
+      if (channel === keepChannel) continue;
+      ranked.push([channel, session]);
+    }
+    ranked.sort((left, right) => {
+      const leftFinished = sessionIsFinished(left[1]) ? 0 : 1;
+      const rightFinished = sessionIsFinished(right[1]) ? 0 : 1;
+      if (leftFinished !== rightFinished) return leftFinished - rightFinished;
+      return left[1].seenAt - right[1].seenAt;
+    });
+    for (const [channel] of ranked) {
+      if (sessions.size <= sessionLimit) break;
+      dropSession(channel);
+    }
+  }
+
   function ensureSession(channel) {
     let session = sessions.get(channel);
     if (!session) {
@@ -395,10 +474,27 @@ function createPlaylistGuard(env) {
         masterUrl: "",
         liveMaster: "",
         mainVariantUrl: "",
+        seenAt: Date.now(),
       };
       sessions.set(channel, session);
     }
+    session.seenAt = Date.now();
+    evictSessions(session.seenAt, channel);
     return session;
+  }
+
+  function rememberVariant(session, channel, abs, meta, backup) {
+    streamByUrl.delete(abs);
+    streamByUrl.set(abs, channel);
+    session.variants.delete(abs);
+    session.variants.set(abs, meta);
+    if (backup) session.backupUrls.add(abs);
+    while (session.variants.size > variantLimit) {
+      const oldest = session.variants.keys().next().value;
+      session.variants.delete(oldest);
+      session.backupUrls.delete(oldest);
+      if (streamByUrl.get(oldest) === channel) streamByUrl.delete(oldest);
+    }
   }
 
   function indexStreamUrls(channel, text, base, backup) {
@@ -407,13 +503,11 @@ function createPlaylistGuard(env) {
     for (const variant of playlist.listVariants(text)) {
       const abs = absoluteVariant(variant.url, base);
       if (!abs) continue;
-      streamByUrl.set(abs, channel);
-      session.variants.set(abs, {
+      rememberVariant(session, channel, abs, {
         resolution: variant.resolution,
         frameRate: variant.frameRate,
         video: variant.video,
-      });
-      if (backup) session.backupUrls.add(abs);
+      }, backup);
     }
   }
 
@@ -523,6 +617,7 @@ function createPlaylistGuard(env) {
       session.requestedAds.clear();
       env.status(false);
       if (wasUsing) env.reload();
+      if (sessionIsFinished(session)) dropSession(channel);
       return null;
     }
     if (ads === null) {
@@ -576,6 +671,7 @@ function createPlaylistGuard(env) {
     if (!channel) return null;
     const session = sessions.get(channel);
     if (!session || !session.masterUrl || !session.liveMaster) return null;
+    session.seenAt = Date.now();
     if (session.backupUrls.has(url)) {
       await maybeReturnToMain(session);
       return session.usingBackup ? text : null;

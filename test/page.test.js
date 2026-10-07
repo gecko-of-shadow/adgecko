@@ -72,6 +72,16 @@ Deno.test("a background tab stays visible to the player", () => {
   assert(source.includes("lowLatencyModeEnabled"), "a reload keeps the low-latency setting");
 });
 
+Deno.test("player maps and worker waits do not live for the whole tab", () => {
+  assert(source.includes("const variantLimit = 64;"), "a channel keeps a bounded set of variant urls");
+  assert(source.includes("sessions.delete(channel)"), "a finished channel session is removed");
+  assert(source.includes("const sessionTtl = 120000;"), "an idle channel session expires");
+  assert(source.includes("URL.revokeObjectURL(blobUrl)"), "the player worker blob is revoked");
+  assert(source.includes('worker.removeEventListener("message", onWorkerMessage, true)'), "the worker listener is removed");
+  assert(source.includes('reject(new Error("gql timed out"))'), "an unanswered worker graphql wait ends");
+  assert(source.includes("clearTimeout(waiter.timer)"), "a graphql reply cancels the wait");
+});
+
 Deno.test("the blocking label follows the media playlist, not the live master", () => {
   assert(!source.includes("env.status(true)"), "a live master must not latch the label on");
   assert(source.includes("env.status(stripped.stripped)"), "media playlists show the label only while a segment was replaced");

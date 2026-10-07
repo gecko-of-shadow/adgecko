@@ -15,7 +15,7 @@ A Chrome extension that blocks video ads on Twitch and YouTube. It is always on.
 
 ## Install
 
-1. Download [twitch-adblock-0.1.6.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.6/twitch-adblock-0.1.6.zip).
+1. Download [twitch-adblock-0.1.7.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.7/twitch-adblock-0.1.7.zip).
 2. Unzip it.
 3. Open `chrome://extensions`.
 4. Turn on Developer mode.
@@ -32,6 +32,19 @@ A small "Blocking ads" label appears on the player while an ad is being blocked.
 - Twitch changes token and playlist shapes without notice. Playback has to go through `fetch` in the page or the player worker.
 - This build blocks Twitch live streams. It does not block Twitch VODs or clips.
 - YouTube ads that are already mixed into the video file still play. The extension does not replace that picture.
+
+## Changelog
+
+### 0.1.7
+
+- Drops a Twitch channel session once the live playlist is clean, and drops idle sessions after two minutes.
+- Keeps only the recent variant URLs for a channel, and at most eight channel sessions.
+- Revokes a player-worker blob URL and removes its message listener when that worker ends.
+- Times out a worker GraphQL wait that never gets a reply. The ad plays if the reply does not come back.
+
+### 0.1.6
+
+- Blocks YouTube pre-roll, mid-roll, Shorts, and banner and overlay ads on the watch page.
 
 Playlist checks:
 
