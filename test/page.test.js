@@ -122,6 +122,29 @@ Deno.test("a background tab stays visible to the player", () => {
   assert(source.includes("lowLatencyModeEnabled"), "a reload keeps the low-latency setting");
 });
 
+Deno.test("visibilitychange does not block Twitch chat reconnect listeners", () => {
+  const start = source.indexOf('document.addEventListener("visibilitychange"');
+  assert(start !== -1, "visibilitychange listener exists");
+  const block = source.slice(start, start + 350);
+  assert(!block.includes("stopImmediatePropagation"), "do not swallow other visibilitychange listeners after player reload");
+  assert(block.includes("video.play()"), "still resume a paused video when the tab changes");
+});
+
+Deno.test("only player-looking workers get the playlist prelude", () => {
+  assert(source.includes("isPlayerWorkerSource"), "gate worker injection on source markers");
+  assert(source.includes("usher.ttvnw.net") || source.includes("PlaybackAccessToken"), "player markers include live HLS or token strings");
+  const workerCtor = source.slice(source.indexOf("function TwitchAdblockWorker"), source.indexOf("TwitchAdblockWorker.prototype"));
+  assert(workerCtor.includes("isPlayerWorkerSource(source)"), "non-player blob workers stay native");
+});
+
+Deno.test("scheduleReload coalesces to one player reload per turn", () => {
+  const start = source.indexOf("function scheduleReload");
+  const end = source.indexOf("function backupMatchScore", start);
+  const block = source.slice(start, end);
+  assert(block.includes("reloadQueued"), "a second scheduleReload in the same turn is ignored");
+  assert(block.includes("queueMicrotask"), "reload still waits for the clean playlist response");
+});
+
 Deno.test("player maps and worker waits do not live for the whole tab", () => {
   assert(source.includes("const variantLimit = 64;"), "a channel keeps a bounded set of variant urls");
   assert(source.includes("sessions.delete(channel)"), "a finished channel session is removed");

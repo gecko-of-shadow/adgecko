@@ -52,6 +52,9 @@
       console.log("twitch-adblock could not read the player worker", error);
     }
     if (!source) return new NativeWorker(url, options);
+    // Chat and other page workers also use twitch.tv blob URLs. Only inject into
+    // workers that look like the live player so their fetch/GQL path stays native.
+    if (!isPlayerWorkerSource(source)) return new NativeWorker(url, options);
     const blobUrl = URL.createObjectURL(new Blob([workerPrelude() + "\n" + source], { type: "text/javascript" }));
     const worker = new NativeWorker(blobUrl, options);
     let released = false;
@@ -209,6 +212,11 @@
     }
   }
 
+  function isPlayerWorkerSource(source) {
+    const text = String(source || "");
+    return /usher\.ttvnw\.net|PlaybackAccessToken|\/channel\/hls\/|#EXTM3U|stitched-ad|amazon-ivs/i.test(text);
+  }
+
   function readTextSync(url) {
     const request = new XMLHttpRequest();
     request.open("GET", url, false);
@@ -320,8 +328,9 @@
   } catch {
     // Another script already defined it.
   }
-  document.addEventListener("visibilitychange", (event) => {
-    event.stopImmediatePropagation();
+  // Do not stopImmediatePropagation — Twitch chat/pubsub reconnect after a
+  // player reload listens for visibilitychange. hidden is already spoofed.
+  document.addEventListener("visibilitychange", () => {
     const video = document.querySelector("video");
     if (video && video.paused && !video.ended) {
       video.play().catch(() => {});
@@ -461,8 +470,14 @@ function createPlaylistGuard(env) {
   const playbackHash = "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9";
   const playbackQuery = "query PlaybackAccessToken($login: String!, $isLive: Boolean!, $vodID: ID!, $isVod: Boolean!, $playerType: String!, $platform: String!) { streamPlaybackAccessToken(channelName: $login, params: {platform: $platform, playerBackend: \"mediaplayer\", playerType: $playerType}) @include(if: $isLive) { value signature __typename } }";
 
+  let reloadQueued = false;
   function scheduleReload() {
-    queueMicrotask(() => env.reload());
+    if (reloadQueued) return;
+    reloadQueued = true;
+    queueMicrotask(() => {
+      reloadQueued = false;
+      env.reload();
+    });
   }
 
   function backupMatchScore(mainText, backupText) {
