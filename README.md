@@ -6,9 +6,12 @@ A Chrome extension that blocks video ads on Twitch and YouTube. It is always on.
 
 - Blocks Twitch live midrolls.
 - Keeps the live video playing through the break.
-- Asks Twitch for a backup stream in this order: autoplay (Android), picture-by-picture, then embed.
+- Asks Twitch for backup streams in parallel (picture-by-picture, embed, then autoplay/Android), then picks the clean backup that best matches the live quality ladder.
+- Reloads the player only after the clean playlist is ready, and restores quality sooner after the swap.
 - Does not open a second player above chat.
 - If every backup stream still has ads, strips those ads and holds the last live frame.
+- Shows an in-session “Blocking ads (N)” count on the Twitch player label (this tab only; not stored).
+- Logs one console warning when another Twitch ad script has already patched `fetch` or `Worker` (for example uBlock’s twitch-videoad).
 - Blocks YouTube pre-roll, mid-roll, Shorts, and banner and overlay ads on the watch page.
 - Blocks YouTube home-feed Sponsored cards (for example hotel and other “Sponsored · …” cards with Watch / Book now).
 - Removes those ads from YouTube's player so the same video keeps playing.
@@ -16,7 +19,7 @@ A Chrome extension that blocks video ads on Twitch and YouTube. It is always on.
 
 ## Install
 
-1. Download [twitch-adblock-0.1.9.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.9/twitch-adblock-0.1.9.zip).
+1. Download [twitch-adblock-0.1.10.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.10/twitch-adblock-0.1.10.zip).
 2. Unzip it.
 3. Open `chrome://extensions`.
 4. Turn on Developer mode.
@@ -25,7 +28,7 @@ A Chrome extension that blocks video ads on Twitch and YouTube. It is always on.
 
 Install from the **release zip**, not from an arbitrary git tag checkout. The zip is the packaged extension (`manifest.json`, `src/`, `icons/` only).
 
-A small "Blocking ads" label appears on the player while an ad is being blocked.
+A small "Blocking ads (N)" label appears on the Twitch player while an ad is being blocked. The count is for this tab session only.
 
 ## Known limits
 
@@ -44,11 +47,13 @@ Logic and edge cases:
 deno test --no-lock test/
 ```
 
+Redacted HLS / YouTube fixtures live under `test/fixtures/` and are covered by `test/fixtures.test.js`.
+
 Release smoke (package allowlist, permissions, host coverage, no phone-home / dangerous APIs, deno suite, light playlist fuzz). Requires Deno, Python 3, and ripgrep (`rg`). Does not phone home.
 
 ```
 bash scripts/release-gate.sh
-bash scripts/release-gate.sh --zip twitch-adblock-0.1.9.zip --expect-version 0.1.9
+bash scripts/release-gate.sh --zip twitch-adblock-0.1.10.zip --expect-version 0.1.10
 ```
 
 Pack a shippable zip (`manifest.json`, `src/*.js`, `icons/` only):
@@ -58,6 +63,14 @@ bash scripts/pack-zip.sh
 ```
 
 ## Changelog
+
+### 0.1.10
+
+- Speeds up Twitch midroll handoff: probes picture-by-picture, embed, and autoplay backups together, prefers typically clean types, and picks the closest quality match in a short grace window.
+- Schedules the player reload after the clean playlist response, and restores saved quality sooner (800ms).
+- Logs one console warning when another script has already patched `fetch` or `Worker` (for example uBlock twitch-videoad).
+- Shows an in-session “Blocking ads (N)” count on the Twitch player label (tab memory only).
+- Adds redacted `test/fixtures/` samples for stitched ads, midroll cues, live masters, and YouTube ad payloads, with `deno test` coverage.
 
 ### 0.1.9
 

@@ -50,6 +50,7 @@ function tokenBody(playerType) {
 Deno.test("a clean live playlist drops the channel session", async () => {
   let mainClean = false;
   const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
     async fetch(url) {
       const value = String(url);
       if (value.includes("/channel/hls/") && value.includes("token=live")) {
@@ -87,6 +88,7 @@ Deno.test("a clean live playlist drops the channel session", async () => {
 
 Deno.test("old variant urls are evicted and the current one still swaps", async () => {
   const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
     async fetch(url) {
       const value = String(url);
       if (value.includes("/channel/hls/") && value.includes("token=live")) {
@@ -120,6 +122,7 @@ Deno.test("old variant urls are evicted and the current one still swaps", async 
 
 Deno.test("only the recent channel sessions are kept during ad breaks", async () => {
   const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
     async fetch(url) {
       const value = String(url);
       const channel = channelFrom(value);

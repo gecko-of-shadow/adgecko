@@ -1,0 +1,57 @@
+{
+  "contents": {
+    "twoColumnBrowseResultsRenderer": {
+      "tabs": [
+        {
+          "tabRenderer": {
+            "content": {
+              "richGridRenderer": {
+                "contents": [
+                  {
+                    "richItemRenderer": {
+                      "content": {
+                        "videoRenderer": {
+                          "videoId": "organic1",
+                          "title": { "simpleText": "Normal video" }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "richItemRenderer": {
+                      "content": {
+                        "adSlotRenderer": {
+                          "fulfillmentContent": {
+                            "fulfilledLayout": {
+                              "inFeedAdLayoutRenderer": {
+                                "renderingContent": {
+                                  "promotedVideoRenderer": {
+                                    "headline": { "simpleText": "Sponsored hotel" },
+                                    "navigationEndpoint": {
+                                      "urlEndpoint": { "url": "https://www.googleadservices.com/redacted" }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "continuationItemRenderer": {
+                      "continuationEndpoint": {
+                        "continuationCommand": { "token": "redacted-continuation" }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

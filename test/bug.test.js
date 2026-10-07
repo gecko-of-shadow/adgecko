@@ -48,6 +48,7 @@ function playlistResponse(body) {
 Deno.test("an all-ad backup is not substituted for the live stream", async () => {
   const fetched = [];
   const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
     async fetch(url) {
       const value = String(url);
       fetched.push(value);
@@ -82,6 +83,7 @@ Deno.test("an all-ad backup is not substituted for the live stream", async () =>
 Deno.test("a 404 on the first rung does not hide ads on the next rung", async () => {
   const tokens = [];
   const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
     async fetch(url) {
       const value = String(url);
       if (value.includes("token=live")) {
@@ -115,6 +117,7 @@ Deno.test("a 404 on the first rung does not hide ads on the next rung", async ()
 
 Deno.test("clip and non-live media playlists pass through unchanged", async () => {
   const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
     async fetch(url) {
       const value = String(url);
       if (value.includes("clip.m3u8")) {
@@ -147,6 +150,7 @@ Deno.test("a second master waits for the backup already in flight", async () => 
   let probes = 0;
   const tokens = [];
   const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
     async fetch(url) {
       const value = String(url);
       if (value.includes("token=live")) return playlistResponse(masterFor(["https://video.example/live-variant.m3u8"]));
@@ -177,5 +181,5 @@ Deno.test("a second master waits for the backup already in flight", async () => 
   const [left, right] = await Promise.all([first, second]);
   assert((await left.text()).includes("autoplay-variant.m3u8"), "the first master uses the clean backup");
   assert((await right.text()).includes("autoplay-variant.m3u8"), "the overlapping master uses the same backup");
-  assertEquals(tokens, ["autoplay"], "one backup search serves both masters");
+  assertEquals([...tokens].sort(), ["autoplay", "embed", "picture-by-picture"], "one parallel backup search serves both masters");
 });

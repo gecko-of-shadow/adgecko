@@ -35,7 +35,7 @@ Deno.test("a failed variant probe does not count as a clean backup", () => {
   assert(source.includes("if (!response.ok) continue;"), "a missing rung is not a clean stream");
   assert(source.includes('if (!body.startsWith("#EXTM3U")) continue;'), "a non-playlist body is not a clean stream");
   assert(source.includes("return playlist.hasAdBreak(masterText) || null;"), "a master with no variant is not a clean stream");
-  assert(source.includes("if (probe === null || probe === true) continue;"), "skip a backup that did not load or still has ads");
+  assert(source.includes("if (probe === null || probe === true) return null;"), "skip a backup that did not load or still has ads");
   assert(source.includes("session.tried.clear();"), "a good backup can be chosen again after the retry window");
 });
 
@@ -44,16 +44,33 @@ Deno.test("backup graphql uses only headers gql.twitch.tv allows", () => {
   assert(!source.includes('defineProperty(document, "visibilityState"'), "Twitch reads document.hidden, not this spoof");
 });
 
-Deno.test("backup player types match video-swap-new", () => {
+Deno.test("backup player types prefer typically clean streams", () => {
   assert(
-    source.includes('const backupTypes = ["autoplay", "picture-by-picture", "embed"];'),
-    "try autoplay, then picture-by-picture, then embed",
+    source.includes('const backupTypes = ["picture-by-picture", "embed", "autoplay"];'),
+    "try picture-by-picture and embed before autoplay",
   );
-  assert(!source.includes("mobile_web"), "video-swap-new does not request a mobile web backup");
+  assert(!source.includes("mobile_web"), "does not request a mobile web backup");
   assert(
     source.includes('platform: playerType === "autoplay" ? "android" : "web"'),
     "autoplay tokens use the android platform",
   );
+  assert(source.includes("findCleanBackup"), "backup probes run together for a faster handoff");
+  assert(source.includes("backupMatchScore"), "a clean backup is scored against the live ladder");
+  assert(source.includes("handoffGraceMs"), "a short grace window can pick a better quality peer");
+  assert(source.includes("scheduleReload"), "reload waits for the clean playlist response");
+  assert(source.includes("}, 800);"), "quality restores sooner after a player reload");
+});
+
+Deno.test("a conflict with another Twitch ad script is logged once", () => {
+  assert(source.includes("warnConflictOnce"), "detect another fetch/Worker patcher");
+  assert(source.includes("__twitchAdblockConflictWarned"), "log the conflict warning only once");
+  assert(source.includes("twitch-videoad"), "the warning names the common uBlock script");
+});
+
+Deno.test("the blocking label counts midrolls in this tab session", () => {
+  assert(source.includes("noticeBlocks"), "session counter lives only in memory");
+  assert(source.includes("Blocking ads (${noticeBlocks})"), "label shows the in-session count");
+  assert(source.includes("if (!noticeOn) noticeBlocks += 1"), "count rises once per blocking streak");
 });
 
 Deno.test("a picture-by-picture token request is dropped before the chat mini player opens", () => {

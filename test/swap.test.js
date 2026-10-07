@@ -53,6 +53,7 @@ Deno.test("a midroll variant is replaced by the first clean backup and the playe
   const reloads = [];
   let mainClean = false;
   const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
     async fetch(url) {
       const value = String(url);
       if (value.includes("/channel/hls/") && value.includes("token=live")) return playlistResponse(mainClean ? masterFor("https://video.example/live-variant.m3u8") : mainMaster);
@@ -81,10 +82,8 @@ Deno.test("a midroll variant is replaced by the first clean backup and the playe
   const masterText = await master.text();
   assert(masterText.includes("https://video.example/pip-variant.m3u8"), "master variants point at the clean backup");
   assert(!masterText.includes("live-variant.m3u8"), "the ad master is not what the player reads");
-  assertEquals(tokens, [
-    { playerType: "autoplay", platform: "android" },
-    { playerType: "picture-by-picture", platform: "web" },
-  ], "backup order");
+  assert(tokens.some((item) => item.playerType === "picture-by-picture" && item.platform === "web"), "picture-by-picture is probed");
+  assert(tokens.some((item) => item.playerType === "autoplay" && item.platform === "android") || tokens.some((item) => item.playerType === "embed"), "other backup types are probed in parallel");
 
   const media = await guard("https://video.example/live-variant.m3u8");
   const mediaText = await media.text();
@@ -106,8 +105,58 @@ Deno.test("a midroll variant is replaced by the first clean backup and the playe
   assertEquals(reloads, ["reload", "reload"], "a clean master does not reload again");
 });
 
+Deno.test("a higher-quality clean backup wins when probes finish in the grace window", async () => {
+  const chosen = [];
+  const lowMaster = [
+    "#EXTM3U",
+    '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,CODECS="avc1.4D401F",FRAME-RATE=30.000',
+    "https://video.example/pip-low.m3u8",
+  ].join("\n");
+  const highMaster = [
+    "#EXTM3U",
+    '#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720,CODECS="avc1.4D401F",FRAME-RATE=30.000',
+    "https://video.example/embed-high.m3u8",
+  ].join("\n");
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 40,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("token=live")) return playlistResponse(mainMaster);
+      if (value.includes("token=picture-by-picture")) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return playlistResponse(lowMaster);
+      }
+      if (value.includes("token=embed")) {
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        return playlistResponse(highMaster);
+      }
+      if (value.includes("token=autoplay")) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return playlistResponse(masterFor("https://video.example/autoplay-variant.m3u8"));
+      }
+      if (value.includes("live-variant") || value.includes("autoplay-variant")) return playlistResponse(adMedia);
+      if (value.includes("pip-low") || value.includes("embed-high")) return playlistResponse(cleanMedia);
+      return new Response("missing", { status: 404 });
+    },
+    async gql(body) {
+      return JSON.stringify({
+        data: { streamPlaybackAccessToken: { value: body.variables.playerType, signature: "sig" } },
+      });
+    },
+    reload() {},
+    status() {},
+  });
+
+  const master = await guard("https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live");
+  const masterText = await master.text();
+  chosen.push(masterText.includes("embed-high.m3u8"), masterText.includes("pip-low.m3u8"));
+  assert(masterText.includes("https://video.example/embed-high.m3u8"), "grace window keeps the closer quality backup");
+  assert(!masterText.includes("pip-low.m3u8"), "lower quality is not preferred when a match exists");
+});
+
 Deno.test("embed tokens on the response root still count", async () => {
   const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
     async fetch(url) {
       const value = String(url);
       if (value.includes("token=live")) return playlistResponse(mainMaster);

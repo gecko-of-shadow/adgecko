@@ -1,0 +1,17 @@
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:2
+#EXT-X-MEDIA-SEQUENCE:200
+#EXTINF:2.000,live
+https://video.example/redacted/live-seg-200.ts
+#EXT-X-CUE-OUT:DURATION=30
+#EXT-X-DATERANGE:ID="midroll-redacted-1",CLASS="twitch-stitched-ad",START-DATE="2024-06-15T13:30:00.000Z",DURATION=30.0,X-TV-TWITCH-AD-POD-FILLER-TYPE="midroll"
+#EXT-X-PROGRAM-DATE-TIME:2024-06-15T13:30:00.000Z
+#EXTINF:2.000,
+https://ads.example/redacted/processing/midroll-seg0.ts
+#EXT-X-PROGRAM-DATE-TIME:2024-06-15T13:30:02.000Z
+#EXTINF:2.000,
+https://ads.example/redacted/_404/midroll-seg1.ts
+#EXT-X-CUE-IN
+#EXTINF:2.000,live
+https://video.example/redacted/live-seg-201.ts

@@ -1,0 +1,15 @@
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:2
+#EXT-X-MEDIA-SEQUENCE:100
+#EXTINF:2.000,live
+https://video.example/redacted/live-seg-100.ts
+#EXT-X-DATERANGE:ID="stitched-ad-redacted-1",CLASS="twitch-stitched-ad",START-DATE="2024-06-15T12:00:00.000Z",DURATION=15.0,X-TV-TWITCH-AD-POD-POSITION="0"
+#EXT-X-PROGRAM-DATE-TIME:2024-06-15T12:00:00.000Z
+#EXTINF:2.000,
+https://ads.example/redacted/adsquared/pod0-seg0.ts
+#EXT-X-PROGRAM-DATE-TIME:2024-06-15T12:00:02.000Z
+#EXTINF:2.000,
+https://ads.example/redacted/adsquared/pod0-seg1.ts
+#EXTINF:2.000,live
+https://video.example/redacted/live-seg-101.ts
