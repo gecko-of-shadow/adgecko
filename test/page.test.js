@@ -162,6 +162,11 @@ Deno.test("reloadPlayer always resets src after a midroll handoff", () => {
   assert(block.includes('setSrc({ isNewMediaPlayerInstance: true, refreshAccessToken: true })'), "usher switches via setSrc");
   assert(!block.includes("isPaused()"), "a paused buffering spinner must still reset");
   assert(block.includes("found.player.play"), "playback is nudged immediately after setSrc");
+  // 0.1.13 latched mute / spinner: pin before setSrc, deferred HTMLVideoElement play, 1000ms rewrite.
+  assert(!block.includes("getHTMLVideoElement"), "no deferred HTMLVideoElement play after setSrc");
+  assert(!block.includes("}, 1000);"), "no second settings rewrite at 1000ms");
+  const setSrcAt = block.indexOf("setSrc");
+  assert(setSrcAt !== -1 && !block.slice(0, setSrcAt).includes("safeSet("), "do not pin settings before setSrc");
 });
 
 Deno.test("player maps and worker waits do not live for the whole tab", () => {
