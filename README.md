@@ -30,22 +30,10 @@
 
 ## What’s new in 0.1.15
 
-Closer to TwitchAdSolutions video-swap-new midroll handoff: moving-off guard so leave+reload cannot re-enter backup, notice only while on backup, same backup try order. Still Chrome-safe (no visibility stopPropagation; player-worker gate).
-
-## What’s new in 0.1.15
-
-Smoother handoff after a midroll: delay player reload until the clean playlist arrives, always refresh source, pin quality, and nudge playback so the spinner is less likely to stick.
-
-## What’s new in 0.1.15
-
-Fixes the post-ad freeze: video spinner + stuck **Blocking ads** label, and chat stopping after a midroll. Returns to the live stream when the ad ends (or fails open instead of freezing).
-
----
-
-## What’s new in 0.1.15
+Recommended build. Restores the simpler **0.1.12** player reload handoff so streams are less likely to stick on a spinner or mute latch. Keeps post-ad chat and **Blocking ads** label recovery. Prefer this zip over older builds.
 
 <p align="center">
-  <img src="media/whats-new.jpg" alt="v0.1.15 leaner Twitch playlist probes, GQL gate, YouTube buffer skip" width="900">
+  <img src="media/whats-new.jpg" alt="v0.1.15 recommended restore of 0.1.12 reload handoff" width="900">
 </p>
 
 ---
