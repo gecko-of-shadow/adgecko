@@ -179,3 +179,120 @@ Deno.test("embed tokens on the response root still count", async () => {
   const masterText = await master.text();
   assert(masterText.includes("https://video.example/embed-variant.m3u8"), "a root embed token is accepted");
 });
+
+Deno.test("a stale main variant still returns to main and clears Blocking ads", async () => {
+  const statuses = [];
+  const reloads = [];
+  let mainClean = false;
+  let rotated = false;
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("/channel/hls/") && value.includes("token=live")) {
+        const live = rotated
+          ? "https://video.example/live-variant-v2.m3u8"
+          : "https://video.example/live-variant.m3u8";
+        return playlistResponse(masterFor(live));
+      }
+      if (value.includes("/channel/hls/") && value.includes("token=picture-by-picture")) {
+        return playlistResponse(masterFor("https://video.example/pip-variant.m3u8"));
+      }
+      if (value.includes("/channel/hls/") && value.includes("token=embed")) {
+        return playlistResponse(masterFor("https://video.example/embed-variant.m3u8"));
+      }
+      if (value.includes("/channel/hls/") && value.includes("token=autoplay")) {
+        return playlistResponse(masterFor("https://video.example/autoplay-variant.m3u8"));
+      }
+      if (value.includes("live-variant-v2")) return playlistResponse(cleanMedia);
+      if (value.includes("live-variant")) {
+        if (rotated) return new Response("gone", { status: 404 });
+        return playlistResponse(mainClean ? cleanMedia : adMedia);
+      }
+      if (value.includes("pip-variant") || value.includes("embed-variant") || value.includes("autoplay-variant")) {
+        return playlistResponse(cleanMedia);
+      }
+      return new Response("missing", { status: 404 });
+    },
+    async gql(body) {
+      return JSON.stringify({
+        data: { streamPlaybackAccessToken: { value: body.variables.playerType, signature: "sig" } },
+      });
+    },
+    reload() {
+      reloads.push("reload");
+    },
+    status(blocking) {
+      statuses.push(Boolean(blocking));
+    },
+  });
+
+  const masterUrl = "https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live";
+  await guard(masterUrl);
+  await guard("https://video.example/live-variant.m3u8");
+  await guard("https://video.example/pip-variant.m3u8");
+  assert(statuses.includes(true), "blocking label turns on while on backup");
+
+  // Main is clean again, but the cached mainVariantUrl rotated off the CDN.
+  mainClean = true;
+  rotated = true;
+  statuses.length = 0;
+  reloads.length = 0;
+  await guard("https://video.example/pip-variant.m3u8");
+
+  assertEquals(statuses.at(-1), false, "Blocking ads clears once main is clean again");
+  assertEquals(reloads, ["reload"], "player reloads back onto the main stream");
+  const restored = await guard(masterUrl);
+  assert((await restored.text()).includes("live-variant-v2.m3u8"), "next master uses the rotated live ladder");
+});
+
+Deno.test("failed main probes while on backup fail open instead of freezing", async () => {
+  const statuses = [];
+  const reloads = [];
+  let mastersDead = false;
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("/channel/hls/") && value.includes("token=live")) {
+        if (mastersDead) return new Response("gone", { status: 404 });
+        return playlistResponse(masterFor("https://video.example/live-variant.m3u8"));
+      }
+      if (value.includes("/channel/hls/")) {
+        return playlistResponse(masterFor("https://video.example/pip-variant.m3u8"));
+      }
+      if (value.includes("live-variant")) {
+        if (mastersDead) return new Response("gone", { status: 404 });
+        return playlistResponse(adMedia);
+      }
+      if (value.includes("pip-variant")) return playlistResponse(cleanMedia);
+      return new Response("missing", { status: 404 });
+    },
+    async gql(body) {
+      return JSON.stringify({
+        data: { streamPlaybackAccessToken: { value: body.variables.playerType, signature: "sig" } },
+      });
+    },
+    reload() {
+      reloads.push("reload");
+    },
+    status(blocking) {
+      statuses.push(Boolean(blocking));
+    },
+  });
+
+  const masterUrl = "https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live";
+  await guard(masterUrl);
+  await guard("https://video.example/pip-variant.m3u8");
+
+  mastersDead = true;
+  statuses.length = 0;
+  reloads.length = 0;
+  // Several backup polls with no reachable main/master should not stay latched forever.
+  await guard("https://video.example/pip-variant.m3u8");
+  await guard("https://video.example/pip-variant.m3u8");
+  await guard("https://video.example/pip-variant.m3u8");
+
+  assertEquals(statuses.at(-1), false, "fail open clears the blocking label");
+  assert(reloads.length >= 1, "fail open reloads so the player is not stuck on a dead backup");
+});

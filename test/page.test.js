@@ -160,3 +160,13 @@ Deno.test("the blocking label follows the media playlist, not the live master", 
   assert(source.includes("env.status(stripped.stripped)"), "media playlists show the label only while a segment was replaced");
   assert(source.includes("if (!session.usingBackup) env.status(false);"), "an unknown probe clears the label when no backup is playing");
 });
+
+Deno.test("return-to-main refreshes a rotated live ladder and fails open", () => {
+  const start = source.indexOf("async function maybeReturnToMain");
+  const end = source.indexOf("async function playbackToken", start);
+  const body = source.slice(start, end);
+  assert(body.includes("leaveBackup"), "clearing backup state is shared");
+  assert(body.includes("sampleHasAds"), "a stale mainVariantUrl re-probes via the live master");
+  assert(body.includes("mainProbeFails"), "unreachable main/master probes are counted");
+  assert(body.includes("mainProbeFails >= 3"), "fail open after repeated probe failures");
+});

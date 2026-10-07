@@ -606,6 +606,7 @@ function createPlaylistGuard(env) {
         masterUrl: "",
         liveMaster: "",
         mainVariantUrl: "",
+        mainProbeFails: 0,
         seenAt: Date.now(),
       };
       sessions.set(channel, session);
@@ -671,14 +672,7 @@ function createPlaylistGuard(env) {
     env.fetch(adUrl).then((response) => response.arrayBuffer()).catch(() => {});
   }
 
-  async function maybeReturnToMain(session) {
-    if (!session.mainVariantUrl) return;
-    const body = await fetchPlaylist(session.mainVariantUrl);
-    if (body == null) return;
-    if (playlist.hasAdBreak(body)) {
-      consumePreroll(session, body);
-      return;
-    }
+  function leaveBackup(session) {
     const wasUsing = session.usingBackup;
     session.usingBackup = false;
     session.served = "";
@@ -686,8 +680,49 @@ function createPlaylistGuard(env) {
     session.tried.clear();
     session.reloadedForBackup = false;
     session.requestedAds.clear();
+    session.mainProbeFails = 0;
     env.status(false);
     if (wasUsing) scheduleReload();
+  }
+
+  async function maybeReturnToMain(session) {
+    if (!session.usingBackup) return;
+
+    // Prefer the cached main media URL when it still resolves.
+    if (session.mainVariantUrl) {
+      const body = await fetchPlaylist(session.mainVariantUrl);
+      if (body != null) {
+        session.mainProbeFails = 0;
+        if (playlist.hasAdBreak(body)) {
+          consumePreroll(session, body);
+          return;
+        }
+        leaveBackup(session);
+        return;
+      }
+    }
+
+    // CDN rungs rotate: refresh the live master and probe again before staying on backup.
+    if (session.masterUrl) {
+      const master = await fetchPlaylist(session.masterUrl);
+      if (master != null) {
+        const channel = playlist.channelFromPlaylistUrl(session.masterUrl);
+        if (channel) rememberMain(session, channel, session.masterUrl, master);
+        const ads = await sampleHasAds(master, session.masterUrl, session.mainVariantUrl);
+        if (ads === true) {
+          session.mainProbeFails = 0;
+          return;
+        }
+        if (ads === false) {
+          leaveBackup(session);
+          return;
+        }
+      }
+    }
+
+    // Fail open: do not freeze on a dead backup when main/master probes keep failing.
+    session.mainProbeFails += 1;
+    if (session.mainProbeFails >= 3) leaveBackup(session);
   }
 
   async function playbackToken(channel, playerType) {
@@ -786,15 +821,7 @@ function createPlaylistGuard(env) {
     rememberMain(session, channel, masterUrl, liveText);
     const ads = await sampleHasAds(liveText, masterUrl, knownUrl, knownBody);
     if (ads === false) {
-      const wasUsing = session.usingBackup;
-      session.usingBackup = false;
-      session.served = "";
-      session.backupUrls.clear();
-      session.tried.clear();
-      session.reloadedForBackup = false;
-      session.requestedAds.clear();
-      env.status(false);
-      if (wasUsing) scheduleReload();
+      leaveBackup(session);
       if (sessionIsFinished(session)) dropSession(channel);
       return null;
     }
