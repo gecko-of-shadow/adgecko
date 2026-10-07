@@ -1,11 +1,10 @@
 {
   "manifest_version": 3,
   "name": "twitch-adblock",
-  "version": "0.1.5",
-  "description": "Blocks video ads on Twitch.",
+  "version": "0.1.6",
+  "description": "Blocks video ads on Twitch and YouTube.",
   "action": {
     "default_title": "twitch-adblock",
-    "default_popup": "src/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -24,6 +23,13 @@
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true
+    },
+    {
+      "matches": ["*://www.youtube.com/*", "*://m.youtube.com/*", "*://youtube.com/*"],
+      "js": ["src/youtube.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
     }
   ]
 }
