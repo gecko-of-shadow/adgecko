@@ -17,13 +17,15 @@
     status: setNotice,
   });
 
-  window.fetch = function (input, init) {
+  window.fetch = async function (input, init) {
     const replay = input instanceof Request ? input.clone() : input;
-    const request = rewritePlaybackRequest(input, init);
-    return guard(request.input, request.init).catch((error) => {
+    try {
+      const request = await rewritePlaybackRequest(input, init);
+      return await guard(request.input, request.init);
+    } catch (error) {
       console.log("twitch-adblock failed open", error);
       return nativeFetch(replay, init);
-    });
+    }
   };
 
   const NativeWorker = window.Worker;
@@ -83,6 +85,7 @@
     return [
       installTwitchAdblockPlaylist.toString(),
       "installTwitchAdblockPlaylist(globalThis.TwitchAdblockPlaylist = {});",
+      rewritePlaybackBody.toString(),
       createPlaylistGuard.toString(),
       startTwitchAdblockWorker.toString(),
       "startTwitchAdblockWorker();",
@@ -124,43 +127,31 @@
     return response.text();
   }
 
-  function rewritePlaybackRequest(input, init) {
-    captureHeaders(init);
+  async function rewritePlaybackRequest(input, init) {
+    captureHeaders(init, input);
     const url = requestUrl(input);
-    if (!init || typeof init.body !== "string" || !url.includes("gql") || !init.body.includes("PlaybackAccessToken")) {
-      return { input, init };
+    let body = "";
+    let fromRequest = false;
+    if (init && typeof init.body === "string") body = init.body;
+    else if (typeof Request !== "undefined" && input instanceof Request) {
+      body = await input.clone().text();
+      fromRequest = true;
     }
-    // A picture-by-picture token opens a second player above chat. Drop it here.
-    // Backup tokens use the original fetch, so they are not affected.
-    if (init.body.includes("picture-by-picture")) {
-      console.log("twitch-adblock: dropping the picture-by-picture player token");
-      return { input, init: Object.assign({}, init, { body: "" }) };
-    }
-    try {
-      const parsed = JSON.parse(init.body);
-      const items = Array.isArray(parsed) ? parsed : [parsed];
-      let changed = false;
-      for (const item of items) {
-        const name = item && item.operationName ? item.operationName : "";
-        if (!item || !item.variables || !name.includes("PlaybackAccessToken") || name.includes("Prefetch")) continue;
-        if (item.variables.playerType && item.variables.playerType !== FORCED_PLAYER_TYPE) {
-          item.variables.playerType = FORCED_PLAYER_TYPE;
-          changed = true;
-        }
-      }
-      if (!changed) return { input, init };
-      console.log("twitch-adblock: using the popout player token");
-      return { input, init: Object.assign({}, init, { body: JSON.stringify(parsed) }) };
-    } catch {
-      return { input, init };
-    }
+    if (!url.includes("gql") || !body.includes("PlaybackAccessToken")) return { input, init };
+    const rewritten = rewritePlaybackBody(body);
+    if (!rewritten.changed) return { input, init };
+    if (rewritten.droppedPip) console.log("twitch-adblock: dropping the picture-by-picture player token");
+    if (rewritten.rewrittenType) console.log("twitch-adblock: using the popout player token");
+    if (!fromRequest) return { input, init: Object.assign({}, init, { body: rewritten.body }) };
+    return { input: new Request(input, { body: rewritten.body }), init };
   }
 
-  function captureHeaders(init) {
-    if (!init || !init.headers) return;
-    const foundDevice = headerValue(init.headers, "X-Device-Id") || headerValue(init.headers, "Device-ID");
-    const foundIntegrity = headerValue(init.headers, "Client-Integrity");
-    const foundAuthorization = headerValue(init.headers, "Authorization");
+  function captureHeaders(init, input) {
+    const fromInit = init && init.headers;
+    const fromRequest = typeof Request !== "undefined" && input instanceof Request ? input.headers : null;
+    const foundDevice = headerValue(fromInit, "X-Device-Id") || headerValue(fromInit, "Device-ID") || headerValue(fromRequest, "X-Device-Id") || headerValue(fromRequest, "Device-ID");
+    const foundIntegrity = headerValue(fromInit, "Client-Integrity") || headerValue(fromRequest, "Client-Integrity");
+    const foundAuthorization = headerValue(fromInit, "Authorization") || headerValue(fromRequest, "Authorization");
     if (foundDevice) deviceId = foundDevice;
     if (foundIntegrity) clientIntegrity = foundIntegrity;
     if (foundAuthorization) authorization = foundAuthorization;
@@ -355,13 +346,65 @@ function startTwitchAdblockWorker() {
       postMessage({ source: "twitch-adblock", type: "status", blocking });
     },
   });
-  self.fetch = function (input, init) {
+  self.fetch = async function (input, init) {
     const replay = typeof Request !== "undefined" && input instanceof Request ? input.clone() : input;
-    return guard(input, init).catch((error) => {
+    try {
+      let nextInput = input;
+      let nextInit = init;
+      let body = init && typeof init.body === "string" ? init.body : "";
+      if (!body && typeof Request !== "undefined" && input instanceof Request) body = await input.clone().text();
+      const url = typeof input === "string" ? input : (input && input.url) || "";
+      if (url.includes("gql") && body.includes("PlaybackAccessToken")) {
+        const rewritten = rewritePlaybackBody(body);
+        if (rewritten.changed) {
+          if (init && typeof init.body === "string") nextInit = Object.assign({}, init, { body: rewritten.body });
+          else if (typeof Request !== "undefined" && input instanceof Request) nextInput = new Request(input, { body: rewritten.body });
+        }
+      }
+      return await guard(nextInput, nextInit);
+    } catch (error) {
       console.log("twitch-adblock failed open", error);
       return nativeFetch(replay, init);
-    });
+    }
   };
+}
+
+function rewritePlaybackBody(body) {
+  const source = String(body || "");
+  if (!source.includes("PlaybackAccessToken")) return { body: source, changed: false, droppedPip: false, rewrittenType: false };
+  let parsed;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    return { body: source, changed: false, droppedPip: false, rewrittenType: false };
+  }
+  const items = Array.isArray(parsed) ? parsed : [parsed];
+  const kept = [];
+  let changed = false;
+  let droppedPip = false;
+  let rewrittenType = false;
+  for (const item of items) {
+    const name = item && item.operationName ? String(item.operationName) : "";
+    const isPlayback = Boolean(item && item.variables && name.includes("PlaybackAccessToken") && !name.includes("Prefetch"));
+    if (!isPlayback) {
+      kept.push(item);
+      continue;
+    }
+    if (item.variables.playerType === "picture-by-picture") {
+      droppedPip = true;
+      changed = true;
+      continue;
+    }
+    if (item.variables.playerType && item.variables.playerType !== "popout") {
+      item.variables.playerType = "popout";
+      rewrittenType = true;
+      changed = true;
+    }
+    kept.push(item);
+  }
+  if (!changed) return { body: source, changed: false, droppedPip: false, rewrittenType: false };
+  if (!kept.length) return { body: "", changed: true, droppedPip, rewrittenType };
+  return { body: JSON.stringify(Array.isArray(parsed) ? kept : kept[0]), changed: true, droppedPip, rewrittenType };
 }
 
 function createPlaylistGuard(env) {
@@ -586,27 +629,54 @@ function createPlaylistGuard(env) {
     return tokenFrom(json);
   }
 
-  async function sampleHasAds(masterText, masterUrl) {
-    const sample = playlist.pickVariant(masterText, null);
-    if (!sample) return playlist.hasAdBreak(masterText) || null;
+  async function sampleHasAds(masterText, masterUrl, knownUrl, knownBody) {
+    const variants = playlist.listVariants(masterText);
+    if (!variants.length) return playlist.hasAdBreak(masterText) || null;
+    let sawPlaylist = false;
+    for (const variant of variants) {
+      const variantUrl = absoluteVariant(variant.url, masterUrl);
+      let body = "";
+      if (knownBody && knownUrl && variantUrl === knownUrl) body = knownBody;
+      else {
+        try {
+          const response = await env.fetch(variantUrl);
+          if (!response.ok) continue;
+          body = await response.text();
+        } catch {
+          continue;
+        }
+      }
+      if (!body.startsWith("#EXTM3U")) continue;
+      sawPlaylist = true;
+      if (playlist.hasAdBreak(body)) return true;
+    }
+    return sawPlaylist ? false : null;
+  }
+
+  async function backupMaster(masterUrl, liveText, knownUrl, knownBody) {
+    const channel = playlist.channelFromPlaylistUrl(masterUrl);
+    if (!channel) return null;
+    let session = ensureSession(channel);
+    while (session.inflight) {
+      await session.inflight;
+      session = sessions.get(channel) || ensureSession(channel);
+    }
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    session.inflight = gate;
     try {
-      const response = await env.fetch(new URL(sample, masterUrl).href);
-      if (!response.ok) return null;
-      const body = await response.text();
-      if (!body.startsWith("#EXTM3U")) return null;
-      return playlist.hasAdBreak(body);
-    } catch {
-      return null;
+      return await runBackup(session, channel, masterUrl, liveText, knownUrl, knownBody);
+    } finally {
+      release();
+      if (session.inflight === gate) session.inflight = null;
     }
   }
 
-  async function backupMaster(masterUrl, liveText) {
-    const channel = playlist.channelFromPlaylistUrl(masterUrl);
-    if (!channel) return null;
-    const session = ensureSession(channel);
+  async function runBackup(session, channel, masterUrl, liveText, knownUrl, knownBody) {
     rememberMain(session, channel, masterUrl, liveText);
-
-    const ads = await sampleHasAds(liveText, masterUrl);
+    const ads = await sampleHasAds(liveText, masterUrl, knownUrl, knownBody);
     if (ads === false) {
       const wasUsing = session.usingBackup;
       session.usingBackup = false;
@@ -649,8 +719,7 @@ function createPlaylistGuard(env) {
         if (!response.ok) continue;
         const master = await response.text();
         const probe = await sampleHasAds(master, url.href);
-        if (probe === null) continue;
-        if (probe === true && playerType !== backupTypes[backupTypes.length - 1]) continue;
+        if (probe === null || probe === true) continue;
         session.served = playlist.mapVariantsToBackup(liveText, master, url.href);
         session.usingBackup = true;
         session.retryAt = Date.now() + 30000;
@@ -677,7 +746,7 @@ function createPlaylistGuard(env) {
       return session.usingBackup ? text : null;
     }
     if (!playlist.hasAdBreak(text)) return null;
-    const mapped = await backupMaster(session.masterUrl, session.liveMaster);
+    const mapped = await backupMaster(session.masterUrl, session.liveMaster, url, text);
     if (!mapped || !session.usingBackup) return null;
     const picked = playlist.pickVariant(mapped, session.variants.get(url) || null);
     if (!picked) return null;
@@ -725,7 +794,7 @@ function createPlaylistGuard(env) {
         headers: { "Content-Type": "video/mp2t" },
       });
     }
-    if (!playlist.isLivePlaylistUrl(url)) return env.fetch(input, init);
+    if (!playlist.isLivePlaylistUrl(url) && !streamByUrl.has(url)) return env.fetch(input, init);
     if (url.includes("/channel/hls/")) {
       const parentless = new URL(url);
       parentless.searchParams.delete("parent_domains");

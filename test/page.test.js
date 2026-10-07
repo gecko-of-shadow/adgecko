@@ -4,6 +4,12 @@ function assert(condition, label) {
   if (!condition) throw new Error(label);
 }
 
+function assertEquals(actual, expected, label) {
+  const left = JSON.stringify(actual);
+  const right = JSON.stringify(expected);
+  if (left !== right) throw new Error(`${label || "expected equal values"}\n${left}\n${right}`);
+}
+
 Deno.test("the worker prelude installs the playlist on globalThis", () => {
   assert(
     source.includes("installTwitchAdblockPlaylist(globalThis.TwitchAdblockPlaylist = {})"),
@@ -26,10 +32,10 @@ Deno.test("fail-open clones a Request before the body is used", () => {
 });
 
 Deno.test("a failed variant probe does not count as a clean backup", () => {
-  assert(source.includes("if (!response.ok) return null;"), "unknown probe result");
-  assert(source.includes('if (!body.startsWith("#EXTM3U")) return null;'), "a non-playlist body is not a clean stream");
+  assert(source.includes("if (!response.ok) continue;"), "a missing rung is not a clean stream");
+  assert(source.includes('if (!body.startsWith("#EXTM3U")) continue;'), "a non-playlist body is not a clean stream");
   assert(source.includes("return playlist.hasAdBreak(masterText) || null;"), "a master with no variant is not a clean stream");
-  assert(source.includes("if (probe === null) continue;"), "skip a backup whose playlist did not load");
+  assert(source.includes("if (probe === null || probe === true) continue;"), "skip a backup that did not load or still has ads");
   assert(source.includes("session.tried.clear();"), "a good backup can be chosen again after the retry window");
 });
 
@@ -51,11 +57,18 @@ Deno.test("backup player types match video-swap-new", () => {
 });
 
 Deno.test("a picture-by-picture token request is dropped before the chat mini player opens", () => {
-  const dropAt = source.indexOf('init.body.includes("picture-by-picture")');
-  const rewriteAt = source.indexOf("item.variables.playerType = FORCED_PLAYER_TYPE");
-  assert(dropAt !== -1, "detect the mini-player token");
-  assert(source.includes('body: ""'), "an empty body makes gql reject that token");
-  assert(rewriteAt !== -1 && dropAt < rewriteAt, "drop the mini-player token before rewriting it to popout");
+  const start = source.indexOf("function rewritePlaybackBody");
+  const rewritePlaybackBody = new Function(`${source.slice(start)}\nreturn rewritePlaybackBody;`)();
+  const onlyPip = JSON.stringify({ operationName: "PlaybackAccessToken", variables: { playerType: "picture-by-picture" } });
+  assertEquals(rewritePlaybackBody(onlyPip).body, "");
+  const batch = JSON.stringify([
+    { operationName: "PlaybackAccessToken", variables: { playerType: "site", login: "Some_Channel" } },
+    { operationName: "PlaybackAccessToken", variables: { playerType: "picture-by-picture", login: "Some_Channel" } },
+  ]);
+  const kept = JSON.parse(rewritePlaybackBody(batch).body);
+  assertEquals(kept.length, 1);
+  assertEquals(kept[0].variables.playerType, "popout");
+  assertEquals(kept[0].variables.login, "Some_Channel");
 });
 
 Deno.test("a midroll variant is answered with the backup stream", () => {

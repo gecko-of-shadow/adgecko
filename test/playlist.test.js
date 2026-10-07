@@ -21,6 +21,8 @@ Deno.test("live playlist urls include media playlists that have no m3u8 suffix",
   assertEquals(playlist.isLivePlaylistUrl("https://usher.ttvnw.net/api/v2/channel/hls/name.m3u8"), true);
   assertEquals(playlist.isLivePlaylistUrl("https://usher.ttvnw.net/vod/v2/123.m3u8"), false);
   assertEquals(playlist.isLivePlaylistUrl("https://gql.twitch.tv/gql"), false);
+  assertEquals(playlist.isLivePlaylistUrl("https://clips-media-assets2.twitch.tv/AT-cm/abc.m3u8"), false);
+  assertEquals(playlist.isLivePlaylistUrl("https://d2e2de1etea730.cloudfront.net/video/hls/index.m3u8"), false);
 });
 
 Deno.test("channel names come from live usher paths", () => {
@@ -215,11 +217,13 @@ Deno.test("a leftover ad tag with only live segments does not count as an ad bre
     '#EXT-X-DATERANGE:ID="stitched-ad-old",CLASS="twitch-stitched-ad"',
     "#EXTINF:2.0,live",
     "https://video.example/live1.ts",
+    "#EXT-X-TWITCH-PREFETCH:https://video.example/next.ts",
   ].join("\n");
   assertEquals(playlist.hasAdBreak(playlistText), false);
   const stripped = playlist.stripAds(playlistText);
   assertEquals(stripped.stripped, false);
   assertEquals(stripped.text.includes("https://video.example/live1.ts"), true);
+  assertEquals(stripped.text.includes("#EXT-X-TWITCH-PREFETCH:"), true);
 });
 
 Deno.test("a normal live playlist is left unchanged", () => {

@@ -38,7 +38,16 @@ function installTwitchAdblockPlaylist(target) {
   function isLivePlaylistUrl(url) {
     const value = String(url || "");
     if (value.includes("/vod/")) return false;
-    return value.includes(".m3u8") || value.includes("/playlist/") || value.includes("/channel/hls/");
+    let parsed;
+    try {
+      parsed = new URL(value, "https://usher.ttvnw.net");
+    } catch {
+      return false;
+    }
+    const host = parsed.hostname;
+    if (host !== "usher.ttvnw.net" && !host.endsWith(".ttvnw.net")) return false;
+    const path = parsed.pathname;
+    return path.includes("/channel/hls/") || path.includes("/playlist/") || path.endsWith(".m3u8");
   }
 
   function channelFromPlaylistUrl(url) {
@@ -243,7 +252,7 @@ function installTwitchAdblockPlaylist(target) {
     const windows = adWindows(lines);
     const times = segmentTimes(lines);
     const marked = lines.some((line, index) => {
-      if (hasStitchedAd(line) || (line.startsWith("#EXTINF") && line.includes("Amazon"))) return true;
+      if (line.startsWith("#EXTINF") && line.includes("Amazon")) return true;
       return isAdSegmentLine(lines, index, windows, times);
     });
     if (!marked) return { text: lines.join("\n"), adUrls: [], stripped: false };

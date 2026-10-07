@@ -41,6 +41,15 @@ A small "Blocking ads" label appears on the player while an ad is being blocked.
 - Keeps only the recent variant URLs for a channel, and at most eight channel sessions.
 - Revokes a player-worker blob URL and removes its message listener when that worker ends.
 - Times out a worker GraphQL wait that never gets a reply. The ad plays if the reply does not come back.
+- Leaves the player on the live stream when every backup still has ads, and holds the last live frame there.
+- Still looks at later quality rungs when the first playlist request fails.
+- Passes Twitch clips and VODs through unchanged.
+- Drops only a picture-by-picture token, including inside a batched request, a `Request` body, and the player worker. Other playback requests in that body stay, and integrity headers from the request are kept.
+- Leaves a live prefetch in place when a stitched tag has no ad segments.
+- Runs one backup search when two master playlists overlap, and does not download a media playlist twice for that check.
+- A reused YouTube player request returns the new video.
+- The "Blocking ads" label clears on navigation and when the next player response has no ads.
+- An ad-only YouTube watch or Shorts payload is left unchanged so that ad can play.
 
 ### 0.1.6
 

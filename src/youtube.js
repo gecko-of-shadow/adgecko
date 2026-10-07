@@ -238,6 +238,8 @@ function startYoutubeAdblock() {
   const nativeSend = XMLHttpRequest.prototype.send;
   const nativeParse = JSON.parse;
   let hideTimer = 0;
+  let noticeGeneration = 0;
+  const retryTimers = new Set();
 
   function requestUrl(input) {
     if (typeof input === "string") return input;
@@ -250,6 +252,15 @@ function startYoutubeAdblock() {
     return path === "/watch" || path.startsWith("/shorts");
   }
 
+  function isAdOnlyPlayer(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    if (api.rootHasPlayback(value)) return false;
+    const keys = Object.keys(value);
+    if (!keys.length) return false;
+    const adKeys = new Set(["adPlacements", "playerAds", "adSlots", "adBreakHeartbeatParams", "adBreakParams"]);
+    return keys.every((key) => adKeys.has(key));
+  }
+
   function playerRoot() {
     const active = document.querySelector("ytd-reel-video-renderer[is-active]");
     if (active) return active.querySelector("#player-container") || active.querySelector(".html5-video-player") || active;
@@ -258,16 +269,33 @@ function startYoutubeAdblock() {
       || document.querySelector("ytd-watch-flexy #player");
   }
 
-  function notify(blocking, attempt) {
+  function clearNoticeTimers() {
+    clearTimeout(hideTimer);
+    hideTimer = 0;
+    for (const timer of retryTimers) clearTimeout(timer);
+    retryTimers.clear();
+  }
+
+  function notify(blocking, attempt, generation) {
     const existing = document.getElementById("twitch-adblock-notice");
     if (!blocking) {
+      noticeGeneration += 1;
+      clearNoticeTimers();
       if (existing) existing.remove();
       return;
     }
+    const gen = generation == null ? noticeGeneration : generation;
+    if (gen !== noticeGeneration) return;
     const player = playerRoot();
     if (!player) {
       const next = (attempt || 0) + 1;
-      if (next <= 8) setTimeout(() => notify(true, next), 500);
+      if (next <= 8) {
+        const timer = setTimeout(() => {
+          retryTimers.delete(timer);
+          notify(true, next, gen);
+        }, 500);
+        retryTimers.add(timer);
+      }
       return;
     }
     const notice = existing || document.createElement("div");
@@ -276,7 +304,9 @@ function startYoutubeAdblock() {
     notice.style.cssText = "position:absolute;top:8px;left:8px;z-index:60;color:#fff;background:rgba(0,0,0,.75);padding:4px 8px;font:12px/1.2 sans-serif;pointer-events:none;";
     if (notice.parentElement !== player) player.appendChild(notice);
     clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => notify(false), 8000);
+    hideTimer = setTimeout(() => {
+      if (gen === noticeGeneration) notify(false);
+    }, 8000);
   }
 
   function removeDomAds() {
@@ -370,7 +400,10 @@ function startYoutubeAdblock() {
     return prepare.then((prepared) => nativeFetch(prepared.input, prepared.init).then((response) => {
       return response.clone().text().then((text) => {
         const stripped = api.stripResponseText(text, url);
-        if (!stripped.blocked) return response;
+        if (!stripped.blocked) {
+          if ((kind === "player" || kind === "reel") && !api.textLooksLikeAds(text)) notify(false);
+          return response;
+        }
         notify(true);
         const headers = new Headers(response.headers);
         headers.delete("content-encoding");
@@ -395,19 +428,18 @@ function startYoutubeAdblock() {
     xhr.__ytAdblock = true;
     const textDesc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, "responseText");
     const responseDesc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, "response");
-    let cached = "";
-    let done = false;
     Object.defineProperty(xhr, "responseText", {
       configurable: true,
       get() {
         const raw = textDesc.get.call(xhr);
         if (xhr.readyState !== 4) return raw;
-        if (done) return cached;
+        if (xhr.__ytCacheGen === xhr.__ytGen) return xhr.__ytCacheText;
         const stripped = api.stripResponseText(raw, xhr.__ytUrl || "");
-        cached = stripped.blocked ? stripped.text : raw;
-        done = true;
+        xhr.__ytCacheText = stripped.blocked ? stripped.text : raw;
+        xhr.__ytCacheGen = xhr.__ytGen;
         if (stripped.blocked) notify(true);
-        return cached;
+        else if ((api.kindFor(xhr.__ytUrl || "") === "player" || api.kindFor(xhr.__ytUrl || "") === "reel") && !api.textLooksLikeAds(raw)) notify(false);
+        return xhr.__ytCacheText;
       },
     });
     Object.defineProperty(xhr, "response", {
@@ -432,6 +464,7 @@ function startYoutubeAdblock() {
 
   XMLHttpRequest.prototype.open = function (method, url) {
     this.__ytUrl = String(url || "");
+    this.__ytGen = (this.__ytGen || 0) + 1;
     if (api.kindFor(this.__ytUrl)) installXhrStrip(this);
     return nativeOpen.apply(this, arguments);
   };
@@ -454,8 +487,10 @@ function startYoutubeAdblock() {
     const path = location.pathname || "";
     const kind = path.startsWith("/shorts") ? "reel" : (path === "/watch" ? "watch" : "player");
     try {
+      if (isAdOnlyPlayer(value)) return value;
       const stripped = api.stripValue(value, kind);
       if (!stripped.blocked) return value;
+      if (!api.rootHasPlayback(stripped.value) && !api.rootHasPlayback(value)) return value;
       if (kind === "player" && !api.rootHasPlayback(stripped.value)) return value;
       notify(true);
       return stripped.value;
