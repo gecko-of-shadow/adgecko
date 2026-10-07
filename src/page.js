@@ -1027,7 +1027,14 @@ function createPlaylistGuard(env) {
         env.status(false);
         return textResponse(text);
       }
+      // Never serve a blanked/stripped midroll under Twitch ad UI — if strip would
+      // only blank ad segments (no live hold), latch fail-open and pass original A/V.
       const stripped = playlist.stripAds(swapped || text);
+      if (!swapped && stripped.adUrls.length && playlist.hasAdBreak(text)) {
+        if (session) failOpenShowAds(session);
+        env.status(false);
+        return textResponse(text);
+      }
       if (stripped.adUrls.length) rememberBlocked(stripped.adUrls);
       // Gold banner is !!BackupEncodings — only while we are on a backup stream.
       const latest = channel ? sessions.get(channel) : null;

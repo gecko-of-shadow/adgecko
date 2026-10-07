@@ -277,6 +277,13 @@ function installTwitchAdblockPlaylist(target) {
     const kept = [];
     let replaced = false;
     let previousClean = "";
+    function lastKeptUrl() {
+      for (let k = kept.length - 1; k >= 0; k--) {
+        const entry = kept[k];
+        if (entry && !entry.startsWith("#")) return entry;
+      }
+      return "";
+    }
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
         .replaceAll(/(X-TV-TWITCH-AD-URL=")[^"]*(")/g, "$1https://twitch.tv$2")
@@ -292,12 +299,19 @@ function installTwitchAdblockPlaylist(target) {
         const duration = line.slice("#EXTINF:".length).split(",")[0];
         const adUrl = nextUrl;
         const anchor = previousClean || followingClean[i];
-        kept.push(`#EXTINF:${duration},live`);
         if (anchor) {
+          // One live hold is enough — repeating the same URL for every ad slot
+          // loops A/V. Drop extra slots so playback stays continuous.
+          if (lastKeptUrl() === anchor) {
+            i += 1;
+            continue;
+          }
+          kept.push(`#EXTINF:${duration},live`);
           kept.push(anchor);
         } else {
+          // No live hold: pass the real ad through. Blanking freezes under ad UI.
+          kept.push(line);
           kept.push(adUrl);
-          adUrls.push(adUrl);
         }
         i += 1;
         continue;

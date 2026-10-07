@@ -30,16 +30,22 @@
 
 ## What’s new in 0.1.17
 
-**Sole recommended Latest.** Play-like **0.1.15** on ad-heavy live channels: when no clean backup exists, still **fail open** (pass the real midroll through — do not strip into a blank spinner), but **without** the 0.1.16 forced enter/exit player reloads that starved the buffer (~0–13ms) and left a stuck spinner while chat kept moving. Clean handoff from 0.1.15 is unchanged. Prefer this zip only; older builds are retired.
+**Sole recommended Latest.** Goal: **continuous live playback** — no freeze, buffer starve, or forced reload thrash through midrolls.
+
+- When a clean backup exists: swap like video-swap-new (lower quality during ads is OK); one handoff reload only when latching/leaving backup.
+- When every backup is dirty: **fail open** — pass the real midroll A/V through unmodified. **No** enter/exit `setSrc` (0.1.16 starved buffers into a stuck spinner while chat kept moving).
+- Never blank or loop one live segment under Twitch ad UI; strip drops extra same-URL holds instead of repeating them.
+
+Prefer this zip only; older builds are retired.
 
 <p align="center">
-  <img src="media/whats-new.jpg" alt="v0.1.17 play-like-15 fail-open without reload thrash" width="900">
+  <img src="media/whats-new.jpg" alt="v0.1.17 continuous play fail-open without reload thrash" width="900">
 </p>
 
 ---
 
 ## Notes
 
-- Twitch: live midrolls only (VODs/clips pass through). Player may hitch once at midroll start/end.
+- Twitch: live midrolls only (VODs/clips pass through). Backup swap may change quality briefly; playback should keep going.
 - YouTube: player ads + home Sponsored cards. Ads already muxed into the file still play (fail open).
 - Dev: `deno test --no-lock test/` · `bash scripts/release-gate.sh` · `bash scripts/pack-zip.sh`

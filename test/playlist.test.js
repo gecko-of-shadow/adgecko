@@ -116,7 +116,7 @@ Deno.test("ad playlists repeat the live segment and drop stitched metadata", () 
   assertEquals(stripped.text.includes("https://video.example/live1.ts"), true);
 });
 
-Deno.test("an all-ad playlist records the segment urls when no live segment exists", () => {
+Deno.test("an all-ad playlist passes real ads through instead of blanking", () => {
   const playlistText = [
     "#EXTM3U",
     '#EXT-X-DATERANGE:ID="stitched-ad-1"',
@@ -124,12 +124,13 @@ Deno.test("an all-ad playlist records the segment urls when no live segment exis
     "https://ads.example/only.ts",
   ].join("\n");
   const stripped = playlist.stripAds(playlistText);
-  assertEquals(stripped.adUrls, ["https://ads.example/only.ts"]);
-  assertEquals(stripped.text.includes("#EXTINF:2.0,live"), true);
+  assertEquals(stripped.adUrls, []);
+  assertEquals(stripped.stripped, true);
   assertEquals(stripped.text.includes("https://ads.example/only.ts"), true);
+  assertEquals(stripped.text.includes("Amazon"), true);
 });
 
-Deno.test("an ad between live segments repeats the newest preceding segment", () => {
+Deno.test("an ad between live segments holds one live url without repeating the loop", () => {
   const playlistText = [
     "#EXTM3U",
     "#EXTINF:2.0,live",
@@ -150,12 +151,10 @@ Deno.test("an ad between live segments repeats the newest preceding segment", ()
   assertEquals(stripped.adUrls, []);
   assertEquals(stripped.text.includes("https://ads.example/"), false);
   const urls = stripped.text.split("\n").filter((line) => line.startsWith("https://"));
+  // Drop consecutive same-anchor repeats so A/V does not loop one segment.
   assertEquals(urls, [
     "https://video.example/live1.ts",
     "https://video.example/live2.ts",
-    "https://video.example/live2.ts",
-    "https://video.example/live2.ts",
-    "https://video.example/live3.ts",
     "https://video.example/live3.ts",
   ]);
 });
@@ -164,7 +163,9 @@ Deno.test("an ad path marked live is not reused as the clean segment", () => {
   const onlyAd = "#EXTM3U\n#EXTINF:2.0,live\nhttps://video.example/adsquared/only.ts";
   const stripped = playlist.stripAds(onlyAd);
   assertEquals(stripped.stripped, true);
-  assertEquals(stripped.adUrls, ["https://video.example/adsquared/only.ts"]);
+  // No live hold → pass the real segment through (never blank under ad UI).
+  assertEquals(stripped.adUrls, []);
+  assertEquals(stripped.text.includes("https://video.example/adsquared/only.ts"), true);
 
   const mixed = [
     "#EXTM3U",
