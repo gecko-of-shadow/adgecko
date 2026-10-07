@@ -16,12 +16,14 @@ A Chrome extension that blocks video ads on Twitch and YouTube. It is always on.
 
 ## Install
 
-1. Download [twitch-adblock-0.1.8.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.8/twitch-adblock-0.1.8.zip).
+1. Download [twitch-adblock-0.1.9.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.9/twitch-adblock-0.1.9.zip).
 2. Unzip it.
 3. Open `chrome://extensions`.
 4. Turn on Developer mode.
 5. Choose **Load unpacked** and select the unzipped folder (the one that contains `manifest.json`).
 6. Turn off the uBlock filter `twitch.tv##+js(twitch-videoad)` while this extension is loaded. If another extension is also changing the YouTube player, turn that off too.
+
+Install from the **release zip**, not from an arbitrary git tag checkout. The zip is the packaged extension (`manifest.json`, `src/`, `icons/` only).
 
 A small "Blocking ads" label appears on the player while an ad is being blocked.
 
@@ -34,7 +36,34 @@ A small "Blocking ads" label appears on the player while an ad is being blocked.
 - This build blocks Twitch live streams. It does not block Twitch VODs or clips.
 - YouTube ads that are already mixed into the video file still play. The extension does not replace that picture.
 
+## Testing
+
+Logic and edge cases:
+
+```
+deno test --no-lock test/
+```
+
+Release smoke (package allowlist, permissions, host coverage, no phone-home / dangerous APIs, deno suite, light playlist fuzz). Requires Deno, Python 3, and ripgrep (`rg`). Does not phone home.
+
+```
+bash scripts/release-gate.sh
+bash scripts/release-gate.sh --zip twitch-adblock-0.1.9.zip --expect-version 0.1.9
+```
+
+Pack a shippable zip (`manifest.json`, `src/*.js`, `icons/` only):
+
+```
+bash scripts/pack-zip.sh
+```
+
 ## Changelog
+
+### 0.1.9
+
+- Adds `scripts/release-gate.sh`: local release smoke for package contents, manifest hosts/permissions, phone-home and dangerous-API scans, `deno test`, and a light playlist fuzz.
+- Adds `scripts/pack-zip.sh` to build the shippable zip.
+- Documents that installs should use the GitHub release zip (not a mismatched git tag tree).
 
 ### 0.1.8
 
@@ -62,9 +91,3 @@ A small "Blocking ads" label appears on the player while an ad is being blocked.
 ### 0.1.6
 
 - Blocks YouTube pre-roll, mid-roll, Shorts, and banner and overlay ads on the watch page.
-
-Playlist checks:
-
-```
-deno test --no-lock test/playlist.test.js test/page.test.js test/swap.test.js test/youtube.test.js
-```
