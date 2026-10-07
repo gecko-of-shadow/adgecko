@@ -48,6 +48,11 @@ function playlistResponse(body) {
   return new Response(body, { status: 200, headers: { "Content-Type": "application/vnd.apple.mpegurl" } });
 }
 
+function flushReload() {
+  // scheduleReload uses setTimeout(0) so the playlist Response lands first.
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 Deno.test("a midroll variant is replaced by the first clean backup and the player reloads once", async () => {
   const tokens = [];
   const reloads = [];
@@ -89,19 +94,23 @@ Deno.test("a midroll variant is replaced by the first clean backup and the playe
   const mediaText = await media.text();
   assert(mediaText.includes("https://video.example/live.ts"), "the variant the player already has is answered with backup video");
   assert(!mediaText.includes("ads.example"), "the ad segment is not in the swapped playlist");
+  await flushReload();
   assertEquals(reloads, ["reload"], "one reload when the midroll swap starts");
 
   const backup = await guard("https://video.example/pip-variant.m3u8");
   const backupText = await backup.text();
   assert(backupText.includes("https://video.example/live.ts"), "backup playback stays on the clean playlist");
+  await flushReload();
   assertEquals(reloads, ["reload"], "checking the main stream does not reload again while ads remain");
 
   mainClean = true;
   await guard("https://video.example/pip-variant.m3u8");
+  await flushReload();
   assertEquals(reloads, ["reload", "reload"], "playback returns to the main stream when the ad break ends");
   const restored = await guard(masterUrl);
   const restoredText = await restored.text();
   assert(restoredText.includes("https://video.example/live-variant.m3u8"), "the next master is the normal stream");
+  await flushReload();
   assertEquals(reloads, ["reload", "reload"], "a clean master does not reload again");
 });
 
@@ -239,6 +248,7 @@ Deno.test("a stale main variant still returns to main and clears Blocking ads", 
   statuses.length = 0;
   reloads.length = 0;
   await guard("https://video.example/pip-variant.m3u8");
+  await flushReload();
 
   assertEquals(statuses.at(-1), false, "Blocking ads clears once main is clean again");
   assertEquals(reloads, ["reload"], "player reloads back onto the main stream");
@@ -292,7 +302,40 @@ Deno.test("failed main probes while on backup fail open instead of freezing", as
   await guard("https://video.example/pip-variant.m3u8");
   await guard("https://video.example/pip-variant.m3u8");
   await guard("https://video.example/pip-variant.m3u8");
+  await flushReload();
 
   assertEquals(statuses.at(-1), false, "fail open clears the blocking label");
   assert(reloads.length >= 1, "fail open reloads so the player is not stuck on a dead backup");
+});
+
+Deno.test("scheduleReload fires after the clean playlist Response is returned", async () => {
+  const order = [];
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("token=live")) return playlistResponse(mainMaster);
+      if (value.includes("/channel/hls/")) return playlistResponse(masterFor("https://video.example/pip-variant.m3u8"));
+      if (value.includes("live-variant")) return playlistResponse(adMedia);
+      if (value.includes("pip-variant")) return playlistResponse(cleanMedia);
+      return new Response("missing", { status: 404 });
+    },
+    async gql(body) {
+      return JSON.stringify({
+        data: { streamPlaybackAccessToken: { value: body.variables.playerType, signature: "sig" } },
+      });
+    },
+    reload() {
+      order.push("reload");
+    },
+    status() {},
+  });
+
+  await guard("https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live");
+  const media = await guard("https://video.example/live-variant.m3u8");
+  order.push("response");
+  await media.text();
+  assertEquals(order, ["response"], "reload must not run before the fetch caller gets the body");
+  await flushReload();
+  assertEquals(order, ["response", "reload"], "reload runs on the next macrotask after the Response");
 });

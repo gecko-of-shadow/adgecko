@@ -260,22 +260,51 @@
       return;
     }
     // A stalled midroll player often reports paused. Skipping reload left gecko
-    // stuck on the backup with a spinner after the ad ended — always refresh.
-    const quality = safeGet("video-quality");
+    // stuck on the buffering spinner after the ad ended — always refresh.
     const muted = safeGet("video-muted");
     const volume = safeGet("volume");
+    let quality = safeGet("video-quality");
+    try {
+      const group = found.player.core && found.player.core.state && found.player.core.state.quality
+        ? found.player.core.state.quality.group
+        : "";
+      if (!quality && group) quality = JSON.stringify({ default: group });
+    } catch {
+      // Player internals differ by build.
+    }
+    // Pin settings before setSrc so the new usher instance reads them on boot.
+    if (quality) safeSet("video-quality", quality);
+    if (muted) safeSet("video-muted", muted);
+    if (volume) safeSet("volume", volume);
     try {
       found.state.setSrc({ isNewMediaPlayerInstance: true, refreshAccessToken: true });
-      if (typeof found.player.play === "function") found.player.play();
     } catch (error) {
       console.log("twitch-adblock reload failed", error);
       return;
     }
+    // The mediaPlayerInstance from findPlayer is often replaced by setSrc.
     setTimeout(() => {
       if (quality) safeSet("video-quality", quality);
       if (muted) safeSet("video-muted", muted);
       if (volume) safeSet("volume", volume);
-    }, 800);
+      const again = findPlayer();
+      const player = again && again.player;
+      try {
+        if (player && typeof player.play === "function") player.play();
+        const video = player && typeof player.getHTMLVideoElement === "function"
+          ? player.getHTMLVideoElement()
+          : document.querySelector("video");
+        if (video && video.paused && !video.ended) video.play().catch(() => {});
+      } catch {
+        // Fail open: Twitch may still recover on its own.
+      }
+    }, 0);
+    // Twitch can overwrite quality after the new instance finishes usher setup.
+    setTimeout(() => {
+      if (quality) safeSet("video-quality", quality);
+      if (muted) safeSet("video-muted", muted);
+      if (volume) safeSet("volume", volume);
+    }, 1000);
   }
 
   function safeGet(key) {
@@ -475,10 +504,13 @@ function createPlaylistGuard(env) {
   function scheduleReload() {
     if (reloadQueued) return;
     reloadQueued = true;
-    queueMicrotask(() => {
+    // Macrotask: the clean playlist Response must reach the player before setSrc
+    // tears down the backup→main handoff. A microtask would run before the fetch
+    // promise delivers the body and leave the spinner stuck.
+    setTimeout(() => {
       reloadQueued = false;
       env.reload();
-    });
+    }, 0);
   }
 
   function backupMatchScore(mainText, backupText) {

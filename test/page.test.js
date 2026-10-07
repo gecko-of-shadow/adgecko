@@ -78,7 +78,8 @@ Deno.test("backup player types prefer typically clean streams", () => {
   assert(source.includes("backupMatchScore"), "a clean backup is scored against the live ladder");
   assert(source.includes("handoffGraceMs"), "a short grace window can pick a better quality peer");
   assert(source.includes("scheduleReload"), "reload waits for the clean playlist response");
-  assert(source.includes("}, 800);"), "quality restores sooner after a player reload");
+  assert(source.includes("Pin settings before setSrc"), "quality is pinned before the usher reset");
+  assert(source.includes("}, 1000);"), "quality is re-applied after the new instance boots");
 });
 
 Deno.test("a conflict with another Twitch ad script is logged once", () => {
@@ -150,7 +151,17 @@ Deno.test("scheduleReload coalesces to one player reload per turn", () => {
   const end = source.indexOf("function backupMatchScore", start);
   const block = source.slice(start, end);
   assert(block.includes("reloadQueued"), "a second scheduleReload in the same turn is ignored");
-  assert(block.includes("queueMicrotask"), "reload still waits for the clean playlist response");
+  assert(block.includes("setTimeout"), "reload waits a macrotask so the playlist Response lands first");
+  assert(!block.includes("queueMicrotask"), "a microtask would setSrc before the fetch resolves");
+});
+
+Deno.test("reloadPlayer always resets src after a midroll handoff", () => {
+  const start = source.indexOf("function reloadPlayer");
+  const end = source.indexOf("function safeGet", start);
+  const block = source.slice(start, end);
+  assert(block.includes('setSrc({ isNewMediaPlayerInstance: true, refreshAccessToken: true })'), "usher switches via setSrc");
+  assert(!block.includes("isPaused()"), "a paused buffering spinner must still reset");
+  assert(block.includes("getHTMLVideoElement"), "playback is nudged on the new media element");
 });
 
 Deno.test("player maps and worker waits do not live for the whole tab", () => {
