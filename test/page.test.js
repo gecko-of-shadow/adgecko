@@ -182,7 +182,11 @@ Deno.test("player maps and worker waits do not live for the whole tab", () => {
 Deno.test("the blocking label follows backup stay, like video-swap-new", () => {
   assert(!source.includes("env.status(true)"), "a live master must not latch the label on");
   assert(!source.includes("env.status(stripped.stripped)"), "strip-only must not drive the notice");
-  assert(source.includes("env.status(Boolean(session && session.usingBackup))"), "media notice matches BackupEncodings-style stay");
+  assert(
+    source.includes("env.status(Boolean(latest && latest.usingBackup))")
+      || source.includes("env.status(Boolean(session && session.usingBackup))"),
+    "media notice matches BackupEncodings-style stay",
+  );
   assert(source.includes("if (!session.usingBackup) env.status(false);"), "an unknown probe clears the label when no backup is playing");
 });
 
@@ -201,4 +205,13 @@ Deno.test("leaveBackup uses video-swap-new moving-off guard", () => {
   assert(source.includes("if (wasUsing) session.movingOffBackup = true"), "leave sets the guard before reload");
   assert(source.includes("movingOffBackup = false"), "master poll clears the guard");
   assert(source.includes('const backupTypes = ["autoplay", "picture-by-picture", "embed"]'), "backup try order matches video-swap-new");
+});
+
+Deno.test("fail-open after exhausted backups skips strip and forces reload", () => {
+  assert(source.includes("function failOpenShowAds"), "shared fail-open helper exists");
+  assert(source.includes("session.failOpen"), "session tracks fail-open like gold exhausted BackupEncodingsStatus");
+  assert(source.includes("failOpenShowAds(session)"), "exhausted backups enter fail-open");
+  assert(source.includes("if (session && session.failOpen && !swapped)"), "fail-open media passes ads through");
+  assert(source.includes("if (session && session.failOpen && !replacement)"), "fail-open master keeps the live ladder");
+  assert(source.includes("if (wasUsing || wasFailOpen) scheduleReload()"), "leaveBackup reloads after fail-open too");
 });

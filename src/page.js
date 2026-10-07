@@ -107,7 +107,7 @@
     if (!fetchHooked && !workerHooked) return;
     globalThis.__twitchAdblockConflictWarned = true;
     console.warn(
-      "twitch-adblock: another script already patched fetch or Worker (for example uBlock Origin's twitch-videoad). Disable that filter while using twitch-adblock so only one ad script runs.",
+      "twitch-adblock: another script already patched fetch or Worker (uBlock twitch-videoad, TTV adblock, or a similar Twitch extension). Disable those while using twitch-adblock — two hooks freeze midrolls into a spinner.",
     );
   }
 
@@ -604,6 +604,10 @@ function createPlaylistGuard(env) {
         retryAt: 0,
         usingBackup: false,
         movingOffBackup: false,
+        // video-swap-new: when every backup type is dirty/dead, pass through real ads
+        // instead of stripping the midroll playlist into a frozen spinner.
+        failOpen: false,
+        failOpenReloaded: false,
         served: "",
         reloadedForBackup: false,
         requestedAds: new Set(),
@@ -680,10 +684,13 @@ function createPlaylistGuard(env) {
 
   function leaveBackup(session) {
     const wasUsing = session.usingBackup;
+    const wasFailOpen = session.failOpen;
     // video-swap-new IsMovingOffBackupEncodings: ignore ad tags until the next
     // master poll so leave+reload cannot immediately re-enter backup.
     if (wasUsing) session.movingOffBackup = true;
     session.usingBackup = false;
+    session.failOpen = false;
+    session.failOpenReloaded = false;
     session.served = "";
     session.backupUrls.clear();
     session.tried.clear();
@@ -691,7 +698,27 @@ function createPlaylistGuard(env) {
     session.requestedAds.clear();
     session.mainProbeFails = 0;
     env.status(false);
-    if (wasUsing) scheduleReload();
+    // Always reload when leaving a latched backup OR clearing a prior fail-open
+    // freeze — otherwise Chrome can stay on a blanked midroll forever.
+    if (wasUsing || wasFailOpen) scheduleReload();
+  }
+
+  // Match video-swap-new when BackupEncodingsStatus is exhausted: serve the real
+  // ad playlist (do not strip) and force one player reload so Twitch midroll UI
+  // can play instead of a permanent spinner. Also helps when another extension
+  // already hooked fetch/Worker and backups cannot latch cleanly.
+  function failOpenShowAds(session) {
+    const already = session.failOpen;
+    session.failOpen = true;
+    session.usingBackup = false;
+    session.served = "";
+    session.backupUrls.clear();
+    session.reloadedForBackup = false;
+    env.status(false);
+    if (!already || !session.failOpenReloaded) {
+      session.failOpenReloaded = true;
+      scheduleReload();
+    }
   }
 
   async function maybeReturnToMain(session) {
@@ -729,9 +756,13 @@ function createPlaylistGuard(env) {
       }
     }
 
-    // Fail open: do not freeze on a dead backup when main/master probes keep failing.
+    // Fail open: leave the dead-main backup path, reload, and allow real ads through
+    // if the next main poll is still midroll (avoids a permanent spinner).
     session.mainProbeFails += 1;
-    if (session.mainProbeFails >= 3) leaveBackup(session);
+    if (session.mainProbeFails >= 3) {
+      leaveBackup(session);
+      failOpenShowAds(session);
+    }
   }
 
   async function playbackToken(channel, playerType) {
@@ -848,13 +879,23 @@ function createPlaylistGuard(env) {
       indexStreamUrls(channel, session.served, masterUrl, true);
       return session.served;
     }
+    if (session.failOpen && Date.now() < session.retryAt) {
+      return null;
+    }
     if (session.tried.size >= backupTypes.length) {
-      if (Date.now() < session.retryAt) return session.served || null;
+      if (Date.now() < session.retryAt) {
+        failOpenShowAds(session);
+        return null;
+      }
       session.tried.clear();
+      session.failOpen = false;
+      session.failOpenReloaded = false;
     }
 
     const best = await findCleanBackup(session, channel, masterUrl, liveText);
     if (best) {
+      session.failOpen = false;
+      session.failOpenReloaded = false;
       session.served = playlist.mapVariantsToBackup(liveText, best.master, best.href);
       session.usingBackup = true;
       session.retryAt = Date.now() + 30000;
@@ -864,6 +905,8 @@ function createPlaylistGuard(env) {
     }
 
     session.retryAt = Date.now() + 30000;
+    // All backup player types were dirty or unreachable — show ads (gold behavior).
+    if (session.tried.size >= backupTypes.length) failOpenShowAds(session);
     return session.served || null;
   }
 
@@ -966,18 +1009,38 @@ function createPlaylistGuard(env) {
         const existing = channel ? sessions.get(channel) : null;
         if (existing) existing.movingOffBackup = false;
         const replacement = await backupMaster(url, text);
-        const timed = playlist.writeServerTime(replacement || text, playlist.readServerTime(text));
         const session = channel ? sessions.get(channel) : null;
         if (session) env.status(Boolean(session.usingBackup));
+        // Fail-open: do not rewrite the live ladder — player needs real ad stream.
+        if (session && session.failOpen && !replacement) {
+          return textResponse(playlist.writeServerTime(text, playlist.readServerTime(text)));
+        }
+        const timed = playlist.writeServerTime(replacement || text, playlist.readServerTime(text));
         return textResponse(playlist.stripAds(timed).text);
       }
+      const channel = streamByUrl.get(url);
+      const session = channel ? sessions.get(channel) : null;
       const swapped = await backupMedia(url, text);
+      // Midroll ended after fail-open: clear the latch and reload so playback
+      // does not stay on a stuck spinner from the blanked ad pod.
+      if (session && session.failOpen && !swapped && !playlist.hasAdBreak(text)) {
+        session.failOpen = false;
+        session.failOpenReloaded = false;
+        env.status(false);
+        scheduleReload();
+        return textResponse(text);
+      }
+      // Still in fail-open midroll with no backup: pass ads through unmodified
+      // (video-swap-new returns textStr when every backup type is exhausted).
+      if (session && session.failOpen && !swapped) {
+        env.status(false);
+        return textResponse(text);
+      }
       const stripped = playlist.stripAds(swapped || text);
       if (stripped.adUrls.length) rememberBlocked(stripped.adUrls);
       // Gold banner is !!BackupEncodings — only while we are on a backup stream.
-      const channel = streamByUrl.get(url);
-      const session = channel ? sessions.get(channel) : null;
-      env.status(Boolean(session && session.usingBackup));
+      const latest = channel ? sessions.get(channel) : null;
+      env.status(Boolean(latest && latest.usingBackup));
       return textResponse(stripped.text);
     } catch (error) {
       console.log("twitch-adblock playlist failed", error);

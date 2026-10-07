@@ -4,7 +4,7 @@
   <img src="media/readme-hero.jpg" alt="twitch-adblock — always-on ad blocking for Twitch and YouTube" width="900">
 </p>
 
-**[Download twitch-adblock-0.1.15.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.15/twitch-adblock-0.1.15.zip)** · Always on · No popup · Twitch live + YouTube
+**[Download twitch-adblock-0.1.16.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.16/twitch-adblock-0.1.16.zip)** · Always on · No popup · Twitch live + YouTube
 
 ---
 
@@ -22,18 +22,18 @@
   <img src="media/readme-install.jpg" alt="Install in 5 steps" width="900">
 </p>
 
-1. Download the [release zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.15/twitch-adblock-0.1.15.zip) (not a random git checkout).
+1. Download the [release zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.16/twitch-adblock-0.1.16.zip) (not a random git checkout).
 2. Unzip → `chrome://extensions` → Developer mode → **Load unpacked** → pick the folder with `manifest.json`.
-3. While this is loaded, turn off uBlock’s `twitch.tv##+js(twitch-videoad)` / video-swap-new (and any other YouTube-player patcher). **One ad script per page.**
+3. While this is loaded, turn off uBlock’s `twitch.tv##+js(twitch-videoad)` / video-swap-new **and any other Twitch ad extension** (purple lightning icons included). **One ad script per page.**
 
 ---
 
-## What’s new in 0.1.15
+## What’s new in 0.1.16
 
-Recommended build. Restores the simpler **0.1.12** player reload handoff so streams are less likely to stick on a spinner or mute latch. Keeps post-ad chat and **Blocking ads** label recovery. Prefer this zip over older builds.
+Recommended build. When no clean backup exists, **fail open** like Firefox video-swap-new: pass the real midroll through and force a player reload instead of stripping ads into a permanent spinner. After the break, another reload clears stuck loading. Still includes the 0.1.15 reload handoff restore.
 
 <p align="center">
-  <img src="media/whats-new.jpg" alt="v0.1.15 recommended restore of 0.1.12 reload handoff" width="900">
+  <img src="media/whats-new.jpg" alt="v0.1.16 fail-open midroll recovery" width="900">
 </p>
 
 ---

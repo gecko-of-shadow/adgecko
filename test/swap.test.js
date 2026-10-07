@@ -309,6 +309,87 @@ Deno.test("failed main probes while on backup fail open instead of freezing", as
   assert(reloads.length >= 1, "fail open reloads so the player is not stuck on a dead backup");
 });
 
+Deno.test("exhausted dirty backups fail open: pass ads through and reload", async () => {
+  const reloads = [];
+  const statuses = [];
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("/channel/hls/")) {
+        const token = value.includes("token=live") ? "live" : "backup";
+        return playlistResponse(masterFor(`https://video.example/${token}-variant.m3u8`));
+      }
+      // Every player type is midroll-dirty — no clean backup exists.
+      if (value.includes("-variant")) return playlistResponse(adMedia);
+      return new Response("missing", { status: 404 });
+    },
+    async gql(body) {
+      return JSON.stringify({
+        data: { streamPlaybackAccessToken: { value: body.variables.playerType, signature: "sig" } },
+      });
+    },
+    reload() {
+      reloads.push("reload");
+    },
+    status(blocking) {
+      statuses.push(Boolean(blocking));
+    },
+  });
+
+  const masterUrl = "https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live";
+  const master = await guard(masterUrl);
+  const masterText = await master.text();
+  assert(masterText.includes("live-variant.m3u8"), "fail-open keeps the real live ladder");
+  assert(!masterText.includes("backup-variant"), "no dirty backup is latched as the stream");
+  await flushReload();
+  assert(reloads.length >= 1, "fail-open forces a player reload so midroll can play");
+
+  const media = await guard("https://video.example/live-variant.m3u8");
+  const mediaText = await media.text();
+  assert(mediaText.includes("ads.example/ad.ts"), "real ad segments pass through unmodified");
+  assert(mediaText.includes("stitched-ad"), "ad markers stay so Twitch midroll UI can run");
+  assertEquals(statuses.at(-1), false, "Blocking ads stays off during fail-open");
+});
+
+Deno.test("fail-open clears and reloads when the midroll playlist goes clean", async () => {
+  const reloads = [];
+  let dirty = true;
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("/channel/hls/")) {
+        return playlistResponse(masterFor("https://video.example/live-variant.m3u8"));
+      }
+      if (value.includes("live-variant")) return playlistResponse(dirty ? adMedia : cleanMedia);
+      return new Response("missing", { status: 404 });
+    },
+    async gql(body) {
+      return JSON.stringify({
+        data: { streamPlaybackAccessToken: { value: body.variables.playerType, signature: "sig" } },
+      });
+    },
+    reload() {
+      reloads.push("reload");
+    },
+    status() {},
+  });
+
+  const masterUrl = "https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live";
+  await guard(masterUrl);
+  await guard("https://video.example/live-variant.m3u8");
+  await flushReload();
+  const afterFailOpen = reloads.length;
+  assert(afterFailOpen >= 1, "initial fail-open reloaded");
+
+  dirty = false;
+  const clean = await guard("https://video.example/live-variant.m3u8");
+  assert((await clean.text()).includes("video.example/live.ts"), "clean live segments return");
+  await flushReload();
+  assert(reloads.length > afterFailOpen, "leaving fail-open reloads so the spinner clears");
+});
+
 Deno.test("scheduleReload fires after the clean playlist Response is returned", async () => {
   const order = [];
   const guard = createPlaylistGuard({

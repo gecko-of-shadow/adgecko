@@ -74,10 +74,12 @@ Deno.test("an all-ad backup is not substituted for the live stream", async () =>
   assert(!masterText.includes("embed-variant.m3u8"), "an ad-only backup is not installed");
   const media = await guard("https://video.example/live-variant.m3u8");
   const mediaText = await media.text();
-  assert(mediaText.includes("https://video.example/live.ts"), "the last live frame stays in the playlist");
-  assert(!mediaText.includes("ads.example"), "the ad segment is removed from the main playlist");
+  // video-swap-new fail-open: when every backup is dirty, pass the real midroll through
+  // instead of stripping it into a frozen/blank playlist.
+  assert(mediaText.includes("ads.example"), "fail-open keeps real ad segments playable");
+  assert(mediaText.includes("stitched-ad") || mediaText.includes("live.ts"), "midroll metadata or live anchors remain");
   const segment = await guard("https://ads.example/ad.ts");
-  assertEquals(await segment.text(), "segment", "a segment that was not the only thing left is not blanked");
+  assertEquals(await segment.text(), "segment", "fail-open does not blank the ad segments it decided to show");
 });
 
 Deno.test("a clean master only probes one quality playlist", async () => {
