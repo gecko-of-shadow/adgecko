@@ -157,6 +157,8 @@
   async function rewritePlaybackRequest(input, init) {
     captureHeaders(init, input);
     const url = requestUrl(input);
+    // Cheap URL gate before any Request body read — most page fetches are not GQL.
+    if (!url.includes("gql")) return { input, init };
     let body = "";
     let fromRequest = false;
     if (init && typeof init.body === "string") body = init.body;
@@ -164,7 +166,7 @@
       body = await input.clone().text();
       fromRequest = true;
     }
-    if (!url.includes("gql") || !body.includes("PlaybackAccessToken")) return { input, init };
+    if (!body.includes("PlaybackAccessToken")) return { input, init };
     const rewritten = rewritePlaybackBody(body);
     if (!rewritten.changed) return { input, init };
     if (rewritten.droppedPip) console.log("twitch-adblock: dropping the picture-by-picture player token");
@@ -386,14 +388,17 @@ function startTwitchAdblockWorker() {
     try {
       let nextInput = input;
       let nextInit = init;
-      let body = init && typeof init.body === "string" ? init.body : "";
-      if (!body && typeof Request !== "undefined" && input instanceof Request) body = await input.clone().text();
       const url = typeof input === "string" ? input : (input && input.url) || "";
-      if (url.includes("gql") && body.includes("PlaybackAccessToken")) {
-        const rewritten = rewritePlaybackBody(body);
-        if (rewritten.changed) {
-          if (init && typeof init.body === "string") nextInit = Object.assign({}, init, { body: rewritten.body });
-          else if (typeof Request !== "undefined" && input instanceof Request) nextInput = new Request(input, { body: rewritten.body });
+      // Gate on GQL URL before reading a Request body.
+      if (url.includes("gql")) {
+        let body = init && typeof init.body === "string" ? init.body : "";
+        if (!body && typeof Request !== "undefined" && input instanceof Request) body = await input.clone().text();
+        if (body.includes("PlaybackAccessToken")) {
+          const rewritten = rewritePlaybackBody(body);
+          if (rewritten.changed) {
+            if (init && typeof init.body === "string") nextInit = Object.assign({}, init, { body: rewritten.body });
+            else if (typeof Request !== "undefined" && input instanceof Request) nextInput = new Request(input, { body: rewritten.body });
+          }
         }
       }
       return await guard(nextInput, nextInit);
@@ -701,8 +706,26 @@ function createPlaylistGuard(env) {
   async function sampleHasAds(masterText, masterUrl, knownUrl, knownBody) {
     const variants = playlist.listVariants(masterText);
     if (!variants.length) return playlist.hasAdBreak(masterText) || null;
+    // Prefer a known media body / the first listed rung, then the rest. Stop on the
+    // first successfully loaded clean playlist — Twitch stitches ads across live
+    // rungs together, so probing every quality on a clean poll only wastes fetches.
+    const ordered = [];
+    const seen = new Set();
+    function enqueue(variant) {
+      const abs = absoluteVariant(variant.url, masterUrl);
+      if (!abs || seen.has(abs)) return;
+      seen.add(abs);
+      ordered.push(variant);
+    }
+    if (knownUrl) {
+      const known = variants.find((variant) => absoluteVariant(variant.url, masterUrl) === knownUrl);
+      if (known) enqueue(known);
+    }
+    if (variants[0]) enqueue(variants[0]);
+    for (const variant of variants) enqueue(variant);
+
     let sawPlaylist = false;
-    for (const variant of variants) {
+    for (const variant of ordered) {
       const variantUrl = absoluteVariant(variant.url, masterUrl);
       let body = "";
       if (knownBody && knownUrl && variantUrl === knownUrl) body = knownBody;
@@ -718,6 +741,7 @@ function createPlaylistGuard(env) {
       if (!body.startsWith("#EXTM3U")) continue;
       sawPlaylist = true;
       if (playlist.hasAdBreak(body)) return true;
+      return false;
     }
     return sawPlaylist ? false : null;
   }

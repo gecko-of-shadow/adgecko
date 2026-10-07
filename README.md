@@ -19,7 +19,7 @@ A Chrome extension that blocks video ads on Twitch and YouTube. It is always on.
 
 ## Install
 
-1. Download [twitch-adblock-0.1.10.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.10/twitch-adblock-0.1.10.zip).
+1. Download [twitch-adblock-0.1.11.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.11/twitch-adblock-0.1.11.zip).
 2. Unzip it.
 3. Open `chrome://extensions`.
 4. Turn on Developer mode.
@@ -53,7 +53,7 @@ Release smoke (package allowlist, permissions, host coverage, no phone-home / da
 
 ```
 bash scripts/release-gate.sh
-bash scripts/release-gate.sh --zip twitch-adblock-0.1.10.zip --expect-version 0.1.10
+bash scripts/release-gate.sh --zip twitch-adblock-0.1.11.zip --expect-version 0.1.11
 ```
 
 Pack a shippable zip (`manifest.json`, `src/*.js`, `icons/` only):
@@ -63,6 +63,12 @@ bash scripts/pack-zip.sh
 ```
 
 ## Changelog
+
+### 0.1.11
+
+- Twitch clean live: probes the active/first HLS quality playlist and stops when it is clean, instead of fetching every rung on each master poll.
+- Gates Twitch GQL playback rewrites on the request URL before reading a `Request` body, so unrelated page fetches skip the body clone.
+- YouTube: skips clone+buffer of failed or non-JSON `youtubei` responses; still fully buffers OK JSON so ad stripping stays fail-open and complete.
 
 ### 0.1.10
 

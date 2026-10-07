@@ -103,6 +103,15 @@ function installYoutubeAdblock(target) {
       || source.includes('"isAd": true');
   }
 
+  // Skip clone+buffer on failed or clearly non-JSON youtubei responses.
+  // Still buffer OK JSON/text bodies — ad markers can appear anywhere in browse/watch.
+  function shouldBufferYoutubei(response) {
+    if (!response || !response.ok) return false;
+    const type = String(response.headers.get("content-type") || "").toLowerCase();
+    if (!type) return true;
+    return type.includes("json") || type.includes("text") || type.includes("javascript");
+  }
+
   function hasRealAdField(node, field) {
     if (!Object.prototype.hasOwnProperty.call(node, field)) return false;
     const value = node[field];
@@ -263,6 +272,7 @@ function installYoutubeAdblock(target) {
     WATCH_AD_KEYS,
     kindFor,
     textLooksLikeAds,
+    shouldBufferYoutubei,
     isShortsAdEntry,
     isWatchAdNode,
     rootHasPlayback,
@@ -444,6 +454,7 @@ function startYoutubeAdblock() {
     const replay = input instanceof Request ? input.clone() : input;
     const prepare = kind === "player" ? rewritePlayerBody(input, init) : Promise.resolve({ input, init });
     return prepare.then((prepared) => nativeFetch(prepared.input, prepared.init).then((response) => {
+      if (!api.shouldBufferYoutubei(response)) return response;
       return response.clone().text().then((text) => {
         const stripped = api.stripResponseText(text, url);
         if (!stripped.blocked) {

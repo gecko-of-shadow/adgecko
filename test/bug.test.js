@@ -80,6 +80,37 @@ Deno.test("an all-ad backup is not substituted for the live stream", async () =>
   assertEquals(await segment.text(), "segment", "a segment that was not the only thing left is not blanked");
 });
 
+Deno.test("a clean master only probes one quality playlist", async () => {
+  const mediaFetches = [];
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("/channel/hls/")) {
+        return playlistResponse(masterFor([
+          "https://video.example/v1.m3u8",
+          "https://video.example/v2.m3u8",
+          "https://video.example/v3.m3u8",
+        ]));
+      }
+      if (value.includes(".m3u8")) {
+        mediaFetches.push(value);
+        return playlistResponse(cleanMedia);
+      }
+      return new Response("missing", { status: 404 });
+    },
+    async gql() {
+      return "{}";
+    },
+    reload() {},
+    status() {},
+  });
+
+  await guard("https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live");
+  assertEquals(mediaFetches.length, 1, "clean path probes one rung");
+  assert(mediaFetches[0].includes("v1.m3u8"), "prefers the first listed rung");
+});
+
 Deno.test("a 404 on the first rung does not hide ads on the next rung", async () => {
   const tokens = [];
   const guard = createPlaylistGuard({

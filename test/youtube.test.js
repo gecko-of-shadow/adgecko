@@ -164,6 +164,15 @@ Deno.test("a clean player response is not rewritten", () => {
   assertEquals(stripped.text, text);
 });
 
+Deno.test("youtubei buffering skips failed and non-json responses", () => {
+  assert(typeof api.shouldBufferYoutubei === "function", "buffer gate is exported");
+  assertEquals(api.shouldBufferYoutubei({ ok: false, headers: { get() { return "application/json"; } } }), false);
+  assertEquals(api.shouldBufferYoutubei({ ok: true, headers: { get() { return "image/jpeg"; } } }), false);
+  assertEquals(api.shouldBufferYoutubei({ ok: true, headers: { get() { return "application/json"; } } }), true);
+  assertEquals(api.shouldBufferYoutubei({ ok: true, headers: { get() { return ""; } } }), true);
+  assert(source.includes("shouldBufferYoutubei(response)"), "fetch uses the buffer gate before clone");
+});
+
 Deno.test("player stripping leaves a feed card that is not a player response", () => {
   const card = { title: "feed", adSlots: [{ adSlotRenderer: { ad: true } }] };
   const stripped = api.stripValue(card, "player");
@@ -196,7 +205,7 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assert(source.includes("isInlinePlaybackNoAd"), "player requests opt out of scheduled ads");
   assert(source.includes('notice.textContent = "Blocking ads"'), "the player label says ads are being blocked");
   assertEquals(manifest.name, "twitch-adblock");
-  assertEquals(manifest.version, "0.1.10");
+  assertEquals(manifest.version, "0.1.11");
   assertEquals(manifest.action.default_popup, undefined);
   const youtube = manifest.content_scripts.find((script) => script.js.includes("src/youtube.js"));
   assert(youtube, "youtube has its own content script");

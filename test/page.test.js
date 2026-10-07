@@ -39,6 +39,26 @@ Deno.test("a failed variant probe does not count as a clean backup", () => {
   assert(source.includes("session.tried.clear();"), "a good backup can be chosen again after the retry window");
 });
 
+Deno.test("sampleHasAds stops on the first clean quality playlist", () => {
+  const start = source.indexOf("async function sampleHasAds");
+  const end = source.indexOf("async function backupMaster", start);
+  const sample = source.slice(start, end);
+  assert(sample.includes("return false;"), "a clean rung ends the probe early");
+  assert(sample.includes("if (variants[0]) enqueue(variants[0]);"), "the first listed rung is preferred");
+  assert(sample.includes("knownUrl"), "a known media body is reused when present");
+});
+
+Deno.test("playback rewrite gates on the gql url before reading a Request body", () => {
+  assert(source.includes('if (!url.includes("gql")) return { input, init };'), "page skips body read for non-gql fetches");
+  const workerStart = source.indexOf("function startTwitchAdblockWorker");
+  const workerFetch = source.slice(workerStart);
+  assert(workerFetch.includes('if (url.includes("gql"))'), "worker gates body read on gql");
+  assert(
+    workerFetch.indexOf('if (url.includes("gql"))') < workerFetch.indexOf("input.clone().text()"),
+    "worker reads the Request body only after the gql check",
+  );
+});
+
 Deno.test("backup graphql uses only headers gql.twitch.tv allows", () => {
   assert(!source.includes("X-Twitch-Adblock"), "that header is not in Access-Control-Allow-Headers");
   assert(!source.includes('defineProperty(document, "visibilityState"'), "Twitch reads document.hidden, not this spoof");
