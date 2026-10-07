@@ -18,7 +18,6 @@ function installYoutubeAdblock(target) {
   const DOM_AD_SELECTORS = [
     ".ytp-ad-overlay-container",
     ".ytp-ad-overlay-slot",
-    "ytd-watch-flexy #player-ads",
     "ytd-watch-flexy ytd-ad-slot-renderer",
     "ytd-watch-flexy ytd-action-companion-ad-renderer",
     "ytd-watch-flexy ytd-display-ad-renderer",
@@ -283,9 +282,15 @@ function startYoutubeAdblock() {
   function removeDomAds() {
     if (!onWatchSurface()) return;
     const nodes = document.querySelectorAll(api.DOM_AD_SELECTORS.join(","));
-    if (!nodes.length) return;
-    for (const node of nodes) node.remove();
-    notify(true);
+    let removed = false;
+    for (const node of nodes) {
+      if (node.id === "player-ads") continue;
+      const shadowChildren = node.shadowRoot ? node.shadowRoot.childElementCount : 0;
+      if (!node.childElementCount && !shadowChildren && !(node.textContent || "").trim()) continue;
+      node.remove();
+      removed = true;
+    }
+    if (removed) notify(true);
   }
 
   function hookInitial(name, kind) {

@@ -180,7 +180,10 @@ Deno.test("dom selectors remove banners and overlays and leave the video element
     assert(selector !== "video", selector);
     assert(selector !== "#movie_player", selector);
     assert(selector !== ".html5-video-player", selector);
+    assert(selector !== "ytd-watch-flexy #player-ads", selector);
   }
+  assert(source.includes('if (node.id === "player-ads") continue;'), "an empty player-ads shell stays");
+  assert(source.includes("!node.childElementCount"), "an empty overlay is not removed");
 });
 
 Deno.test("the youtube script does not swap media or phone home", () => {
