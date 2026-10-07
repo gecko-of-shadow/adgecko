@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "twitch-adblock",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Blocks video ads on Twitch.",
   "action": {
     "default_title": "twitch-adblock",
@@ -19,7 +19,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.twitch.tv/*"],
+      "matches": ["*://twitch.tv/*", "*://*.twitch.tv/*"],
       "js": ["src/playlist.js", "src/page.js"],
       "run_at": "document_start",
       "world": "MAIN",

@@ -229,6 +229,20 @@ Deno.test("a normal live playlist is left unchanged", () => {
   assertEquals(stripped.text, playlistText);
 });
 
+Deno.test("the first non-live segment is the preroll fetched beside the backup stream", () => {
+  const playlistText = [
+    "#EXTM3U",
+    "#EXTINF:2.0,live",
+    "https://video.example/live.ts",
+    "#EXTINF:2.0,",
+    "https://ads.example/ad.ts",
+    "#EXTINF:2.0,",
+    "https://ads.example/ad2.ts",
+  ].join("\n");
+  assertEquals(playlist.firstAdSegmentUrl(playlistText), "https://ads.example/ad.ts");
+  assertEquals(playlist.firstAdSegmentUrl("#EXTM3U\n#EXTINF:2.0,live\nhttps://video.example/live.ts"), "");
+});
+
 Deno.test("blank segment is a short mpeg-ts with a pat, pmt, and pts", () => {
   const bytes = playlist.blankSegmentBytes();
   assertEquals(bytes.length, 188 * 3);

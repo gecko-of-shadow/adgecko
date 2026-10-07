@@ -333,6 +333,18 @@ function installTwitchAdblockPlaylist(target) {
     return packet;
   }
 
+  function firstAdSegmentUrl(text) {
+    const lines = linesOf(text);
+    for (let i = 0; i < lines.length - 1; i++) {
+      const line = lines[i];
+      if (!line.startsWith("#EXTINF") || line.includes(",live")) continue;
+      const next = lines[i + 1].trim();
+      if (!next || next.startsWith("#")) continue;
+      return next;
+    }
+    return "";
+  }
+
   function blankSegmentBytes() {
     const pat = withCrc(Uint8Array.from([
       0x00, 0xb0, 0x0d, 0x00, 0x01, 0xc1, 0x00, 0x00, 0x00, 0x01, 0xe1, 0x00,
@@ -374,6 +386,7 @@ function installTwitchAdblockPlaylist(target) {
     pickVariant,
     mapVariantsToBackup,
     stripAds,
+    firstAdSegmentUrl,
     blankSegmentBytes,
   });
 }

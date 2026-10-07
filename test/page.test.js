@@ -58,6 +58,20 @@ Deno.test("a picture-by-picture token request is dropped before the chat mini pl
   assert(rewriteAt !== -1 && dropAt < rewriteAt, "drop the mini-player token before rewriting it to popout");
 });
 
+Deno.test("a midroll variant is answered with the backup stream", () => {
+  assert(source.includes("const streamByUrl = new Map();"), "variant urls stay tied to the channel");
+  assert(source.includes("if (!session.reloadedForBackup)"), "reload once when the player is already on the ad playlist");
+  assert(source.includes("session.mainVariantUrl"), "the main variant is checked so playback can return");
+  assert(source.includes("json.streamPlaybackAccessToken"), "embed tokens may sit on the response root");
+  assert(source.includes("await env.gql(body)"), "backup tokens use the original gql fetch");
+  assert(source.includes('await nativeFetch("https://gql.twitch.tv/gql"'), "page gql does not go through the hooked fetch");
+});
+
+Deno.test("a background tab stays visible to the player", () => {
+  assert(source.includes('defineProperty(document, "hidden"'), "Twitch pauses when document.hidden is true");
+  assert(source.includes("lowLatencyModeEnabled"), "a reload keeps the low-latency setting");
+});
+
 Deno.test("the blocking label follows the media playlist, not the live master", () => {
   assert(!source.includes("env.status(true)"), "a live master must not latch the label on");
   assert(source.includes("env.status(stripped.stripped)"), "media playlists show the label only while a segment was replaced");

@@ -249,6 +249,43 @@
     notice.style.cssText = "position:absolute;top:8px;left:8px;z-index:20;color:#fff;background:rgba(0,0,0,.75);padding:4px 8px;font:12px/1.2 sans-serif;pointer-events:none;";
     if (notice.parentElement !== player) player.appendChild(notice);
   }
+
+  // Twitch pauses a background tab when document.hidden is true. Keep the
+  // stream playing through an ad break. visibilityState is left alone.
+  try {
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      get() {
+        return false;
+      },
+    });
+  } catch {
+    // Another script already defined it.
+  }
+  document.addEventListener("visibilitychange", (event) => {
+    event.stopImmediatePropagation();
+    const video = document.querySelector("video");
+    if (video && video.paused && !video.ended) {
+      video.play().catch(() => {});
+    }
+  }, true);
+
+  try {
+    const playerKeys = ["video-quality", "video-muted", "volume", "lowLatencyModeEnabled", "persistenceEnabled"];
+    const cachedSettings = new Map(playerKeys.map((key) => [key, localStorage.getItem(key)]));
+    const nativeGetItem = localStorage.getItem.bind(localStorage);
+    const nativeSetItem = localStorage.setItem.bind(localStorage);
+    localStorage.getItem = function (key) {
+      if (cachedSettings.has(key)) return cachedSettings.get(key);
+      return nativeGetItem(key);
+    };
+    localStorage.setItem = function (key, value) {
+      if (cachedSettings.has(key)) cachedSettings.set(key, value);
+      return nativeSetItem(key, value);
+    };
+  } catch {
+    // Firefox can refuse these hooks. The reload path still restores quality.
+  }
 })();
 
 function startTwitchAdblockWorker() {
@@ -293,6 +330,7 @@ function startTwitchAdblockWorker() {
 function createPlaylistGuard(env) {
   const playlist = globalThis.TwitchAdblockPlaylist;
   const sessions = new Map();
+  const streamByUrl = new Map();
   const blockedSegments = new Map();
   const backupTypes = ["autoplay", "picture-by-picture", "embed"];
   const playbackHash = "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9";
@@ -325,9 +363,105 @@ function createPlaylistGuard(env) {
   }
 
   function tokenFrom(json) {
-    const token = json && json.data && json.data.streamPlaybackAccessToken;
+    const data = json && json.data;
+    // Embed responses sometimes put the token on the root instead of under data.
+    const token = (data && data.streamPlaybackAccessToken) || (json && json.streamPlaybackAccessToken);
     if (!token || !token.value || !token.signature) return null;
     return token;
+  }
+
+  function absoluteVariant(url, base) {
+    try {
+      const resolved = new URL(url, base);
+      resolved.hash = "";
+      return canonical(resolved.href);
+    } catch {
+      return canonical(String(url || ""));
+    }
+  }
+
+  function ensureSession(channel) {
+    let session = sessions.get(channel);
+    if (!session) {
+      session = {
+        tried: new Set(),
+        retryAt: 0,
+        usingBackup: false,
+        served: "",
+        reloadedForBackup: false,
+        requestedAds: new Set(),
+        variants: new Map(),
+        backupUrls: new Set(),
+        masterUrl: "",
+        liveMaster: "",
+        mainVariantUrl: "",
+      };
+      sessions.set(channel, session);
+    }
+    return session;
+  }
+
+  function indexStreamUrls(channel, text, base, backup) {
+    const session = sessions.get(channel);
+    if (!session) return;
+    for (const variant of playlist.listVariants(text)) {
+      const abs = absoluteVariant(variant.url, base);
+      if (!abs) continue;
+      streamByUrl.set(abs, channel);
+      session.variants.set(abs, {
+        resolution: variant.resolution,
+        frameRate: variant.frameRate,
+        video: variant.video,
+      });
+      if (backup) session.backupUrls.add(abs);
+    }
+  }
+
+  function rememberMain(session, channel, masterUrl, liveText) {
+    session.masterUrl = masterUrl;
+    session.liveMaster = liveText;
+    const sample = playlist.pickVariant(liveText, null);
+    if (sample) session.mainVariantUrl = absoluteVariant(sample, masterUrl);
+    indexStreamUrls(channel, liveText, masterUrl, false);
+  }
+
+  async function fetchPlaylist(url) {
+    try {
+      const response = await env.fetch(url);
+      if (!response.ok) return null;
+      const body = await response.text();
+      if (!body.startsWith("#EXTM3U")) return null;
+      return body;
+    } catch {
+      return null;
+    }
+  }
+
+  function consumePreroll(session, text) {
+    if (playlist.isMidroll(text)) return;
+    const adUrl = playlist.firstAdSegmentUrl(text);
+    if (!adUrl || session.requestedAds.has(adUrl)) return;
+    session.requestedAds.add(adUrl);
+    env.fetch(adUrl).then((response) => response.arrayBuffer()).catch(() => {});
+  }
+
+  async function maybeReturnToMain(session) {
+    if (!session.mainVariantUrl) return;
+    const body = await fetchPlaylist(session.mainVariantUrl);
+    if (body == null) return;
+    if (playlist.hasAdBreak(body)) {
+      consumePreroll(session, body);
+      return;
+    }
+    const wasUsing = session.usingBackup;
+    session.usingBackup = false;
+    session.served = "";
+    session.backupUrls.clear();
+    session.tried.clear();
+    session.reloadedForBackup = false;
+    session.requestedAds.clear();
+    env.status(false);
+    if (wasUsing) env.reload();
   }
 
   async function playbackToken(channel, playerType) {
@@ -345,6 +479,8 @@ function createPlaylistGuard(env) {
         persistedQuery: { version: 1, sha256Hash: playbackHash },
       },
     };
+    // Backup tokens use env.gql, which calls the original fetch. The page hook
+    // that drops picture-by-picture never sees this request.
     let json = JSON.parse(await env.gql(body));
     if (!tokenFrom(json) && JSON.stringify(json.errors || json).toLowerCase().includes("persist")) {
       json = JSON.parse(await env.gql({
@@ -373,27 +509,32 @@ function createPlaylistGuard(env) {
   async function backupMaster(masterUrl, liveText) {
     const channel = playlist.channelFromPlaylistUrl(masterUrl);
     if (!channel) return null;
-    let session = sessions.get(channel);
-    if (!session) {
-      session = { tried: new Set(), retryAt: 0, usingBackup: false, served: "" };
-      sessions.set(channel, session);
-    }
+    const session = ensureSession(channel);
+    rememberMain(session, channel, masterUrl, liveText);
 
     const ads = await sampleHasAds(liveText, masterUrl);
     if (ads === false) {
-      if (session.usingBackup) env.reload();
+      const wasUsing = session.usingBackup;
       session.usingBackup = false;
       session.served = "";
+      session.backupUrls.clear();
       session.tried.clear();
+      session.reloadedForBackup = false;
+      session.requestedAds.clear();
       env.status(false);
+      if (wasUsing) env.reload();
       return null;
     }
     if (ads === null) {
       if (!session.usingBackup) env.status(false);
+      if (session.usingBackup && session.served) indexStreamUrls(channel, session.served, masterUrl, true);
       return session.usingBackup ? session.served : null;
     }
 
-    if (session.usingBackup && session.served && Date.now() < session.retryAt) return session.served;
+    if (session.usingBackup && session.served && Date.now() < session.retryAt) {
+      indexStreamUrls(channel, session.served, masterUrl, true);
+      return session.served;
+    }
     if (session.tried.size >= backupTypes.length) {
       if (Date.now() < session.retryAt) return session.served || null;
       session.tried.clear();
@@ -419,6 +560,7 @@ function createPlaylistGuard(env) {
         session.usingBackup = true;
         session.retryAt = Date.now() + 30000;
         session.tried.clear();
+        indexStreamUrls(channel, session.served, url.href, true);
         return session.served;
       } catch (error) {
         console.log("twitch-adblock backup failed", playerType, error);
@@ -427,6 +569,29 @@ function createPlaylistGuard(env) {
 
     session.retryAt = Date.now() + 30000;
     return session.served || null;
+  }
+
+  async function backupMedia(url, text) {
+    const channel = streamByUrl.get(url);
+    if (!channel) return null;
+    const session = sessions.get(channel);
+    if (!session || !session.masterUrl || !session.liveMaster) return null;
+    if (session.backupUrls.has(url)) {
+      await maybeReturnToMain(session);
+      return session.usingBackup ? text : null;
+    }
+    if (!playlist.hasAdBreak(text)) return null;
+    const mapped = await backupMaster(session.masterUrl, session.liveMaster);
+    if (!mapped || !session.usingBackup) return null;
+    const picked = playlist.pickVariant(mapped, session.variants.get(url) || null);
+    if (!picked) return null;
+    const body = await fetchPlaylist(absoluteVariant(picked, session.masterUrl));
+    if (body == null || playlist.hasAdBreak(body)) return null;
+    if (!session.reloadedForBackup) {
+      session.reloadedForBackup = true;
+      env.reload();
+    }
+    return body;
   }
 
   async function handlePlaylist(url, init) {
@@ -442,9 +607,11 @@ function createPlaylistGuard(env) {
         const timed = playlist.writeServerTime(replacement || text, playlist.readServerTime(text));
         return textResponse(playlist.stripAds(timed).text);
       }
-      const stripped = playlist.stripAds(text);
+      const swapped = await backupMedia(url, text);
+      const stripped = playlist.stripAds(swapped || text);
       if (stripped.adUrls.length) rememberBlocked(stripped.adUrls);
       env.status(stripped.stripped);
+      if (swapped) env.status(Boolean(swapped));
       return textResponse(stripped.text);
     } catch (error) {
       console.log("twitch-adblock playlist failed", error);
