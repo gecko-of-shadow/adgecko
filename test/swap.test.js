@@ -391,6 +391,100 @@ Deno.test("fail-open clears quietly when the midroll playlist goes clean", async
   assertEquals(reloads, [], "leave fail-open without reload so buffer is not reset");
 });
 
+Deno.test("stitched midroll with live holds passes ads instead of freezing on the hold", async () => {
+  // Real midrolls often keep a prior live .ts beside stitched ads. stripAds would
+  // collapse that to one live hold → frozen frame under Twitch ad UI.
+  const midrollWithLiveHold = [
+    "#EXTM3U",
+    "#EXTINF:2.0,live",
+    "https://video.example/live-hold.ts",
+    '#EXT-X-DATERANGE:ID="stitched-ad-1",CLASS="twitch-stitched-ad",START-DATE="2024-01-07T20:10:40.960Z",DURATION=120',
+    "#EXT-X-PROGRAM-DATE-TIME:2024-01-07T20:10:40.960Z",
+    "#EXTINF:2.0,",
+    "https://ads.example/ad.ts",
+    "#EXTINF:2.0,",
+    "https://ads.example/ad2.ts",
+  ].join("\n");
+  const reloads = [];
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("/channel/hls/")) {
+        return playlistResponse(masterFor("https://video.example/live-variant.m3u8"));
+      }
+      if (value.includes("-variant")) return playlistResponse(midrollWithLiveHold);
+      return new Response("missing", { status: 404 });
+    },
+    async gql(body) {
+      return JSON.stringify({
+        data: { streamPlaybackAccessToken: { value: body.variables.playerType, signature: "sig" } },
+      });
+    },
+    reload() {
+      reloads.push("reload");
+    },
+    status() {},
+  });
+
+  await guard("https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live");
+  const media = await guard("https://video.example/live-variant.m3u8");
+  const mediaText = await media.text();
+  assert(mediaText.includes("ads.example/ad.ts"), "real ad A/V must play under the ad-break UI");
+  assert(mediaText.includes("ads.example/ad2.ts"), "full ad pod passes through");
+  assert(mediaText.includes("stitched-ad"), "Twitch midroll markers stay");
+  await flushReload();
+  assertEquals(reloads, [], "no reload thrash while fail-open shows ads");
+});
+
+Deno.test("long fail-open midroll keeps ads after the backup retry window", async () => {
+  const reloads = [];
+  const realNow = Date.now;
+  let now = realNow();
+  Date.now = () => now;
+  try {
+    const guard = createPlaylistGuard({
+      handoffGraceMs: 0,
+      async fetch(url) {
+        const value = String(url);
+        if (value.includes("/channel/hls/")) {
+          return playlistResponse(masterFor("https://video.example/live-variant.m3u8"));
+        }
+        if (value.includes("-variant")) return playlistResponse(adMedia);
+        return new Response("missing", { status: 404 });
+      },
+      async gql(body) {
+        return JSON.stringify({
+          data: { streamPlaybackAccessToken: { value: body.variables.playerType, signature: "sig" } },
+        });
+      },
+      reload() {
+        reloads.push("reload");
+      },
+      status() {},
+    });
+
+    const masterUrl = "https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live";
+    await guard(masterUrl);
+    await guard("https://video.example/live-variant.m3u8");
+    await flushReload();
+    assertEquals(reloads, [], "enter fail-open without reload");
+
+    // Past the 30s retryAt: old tip cleared failOpen and could strip again.
+    now += 31000;
+    const masterAgain = await guard(masterUrl);
+    assert((await masterAgain.text()).includes("live-variant.m3u8"), "still on the live ladder");
+    const mediaAgain = await guard("https://video.example/live-variant.m3u8");
+    const mediaText = await mediaAgain.text();
+    assert(mediaText.includes("ads.example/ad.ts"), "long midroll still passes real ads after retry");
+    assert(mediaText.includes("stitched-ad"), "ad markers remain after retry");
+    await flushReload();
+    assertEquals(reloads, [], "retry window must not force reload thrash");
+  } finally {
+    Date.now = realNow;
+  }
+});
+
 Deno.test("scheduleReload fires after the clean playlist Response is returned", async () => {
   const order = [];
   const guard = createPlaylistGuard({

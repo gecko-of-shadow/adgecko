@@ -4,7 +4,7 @@
   <img src="media/readme-hero.jpg" alt="twitch-adblock — always-on ad blocking for Twitch and YouTube" width="900">
 </p>
 
-**[Download twitch-adblock-0.1.17.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.17/twitch-adblock-0.1.17.zip)** · Always on · No popup · Twitch live + YouTube
+**Stable:** [v0.1.16](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.1.16) · **Beta:** [twitch-adblock-0.1.18.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.18/twitch-adblock-0.1.18.zip) · Always on · No popup · Twitch live + YouTube
 
 ---
 
@@ -22,24 +22,25 @@
   <img src="media/readme-install.jpg" alt="Install in 5 steps" width="900">
 </p>
 
-1. Download the [release zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.17/twitch-adblock-0.1.17.zip) (not a random git checkout).
+1. Download a [release zip](https://github.com/gecko-of-shadow/twitch-adblock/releases) (not a random git checkout). For this freeze fix use the **0.1.18 beta**.
 2. Unzip → `chrome://extensions` → Developer mode → **Load unpacked** → pick the folder with `manifest.json`.
-3. While this is loaded, turn off uBlock’s `twitch.tv##+js(twitch-videoad)` / video-swap-new **and any other Twitch ad extension** (purple lightning icons included). **One ad script per page.**
+3. While this is loaded, turn off uBlock’s `twitch.tv##+js(twitch-videoad)` / video-swap-new **and any other Twitch ad extension** (purple lightning icons included). **One ad script per page.** Two scripts on the same Twitch tab can freeze video while chat still moves.
 
 ---
 
-## What’s new in 0.1.17
+## What’s new in 0.1.18 (beta)
 
-**Sole recommended Latest.** Goal: **continuous live playback** — no freeze, buffer starve, or forced reload thrash through midrolls.
+**Beta** — test candidate. Stable Latest stays **v0.1.16** until a new stable is pinned.
 
-- When a clean backup exists: swap like video-swap-new (lower quality during ads is OK); one handoff reload only when latching/leaving backup.
-- When every backup is dirty: **fail open** — pass the real midroll A/V through unmodified. **No** enter/exit `setSrc` (0.1.16 starved buffers into a stuck spinner while chat kept moving).
-- Never blank or loop one live segment under Twitch ad UI; strip drops extra same-URL holds instead of repeating them.
+Goal: **continuous live playback** through long midrolls — no freeze, no reload thrash, no need to refresh.
 
-Prefer this zip only; older builds are retired.
+- When a clean backup exists: swap like video-swap-new (lower quality during ads is OK).
+- When every backup is dirty: **fail open** — pass the real midroll A/V through unmodified. No enter/exit `setSrc` thrash.
+- **Fix:** never strip a main midroll into a single live-hold under Twitch’s “taking an ad break” UI (that froze the frame while chat kept moving). Pass real ads for the whole break, including after the backup retry window on long pods.
+- stripAds still drops consecutive same-URL live holds so A/V does not loop one segment when stripping is used.
 
 <p align="center">
-  <img src="media/whats-new.jpg" alt="v0.1.17 continuous play fail-open without reload thrash" width="900">
+  <img src="media/whats-new.jpg" alt="v0.1.18 beta continuous play through long fail-open midrolls" width="900">
 </p>
 
 ---

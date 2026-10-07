@@ -871,6 +871,9 @@ function createPlaylistGuard(env) {
       indexStreamUrls(channel, session.served, masterUrl, true);
       return session.served;
     }
+    // Fail-open pass-through while the retry window is open. Keep the latch for
+    // the whole midroll — clearing it every 30s re-stripped live holds under the
+    // Twitch ad UI and froze long breaks (stuck → brief play → freeze again).
     if (session.failOpen && Date.now() < session.retryAt) {
       return null;
     }
@@ -879,9 +882,10 @@ function createPlaylistGuard(env) {
         failOpenShowAds(session);
         return null;
       }
+      // Retry backup types after the window, but stay in fail-open so media polls
+      // keep serving real ads until a clean backup actually latches.
       session.tried.clear();
-      session.failOpen = false;
-      session.failOpenReloaded = false;
+      failOpenShowAds(session);
     }
 
     const best = await findCleanBackup(session, channel, masterUrl, liveText);
@@ -1021,20 +1025,16 @@ function createPlaylistGuard(env) {
         env.status(false);
         return textResponse(text);
       }
-      // Still in fail-open midroll with no backup: pass ads through unmodified
-      // so A/V stay muxed (stripping/blanking here caused segment loops).
-      if (session && session.failOpen && !swapped) {
+      // No clean backup body + still midroll: ALWAYS pass real ads through.
+      // Never strip main into a single live-hold under Twitch "taking an ad break"
+      // UI — that freezes the frame while chat keeps moving. (0.1.17's guard used
+      // stripped.adUrls, which stripAds no longer fills, so the freeze returned.)
+      if (!swapped && playlist.hasAdBreak(text)) {
+        if (session && !session.movingOffBackup) failOpenShowAds(session);
         env.status(false);
         return textResponse(text);
       }
-      // Never serve a blanked/stripped midroll under Twitch ad UI — if strip would
-      // only blank ad segments (no live hold), latch fail-open and pass original A/V.
       const stripped = playlist.stripAds(swapped || text);
-      if (!swapped && stripped.adUrls.length && playlist.hasAdBreak(text)) {
-        if (session) failOpenShowAds(session);
-        env.status(false);
-        return textResponse(text);
-      }
       if (stripped.adUrls.length) rememberBlocked(stripped.adUrls);
       // Gold banner is !!BackupEncodings — only while we are on a backup stream.
       const latest = channel ? sessions.get(channel) : null;

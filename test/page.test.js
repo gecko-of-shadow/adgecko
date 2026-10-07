@@ -211,9 +211,10 @@ Deno.test("fail-open after exhausted backups skips strip without forced reload",
   assert(source.includes("function failOpenShowAds"), "shared fail-open helper exists");
   assert(source.includes("session.failOpen"), "session tracks fail-open like gold exhausted BackupEncodingsStatus");
   assert(source.includes("failOpenShowAds(session)"), "exhausted backups enter fail-open");
-  assert(source.includes("if (session && session.failOpen && !swapped)"), "fail-open media passes ads through");
+  assert(source.includes("if (!swapped && playlist.hasAdBreak(text))"), "main midroll without backup always passes ads");
   assert(source.includes("if (session && session.failOpen && !replacement)"), "fail-open master keeps the live ladder");
   assert(source.includes("if (wasUsing) scheduleReload()"), "leaveBackup reloads only after a latched backup");
+  assert(!source.includes("stripped.adUrls.length && playlist.hasAdBreak"), "do not gate pass-through on empty adUrls");
   const failOpenStart = source.indexOf("function failOpenShowAds");
   const failOpenEnd = source.indexOf("async function maybeReturnToMain", failOpenStart);
   const failOpenBody = source.slice(failOpenStart, failOpenEnd);
