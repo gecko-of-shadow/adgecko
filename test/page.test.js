@@ -38,6 +38,26 @@ Deno.test("backup graphql uses only headers gql.twitch.tv allows", () => {
   assert(!source.includes('defineProperty(document, "visibilityState"'), "Twitch reads document.hidden, not this spoof");
 });
 
+Deno.test("backup player types match video-swap-new", () => {
+  assert(
+    source.includes('const backupTypes = ["autoplay", "picture-by-picture", "embed"];'),
+    "try autoplay, then picture-by-picture, then embed",
+  );
+  assert(!source.includes("mobile_web"), "video-swap-new does not request a mobile web backup");
+  assert(
+    source.includes('platform: playerType === "autoplay" ? "android" : "web"'),
+    "autoplay tokens use the android platform",
+  );
+});
+
+Deno.test("a picture-by-picture token request is dropped before the chat mini player opens", () => {
+  const dropAt = source.indexOf('init.body.includes("picture-by-picture")');
+  const rewriteAt = source.indexOf("item.variables.playerType = FORCED_PLAYER_TYPE");
+  assert(dropAt !== -1, "detect the mini-player token");
+  assert(source.includes('body: ""'), "an empty body makes gql reject that token");
+  assert(rewriteAt !== -1 && dropAt < rewriteAt, "drop the mini-player token before rewriting it to popout");
+});
+
 Deno.test("the blocking label follows the media playlist, not the live master", () => {
   assert(!source.includes("env.status(true)"), "a live master must not latch the label on");
   assert(source.includes("env.status(stripped.stripped)"), "media playlists show the label only while a segment was replaced");

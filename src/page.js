@@ -100,6 +100,12 @@
     if (!init || typeof init.body !== "string" || !url.includes("gql") || !init.body.includes("PlaybackAccessToken")) {
       return { input, init };
     }
+    // A picture-by-picture token opens a second player above chat. Drop it here.
+    // Backup tokens use the original fetch, so they are not affected.
+    if (init.body.includes("picture-by-picture")) {
+      console.log("twitch-adblock: dropping the picture-by-picture player token");
+      return { input, init: Object.assign({}, init, { body: "" }) };
+    }
     try {
       const parsed = JSON.parse(init.body);
       const items = Array.isArray(parsed) ? parsed : [parsed];
@@ -288,7 +294,7 @@ function createPlaylistGuard(env) {
   const playlist = globalThis.TwitchAdblockPlaylist;
   const sessions = new Map();
   const blockedSegments = new Map();
-  const backupTypes = ["mobile_web", "embed"];
+  const backupTypes = ["autoplay", "picture-by-picture", "embed"];
   const playbackHash = "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9";
   const playbackQuery = "query PlaybackAccessToken($login: String!, $isLive: Boolean!, $vodID: ID!, $isVod: Boolean!, $playerType: String!, $platform: String!) { streamPlaybackAccessToken(channelName: $login, params: {platform: $platform, playerBackend: \"mediaplayer\", playerType: $playerType}) @include(if: $isLive) { value signature __typename } }";
 

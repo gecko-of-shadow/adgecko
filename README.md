@@ -1,6 +1,6 @@
 # twitch-adblock
 
-A Chrome extension that blocks video ads on Twitch. When a live playlist contains stitched ads, it asks Twitch for a mobile-web stream and then an embed stream. The page's own token is requested as the popout player. If those streams still contain ads, the ad segments are removed from the playlist.
+A Chrome extension that blocks video ads on Twitch. When a live playlist contains stitched ads, it asks Twitch for an autoplay stream, then a picture-by-picture stream, and then an embed stream. The page's own token is requested as the popout player. If those streams still contain ads, the ad segments are removed from the playlist.
 
 Twitch inserts the ads into the live playlist, so this is not a request blocklist. During an ad break the picture can pause, repeat briefly, or drop to another quality. When the main stream is clean again, the player reloads.
 
