@@ -30,8 +30,14 @@
 
 ## What’s new in 0.1.12
 
+Fixes the post-ad freeze: video spinner + stuck **Blocking ads** label, and chat stopping after a midroll. Returns to the live stream when the ad ends (or fails open instead of freezing). Reload the extension after installing this zip.
+
+---
+
+## What’s new in 0.1.11
+
 <p align="center">
-  <img src="media/whats-new.jpg" alt="v0.1.12 leaner Twitch playlist probes, GQL gate, YouTube buffer skip" width="900">
+  <img src="media/whats-new.jpg" alt="v0.1.11 leaner Twitch playlist probes, GQL gate, YouTube buffer skip" width="900">
 </p>
 
 ---

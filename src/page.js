@@ -259,7 +259,8 @@
       console.log("twitch-adblock could not find the player");
       return;
     }
-    if (typeof found.player.isPaused === "function" && found.player.isPaused()) return;
+    // A stalled midroll player often reports paused. Skipping reload left gecko
+    // stuck on the backup with a spinner after the ad ended — always refresh.
     const quality = safeGet("video-quality");
     const muted = safeGet("video-muted");
     const volume = safeGet("volume");

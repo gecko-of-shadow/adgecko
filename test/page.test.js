@@ -122,6 +122,14 @@ Deno.test("a background tab stays visible to the player", () => {
   assert(source.includes("lowLatencyModeEnabled"), "a reload keeps the low-latency setting");
 });
 
+Deno.test("reloadPlayer still refreshes when the stalled player reports paused", () => {
+  const start = source.indexOf("function reloadPlayer");
+  const end = source.indexOf("function safeGet", start);
+  const block = source.slice(start, end);
+  assert(block.includes("setSrc"), "reload still refreshes the player source");
+  assert(!block.includes("isPaused"), "do not skip reload when a midroll stall looks paused");
+});
+
 Deno.test("visibilitychange does not block Twitch chat reconnect listeners", () => {
   const start = source.indexOf('document.addEventListener("visibilitychange"');
   assert(start !== -1, "visibilitychange listener exists");
