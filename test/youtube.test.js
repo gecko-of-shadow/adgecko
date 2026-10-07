@@ -196,7 +196,7 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assert(source.includes("isInlinePlaybackNoAd"), "player requests opt out of scheduled ads");
   assert(source.includes('notice.textContent = "Blocking ads"'), "the player label says ads are being blocked");
   assertEquals(manifest.name, "twitch-adblock");
-  assertEquals(manifest.version, "0.1.7");
+  assertEquals(manifest.version, "0.1.8");
   assertEquals(manifest.action.default_popup, undefined);
   const youtube = manifest.content_scripts.find((script) => script.js.includes("src/youtube.js"));
   assert(youtube, "youtube has its own content script");
@@ -205,4 +205,101 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   const twitch = manifest.content_scripts.find((script) => script.js.includes("src/page.js"));
   assertEquals(twitch.js, ["src/playlist.js", "src/page.js"]);
   assert(twitch.matches.includes("*://*.twitch.tv/*"), "twitch live script stays");
+});
+
+Deno.test("home browse Sponsored cards are removed and videos stay", () => {
+  const browse = {
+    contents: {
+      twoColumnBrowseResultsRenderer: {
+        tabs: [{
+          tabRenderer: {
+            content: {
+              richGridRenderer: {
+                contents: [
+                  { richItemRenderer: { content: { videoRenderer: { videoId: "keep-home" } } } },
+                  {
+                    richItemRenderer: {
+                      content: {
+                        adSlotRenderer: {
+                          fulfillmentContent: {
+                            fulfilledLayout: {
+                              inFeedAdLayoutRenderer: {
+                                renderingContent: {
+                                  promotedSparklesWebRenderer: {
+                                    title: { simpleText: "Marriott" },
+                                    subtitle: { simpleText: "Sponsored · Hotel" },
+                                    description: { simpleText: "Book now" },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                  {
+                    richItemRenderer: {
+                      content: {
+                        promotedVideoRenderer: { videoId: "drop-promoted" },
+                      },
+                    },
+                  },
+                  {
+                    richSectionRenderer: {
+                      content: { statementBannerRenderer: { title: "promo" } },
+                    },
+                  },
+                  { continuationItemRenderer: { token: "next-page" } },
+                ],
+              },
+            },
+          },
+        }],
+      },
+    },
+  };
+  const stripped = api.stripResponseText(
+    JSON.stringify(browse),
+    "https://www.youtube.com/youtubei/v1/browse?prettyPrint=false",
+  );
+  assert(stripped.blocked, "home Sponsored cards were removed");
+  const items = JSON.parse(stripped.text)
+    .contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.richGridRenderer.contents;
+  assertEquals(items.length, 2, "video + continuation remain");
+  assertEquals(items[0].richItemRenderer.content.videoRenderer.videoId, "keep-home");
+  assertEquals(items[1].continuationItemRenderer.token, "next-page");
+  assert(!stripped.text.includes("Marriott"), "hotel Sponsored card is gone");
+  assert(!stripped.text.includes("promotedVideoRenderer"), "promoted video card is gone");
+  assert(!stripped.text.includes("statementBannerRenderer"), "statement banner section is gone");
+});
+
+Deno.test("browse continuations drop in-feed ads and keep the continuation token", () => {
+  const body = {
+    onResponseReceivedActions: [{
+      appendContinuationItemsAction: {
+        continuationItems: [
+          { richItemRenderer: { content: { videoRenderer: { videoId: "more" } } } },
+          { richItemRenderer: { content: { inFeedAdLayoutRenderer: { ad: true } } } },
+          { continuationItemRenderer: { token: "keep-scroll" } },
+        ],
+      },
+    }],
+  };
+  const stripped = api.stripResponseText(JSON.stringify(body), "/youtubei/v1/browse");
+  const items = JSON.parse(stripped.text).onResponseReceivedActions[0].appendContinuationItemsAction.continuationItems;
+  assertEquals(items.map((item) => Object.keys(item)[0]), ["richItemRenderer", "continuationItemRenderer"]);
+  assertEquals(items[1].continuationItemRenderer.token, "keep-scroll");
+});
+
+Deno.test("browse kind is recognized and home CSS targets Sponsored cards", () => {
+  assertEquals(api.kindFor("https://www.youtube.com/youtubei/v1/browse?prettyPrint=false"), "browse");
+  assert(api.HOME_FEED_AD_CSS.includes("ytd-rich-item-renderer:has(ytd-ad-slot-renderer)"), "rich item with ad slot");
+  assert(api.HOME_FEED_AD_CSS.includes("ytd-promoted-sparkles-web-renderer"), "sparkles sponsored card");
+  assert(api.HOME_FEED_AD_CSS.includes("ytd-in-feed-ad-layout-renderer"), "in-feed ad layout");
+  assert(api.WATCH_AD_KEYS.includes("promotedSparklesWebRenderer"), "sparkles key");
+  assert(api.WATCH_AD_KEYS.includes("inFeedAdLayoutRenderer"), "in-feed key");
+  assert(source.includes("injectHomeFeedCss"), "home CSS is injected");
+  assert(source.includes('kind === "browse"'), "browse stripping is enabled");
+  assert(!api.HOME_FEED_AD_CSS.includes("ytd-rich-item-renderer:has(ytd-rich-grid-media)"), "normal home videos are not hidden");
 });

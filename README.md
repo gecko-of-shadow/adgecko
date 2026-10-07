@@ -10,12 +10,13 @@ A Chrome extension that blocks video ads on Twitch and YouTube. It is always on.
 - Does not open a second player above chat.
 - If every backup stream still has ads, strips those ads and holds the last live frame.
 - Blocks YouTube pre-roll, mid-roll, Shorts, and banner and overlay ads on the watch page.
+- Blocks YouTube home-feed Sponsored cards (for example hotel and other “Sponsored · …” cards with Watch / Book now).
 - Removes those ads from YouTube's player so the same video keeps playing.
 - If a YouTube ad cannot be removed, it plays. The picture is not frozen and a blank frame is not swapped in.
 
 ## Install
 
-1. Download [twitch-adblock-0.1.7.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.7/twitch-adblock-0.1.7.zip).
+1. Download [twitch-adblock-0.1.8.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.8/twitch-adblock-0.1.8.zip).
 2. Unzip it.
 3. Open `chrome://extensions`.
 4. Turn on Developer mode.
@@ -34,6 +35,13 @@ A small "Blocking ads" label appears on the player while an ad is being blocked.
 - YouTube ads that are already mixed into the video file still play. The extension does not replace that picture.
 
 ## Changelog
+
+### 0.1.8
+
+- Blocks YouTube home-feed Sponsored cards on youtube.com.
+- Strips those cards from the home browse response and continuations so infinite scroll keeps working.
+- Hides any remaining Sponsored cards with CSS. A brief flash before hide is possible.
+- Leaves normal home videos and continuation tokens in place.
 
 ### 0.1.7
 

@@ -1,6 +1,7 @@
 // Runs on YouTube at document_start. Ads are removed from the player
-// response so the same video keeps playing. Nothing here replaces the
-// picture with a blank frame.
+// response so the same video keeps playing. Home-feed Sponsored cards
+// are stripped from browse JSON and hidden with CSS. Nothing here
+// replaces the picture with a blank frame.
 function installYoutubeAdblock(target) {
   const nativeJSONParse = JSON.parse;
   const PLAYER_AD_FIELDS = ["adPlacements", "playerAds", "adSlots", "adBreakHeartbeatParams", "adBreakParams"];
@@ -14,6 +15,14 @@ function installYoutubeAdblock(target) {
     "playerBytesAdLayoutRenderer",
     "instreamVideoAdRenderer",
     "bannerPromoRenderer",
+    "promotedSparklesWebRenderer",
+    "promotedVideoRenderer",
+    "compactPromotedVideoRenderer",
+    "inFeedAdLayoutRenderer",
+    "carouselAdRenderer",
+    "brandVideoShelfRenderer",
+    "brandVideoSingletonRenderer",
+    "statementBannerRenderer",
   ];
   const DOM_AD_SELECTORS = [
     ".ytp-ad-overlay-container",
@@ -28,6 +37,28 @@ function installYoutubeAdblock(target) {
     "ytm-companion-ad-renderer",
     "ytm-promoted-sparkles-web-renderer",
   ];
+  // Home-feed Sponsored cards (CSS hide; brief flash is OK).
+  const HOME_FEED_AD_CSS = [
+    "ytd-rich-item-renderer:has(ytd-ad-slot-renderer)",
+    "ytd-rich-item-renderer:has(ytd-display-ad-renderer)",
+    "ytd-rich-item-renderer:has(ytd-promoted-sparkles-web-renderer)",
+    "ytd-rich-item-renderer:has(ytd-promoted-video-renderer)",
+    "ytd-rich-item-renderer:has(ytd-compact-promoted-video-renderer)",
+    "ytd-rich-item-renderer:has(ytd-in-feed-ad-layout-renderer)",
+    "ytd-rich-item-renderer:has(ytd-carousel-ad-renderer)",
+    "ytd-rich-section-renderer:has(ytd-statement-banner-renderer)",
+    "ytd-rich-section-renderer:has(ytd-brand-video-shelf-renderer)",
+    "ytd-rich-section-renderer:has(ytd-brand-video-singleton-renderer)",
+    "ytd-ad-slot-renderer",
+    "ytd-promoted-sparkles-web-renderer",
+    "ytd-promoted-video-renderer",
+    "ytd-compact-promoted-video-renderer",
+    "ytd-in-feed-ad-layout-renderer",
+    "ytd-carousel-ad-renderer",
+    "ytd-statement-banner-renderer",
+    "ytm-promoted-sparkles-web-renderer",
+    "ytm-ad-slot-renderer",
+  ].join(",");
 
   function kindFor(url) {
     let parsed;
@@ -44,6 +75,7 @@ function installYoutubeAdblock(target) {
     if (path.includes("/youtubei/v1/player") || path.includes("/youtubei/v1/get_midroll")) return "player";
     if (path.includes("/youtubei/v1/reel/")) return "reel";
     if (path.includes("/youtubei/v1/next") || path.includes("/youtubei/v1/get_watch")) return "watch";
+    if (path.includes("/youtubei/v1/browse")) return "browse";
     return "";
   }
 
@@ -58,6 +90,14 @@ function installYoutubeAdblock(target) {
       || source.includes('"actionCompanionAdRenderer"')
       || source.includes('"displayAdRenderer"')
       || source.includes('"bannerPromoRenderer"')
+      || source.includes('"promotedSparklesWebRenderer"')
+      || source.includes('"promotedVideoRenderer"')
+      || source.includes('"compactPromotedVideoRenderer"')
+      || source.includes('"inFeedAdLayoutRenderer"')
+      || source.includes('"carouselAdRenderer"')
+      || source.includes('"brandVideoShelfRenderer"')
+      || source.includes('"brandVideoSingletonRenderer"')
+      || source.includes('"statementBannerRenderer"')
       || source.includes("REEL_VIDEO_TYPE_AD")
       || source.includes('"isAd":true')
       || source.includes('"isAd": true');
@@ -121,12 +161,15 @@ function installYoutubeAdblock(target) {
 
   function isWatchAdNode(item) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    if (item.continuationItemRenderer) return false;
     if (hasVideoContent(item)) return false;
     if (WATCH_AD_KEYS.some((key) => item[key] != null)) return true;
     const content = item.content;
     if (content && !Array.isArray(content) && !hasVideoContent(content) && WATCH_AD_KEYS.some((key) => content[key] != null)) return true;
     const rich = item.richItemRenderer && item.richItemRenderer.content;
     if (rich && !hasVideoContent(rich) && WATCH_AD_KEYS.some((key) => rich[key] != null)) return true;
+    const section = item.richSectionRenderer && item.richSectionRenderer.content;
+    if (section && !hasVideoContent(section) && WATCH_AD_KEYS.some((key) => section[key] != null)) return true;
     return false;
   }
 
@@ -139,7 +182,7 @@ function installYoutubeAdblock(target) {
     }
     let blocked = false;
     const seen = new WeakSet();
-    const dropEntries = kind === "reel" || kind === "watch";
+    const dropEntries = kind === "reel" || kind === "watch" || kind === "browse";
 
     function visit(node) {
       if (!node || typeof node !== "object" || seen.has(node)) return;
@@ -215,7 +258,9 @@ function installYoutubeAdblock(target) {
 
   Object.assign(target, {
     DOM_AD_SELECTORS,
+    HOME_FEED_AD_CSS,
     PLAYER_AD_FIELDS,
+    WATCH_AD_KEYS,
     kindFor,
     textLooksLikeAds,
     isShortsAdEntry,
@@ -373,6 +418,7 @@ function startYoutubeAdblock() {
     const path = location.pathname || "";
     if (path === "/watch") return "watch";
     if (path.startsWith("/shorts")) return "reel";
+    if (path === "/" || path === "") return "browse";
     return "";
   }
 
@@ -485,11 +531,18 @@ function startYoutubeAdblock() {
     const value = nativeParse.call(this, text, reviver);
     if (typeof text !== "string" || !api.textLooksLikeAds(text)) return value;
     const path = location.pathname || "";
-    const kind = path.startsWith("/shorts") ? "reel" : (path === "/watch" ? "watch" : "player");
+    const kind = path.startsWith("/shorts")
+      ? "reel"
+      : (path === "/watch" ? "watch" : ((path === "/" || path === "") ? "browse" : "player"));
     try {
       if (isAdOnlyPlayer(value)) return value;
       const stripped = api.stripValue(value, kind);
       if (!stripped.blocked) return value;
+      // Browse/watch/reel only drop ad entries. Player payloads must stay playable.
+      if (kind === "browse" || kind === "watch" || kind === "reel") {
+        notify(true);
+        return stripped.value;
+      }
       if (!api.rootHasPlayback(stripped.value) && !api.rootHasPlayback(value)) return value;
       if (kind === "player" && !api.rootHasPlayback(stripped.value)) return value;
       notify(true);
@@ -503,7 +556,23 @@ function startYoutubeAdblock() {
   hookInitial("ytInitialPlayerResponse", "player");
   hookInitial("ytInitialData", initialDataKind());
 
+  function injectHomeFeedCss() {
+    try {
+      if (typeof document === "undefined" || !document.createElement) return;
+      if (document.getElementById && document.getElementById("twitch-adblock-yt-home-css")) return;
+      const style = document.createElement("style");
+      style.id = "twitch-adblock-yt-home-css";
+      style.textContent = api.HOME_FEED_AD_CSS + "{display:none!important;}";
+      const parent = document.head || document.documentElement;
+      if (!parent || typeof parent.appendChild !== "function") return;
+      parent.appendChild(style);
+    } catch (error) {
+      console.log("twitch-adblock youtube failed open", error);
+    }
+  }
+
   function watchDom() {
+    injectHomeFeedCss();
     const root = document.documentElement;
     if (!root || typeof MutationObserver !== "function") return;
     let scheduled = false;
@@ -519,8 +588,12 @@ function startYoutubeAdblock() {
     removeDomAds();
   }
 
+  injectHomeFeedCss();
   document.addEventListener("yt-navigate-start", () => notify(false), true);
-  document.addEventListener("yt-navigate-finish", () => removeDomAds(), true);
+  document.addEventListener("yt-navigate-finish", () => {
+    injectHomeFeedCss();
+    removeDomAds();
+  }, true);
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", watchDom, { once: true });
   } else {
