@@ -4,7 +4,7 @@
   <img src="media/readme-hero.jpg" alt="twitch-adblock — always-on ad blocking for Twitch and YouTube" width="900">
 </p>
 
-**[Download twitch-adblock-0.1.11.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.11/twitch-adblock-0.1.11.zip)** · Always on · No popup · Twitch live + YouTube
+**[Download twitch-adblock-0.1.12.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.12/twitch-adblock-0.1.12.zip)** · Always on · No popup · Twitch live + YouTube
 
 ---
 
@@ -22,16 +22,16 @@
   <img src="media/readme-install.jpg" alt="Install in 5 steps" width="900">
 </p>
 
-1. Download the [release zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.11/twitch-adblock-0.1.11.zip) (not a random git checkout).
+1. Download the [release zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.12/twitch-adblock-0.1.12.zip) (not a random git checkout).
 2. Unzip → `chrome://extensions` → Developer mode → **Load unpacked** → pick the folder with `manifest.json`.
 3. While this is loaded, turn off uBlock’s `twitch.tv##+js(twitch-videoad)` (and any other YouTube-player patcher).
 
 ---
 
-## What’s new in 0.1.11
+## What’s new in 0.1.12
 
 <p align="center">
-  <img src="media/whats-new.jpg" alt="v0.1.11 leaner Twitch playlist probes, GQL gate, YouTube buffer skip" width="900">
+  <img src="media/whats-new.jpg" alt="v0.1.12 leaner Twitch playlist probes, GQL gate, YouTube buffer skip" width="900">
 </p>
 
 ---
