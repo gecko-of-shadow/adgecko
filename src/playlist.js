@@ -27,6 +27,21 @@ function installTwitchAdblockPlaylist(target) {
       || source.includes("#EXT-X-CUE-OUT");
   }
 
+  // Twitch "maf" breaks are one DATERANGE on a playlist whose segments stay live; the
+  // player draws the ad itself. Only that line goes: segments and numbering stay, and
+  // it is never an ad break, so it cannot start a backup swap or a reload.
+  function removeMafAds(text) {
+    const source = String(text || "");
+    if (!source.includes("twitch-maf-ad")) return { text: source, removed: 0 };
+    let removed = 0;
+    const kept = source.split("\n").filter((line) => {
+      if (!line.startsWith("#EXT-X-DATERANGE:") || !line.includes('CLASS="twitch-maf-ad"')) return true;
+      removed += 1;
+      return false;
+    });
+    return { text: kept.join("\n"), removed };
+  }
+
   function isMidroll(text) {
     return /"midroll"/i.test(String(text || ""));
   }
@@ -461,6 +476,7 @@ function installTwitchAdblockPlaylist(target) {
   Object.assign(target, {
     parseAttributes,
     hasStitchedAd,
+    removeMafAds,
     hasAdBreak,
     isMidroll,
     isMasterPlaylist,

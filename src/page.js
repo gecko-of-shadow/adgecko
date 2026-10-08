@@ -1270,6 +1270,11 @@ function createPlaylistGuard(env) {
     return session ? playlist.stripAds(text, session.ledger, true).text : text;
   }
 
+  function withoutMafAd(body) {
+    const result = playlist.removeMafAds(body);
+    if (result.removed) trace("playlist", "maf-ad tag removed");
+    return result.text;
+  }
 
   async function handlePlaylist(url, init) {
     const response = await env.fetch(url, init);
@@ -1309,7 +1314,7 @@ function createPlaylistGuard(env) {
         session.failOpenReloaded = false;
         env.status(false);
         trace("playlist", "midroll-ended");
-        return textResponse(throughLedger(session, text));
+        return textResponse(withoutMafAd(throughLedger(session, text)));
       }
       // No clean backup body + still midroll: pass real ads through. backupMedia has
       // already tried every clean backup, so this is the exhausted (or unknown) case.
@@ -1317,7 +1322,7 @@ function createPlaylistGuard(env) {
       if (!swapped && playlist.hasAdBreak(text)) {
         env.status(false);
         trace("playlist", "pass-midroll");
-        return textResponse(throughLedger(session, text));
+        return textResponse(withoutMafAd(throughLedger(session, text)));
       }
       const stripped = playlist.stripAds(swapped || text, session ? session.ledger : null);
       if (stripped.adUrls.length) {
@@ -1327,7 +1332,7 @@ function createPlaylistGuard(env) {
       // Gold banner is !!BackupEncodings — only while we are on a backup stream.
       const latest = channel ? sessions.get(channel) : null;
       env.status(Boolean(latest && latest.usingBackup && !stripped.passed));
-      return textResponse(stripped.text);
+      return textResponse(withoutMafAd(stripped.text));
     } catch (error) {
       console.log("twitch-adblock playlist failed", error);
       trace("playlist", "failed-open");

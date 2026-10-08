@@ -3,6 +3,7 @@ import youtubeSource from "../src/youtube.js" with { type: "text" };
 import stitchedAd from "./fixtures/twitch-stitched-ad.m3u8" with { type: "text" };
 import midrollCue from "./fixtures/twitch-midroll-cue.m3u8" with { type: "text" };
 import liveMaster from "./fixtures/twitch-live-master.m3u8" with { type: "text" };
+import mafAd from "./fixtures/twitch-maf-ad.m3u8" with { type: "text" };
 import playerAd from "./fixtures/youtube-player-ad.json" with { type: "text" };
 import homeSponsored from "./fixtures/youtube-home-sponsored.json" with { type: "text" };
 
@@ -76,4 +77,16 @@ Deno.test("fixture files stay redacted", () => {
     assert(!/oauth|Bearer |client_secret|password=/i.test(blob), "no credentials in fixtures");
     assert(!blob.includes("kimne78kx3ncx6brgo4mv6wki5h1ko"), "no live client secret material");
   }
+});
+
+Deno.test("a maf ad break is not an ad break and only its tag is removed", () => {
+  // Every segment stays live: swapping to a backup here would reload for nothing.
+  assert(!playlist.hasAdBreak(mafAd), "an all-live maf break never starts a backup swap");
+  assert(!playlist.stripAds(mafAd).stripped, "stripAds leaves the maf playlist alone");
+  const result = playlist.removeMafAds(mafAd);
+  assert(result.removed === 1, "the single maf DATERANGE line is removed");
+  assert(!result.text.includes("twitch-maf-ad"), "the player never sees the maf tag");
+  const expected = mafAd.split("\n").filter((line) => !line.includes('CLASS="twitch-maf-ad"')).join("\n");
+  assert(result.text === expected, "segments, prefetch lines, and numbering are untouched");
+  assert(playlist.removeMafAds(result.text).removed === 0, "a second pass changes nothing");
 });

@@ -1,5 +1,6 @@
 import pageSource from "../src/page.js" with { type: "text" };
 import playlistSource from "../src/playlist.js" with { type: "text" };
+import mafAd from "./fixtures/twitch-maf-ad.m3u8" with { type: "text" };
 
 function assertEquals(actual, expected, label) {
   const left = JSON.stringify(actual);
@@ -759,6 +760,50 @@ Deno.test("a backup that gets its own ad plays it through without another reload
   assertEquals(statuses.at(-1), false, "Blocking ads is off while that ad plays");
   await flushReload();
   assertEquals(reloads, [], "no hop to another type, so no extra reload");
+});
+
+Deno.test("a maf ad break loses only its tag: no token request, no reload, no label", async () => {
+  const traces = [];
+  const previous = globalThis.TwitchAdblockDebug;
+  globalThis.TwitchAdblockDebug = { on: true, trace: (kind, detail) => traces.push(kind + " " + detail) };
+  try {
+    let tokens = 0;
+    const reloads = [];
+    const statuses = [];
+    let mediaText = "#EXTM3U\n#EXTINF:2.0,live\nhttps://video.example/live.ts";
+    const guard = createPlaylistGuard({
+      handoffGraceMs: 0,
+      async fetch(url) {
+        const value = String(url);
+        if (value.includes("/channel/hls/")) return playlistResponse(mainMaster);
+        if (value.includes("live-variant")) return playlistResponse(mediaText);
+        return new Response("missing", { status: 404 });
+      },
+      async gql(body) {
+        tokens += 1;
+        return tokenFor(body);
+      },
+      reload() {
+        reloads.push("reload");
+      },
+      status(blocking) {
+        statuses.push(Boolean(blocking));
+      },
+    });
+    await guard(masterUrlForTests);
+    mediaText = mafAd;
+    const media = await guard("https://video.example/live-variant.m3u8");
+    const text = await media.text();
+    const expected = mafAd.split("\n").filter((line) => !line.includes('CLASS="twitch-maf-ad"')).join("\n");
+    assertEquals(text, expected, "only the maf DATERANGE line is removed");
+    await flushReload();
+    assertEquals(tokens, 0, "no backup token is requested");
+    assertEquals(reloads, [], "no player reload");
+    assert(!statuses.includes(true), "Blocking ads never turns on");
+    assert(traces.includes("playlist maf-ad tag removed"), "debug mode shows the strip");
+  } finally {
+    globalThis.TwitchAdblockDebug = previous;
+  }
 });
 
 Deno.test("a stitched range at the live edge swaps before any ad segment is listed", async () => {
