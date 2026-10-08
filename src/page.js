@@ -10,7 +10,35 @@
   let authorization = "";
 
   const nativeFetch = window.fetch.bind(window);
+  const playerWorkers = new Set();
   warnConflictOnce(window.fetch, window.Worker);
+  window.addEventListener("message", (event) => {
+    try {
+      if (event.source !== window) return;
+      const data = event.data;
+      if (!data || data.source !== "twitch-adblock-debug") return;
+      if (data.type !== "set" && data.type !== "get") return;
+      const debug = globalThis.TwitchAdblockDebug;
+      if (!debug) return;
+      if (data.type === "set" && debug.on !== (data.on === true)) {
+        const next = data.on === true;
+        if (!next) debug.note("debug", "off");
+        debug.setEnabled(next);
+        if (next) debug.note("debug", "on");
+        tellWorkers(next);
+      }
+      window.postMessage({
+        source: "twitch-adblock-debug",
+        type: "state",
+        on: debug.on === true,
+        text: debug.dump(),
+        version: debug.version || "0.1.19",
+        gen: data.gen,
+      }, "*");
+    } catch {
+      // The debug popup must not affect playback.
+    }
+  });
   const guard = createPlaylistGuard({
     fetch: nativeFetch,
     gql: pageGql,
@@ -25,6 +53,7 @@
       return await guard(request.input, request.init);
     } catch (error) {
       console.log("twitch-adblock failed open", error);
+      trace("fail-open", "page-fetch");
       return nativeFetch(replay, init);
     }
   };
@@ -58,7 +87,9 @@
     const blobUrl = URL.createObjectURL(new Blob([workerPrelude() + "\n" + source], { type: "text/javascript" }));
     const worker = new NativeWorker(blobUrl, options);
     let released = false;
+    let held = worker;
     function releaseWorker() {
+      if (held) playerWorkers.delete(held);
       if (released) return;
       released = true;
       URL.revokeObjectURL(blobUrl);
@@ -66,6 +97,20 @@
     }
     worker.addEventListener("message", onWorkerMessage, true);
     worker.addEventListener("error", releaseWorker);
+    try {
+      if (typeof WeakRef === "function") held = new WeakRef(worker);
+      playerWorkers.add(held);
+      while (playerWorkers.size > 8) {
+        const oldest = playerWorkers.values().next().value;
+        playerWorkers.delete(oldest);
+      }
+      if (globalThis.TwitchAdblockDebug && globalThis.TwitchAdblockDebug.on === true) {
+        worker.postMessage({ source: "twitch-adblock", type: "debug-set", on: true });
+      }
+      trace("worker", "hooked");
+    } catch {
+      // Debug setup must not block the player worker.
+    }
     const nativeTerminate = worker.terminate;
     worker.terminate = function () {
       releaseWorker();
@@ -106,14 +151,48 @@
     const workerHooked = forced || (typeof workerFn === "function" && !isNativeFunction(workerFn));
     if (!fetchHooked && !workerHooked) return;
     globalThis.__twitchAdblockConflictWarned = true;
+    trace("conflict", "fetch-or-worker");
     console.warn(
       "twitch-adblock: another script already patched fetch or Worker (uBlock twitch-videoad, TTV adblock, or a similar Twitch extension). Disable those while using twitch-adblock — two hooks freeze midrolls into a spinner.",
     );
   }
 
+  function trace(kind, detail) {
+    try {
+      const debug = globalThis.TwitchAdblockDebug;
+      if (!debug || debug.on !== true) return;
+      debug.trace(kind, detail);
+    } catch {
+      // Debug never changes playback.
+    }
+  }
+
+  function tellWorkers(on) {
+    for (const held of [...playerWorkers]) {
+      const worker = held && typeof held.deref === "function" ? held.deref() : held;
+      if (!worker) {
+        playerWorkers.delete(held);
+        continue;
+      }
+      try {
+        worker.postMessage({ source: "twitch-adblock", type: "debug-set", on: on === true });
+      } catch {
+        playerWorkers.delete(held);
+      }
+    }
+  }
+
   function workerPrelude() {
+    let debugBoot = "";
+    try {
+      if (typeof installTwitchAdblockDebug === "function") {
+        debugBoot = installTwitchAdblockDebug.toString() + "\ninstallTwitchAdblockDebug(globalThis.TwitchAdblockDebug = {}, true);\n";
+      }
+    } catch {
+      debugBoot = "";
+    }
     return [
-      installTwitchAdblockPlaylist.toString(),
+      debugBoot + installTwitchAdblockPlaylist.toString(),
       "installTwitchAdblockPlaylist(globalThis.TwitchAdblockPlaylist = {});",
       rewritePlaybackBody.toString(),
       createPlaylistGuard.toString(),
@@ -126,6 +205,15 @@
     const data = event.data;
     if (!data || data.source !== "twitch-adblock") return;
     event.stopImmediatePropagation();
+    if (data.type === "debug") {
+      try {
+        const debug = globalThis.TwitchAdblockDebug;
+        if (debug && data.entry) debug.note(data.entry.kind, data.entry.detail);
+      } catch {
+        // Ignore a bad debug entry.
+      }
+      return;
+    }
     if (data.type === "gql") {
       const worker = event.currentTarget;
       pageGql(data.body).then(
@@ -254,9 +342,19 @@
   }
 
   function reloadPlayer() {
+    function trace(kind, detail) {
+      try {
+        const debug = globalThis.TwitchAdblockDebug;
+        if (!debug || debug.on !== true) return;
+        debug.trace(kind, detail);
+      } catch {
+        // A debug note must not skip setSrc or the quality restore.
+      }
+    }
     const found = findPlayer();
     if (!found || !found.player || !found.state) {
       console.log("twitch-adblock could not find the player");
+      trace("reload", "player-missing");
       return;
     }
     // A stalled midroll player often reports paused. Skipping reload left the viewer
@@ -269,8 +367,10 @@
       if (typeof found.player.play === "function") found.player.play();
     } catch (error) {
       console.log("twitch-adblock reload failed", error);
+      trace("reload", "reload-failed");
       return;
     }
+    trace("reload", "setSrc");
     setTimeout(() => {
       if (quality) safeSet("video-quality", quality);
       if (muted) safeSet("video-muted", muted);
@@ -362,7 +462,18 @@ function startTwitchAdblockWorker() {
   const gqlWaitMs = 15000;
   self.addEventListener("message", (event) => {
     const data = event.data;
-    if (!data || data.source !== "twitch-adblock" || data.type !== "gql-result") return;
+    if (!data || data.source !== "twitch-adblock") return;
+    if (data.type === "debug-set") {
+      event.stopImmediatePropagation();
+      try {
+        const debug = globalThis.TwitchAdblockDebug;
+        if (debug && typeof debug.setEnabled === "function") debug.setEnabled(data.on === true);
+      } catch {
+        // A debug toggle must not break worker fetches.
+      }
+      return;
+    }
+    if (data.type !== "gql-result") return;
     event.stopImmediatePropagation();
     const waiter = pending.get(data.id);
     if (!waiter) return;
@@ -415,6 +526,12 @@ function startTwitchAdblockWorker() {
       return await guard(nextInput, nextInit);
     } catch (error) {
       console.log("twitch-adblock failed open", error);
+      try {
+        const debug = globalThis.TwitchAdblockDebug;
+        if (debug && debug.on === true) debug.trace("fail-open", "worker-fetch");
+      } catch {
+        // Fail open even when the debug log is broken.
+      }
       return nativeFetch(replay, init);
     }
   };
@@ -473,9 +590,19 @@ function createPlaylistGuard(env) {
   const playbackQuery = "query PlaybackAccessToken($login: String!, $isLive: Boolean!, $vodID: ID!, $isVod: Boolean!, $playerType: String!, $platform: String!) { streamPlaybackAccessToken(channelName: $login, params: {platform: $platform, playerBackend: \"mediaplayer\", playerType: $playerType}) @include(if: $isLive) { value signature __typename } }";
 
   let reloadQueued = false;
+  function trace(kind, detail) {
+    try {
+      const debug = globalThis.TwitchAdblockDebug;
+      if (!debug || debug.on !== true) return;
+      debug.trace(kind, detail);
+    } catch {
+      // Debug never changes the playlist response.
+    }
+  }
   function scheduleReload() {
     if (reloadQueued) return;
     reloadQueued = true;
+    trace("reload", "queued");
     // Macrotask: the clean playlist Response must reach the player before setSrc
     // resets usher. A microtask can run reload too early and leave a spinner.
     setTimeout(() => {
@@ -684,6 +811,7 @@ function createPlaylistGuard(env) {
 
   function leaveBackup(session) {
     const wasUsing = session.usingBackup;
+    trace("playback", wasUsing ? "leave-backup" : "clear-break");
     // video-swap-new IsMovingOffBackupEncodings: ignore ad tags until the next
     // master poll so leave+reload cannot immediately re-enter backup.
     if (wasUsing) session.movingOffBackup = true;
@@ -714,6 +842,7 @@ function createPlaylistGuard(env) {
     session.backupUrls.clear();
     session.reloadedForBackup = false;
     env.status(false);
+    trace("playback", "fail-open");
   }
 
   async function maybeReturnToMain(session) {
@@ -857,6 +986,7 @@ function createPlaylistGuard(env) {
     }
     const ads = await sampleHasAds(liveText, masterUrl, knownUrl, knownBody);
     if (ads === false) {
+      if (session.usingBackup || session.failOpen) trace("playback", "clean");
       leaveBackup(session);
       if (sessionIsFinished(session)) dropSession(channel);
       return null;
@@ -875,6 +1005,7 @@ function createPlaylistGuard(env) {
     // the whole midroll — clearing it every 30s re-stripped live holds under the
     // Twitch ad UI and froze long breaks (stuck → brief play → freeze again).
     if (session.failOpen && Date.now() < session.retryAt) {
+      trace("playback", "fail-open-hold");
       return null;
     }
     if (session.tried.size >= backupTypes.length) {
@@ -897,10 +1028,12 @@ function createPlaylistGuard(env) {
       session.retryAt = Date.now() + 30000;
       session.tried.clear();
       indexStreamUrls(channel, session.served, best.href, true);
+      trace("playback", "backup " + best.playerType);
       return session.served;
     }
 
     session.retryAt = Date.now() + 30000;
+    trace("playback", "no-backup");
     // All backup player types were dirty or unreachable — show ads (gold behavior).
     if (session.tried.size >= backupTypes.length) failOpenShowAds(session);
     return session.served || null;
@@ -927,6 +1060,7 @@ function createPlaylistGuard(env) {
       };
     } catch (error) {
       console.log("twitch-adblock backup failed", playerType, error);
+      trace("playback", "backup-failed " + playerType);
       return null;
     }
   }
@@ -1009,6 +1143,7 @@ function createPlaylistGuard(env) {
         if (session) env.status(Boolean(session.usingBackup));
         // Fail-open: do not rewrite the live ladder — player needs real ad stream.
         if (session && session.failOpen && !replacement) {
+          trace("playlist", "pass-master");
           return textResponse(playlist.writeServerTime(text, playlist.readServerTime(text)));
         }
         const timed = playlist.writeServerTime(replacement || text, playlist.readServerTime(text));
@@ -1023,6 +1158,7 @@ function createPlaylistGuard(env) {
         session.failOpen = false;
         session.failOpenReloaded = false;
         env.status(false);
+        trace("playlist", "midroll-ended");
         return textResponse(text);
       }
       // No clean backup body + still midroll: ALWAYS pass real ads through.
@@ -1032,16 +1168,21 @@ function createPlaylistGuard(env) {
       if (!swapped && playlist.hasAdBreak(text)) {
         if (session && !session.movingOffBackup) failOpenShowAds(session);
         env.status(false);
+        trace("playlist", "pass-midroll");
         return textResponse(text);
       }
       const stripped = playlist.stripAds(swapped || text);
-      if (stripped.adUrls.length) rememberBlocked(stripped.adUrls);
+      if (stripped.adUrls.length) {
+        rememberBlocked(stripped.adUrls);
+        trace("playlist", "strip " + stripped.adUrls.length);
+      }
       // Gold banner is !!BackupEncodings — only while we are on a backup stream.
       const latest = channel ? sessions.get(channel) : null;
       env.status(Boolean(latest && latest.usingBackup));
       return textResponse(stripped.text);
     } catch (error) {
       console.log("twitch-adblock playlist failed", error);
+      trace("playlist", "failed-open");
       return textResponse(text);
     }
   }

@@ -286,6 +286,48 @@ function startYoutubeAdblock() {
   if (globalThis.__twitchAdblockYoutube) return;
   globalThis.__twitchAdblockYoutube = true;
 
+  function trace(kind, detail) {
+    try {
+      const debug = globalThis.TwitchAdblockDebug;
+      if (!debug || debug.on !== true) return;
+      debug.trace(kind, detail);
+    } catch {
+      // Debug never changes playback.
+    }
+  }
+
+  function logFailOpen(error) {
+    console.log("twitch-adblock youtube failed open", error);
+    trace("fail-open", "youtube");
+  }
+
+  window.addEventListener("message", (event) => {
+    try {
+      if (event.source !== window) return;
+      const data = event.data;
+      if (!data || data.source !== "twitch-adblock-debug") return;
+      if (data.type !== "set" && data.type !== "get") return;
+      const debug = globalThis.TwitchAdblockDebug;
+      if (!debug) return;
+      if (data.type === "set" && debug.on !== (data.on === true)) {
+        const next = data.on === true;
+        if (!next) debug.note("debug", "off");
+        debug.setEnabled(next);
+        if (next) debug.note("debug", "on");
+      }
+      window.postMessage({
+        source: "twitch-adblock-debug",
+        type: "state",
+        on: debug.on === true,
+        text: debug.dump(),
+        version: debug.version || "0.1.19",
+        gen: data.gen,
+      }, "*");
+    } catch {
+      // The debug popup must not affect playback.
+    }
+  });
+
   const api = {};
   installYoutubeAdblock(api);
   const nativeFetch = window.fetch.bind(window);
@@ -332,6 +374,7 @@ function startYoutubeAdblock() {
   }
 
   function notify(blocking, attempt, generation) {
+    if (blocking && !attempt) trace("youtube", "blocked");
     const existing = document.getElementById("twitch-adblock-notice");
     if (!blocking) {
       noticeGeneration += 1;
@@ -394,7 +437,7 @@ function startYoutubeAdblock() {
           notify(true);
         }
       } catch (error) {
-        console.log("twitch-adblock youtube failed open", error);
+        logFailOpen(error);
       }
     }
     try {
@@ -414,13 +457,13 @@ function startYoutubeAdblock() {
             current = stripped.value;
             notify(true);
           } catch (error) {
-            console.log("twitch-adblock youtube failed open", error);
+            logFailOpen(error);
             current = value;
           }
         },
       });
     } catch (error) {
-      console.log("twitch-adblock youtube failed open", error);
+      logFailOpen(error);
     }
   }
 
@@ -471,11 +514,11 @@ function startYoutubeAdblock() {
           headers,
         });
       }).catch((error) => {
-        console.log("twitch-adblock youtube failed open", error);
+        logFailOpen(error);
         return response;
       });
     })).catch((error) => {
-      console.log("twitch-adblock youtube failed open", error);
+      logFailOpen(error);
       return nativeFetch(replay, init);
     });
   };
@@ -512,7 +555,7 @@ function startYoutubeAdblock() {
             return stripped.value;
           }
         } catch (error) {
-          console.log("twitch-adblock youtube failed open", error);
+          logFailOpen(error);
         }
         return raw;
       },
@@ -532,7 +575,7 @@ function startYoutubeAdblock() {
         const marked = api.applyNoAdPlayback(body);
         if (marked.changed) body = marked.body;
       } catch (error) {
-        console.log("twitch-adblock youtube failed open", error);
+        logFailOpen(error);
       }
     }
     return nativeSend.call(this, body);
@@ -559,7 +602,7 @@ function startYoutubeAdblock() {
       notify(true);
       return stripped.value;
     } catch (error) {
-      console.log("twitch-adblock youtube failed open", error);
+      logFailOpen(error);
       return value;
     }
   };
@@ -578,7 +621,7 @@ function startYoutubeAdblock() {
       if (!parent || typeof parent.appendChild !== "function") return;
       parent.appendChild(style);
     } catch (error) {
-      console.log("twitch-adblock youtube failed open", error);
+      logFailOpen(error);
     }
   }
 

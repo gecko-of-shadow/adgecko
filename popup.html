@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>twitch-adblock debug</title>
+  <style>
+    body {
+      margin: 0;
+      width: 280px;
+      color: #efeff1;
+      background: #0e0e10;
+      font: 13px/1.4 sans-serif;
+    }
+    main { padding: 12px; }
+    h1 { margin: 0 0 4px; font-size: 14px; font-weight: 650; }
+    p { margin: 0 0 10px; color: #adadb8; }
+    #status { min-height: 2.8em; color: #efeff1; }
+    .row { display: flex; gap: 8px; }
+    button {
+      flex: 1;
+      border: 0;
+      border-radius: 4px;
+      padding: 8px 10px;
+      background: #2d2d35;
+      color: #efeff1;
+      font: inherit;
+      cursor: pointer;
+    }
+    button[aria-pressed="true"] { background: #9147ff; }
+    #copy-debug { margin-top: 8px; width: 100%; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>twitch-adblock 0.1.19</h1>
+    <p>Temporary debug. Off leaves playback alone.</p>
+    <p id="status">Checking this tab…</p>
+    <div class="row">
+      <button id="debug-on" type="button" aria-pressed="false">ON</button>
+      <button id="debug-off" type="button" aria-pressed="true">OFF</button>
+    </div>
+    <button id="copy-debug" type="button">Copy debug</button>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
