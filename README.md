@@ -1,43 +1,35 @@
 # twitch-adblock
 
-<p align="center">
-  <img src="media/readme-hero.jpg" alt="twitch-adblock — always-on ad blocking for Twitch and YouTube" width="900">
-</p>
-
-**[Download twitch-adblock-0.1.11.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.11/twitch-adblock-0.1.11.zip)** · Always on · No popup · Twitch live + YouTube
-
----
+A Chrome extension that blocks ads on Twitch live streams and YouTube. It is free, runs only in your browser, and sends nothing anywhere.
 
 ## What it does
 
-<p align="center">
-  <img src="media/readme-features.jpg" alt="Twitch live and YouTube features" width="900">
-</p>
+- **Twitch live:** when a midroll starts, it switches to an ad-free backup of the same stream and switches back when the break ends. If no clean backup is available, it lets the ad play instead of freezing your video.
+- **YouTube:** removes player ads and the Sponsored cards on the home page.
+- VODs and clips pass through untouched.
 
----
+## Current version: v0.1.20 (beta)
+
+This is a beta, and it is the only release right now. Midrolls are caught without a page reload, the player reloads at most twice per ad break, and newer Twitch ad markers are cleaned out of the stream.
+
+A small debug popup is **on by default for now (temporary)**. It keeps a short log in memory on your device, hides login tokens, and sends nothing out. Open the extension popup to turn it off or to copy the log if you need to report a problem.
+
+Details are in the [v0.1.20 release notes](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.1.20).
 
 ## Install
 
-<p align="center">
-  <img src="media/readme-install.jpg" alt="Install in 5 steps" width="900">
-</p>
+<!-- INSTALL PICTURE GOES HERE (right above the download link). -->
 
-1. Download the [release zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.11/twitch-adblock-0.1.11.zip) (not a random git checkout).
-2. Unzip → `chrome://extensions` → Developer mode → **Load unpacked** → pick the folder with `manifest.json`.
-3. While this is loaded, turn off uBlock’s `twitch.tv##+js(twitch-videoad)` (and any other YouTube-player patcher).
+**[Download twitch-adblock-0.1.20.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.20/twitch-adblock-0.1.20.zip)**
 
----
-
-## What’s new in 0.1.11
-
-<p align="center">
-  <img src="media/whats-new.jpg" alt="v0.1.11 leaner Twitch playlist probes, GQL gate, YouTube buffer skip" width="900">
-</p>
-
----
+1. Download the zip above and unzip it.
+2. Open `chrome://extensions` and turn on **Developer mode**.
+3. Click **Load unpacked** and pick the folder that holds `manifest.json`.
+4. Turn off other Twitch or YouTube ad blockers and scripts while this is loaded. Two ad scripts on one page can freeze the video.
 
 ## Notes
 
-- Twitch: live midrolls only (VODs/clips pass through). Player may hitch once at midroll start/end.
-- YouTube: player ads + home Sponsored cards. Ads already muxed into the file still play (fail open).
-- Dev: `deno test --no-lock test/` · `bash scripts/release-gate.sh` · `bash scripts/pack-zip.sh`
+- Backup swaps can change the picture quality briefly. Playback should keep going.
+- Ads already baked into a YouTube video file still play.
+- All releases are listed on the [releases page](https://github.com/gecko-of-shadow/twitch-adblock/releases).
+- Development: `deno test --no-lock test/` · `bash scripts/release-gate.sh` · `bash scripts/pack-zip.sh`
