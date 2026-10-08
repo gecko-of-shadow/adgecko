@@ -418,6 +418,33 @@
     if (notice.parentElement !== player) player.appendChild(notice);
   }
 
+  // Stream display ads cover or squeeze the live picture. Hide only their wrappers,
+  // and never an element that holds the video.
+  const PLAYER_AD_CSS = [
+    ".stream-display-ad__wrapper:not(:has(video))",
+    '[data-test-selector="sda-wrapper"]:not(:has(video))',
+  ].join(",\n") + " { display: none !important; }";
+  hidePlayerAds();
+
+  function hidePlayerAds() {
+    try {
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(PLAYER_AD_CSS);
+      document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+      return;
+    } catch {
+      // Older engines: fall back to a style element.
+    }
+    try {
+      const style = document.createElement("style");
+      style.id = "twitch-adblock-player-ads";
+      style.textContent = PLAYER_AD_CSS;
+      (document.head || document.documentElement).appendChild(style);
+    } catch {
+      // Playback does not depend on the banner sheet.
+    }
+  }
+
   // Twitch pauses a background tab when document.hidden is true. Keep the
   // stream playing through an ad break. visibilityState is left alone.
   try {
