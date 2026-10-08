@@ -18,7 +18,7 @@ Details are in the [v0.1.20 release notes](https://github.com/gecko-of-shadow/tw
 
 ## Install
 
-<!-- INSTALL PICTURE GOES HERE (right above the download link). -->
+<img src="docs/install-steps.png" width="500" alt="How to install twitch-adblock in 6 steps">
 
 **[Download twitch-adblock-0.1.20.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.20/twitch-adblock-0.1.20.zip)**
 
