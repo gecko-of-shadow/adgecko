@@ -12,7 +12,7 @@ A Chrome extension that blocks ads on Twitch live streams and YouTube. It is fre
 
 ## Current version: v0.1.21 (beta)
 
-<img src="docs/whats-new.png" width="800" alt="What's new in v0.1.21: the black-screen reload loop is fixed, at most 2 player reloads per minute, it backs off after a false alarm so an ad may play instead of freezing, debug on by default (temporary), plus everything in v0.1.21">
+<img src="docs/whats-new.png" width="800" alt="What's new in v0.1.21: the black-screen reload loop is fixed, at most 2 player reloads per minute, it backs off after a false alarm so an ad may play instead of freezing, debug on by default (temporary), plus everything in v0.1.20">
 
 This is a beta, and it is the only release right now. Midrolls are caught without a page reload, the player reloads at most twice per minute, it backs off after a false alarm (an ad may play instead of freezing), and newer Twitch ad markers are cleaned out of the stream.
 
