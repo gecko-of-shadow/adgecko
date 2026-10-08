@@ -870,6 +870,7 @@ function createPlaylistGuard(env) {
     session.served = "";
     session.servedCleanUrl = "";
     session.spares = [];
+    session.round = null;
     session.backupUrls.clear();
     session.tried.clear();
     session.reloadedForBackup = false;
@@ -892,6 +893,7 @@ function createPlaylistGuard(env) {
     session.served = "";
     session.servedCleanUrl = "";
     session.spares = [];
+    session.round = null;
     session.backupUrls.clear();
     session.reloadedForBackup = false;
     env.status(false);
