@@ -1025,7 +1025,10 @@ function sharedRingHarness() {
     clock.stamps.push(clock.now);
     return true;
   };
-  clock.makeGuard = () => createPlaylistGuard({
+  clock.refusals = 0;
+  clock.makeGuard = (worker) => {
+    const holder = {};
+    const env = {
     handoffGraceMs: 0,
     reloadRoom: clock.reloadRoom,
     reload: clock.claim,
@@ -1042,7 +1045,19 @@ function sharedRingHarness() {
       return tokenFor(body);
     },
     status() {},
-  });
+    };
+    if (worker) {
+      // A worker cannot see the page's ring; the page answers with "reload-refused".
+      delete env.reloadRoom;
+      env.reload = () => {
+        if (clock.claim()) return;
+        clock.refusals++;
+        holder.guard.reloadRefused();
+      };
+    }
+    holder.guard = createPlaylistGuard(env);
+    return holder.guard;
+  };
   return clock;
 }
 
@@ -1100,6 +1115,40 @@ Deno.test("a held leave reload goes out as soon as there is room, before any new
     assertEquals(ring.stamps.length, 2, "the held leave reload used the free slot");
     assertEquals(ring.stamps[1], ring.now, "and it went out on this poll");
     assert(after.length > 0, "the poll is answered");
+  } finally {
+    ring.restore();
+  }
+});
+
+Deno.test("a leave reload the page refuses is retried, and the player gets back to main", async () => {
+  const ring = sharedRingHarness();
+  try {
+    const worker = ring.makeGuard(true);
+    await worker(masterUrlForTests);
+    // Another guard used a page slot 30 s before this break.
+    ring.claim();
+    ring.now += 30000;
+    await worker("https://video.example/b-variant.m3u8");
+    await flushReload();
+    assertEquals(ring.stamps.length, 2, "the swap reload went out");
+    ring.now += 25000;
+    ring.bAds = false;
+    await worker("https://video.example/pip-variant.m3u8");
+    await flushReload();
+    assertEquals(ring.refusals, 1, "the page refused the leave reload");
+    assertEquals(ring.stamps.length, 2, "no reload went out");
+
+    let retried = false;
+    for (let poll = 0; poll < 12 && !retried; poll++) {
+      ring.now += 2000;
+      await worker("https://video.example/pip-variant.m3u8");
+      await flushReload();
+      retried = ring.stamps.length === 2 && ring.stamps[1] > 1700000055000;
+    }
+    assert(retried, "the refused leave was retried once the page had room");
+    assert(ring.refusals <= 3, "retries are paced, not one per poll: " + ring.refusals);
+    const master = await (await worker(masterUrlForTests)).text();
+    assert(master.includes("a-variant.m3u8") && !master.includes("pip-variant.m3u8"), "after the reset the player gets the main ladder");
   } finally {
     ring.restore();
   }

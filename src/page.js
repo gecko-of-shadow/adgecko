@@ -223,7 +223,14 @@
       );
       return;
     }
-    if (data.type === "reload") reloadPlayer();
+    if (data.type === "reload") {
+      // The worker's own ring is only advisory. Tell it when the page's ring said no,
+      // so it keeps the reload wanted instead of believing the player was reset.
+      const worker = event.currentTarget;
+      if (reloadPlayer() === false && !reloadRoom()) {
+        worker.postMessage({ source: "twitch-adblock", type: "reload-refused" });
+      }
+    }
     if (data.type === "status") setNotice(Boolean(data.blocking));
   }
 
@@ -520,6 +527,15 @@ function startTwitchAdblockWorker() {
       }
       return;
     }
+    if (data.type === "reload-refused") {
+      event.stopImmediatePropagation();
+      try {
+        if (typeof guard === "function" && typeof guard.reloadRefused === "function") guard.reloadRefused();
+      } catch {
+        // A late refusal must not break worker fetches.
+      }
+      return;
+    }
     if (data.type !== "gql-result") return;
     event.stopImmediatePropagation();
     const waiter = pending.get(data.id);
@@ -656,6 +672,8 @@ function createPlaylistGuard(env) {
   const sharedRoom = typeof env.reloadRoom === "function" ? env.reloadRoom : null;
   const reloadStamps = [];
   let reloadWanted = false;
+  let reloadWantedAt = 0;
+  let reloadRetryAt = 0;
   let reloadQueued = false;
   function trace(kind, detail) {
     try {
@@ -676,6 +694,7 @@ function createPlaylistGuard(env) {
     if (reloadQueued) return true;
     if (!reloadRoom()) {
       reloadWanted = true;
+      reloadWantedAt = Date.now();
       trace("reload", "held-by-ceiling");
       return false;
     }
@@ -687,14 +706,29 @@ function createPlaylistGuard(env) {
     // resets usher. A microtask can run reload too early and leave a spinner.
     setTimeout(() => {
       reloadQueued = false;
-      env.reload();
+      if (env.reload() === false) reloadRefused();
     }, 0);
     return true;
+  }
+  // The page's ring said no to a reload this guard thought it had room for. The reload
+  // is still owed: give the stamp back and retry once there is room.
+  function reloadRefused() {
+    if (!sharedRoom) reloadStamps.pop();
+    reloadWanted = true;
+    reloadWantedAt = Date.now();
+    reloadRetryAt = reloadWantedAt + 5000;
+    trace("reload", "refused-by-page");
   }
   // A leave reload that the ceiling held back goes out as soon as there is room, so
   // the player never stays on a backup that nobody is watching over.
   function releaseHeldReload() {
-    if (reloadWanted && !reloadQueued && reloadRoom()) scheduleReload();
+    if (!reloadWanted || reloadQueued) return;
+    const now = Date.now();
+    if (now - reloadWantedAt > reloadWindowMs * 2) {
+      reloadWanted = false;
+      return;
+    }
+    if (now >= reloadRetryAt && reloadRoom()) scheduleReload();
   }
 
 
@@ -1439,7 +1473,7 @@ function createPlaylistGuard(env) {
     }
   }
 
-  return async function guardedFetch(input, init) {
+  async function guardedFetch(input, init) {
     const raw = requestUrl(input);
     if (!raw) return env.fetch(input, init);
     const url = canonical(raw);
@@ -1456,5 +1490,7 @@ function createPlaylistGuard(env) {
       return handlePlaylist(parentless.href, init);
     }
     return handlePlaylist(url, init);
-  };
+  }
+  guardedFetch.reloadRefused = reloadRefused;
+  return guardedFetch;
 }

@@ -234,3 +234,9 @@ Deno.test("player-ad CSS hides only stream display ad wrappers that do not hold 
   assert(source.includes("hidePlayerAds();"), "the sheet is installed at document_start");
   assert(source.includes("display: none !important"), "wrappers are hidden, not resized");
 });
+
+Deno.test("a page refusal of a worker reload is sent back to that worker", () => {
+  assert(source.includes('type: "reload-refused"'), "the page tells the worker");
+  assert(source.includes('data.type === "reload-refused"'), "the worker listens for it");
+  assert(source.includes("guard.reloadRefused()"), "the worker hands it to its guard");
+});
