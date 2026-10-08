@@ -1223,25 +1223,16 @@ function createPlaylistGuard(env) {
     session.seenAt = Date.now();
     if (session.backupUrls.has(url)) {
       await maybeReturnToMain(session);
-      if (!session.usingBackup) return null;
-      if (!session.spares.length || !playlist.hasAdBreak(text)) return text;
-      // The backup itself went dirty: move to the next clean type (video-swap-new
-      // onFoundAd on a backup) and reload onto its ladder. Without one, stay here.
-      const moved = await underGate(channel, async (current) => {
-        if (!current.usingBackup || !current.backupUrls.has(url)) return null;
-        const result = await serveBackupBody(current, channel, url);
-        if (result.body != null && result.switched) scheduleReload();
-        return result.body;
-      });
-      if (moved != null) return moved;
+      // A backup that gets its own ad plays it through (stripAds pass mode) instead of
+      // hopping to another type, so a break costs at most two reloads: enter and leave.
       return session.usingBackup ? text : null;
     }
     if (movingOff(session)) return null;
     if (!playlist.hasAdBreak(text)) return null;
     return await backupMaster(session.masterUrl, session.liveMaster, url, text, async (current, name, mapped) => {
       if (!mapped || !current.usingBackup) return null;
-      const result = await serveBackupBody(current, name, url);
-      if (result.body == null) {
+      const body = await serveBackupBody(current, name, url);
+      if (body == null) {
         // Real ads pass only once every clean backup is spent.
         if (current.usingBackup) {
           trace("playback", "backups-spent");
@@ -1255,7 +1246,7 @@ function createPlaylistGuard(env) {
         // Let the clean media response reach the player before forcing a src refresh.
         scheduleReload();
       }
-      return result.body;
+      return body;
     });
   }
 
@@ -1263,23 +1254,22 @@ function createPlaylistGuard(env) {
   // next clean player type, after waiting briefly for probes still in flight.
   async function serveBackupBody(session, channel, url) {
     let body = await cleanBackupBody(session, url);
-    let switched = false;
     while (body == null && session.usingBackup) {
       if (!session.spares.length && session.round && session.round.open) await session.round.settled;
       if (!session.usingBackup || !session.spares.length) break;
       const next = session.spares.shift();
       trace("playback", "backup-dirty next " + next.playerType);
       adoptBackup(session, channel, session.liveMaster, next);
-      switched = true;
       body = await cleanBackupBody(session, url);
     }
-    return { body, switched };
+    return body;
   }
 
   // Raw answers still follow the segment numbering of any slots dropped earlier.
   function throughLedger(session, text) {
     return session ? playlist.stripAds(text, session.ledger, true).text : text;
   }
+
 
   async function handlePlaylist(url, init) {
     const response = await env.fetch(url, init);

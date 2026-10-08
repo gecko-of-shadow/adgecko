@@ -732,9 +732,10 @@ Deno.test("overlapping main polls share one backup decision", async () => {
   assertEquals(reloads, ["reload"]);
 });
 
-Deno.test("a backup that gets its own ad moves to the next clean type and reloads onto it", async () => {
+Deno.test("a backup that gets its own ad plays it through without another reload", async () => {
   const state = { mainAds: true, autoplayCleanFor: 2 };
   const reloads = [];
+  const statuses = [];
   const guard = createPlaylistGuard({
     handoffGraceMs: 0,
     fetch: backupFetch(state),
@@ -744,20 +745,20 @@ Deno.test("a backup that gets its own ad moves to the next clean type and reload
     reload() {
       reloads.push("reload");
     },
-    status() {},
+    status(blocking) {
+      statuses.push(Boolean(blocking));
+    },
   });
   const master = await guard(masterUrlForTests);
   assert((await master.text()).includes("autoplay-variant.m3u8"), "the player starts on the first clean backup");
   const onBackup = await guard("https://video.example/autoplay-variant.m3u8");
   assert((await onBackup.text()).includes("https://video.example/live.ts"), "the first backup plays while clean");
+  assertEquals(statuses.at(-1), true, "Blocking ads shows on the clean backup");
   const dirty = await guard("https://video.example/autoplay-variant.m3u8");
-  const text = await dirty.text();
-  assert(text.includes("https://video.example/pip-live.ts"), "the next clean type answers the dirty backup poll");
-  assert(!text.includes("ads.example"), "the backup's own ad is not shown");
+  assert((await dirty.text()).includes("https://ads.example/ad.ts"), "the backup's own ad passes through");
+  assertEquals(statuses.at(-1), false, "Blocking ads is off while that ad plays");
   await flushReload();
-  assertEquals(reloads, ["reload"], "one reload moves the player onto the next backup");
-  const next = await guard(masterUrlForTests);
-  assert((await next.text()).includes("pip-variant.m3u8"), "the next master lists the new backup");
+  assertEquals(reloads, [], "no hop to another type, so no extra reload");
 });
 
 Deno.test("a stitched range at the live edge swaps before any ad segment is listed", async () => {
