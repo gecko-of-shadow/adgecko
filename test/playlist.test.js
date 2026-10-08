@@ -374,3 +374,45 @@ Deno.test("a stitched range that starts after the newest segment is caught as a 
   const far = upcoming.replace("2024-01-07T20:10:40.000Z", "2024-01-07T20:20:40.000Z");
   assertEquals(playlist.hasAdBreak(far), false, "a range far past the live edge is not a break yet");
 });
+
+Deno.test("a window a little behind the newest one keeps the ledger numbering", () => {
+  const ledger = playlist.createStripLedger();
+  playlist.stripAds(windowText(400, [
+    ["live", "https://video.example/l1.ts"],
+    ["ad", "https://ads.example/a1.ts"],
+    ["ad", "https://ads.example/a2.ts"],
+    ["live", "https://video.example/l2.ts"],
+  ]), ledger);
+  const ahead = playlist.stripAds(windowText(402, [
+    ["ad", "https://ads.example/a2.ts"],
+    ["live", "https://video.example/l2.ts"],
+    ["live", "https://video.example/l3.ts"],
+  ]), ledger);
+  const stale = playlist.stripAds(windowText(401, [
+    ["ad", "https://ads.example/a1.ts"],
+    ["ad", "https://ads.example/a2.ts"],
+    ["live", "https://video.example/l2.ts"],
+  ]), ledger);
+  assertEquals(numbered(ahead.text)[0], [401, "https://video.example/l2.ts"]);
+  assertEquals(numbered(stale.text), [[401, "https://video.example/l2.ts"]]);
+  const raw = playlist.stripAds(windowText(403, [
+    ["live", "https://video.example/l2.ts"],
+    ["live", "https://video.example/l3.ts"],
+  ]), ledger, true);
+  assertEquals(numbered(raw.text)[0], [401, "https://video.example/l2.ts"], "raw answers keep the dropped offset");
+});
+
+Deno.test("a read-only pass never changes the ledger", () => {
+  const ledger = playlist.createStripLedger();
+  playlist.stripAds(windowText(500, [
+    ["live", "https://video.example/l1.ts"],
+    ["ad", "https://ads.example/a1.ts"],
+    ["live", "https://video.example/l2.ts"],
+  ]), ledger);
+  const before = JSON.stringify({ dropped: [...ledger.dropped], base: ledger.base, first: ledger.first, passing: ledger.passing });
+  const far = windowText(100, [["live", "https://video.example/other.ts"]]);
+  assertEquals(playlist.stripAds(far, ledger, true).text, far, "a far stream is answered unchanged");
+  playlist.stripAds(windowText(510, [["ad", "https://ads.example/x.ts"], ["live", "https://video.example/l9.ts"]]), ledger, true);
+  const after = JSON.stringify({ dropped: [...ledger.dropped], base: ledger.base, first: ledger.first, passing: ledger.passing });
+  assertEquals(after, before);
+});

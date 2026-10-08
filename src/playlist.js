@@ -278,26 +278,41 @@ function installTwitchAdblockPlaylist(target) {
     return count;
   }
 
+  // A window this many segments behind the newest one (a stale edge, another
+  // rendition) is read through the ledger; a bigger jump back is a new stream.
+  const staleWindow = 15;
+
   // Drop ad slots that live video follows, and renumber through a ledger kept
   // across refreshes so no live segment is listed twice or replayed. A break at the
   // live edge passes through unmodified until it ends: dropping it starves the player.
-  function stripAds(text, ledger) {
+  // readOnly applies earlier drops and numbering without dropping anything new.
+  function stripAds(text, ledger, readOnly) {
     const lines = linesOf(text);
     const unchanged = lines.join("\n");
-    const book = ledger && ledger.dropped instanceof Set ? ledger : createStripLedger();
+    const numbered = lines.some((line) => line.startsWith("#EXT-X-MEDIA-SEQUENCE:"));
+    const book = numbered && ledger && ledger.dropped instanceof Set ? ledger : createStripLedger();
     const windows = adWindows(lines);
     const times = segmentTimes(lines);
     const firstSequence = mediaSequence(lines);
+    let frozen = readOnly === true;
     if (Number.isFinite(book.first) && firstSequence < book.first) {
-      book.dropped.clear();
-      book.base = 0;
-      book.passing = false;
+      if (book.first - firstSequence > staleWindow) {
+        if (frozen) return { text: unchanged, adUrls: [], stripped: false, passed: false };
+        book.dropped.clear();
+        book.base = 0;
+        book.passing = false;
+        book.first = NaN;
+      } else {
+        frozen = true;
+      }
     }
-    book.first = firstSequence;
-    for (const value of [...book.dropped]) {
-      if (value >= firstSequence) continue;
-      book.dropped.delete(value);
-      book.base += 1;
+    if (!frozen) {
+      book.first = firstSequence;
+      for (const value of [...book.dropped]) {
+        if (value >= firstSequence - staleWindow) continue;
+        book.dropped.delete(value);
+        book.base += 1;
+      }
     }
 
     const segments = [];
@@ -310,20 +325,20 @@ function installTwitchAdblockPlaylist(target) {
     }
     const upcoming = hasUpcomingAd(windows, times);
     const anyAd = upcoming || segments.some((segment) => segment.ad);
-    if (!anyAd) book.passing = false;
+    if (!anyAd && !frozen) book.passing = false;
     const lastLive = segments.reduce((last, segment) => (segment.ad ? last : segment.index), -1);
     const fresh = segments.filter((segment) => segment.ad && !book.dropped.has(segment.sequence));
-    const dropNow = book.passing || upcoming ? [] : fresh.filter((segment) => segment.index < lastLive);
+    const dropNow = frozen || book.passing || upcoming ? [] : fresh.filter((segment) => segment.index < lastLive);
     for (const segment of dropNow) book.dropped.add(segment.sequence);
     const passedAds = fresh.filter((segment) => !book.dropped.has(segment.sequence));
-    if (passedAds.length || upcoming) book.passing = true;
+    if ((passedAds.length || upcoming) && !frozen) book.passing = true;
 
     const dropped = new Set(segments.filter((segment) => book.dropped.has(segment.sequence)).map((segment) => segment.index));
     const firstKept = segments.find((segment) => !dropped.has(segment.index));
     const outSequence = firstKept ? firstKept.sequence - droppedBelow(book, firstKept.sequence) : firstSequence - book.base;
     // Ad markers stay while any ad still plays so Twitch's ad UI can finish cleanly.
-    const cleanMarkers = dropNow.length > 0 && !passedAds.length && !upcoming;
-    const passed = anyAd && book.passing;
+    const cleanMarkers = dropped.size > 0 && !passedAds.length && !upcoming;
+    const passed = anyAd && (book.passing || passedAds.length > 0 || upcoming);
     if (!dropped.size && !cleanMarkers && outSequence === firstSequence) {
       return { text: unchanged, adUrls: [], stripped: false, passed };
     }
