@@ -228,8 +228,8 @@ Deno.test("player-ad CSS hides only stream display ad wrappers that do not hold 
   assert(start !== -1 && end !== -1, "player-ad CSS is defined");
   const selectors = [...source.slice(start, end).matchAll(/(["'])((?:(?!\1).)+)\1/g)].map((match) => match[2]);
   assertEquals(selectors, [
-    ".stream-display-ad__wrapper:not(:has(video))",
-    '[data-test-selector="sda-wrapper"]:not(:has(video))',
+    ".stream-display-ad__wrapper:not(:has(video, .video-player))",
+    '[data-test-selector="sda-wrapper"]:not(:has(video, .video-player))',
   ]);
   assert(source.includes("hidePlayerAds();"), "the sheet is installed at document_start");
   assert(source.includes("display: none !important"), "wrappers are hidden, not resized");

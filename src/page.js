@@ -419,10 +419,10 @@
   }
 
   // Stream display ads cover or squeeze the live picture. Hide only their wrappers,
-  // and never an element that holds the video.
+  // and never an element that holds the video or the player box.
   const PLAYER_AD_CSS = [
-    ".stream-display-ad__wrapper:not(:has(video))",
-    '[data-test-selector="sda-wrapper"]:not(:has(video))',
+    ".stream-display-ad__wrapper:not(:has(video, .video-player))",
+    '[data-test-selector="sda-wrapper"]:not(:has(video, .video-player))',
   ].join(",\n") + " { display: none !important; }";
   hidePlayerAds();
 
