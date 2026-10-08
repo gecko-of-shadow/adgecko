@@ -32,7 +32,7 @@
         type: "state",
         on: debug.on === true,
         text: debug.dump(),
-        version: debug.version || "0.1.19",
+        version: debug.version || "0.1.20",
         gen: data.gen,
       }, "*");
     } catch {
