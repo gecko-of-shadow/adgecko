@@ -1,5 +1,7 @@
 # twitch-adblock
 
+<img src="docs/what-it-is.png" width="800" alt="twitch-adblock blocks Twitch and YouTube ads while the video keeps playing: no ad-break screens, no banners over the stream, no freezing">
+
 A Chrome extension that blocks ads on Twitch live streams and YouTube. It is free, runs only in your browser, and sends nothing anywhere.
 
 ## What it does
@@ -9,6 +11,8 @@ A Chrome extension that blocks ads on Twitch live streams and YouTube. It is fre
 - VODs and clips pass through untouched.
 
 ## Current version: v0.1.20 (beta)
+
+<img src="docs/whats-new.png" width="800" alt="What's new in v0.1.20: midrolls caught without a page reload, Twitch's new ad tag removed, player banner ads hidden, no audio/video looping, at most 2 player reloads per ad break, debug on by default (temporary)">
 
 This is a beta, and it is the only release right now. Midrolls are caught without a page reload, the player reloads at most twice per ad break, and newer Twitch ad markers are cleaned out of the stream.
 
@@ -26,6 +30,10 @@ Details are in the [v0.1.20 release notes](https://github.com/gecko-of-shadow/tw
 2. Open `chrome://extensions` and turn on **Developer mode**.
 3. Click **Load unpacked** and pick the folder that holds `manifest.json`.
 4. Turn off other Twitch or YouTube ad blockers and scripts while this is loaded. Two ad scripts on one page can freeze the video.
+
+## Found a problem?
+
+<img src="docs/found-a-problem.png" width="800" alt="Found a problem? 1. Open the extension popup. 2. Check that Debug is ON. 3. Click Copy debug. 4. Paste it into a GitHub issue.">
 
 ## Notes
 
