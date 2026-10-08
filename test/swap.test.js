@@ -516,3 +516,107 @@ Deno.test("scheduleReload fires after the clean playlist Response is returned", 
   await flushReload();
   assertEquals(order, ["response", "reload"], "reload runs on the next macrotask after the Response");
 });
+
+Deno.test("a backup that turns dirty after its probe moves to the next clean type instead of passing the midroll", async () => {
+  const reloads = [];
+  const statuses = [];
+  let mainAds = false;
+  let autoplayFetches = 0;
+  const pipMedia = "#EXTM3U\n#EXTINF:2.0,live\nhttps://video.example/pip-live.ts";
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("/channel/hls/") && value.includes("token=live")) return playlistResponse(mainMaster);
+      if (value.includes("/channel/hls/") && value.includes("token=autoplay")) return playlistResponse(masterFor("https://video.example/autoplay-variant.m3u8"));
+      if (value.includes("/channel/hls/") && value.includes("token=picture-by-picture")) return playlistResponse(masterFor("https://video.example/pip-variant.m3u8"));
+      if (value.includes("/channel/hls/") && value.includes("token=embed")) return playlistResponse(masterFor("https://video.example/embed-variant.m3u8"));
+      if (value.includes("live-variant")) return playlistResponse(mainAds ? adMedia : cleanMedia);
+      if (value.includes("autoplay-variant")) {
+        autoplayFetches += 1;
+        // Clean when probed, then the backup's own ad starts.
+        return playlistResponse(autoplayFetches === 1 ? cleanMedia : adMedia);
+      }
+      if (value.includes("pip-variant")) return playlistResponse(pipMedia);
+      if (value.includes("embed-variant")) return playlistResponse(adMedia);
+      return new Response("missing", { status: 404 });
+    },
+    async gql(body) {
+      return JSON.stringify({
+        data: { streamPlaybackAccessToken: { value: body.variables.playerType, signature: "sig" } },
+      });
+    },
+    reload() {
+      reloads.push("reload");
+    },
+    status(blocking) {
+      statuses.push(Boolean(blocking));
+    },
+  });
+
+  const masterUrl = "https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live";
+  await guard(masterUrl);
+  mainAds = true;
+  const media = await guard("https://video.example/live-variant.m3u8");
+  const mediaText = await media.text();
+  assert(mediaText.includes("https://video.example/pip-live.ts"), "the next clean backup type is served");
+  assert(!mediaText.includes("ads.example"), "the midroll is not passed through while a clean backup exists");
+  assertEquals(statuses.at(-1), true, "Blocking ads shows while on the backup");
+  await flushReload();
+  assertEquals(reloads, ["reload"], "one reload hands the player to the backup");
+  const next = await guard(masterUrl);
+  assert((await next.text()).includes("https://video.example/pip-variant.m3u8"), "the next master points at the clean type");
+});
+
+Deno.test("a moving-off guard that no master clears expires, so the next midroll is still caught", async () => {
+  const reloads = [];
+  const realNow = Date.now;
+  let now = realNow();
+  Date.now = () => now;
+  try {
+    let mainAds = true;
+    const guard = createPlaylistGuard({
+      handoffGraceMs: 0,
+      async fetch(url) {
+        const value = String(url);
+        if (value.includes("/channel/hls/") && value.includes("token=live")) return playlistResponse(mainMaster);
+        if (value.includes("/channel/hls/")) return playlistResponse(masterFor("https://video.example/autoplay-variant.m3u8"));
+        if (value.includes("live-variant")) return playlistResponse(mainAds ? adMedia : cleanMedia);
+        if (value.includes("autoplay-variant")) return playlistResponse(cleanMedia);
+        return new Response("missing", { status: 404 });
+      },
+      async gql(body) {
+        return JSON.stringify({
+          data: { streamPlaybackAccessToken: { value: body.variables.playerType, signature: "sig" } },
+        });
+      },
+      reload() {
+        reloads.push("reload");
+      },
+      status() {},
+    });
+
+    const masterUrl = "https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live";
+    await guard(masterUrl);
+    await guard("https://video.example/autoplay-variant.m3u8");
+    mainAds = false;
+    await guard("https://video.example/autoplay-variant.m3u8");
+    await flushReload();
+    assertEquals(reloads, ["reload"], "leaving the backup reloads once");
+
+    // The reload never refetched the master, and a new midroll starts.
+    mainAds = true;
+    now += 1000;
+    const early = await guard("https://video.example/live-variant.m3u8");
+    assert((await early.text()).includes("ads.example"), "inside the guard window the handoff is left alone");
+    now += 10000;
+    const late = await guard("https://video.example/live-variant.m3u8");
+    const lateText = await late.text();
+    assert(!lateText.includes("ads.example"), "after the guard expires the midroll is swapped");
+    assert(lateText.includes("https://video.example/live.ts"), "the backup video is served");
+    await flushReload();
+    assertEquals(reloads, ["reload", "reload"], "the new swap reloads without a manual page reload");
+  } finally {
+    Date.now = realNow;
+  }
+});

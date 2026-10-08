@@ -202,7 +202,9 @@ Deno.test("return-to-main refreshes a rotated live ladder and fails open", () =>
 
 Deno.test("leaveBackup uses video-swap-new moving-off guard", () => {
   assert(source.includes("movingOffBackup"), "session tracks IsMovingOffBackupEncodings");
-  assert(source.includes("if (wasUsing) session.movingOffBackup = true"), "leave sets the guard before reload");
+  assert(/if \(handoff\) \{\s*session\.movingOffBackup = true;\s*session\.movingOffAt = Date\.now\(\);/.test(source), "leave sets the guard before reload");
+  assert(source.includes("const handoff = wasUsing && !servingMain;"), "a master that already serves main needs no guard");
+  assert(source.includes("const movingOffMs = 10000"), "a guard the master never clears still expires");
   assert(source.includes("movingOffBackup = false"), "master poll clears the guard");
   assert(source.includes('const backupTypes = ["autoplay", "picture-by-picture", "embed"]'), "backup try order matches video-swap-new");
 });
@@ -213,7 +215,7 @@ Deno.test("fail-open after exhausted backups skips strip without forced reload",
   assert(source.includes("failOpenShowAds(session)"), "exhausted backups enter fail-open");
   assert(source.includes("if (!swapped && playlist.hasAdBreak(text))"), "main midroll without backup always passes ads");
   assert(source.includes("if (session && session.failOpen && !replacement)"), "fail-open master keeps the live ladder");
-  assert(source.includes("if (wasUsing) scheduleReload()"), "leaveBackup reloads only after a latched backup");
+  assert(source.includes("if (handoff) scheduleReload()"), "leaveBackup reloads only after a latched backup");
   assert(!source.includes("stripped.adUrls.length && playlist.hasAdBreak"), "do not gate pass-through on empty adUrls");
   const failOpenStart = source.indexOf("function failOpenShowAds");
   const failOpenEnd = source.indexOf("async function maybeReturnToMain", failOpenStart);

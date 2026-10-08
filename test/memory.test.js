@@ -47,7 +47,7 @@ function tokenBody(playerType) {
   });
 }
 
-Deno.test("a clean live playlist drops the channel session", async () => {
+Deno.test("a clean live master keeps the channel session so a later midroll still swaps", async () => {
   let mainClean = false;
   const guard = createPlaylistGuard({
     handoffGraceMs: 0,
@@ -81,9 +81,10 @@ Deno.test("a clean live playlist drops the channel session", async () => {
   mainClean = true;
   await guard(masterUrl);
   mainClean = false;
+  // A midroll that starts after a clean page load must not need a manual reload.
   const after = await (await guard("https://video.example/live-variant.m3u8")).text();
-  assert(after.includes("https://ads.example/ad.ts"), "a finished session does not keep the old variant");
-  assert(!after.includes("https://video.example/live.ts"), "the dropped variant is not answered with the backup");
+  assert(!after.includes("https://ads.example/ad.ts"), "the later midroll is not passed through");
+  assert(after.includes("https://video.example/live.ts"), "the later midroll is answered with the backup");
 });
 
 Deno.test("old variant urls are evicted and the current one still swaps", async () => {
