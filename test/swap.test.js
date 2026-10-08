@@ -620,3 +620,171 @@ Deno.test("a moving-off guard that no master clears expires, so the next midroll
     Date.now = realNow;
   }
 });
+
+function tokenFor(body) {
+  return JSON.stringify({
+    data: { streamPlaybackAccessToken: { value: body.variables.playerType, signature: "sig" } },
+  });
+}
+
+const masterUrlForTests = "https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live";
+const pipMedia = "#EXTM3U\n#EXTINF:2.0,live\nhttps://video.example/pip-live.ts";
+
+function backupFetch(state) {
+  return async function (url) {
+    const value = String(url);
+    if (value.includes("/channel/hls/") && value.includes("token=live")) return playlistResponse(mainMaster);
+    if (value.includes("/channel/hls/") && value.includes("token=autoplay")) return playlistResponse(masterFor("https://video.example/autoplay-variant.m3u8"));
+    if (value.includes("/channel/hls/") && value.includes("token=picture-by-picture")) return playlistResponse(masterFor("https://video.example/pip-variant.m3u8"));
+    if (value.includes("/channel/hls/") && value.includes("token=embed")) return playlistResponse(masterFor("https://video.example/embed-variant.m3u8"));
+    if (value.includes("live-variant")) return playlistResponse(state.mainAds ? (state.mainText || adMedia) : cleanMedia);
+    if (value.includes("autoplay-variant")) {
+      state.autoplayFetches = (state.autoplayFetches || 0) + 1;
+      return playlistResponse(state.autoplayFetches <= (state.autoplayCleanFor || 1) ? cleanMedia : adMedia);
+    }
+    if (value.includes("pip-variant")) {
+      if (state.pipDelay) await new Promise((resolve) => setTimeout(resolve, state.pipDelay));
+      return playlistResponse(pipMedia);
+    }
+    if (value.includes("embed-variant")) return playlistResponse(adMedia);
+    return new Response("missing", { status: 404 });
+  };
+}
+
+Deno.test("a stalled backup probe cannot hold the player's playlist past the probe deadline", async () => {
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    probeDeadlineMs: 30,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("/channel/hls/") && value.includes("token=live")) return playlistResponse(mainMaster);
+      if (value.includes("/channel/hls/")) return playlistResponse(masterFor("https://video.example/dirty-variant.m3u8"));
+      if (value.includes("-variant")) return playlistResponse(adMedia);
+      return new Response("missing", { status: 404 });
+    },
+    gql(body) {
+      if (body.variables.playerType === "embed") return new Promise(() => {});
+      return Promise.resolve(tokenFor(body));
+    },
+    reload() {},
+    status() {},
+  });
+  const started = Date.now();
+  const master = await guard(masterUrlForTests);
+  assert((await master.text()).includes("live-variant.m3u8"), "the live ladder is served once the deadline passes");
+  assert(Date.now() - started < 1000, "the stalled probe did not hold the master");
+});
+
+Deno.test("a clean backup still answering is awaited before the midroll is passed through", async () => {
+  const state = { mainAds: false, pipDelay: 15 };
+  const reloads = [];
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    probeDeadlineMs: 500,
+    fetch: backupFetch(state),
+    async gql(body) {
+      return tokenFor(body);
+    },
+    reload() {
+      reloads.push("reload");
+    },
+    status() {},
+  });
+  await guard(masterUrlForTests);
+  state.mainAds = true;
+  const media = await guard("https://video.example/live-variant.m3u8");
+  const text = await media.text();
+  assert(text.includes("https://video.example/pip-live.ts"), "the late clean backup is served");
+  assert(!text.includes("ads.example"), "the midroll is not passed through");
+  await flushReload();
+  assertEquals(reloads, ["reload"]);
+});
+
+Deno.test("overlapping main polls share one backup decision", async () => {
+  const state = { mainAds: false };
+  const reloads = [];
+  const statuses = [];
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    fetch: backupFetch(state),
+    async gql(body) {
+      return tokenFor(body);
+    },
+    reload() {
+      reloads.push("reload");
+    },
+    status(blocking) {
+      statuses.push(Boolean(blocking));
+    },
+  });
+  await guard(masterUrlForTests);
+  state.mainAds = true;
+  const [first, second] = await Promise.all([
+    guard("https://video.example/live-variant.m3u8"),
+    guard("https://video.example/live-variant.m3u8"),
+  ]);
+  for (const response of [first, second]) {
+    const text = await response.text();
+    assert(text.includes("https://video.example/pip-live.ts"), "both polls get the clean backup");
+  }
+  assertEquals(statuses.at(-1), true, "no poll failed the session open");
+  await flushReload();
+  assertEquals(reloads, ["reload"]);
+});
+
+Deno.test("a backup that gets its own ad moves to the next clean type and reloads onto it", async () => {
+  const state = { mainAds: true, autoplayCleanFor: 2 };
+  const reloads = [];
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    fetch: backupFetch(state),
+    async gql(body) {
+      return tokenFor(body);
+    },
+    reload() {
+      reloads.push("reload");
+    },
+    status() {},
+  });
+  const master = await guard(masterUrlForTests);
+  assert((await master.text()).includes("autoplay-variant.m3u8"), "the player starts on the first clean backup");
+  const onBackup = await guard("https://video.example/autoplay-variant.m3u8");
+  assert((await onBackup.text()).includes("https://video.example/live.ts"), "the first backup plays while clean");
+  const dirty = await guard("https://video.example/autoplay-variant.m3u8");
+  const text = await dirty.text();
+  assert(text.includes("https://video.example/pip-live.ts"), "the next clean type answers the dirty backup poll");
+  assert(!text.includes("ads.example"), "the backup's own ad is not shown");
+  await flushReload();
+  assertEquals(reloads, ["reload"], "one reload moves the player onto the next backup");
+  const next = await guard(masterUrlForTests);
+  assert((await next.text()).includes("pip-variant.m3u8"), "the next master lists the new backup");
+});
+
+Deno.test("a stitched range at the live edge swaps before any ad segment is listed", async () => {
+  const upcoming = [
+    "#EXTM3U",
+    "#EXT-X-PROGRAM-DATE-TIME:2024-01-07T20:10:36.000Z",
+    "#EXTINF:2.000,live",
+    "https://video.example/live1.ts",
+    '#EXT-X-DATERANGE:ID="stitched-ad-1",CLASS="twitch-stitched-ad",START-DATE="2024-01-07T20:10:38.000Z",DURATION=30',
+  ].join("\n");
+  const state = { mainAds: false, mainText: upcoming, autoplayCleanFor: 99 };
+  const reloads = [];
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    fetch: backupFetch(state),
+    async gql(body) {
+      return tokenFor(body);
+    },
+    reload() {
+      reloads.push("reload");
+    },
+    status() {},
+  });
+  await guard(masterUrlForTests);
+  state.mainAds = true;
+  const media = await guard("https://video.example/live-variant.m3u8");
+  assert((await media.text()).includes("https://video.example/live.ts"), "the backup answers the cue");
+  await flushReload();
+  assertEquals(reloads, ["reload"]);
+});

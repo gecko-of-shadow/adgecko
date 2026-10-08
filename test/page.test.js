@@ -111,7 +111,7 @@ Deno.test("a picture-by-picture token request is dropped before the chat mini pl
 
 Deno.test("a midroll variant is answered with the backup stream", () => {
   assert(source.includes("const streamByUrl = new Map();"), "variant urls stay tied to the channel");
-  assert(source.includes("if (!session.reloadedForBackup)"), "reload once when the player is already on the ad playlist");
+  assert(source.includes("if (!current.reloadedForBackup)"), "reload once when the player is already on the ad playlist");
   assert(source.includes("session.mainVariantUrl"), "the main variant is checked so playback can return");
   assert(source.includes("json.streamPlaybackAccessToken"), "embed tokens may sit on the response root");
   assert(source.includes("await env.gql(body)"), "backup tokens use the original gql fetch");
@@ -183,7 +183,7 @@ Deno.test("the blocking label follows backup stay, like video-swap-new", () => {
   assert(!source.includes("env.status(true)"), "a live master must not latch the label on");
   assert(!source.includes("env.status(stripped.stripped)"), "strip-only must not drive the notice");
   assert(
-    source.includes("env.status(Boolean(latest && latest.usingBackup))")
+    source.includes("env.status(Boolean(latest && latest.usingBackup && !stripped.passed))")
       || source.includes("env.status(Boolean(session && session.usingBackup))"),
     "media notice matches BackupEncodings-style stay",
   );

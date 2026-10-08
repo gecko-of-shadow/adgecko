@@ -616,6 +616,8 @@ function createPlaylistGuard(env) {
   // The moving-off guard normally ends at the next master fetch. If the player
   // reload never refetches the master, expire it so the next midroll is still caught.
   const movingOffMs = 10000;
+  // A stalled backup request must not hold the player's playlist fetch for long.
+  const probeDeadlineMs = env.probeDeadlineMs == null ? 2000 : Number(env.probeDeadlineMs);
   const playbackHash = "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9";
   const playbackQuery = "query PlaybackAccessToken($login: String!, $isLive: Boolean!, $vodID: ID!, $isVod: Boolean!, $playerType: String!, $platform: String!) { streamPlaybackAccessToken(channelName: $login, params: {platform: $platform, playerBackend: \"mediaplayer\", playerType: $playerType}) @include(if: $isLive) { value signature __typename } }";
 
@@ -1013,9 +1015,9 @@ function createPlaylistGuard(env) {
     return sawPlaylist ? false : null;
   }
 
-  async function backupMaster(masterUrl, liveText, knownUrl, knownBody) {
-    const channel = playlist.channelFromPlaylistUrl(masterUrl);
-    if (!channel) return null;
+  // One backup decision per channel at a time: probes, adoption, and the walk to
+  // the next clean type all run behind this gate.
+  async function underGate(channel, work) {
     let session = ensureSession(channel);
     while (session.inflight) {
       await session.inflight;
@@ -1027,11 +1029,20 @@ function createPlaylistGuard(env) {
     });
     session.inflight = gate;
     try {
-      return await runBackup(session, channel, masterUrl, liveText, knownUrl, knownBody);
+      return await work(session);
     } finally {
       release();
       if (session.inflight === gate) session.inflight = null;
     }
+  }
+
+  async function backupMaster(masterUrl, liveText, knownUrl, knownBody, after) {
+    const channel = playlist.channelFromPlaylistUrl(masterUrl);
+    if (!channel) return null;
+    return await underGate(channel, async (session) => {
+      const mapped = await runBackup(session, channel, masterUrl, liveText, knownUrl, knownBody);
+      return after ? await after(session, channel, mapped) : mapped;
+    });
   }
 
   async function runBackup(session, channel, masterUrl, liveText, knownUrl, knownBody) {
@@ -1150,7 +1161,13 @@ function createPlaylistGuard(env) {
     const pending = backupTypes.filter((playerType) => !session.tried.has(playerType));
     for (const playerType of pending) session.tried.add(playerType);
     if (!pending.length) return [];
-    const round = {};
+    let settle;
+    const round = {
+      open: true,
+      settled: new Promise((resolve) => {
+        settle = resolve;
+      }),
+    };
     session.round = round;
     session.spares = [];
 
@@ -1159,6 +1176,16 @@ function createPlaylistGuard(env) {
       let remaining = pending.length;
       let graceTimer = null;
       let done = false;
+      const deadline = setTimeout(() => {
+        finish();
+        closeRound();
+      }, probeDeadlineMs);
+      function closeRound() {
+        if (!round.open) return;
+        round.open = false;
+        clearTimeout(deadline);
+        settle();
+      }
       function finish() {
         if (done) return;
         done = true;
@@ -1177,7 +1204,10 @@ function createPlaylistGuard(env) {
             finish();
           }
         }
-        if (remaining === 0) finish();
+        if (remaining === 0) {
+          finish();
+          closeRound();
+        }
       }
       for (const playerType of pending) {
         probeBackupType(channel, masterUrl, liveText, playerType).then(onResult, () => onResult(null));
@@ -1193,35 +1223,62 @@ function createPlaylistGuard(env) {
     session.seenAt = Date.now();
     if (session.backupUrls.has(url)) {
       await maybeReturnToMain(session);
+      if (!session.usingBackup) return null;
+      if (!session.spares.length || !playlist.hasAdBreak(text)) return text;
+      // The backup itself went dirty: move to the next clean type (video-swap-new
+      // onFoundAd on a backup) and reload onto its ladder. Without one, stay here.
+      const moved = await underGate(channel, async (current) => {
+        if (!current.usingBackup || !current.backupUrls.has(url)) return null;
+        const result = await serveBackupBody(current, channel, url);
+        if (result.body != null && result.switched) scheduleReload();
+        return result.body;
+      });
+      if (moved != null) return moved;
       return session.usingBackup ? text : null;
     }
     if (movingOff(session)) return null;
     if (!playlist.hasAdBreak(text)) return null;
-    const mapped = await backupMaster(session.masterUrl, session.liveMaster, url, text);
-    if (!mapped || !session.usingBackup) return null;
-    // Backup first (video-swap-new): a dirty or missing backup rung moves on to the
-    // next clean player type. Real ads pass only once every clean backup is spent.
+    return await backupMaster(session.masterUrl, session.liveMaster, url, text, async (current, name, mapped) => {
+      if (!mapped || !current.usingBackup) return null;
+      const result = await serveBackupBody(current, name, url);
+      if (result.body == null) {
+        // Real ads pass only once every clean backup is spent.
+        if (current.usingBackup) {
+          trace("playback", "backups-spent");
+          failOpenShowAds(current);
+          current.retryAt = Date.now() + 30000;
+        }
+        return null;
+      }
+      if (!current.reloadedForBackup) {
+        current.reloadedForBackup = true;
+        // Let the clean media response reach the player before forcing a src refresh.
+        scheduleReload();
+      }
+      return result.body;
+    });
+  }
+
+  // Backup first (video-swap-new): a dirty or missing backup rung moves on to the
+  // next clean player type, after waiting briefly for probes still in flight.
+  async function serveBackupBody(session, channel, url) {
     let body = await cleanBackupBody(session, url);
-    while (body == null && session.usingBackup && session.spares.length) {
+    let switched = false;
+    while (body == null && session.usingBackup) {
+      if (!session.spares.length && session.round && session.round.open) await session.round.settled;
+      if (!session.usingBackup || !session.spares.length) break;
       const next = session.spares.shift();
       trace("playback", "backup-dirty next " + next.playerType);
       adoptBackup(session, channel, session.liveMaster, next);
+      switched = true;
       body = await cleanBackupBody(session, url);
     }
-    if (body == null) {
-      if (session.usingBackup) {
-        trace("playback", "backups-spent");
-        failOpenShowAds(session);
-        session.retryAt = Date.now() + 30000;
-      }
-      return null;
-    }
-    if (!session.reloadedForBackup) {
-      session.reloadedForBackup = true;
-      // Let the clean media response reach the player before forcing a src refresh.
-      scheduleReload();
-    }
-    return body;
+    return { body, switched };
+  }
+
+  // Raw answers still follow the segment numbering of any slots dropped earlier.
+  function throughLedger(session, text) {
+    return session ? playlist.stripAds(text, session.ledger, true).text : text;
   }
 
   async function handlePlaylist(url, init) {
@@ -1262,7 +1319,7 @@ function createPlaylistGuard(env) {
         session.failOpenReloaded = false;
         env.status(false);
         trace("playlist", "midroll-ended");
-        return textResponse(text);
+        return textResponse(throughLedger(session, text));
       }
       // No clean backup body + still midroll: pass real ads through. backupMedia has
       // already tried every clean backup, so this is the exhausted (or unknown) case.
@@ -1270,7 +1327,7 @@ function createPlaylistGuard(env) {
       if (!swapped && playlist.hasAdBreak(text)) {
         env.status(false);
         trace("playlist", "pass-midroll");
-        return textResponse(text);
+        return textResponse(throughLedger(session, text));
       }
       const stripped = playlist.stripAds(swapped || text, session ? session.ledger : null);
       if (stripped.adUrls.length) {
@@ -1279,7 +1336,7 @@ function createPlaylistGuard(env) {
       }
       // Gold banner is !!BackupEncodings — only while we are on a backup stream.
       const latest = channel ? sessions.get(channel) : null;
-      env.status(Boolean(latest && latest.usingBackup));
+      env.status(Boolean(latest && latest.usingBackup && !stripped.passed));
       return textResponse(stripped.text);
     } catch (error) {
       console.log("twitch-adblock playlist failed", error);
