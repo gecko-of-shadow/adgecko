@@ -44,7 +44,8 @@
         if (gen === generation) render(null);
         return;
       }
-      chrome.tabs.sendMessage(tab.id, { source: SOURCE, type, on: on === true, gen }, () => {
+      // Top frame only: the player lives there, and child frames keep their own rings.
+      chrome.tabs.sendMessage(tab.id, { source: SOURCE, type, on: on === true, gen }, { frameId: 0 }, () => {
         void chrome.runtime.lastError;
       });
       setTimeout(() => {

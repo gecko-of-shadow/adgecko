@@ -1,8 +1,8 @@
 import debugSource from "../src/debug.js" with { type: "text" };
 import pageSource from "../src/page.js" with { type: "text" };
 import playlistSource from "../src/playlist.js" with { type: "text" };
-import popupSource from "../popup.js" with { type: "text" };
-import popupHtml from "../popup.html" with { type: "text" };
+import popupSource from "../src/popup.js" with { type: "text" };
+import popupHtml from "../src/popup.html" with { type: "text" };
 import bridgeSource from "../src/debug-bridge.js" with { type: "text" };
 import manifest from "../manifest.json" with { type: "json" };
 
@@ -255,4 +255,14 @@ Deno.test("debug off does not call the recorder during playback", async () => {
     if (previous === undefined) delete globalThis.TwitchAdblockDebug;
     else globalThis.TwitchAdblockDebug = previous;
   }
+});
+
+Deno.test("Copy reads the top frame and query secrets with longer names are redacted", () => {
+  assert(popupSource.includes("{ frameId: 0 }"), "the popup asks only the top frame, where the player lives");
+  const debug = fresh(false);
+  debug.setEnabled(true);
+  debug.note("playlist", "https://usher.ttvnw.net/a.m3u8?access_token=secret1&play_session_id=secret2&allow_source=true");
+  const text = debug.dump();
+  assert(!text.includes("secret1") && !text.includes("secret2"), "token and session values are not stored");
+  assert(text.includes("allow_source=true"), "non-secret query values remain");
 });

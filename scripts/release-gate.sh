@@ -73,8 +73,8 @@ pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; FAILS=$((FAILS + 1)); }
 section() { echo; echo "=== $* ==="; }
 
-REQUIRED=(manifest.json popup.html popup.js src/debug.js src/debug-bridge.js src/page.js src/playlist.js src/youtube.js icons/icon16.png icons/icon48.png icons/icon128.png)
-ALLOWED_RE='^(manifest\.json|popup\.html|popup\.js|src/debug\.js|src/debug-bridge\.js|src/page\.js|src/playlist\.js|src/youtube\.js|icons/icon16\.png|icons/icon48\.png|icons/icon128\.png)$'
+REQUIRED=(manifest.json src/popup.html src/popup.js src/debug.js src/debug-bridge.js src/page.js src/playlist.js src/youtube.js icons/icon16.png icons/icon48.png icons/icon128.png)
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/debug\.js|src/debug-bridge\.js|src/page\.js|src/playlist\.js|src/youtube\.js|icons/icon16\.png|icons/icon48\.png|icons/icon128\.png)$'
 
 section "1. Package allowlist + version"
 VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$PKG/manifest.json")"
@@ -125,13 +125,13 @@ else
   pass "repo mode: allowlist checked on shippable paths only"
 fi
 if [[ "$ALLOW_OK" -eq 1 ]]; then pass "shippable file allowlist"; else fail "shippable file allowlist"; fi
-if [[ -f "$PKG/popup.html" && -f "$PKG/popup.js" ]]; then
+if [[ -f "$PKG/src/popup.html" && -f "$PKG/src/popup.js" ]]; then
   pass "temporary debug popup is packaged"
 else
   fail "temporary debug popup files missing"
 fi
-if [[ -f "$PKG/src/popup.html" ]]; then fail "popup.html must live next to manifest.json"; else pass "popup.html is not inside src"; fi
-if rg -n --pcre2 '<script(?![^>]*\bsrc="popup\.js")|onclick=|javascript:' "$PKG/popup.html" >/tmp/gate-popup.txt 2>/dev/null; then
+if [[ -f "$PKG/popup.html" || -f "$PKG/popup.js" ]]; then fail "popup must live in src/ (zip holds manifest.json, src/, icons/ only)"; else pass "popup lives in src/"; fi
+if rg -n --pcre2 '<script(?![^>]*\bsrc="popup\.js")|onclick=|javascript:' "$PKG/src/popup.html" >/tmp/gate-popup.txt 2>/dev/null; then
   cat /tmp/gate-popup.txt
   fail "popup.html must load only popup.js"
 else
@@ -180,9 +180,9 @@ if youtube.get("js") != ["src/debug.js", "src/youtube.js"]:
     print("FAIL  YouTube js order", youtube.get("js")); sys.exit(1)
 print("PASS  YouTube host coverage", sorted(got_y))
 
-if m.get("action", {}).get("default_popup") != "popup.html":
+if m.get("action", {}).get("default_popup") != "src/popup.html":
     print("FAIL  debug popup must be action.default_popup"); sys.exit(1)
-print("PASS  action popup is popup.html")
+print("PASS  action popup is src/popup.html")
 
 bridge = next((s for s in scripts if "src/debug-bridge.js" in (s.get("js") or [])), None)
 if not bridge:
@@ -207,8 +207,6 @@ PY
 section "3. Dangerous APIs + identity / phone-home"
 SCAN_ROOT="$PKG/src"
 SCAN_PATHS=("$SCAN_ROOT")
-[[ -f "$PKG/popup.js" ]] && SCAN_PATHS+=("$PKG/popup.js")
-[[ -f "$PKG/popup.html" ]] && SCAN_PATHS+=("$PKG/popup.html")
 if rg -n --pcre2 '\beval\s*\(|\.innerHTML\s*=|document\.write\s*\(|importScripts\s*\(|chrome\.identity|browser\.identity|navigator\.sendBeacon|geolocation|webkitRTCPeerConnection|\bRTCPeerConnection\b' "${SCAN_PATHS[@]}" >/tmp/gate-danger.txt 2>/dev/null; then
   cat /tmp/gate-danger.txt
   fail "dangerous API hits in packaged src"
@@ -274,7 +272,7 @@ for rel in playback:
     text = (root / rel).read_text(errors="replace")
     if re.search(r"\bchrome\.|\bbrowser\.", text):
         bad.append(rel + " uses chrome/browser")
-for rel in ["popup.js", "src/debug-bridge.js"]:
+for rel in ["src/popup.js", "src/debug-bridge.js"]:
     path = root / rel
     if not path.is_file():
         bad.append("missing " + rel)

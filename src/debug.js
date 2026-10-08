@@ -26,7 +26,7 @@ function installTwitchAdblockDebug(target, worker, storage) {
       return "";
     }
     text = text
-      .replace(/([?&#])(sig|token|play_session|auth|authorization|signature|nauth|nacl)=[^&#\s]*/gi, "$1$2=<redacted>")
+      .replace(/([?&#])([a-z0-9_]*(?:sig|token|session|auth|nacl)[a-z0-9_]*)=[^&#\s]*/gi, "$1$2=<redacted>")
       .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, "<redacted>")
       .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "<redacted>")
       .replace(/\b(OAuth|Bearer)\s+[A-Za-z0-9._~+/-]+=*/gi, "$1 <redacted>");
