@@ -32,7 +32,7 @@
         type: "state",
         on: debug.on === true,
         text: debug.dump(),
-        version: debug.version || "0.1.20",
+        version: debug.version || "0.1.21",
         gen: data.gen,
       }, "*");
     } catch {
@@ -43,6 +43,7 @@
     fetch: nativeFetch,
     gql: pageGql,
     reload: reloadPlayer,
+    reloadRoom,
     status: setNotice,
   });
 
@@ -341,6 +342,20 @@
     return null;
   }
 
+  const reloadCeiling = 2;
+  const reloadWindowMs = 60000;
+  const reloadStamps = [];
+  function reloadRoom() {
+    const now = Date.now();
+    while (reloadStamps.length && now - reloadStamps[0] >= reloadWindowMs) reloadStamps.shift();
+    return reloadStamps.length < reloadCeiling;
+  }
+  function claimReload() {
+    if (!reloadRoom()) return false;
+    reloadStamps.push(Date.now());
+    return true;
+  }
+
   function reloadPlayer() {
     function trace(kind, detail) {
       try {
@@ -355,7 +370,11 @@
     if (!found || !found.player || !found.state) {
       console.log("twitch-adblock could not find the player");
       trace("reload", "player-missing");
-      return;
+      return false;
+    }
+    if (!claimReload()) {
+      trace("reload", "refused-by-ceiling");
+      return false;
     }
     // A stalled midroll player often reports paused. Skipping reload left the viewer
     // stuck on the backup with a spinner after the ad ended — always refresh.
@@ -368,7 +387,7 @@
     } catch (error) {
       console.log("twitch-adblock reload failed", error);
       trace("reload", "reload-failed");
-      return;
+      return false;
     }
     trace("reload", "setSrc");
     setTimeout(() => {
@@ -376,6 +395,7 @@
       if (muted) safeSet("video-muted", muted);
       if (volume) safeSet("volume", volume);
     }, 800);
+    return true;
   }
 
 
@@ -631,6 +651,9 @@ function createPlaylistGuard(env) {
   const holdBaseMs = 60000;
   const holdMaxMs = 240000;
   const flapMemoryMs = 300000;
+  // Inside the page, env.reloadRoom is the one ring every guard shares. A worker has no
+  // view of it, so its own ring is only advisory and the page still has the last word.
+  const sharedRoom = typeof env.reloadRoom === "function" ? env.reloadRoom : null;
   const reloadStamps = [];
   let reloadWanted = false;
   let reloadQueued = false;
@@ -644,6 +667,7 @@ function createPlaylistGuard(env) {
     }
   }
   function reloadRoom() {
+    if (sharedRoom) return sharedRoom();
     const now = Date.now();
     while (reloadStamps.length && now - reloadStamps[0] >= reloadWindowMs) reloadStamps.shift();
     return reloadStamps.length < reloadCeiling;
@@ -656,7 +680,7 @@ function createPlaylistGuard(env) {
       return false;
     }
     reloadWanted = false;
-    reloadStamps.push(Date.now());
+    if (!sharedRoom) reloadStamps.push(Date.now());
     reloadQueued = true;
     trace("reload", "queued");
     // Macrotask: the clean playlist Response must reach the player before setSrc
@@ -903,11 +927,11 @@ function createPlaylistGuard(env) {
 
   // servingMain: this master response already hands the player the main ladder,
   // so it needs neither the moving-off guard nor another reload.
-  function leaveBackup(session, servingMain) {
+  function leaveBackup(session, servingMain, deadMain) {
     const wasUsing = session.usingBackup;
     const handoff = wasUsing && !servingMain;
     trace("playback", wasUsing ? "leave-backup" : "clear-break");
-    if (wasUsing && servingMain && Date.now() - session.backupAt < flapMs) holdAfterFalseAlarm(session);
+    if (wasUsing && !deadMain && Date.now() - session.backupAt < flapMs) holdAfterFalseAlarm(session);
     session.adRung = null;
     // video-swap-new IsMovingOffBackupEncodings: ignore ad tags until the next
     // master poll so leave+reload cannot immediately re-enter backup.
@@ -989,7 +1013,7 @@ function createPlaylistGuard(env) {
     // Fail open: leave the dead-main backup path (0.1.15). If the next main poll
     // is still midroll with no clean backup, runBackup latches fail-open pass-through.
     session.mainProbeFails += 1;
-    if (session.mainProbeFails >= 3) leaveBackup(session);
+    if (session.mainProbeFails >= 3) leaveBackup(session, false, true);
   }
 
   async function playbackToken(channel, playerType) {
@@ -1149,7 +1173,8 @@ function createPlaylistGuard(env) {
       failOpenShowAds(session);
     }
 
-    if (!session.usingBackup && !reloadRoom()) {
+    // A leave reload still waiting for room goes out before any new swap starts.
+    if (!session.usingBackup && (reloadWanted || !reloadRoom())) {
       trace("playback", "reload-ceiling");
       return null;
     }

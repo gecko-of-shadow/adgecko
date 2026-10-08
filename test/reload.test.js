@@ -89,6 +89,7 @@ function compileReload(fnSource) {
     "safeSet",
     "setTimeout",
     "console",
+    "claimReload",
     `${fnSource}\nreturn reloadPlayer;`,
   );
 }
@@ -177,6 +178,7 @@ async function runReload(fnSource, prefs) {
     env.safeSet,
     setTimeout,
     { log() {} },
+    () => true,
   );
   reloadPlayer();
   return env;
@@ -287,4 +289,36 @@ Deno.test("tip reloadPlayer compiled from source passes the good contract", asyn
   );
   assertEquals(env.store.get("video-muted"), "false", "tip: unmuted preference kept");
   assert(!summarize(env.events).includes("video.play"), "tip: no video element play");
+});
+
+Deno.test("the page-wide ceiling refuses a third setSrc inside 60 s, whoever asks", () => {
+  const start = pageSource.indexOf("const reloadCeiling");
+  const end = pageSource.indexOf("function reloadPlayer", start);
+  const ring = new Function(`${pageSource.slice(start, end)}\nreturn { reloadRoom, claimReload };`)();
+  const realNow = Date.now;
+  let now = 1700000000000;
+  Date.now = () => now;
+  try {
+    assert(ring.claimReload(), "first reload allowed");
+    now += 10000;
+    assert(ring.claimReload(), "second reload allowed");
+    now += 10000;
+    assert(!ring.reloadRoom(), "no room for a third");
+    assert(!ring.claimReload(), "third reload refused");
+    now += 40000;
+    assert(ring.claimReload(), "room again once the first one is 60 s old");
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+Deno.test("reloadPlayer asks the ceiling before setSrc and reports a refusal", () => {
+  const start = pageSource.indexOf("function reloadPlayer");
+  const end = pageSource.indexOf("function safeGet", start);
+  const block = pageSource.slice(start, end);
+  assert(block.indexOf("claimReload()") !== -1 && block.indexOf("claimReload()") < block.indexOf("found.state.setSrc"), "the ceiling is checked before setSrc");
+  const env = createHandoffEnv();
+  const compiled = compileReload(block.trim())(env.findPlayer, env.safeGet, env.safeSet, setTimeout, { log() {} }, () => false);
+  assertEquals(compiled(), false, "a refused reload says so");
+  assertEquals(summarize(env.events).filter((item) => item === "setSrc").length, 0, "a refused reload never calls setSrc");
 });

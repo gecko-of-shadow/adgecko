@@ -600,6 +600,7 @@ Deno.test("a moving-off guard that no master clears expires, so the next midroll
     const masterUrl = "https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live";
     await guard(masterUrl);
     await guard("https://video.example/autoplay-variant.m3u8");
+    now += 20000;
     mainAds = false;
     await guard("https://video.example/autoplay-variant.m3u8");
     await flushReload();
@@ -978,5 +979,128 @@ Deno.test("a normal break costs one swap reload and one return reload, within th
   } catch (error) {
     state.restore();
     throw error;
+  }
+});
+
+Deno.test("main's ad flag flickering while on backup does not make a reload pair every minute", async () => {
+  const state = loopHarness({ bandwidth: 1000000, resolution: "852x480", frameRate: "30.000" });
+  try {
+    await state.guard(masterUrlForTests);
+    let passedThrough = 0;
+    for (let cycle = 0; cycle < 50; cycle++) {
+      state.bAds = true;
+      state.now += 3000;
+      const media = await (await state.guard("https://video.example/b-variant.m3u8")).text();
+      if (media.includes("ads.example")) passedThrough++;
+      await flushReload();
+      state.now += 2400;
+      state.bAds = false;
+      await state.guard("https://video.example/pip-variant.m3u8");
+      await flushReload();
+      state.now += 1000;
+    }
+    const total = state.now - 1700000000000;
+    assert(total > 300000, "the simulation covers five minutes");
+    assert(state.reloads.length <= 6, "flicker is held on main, not one reload pair per minute: " + state.reloads.length);
+    assert(passedThrough >= 20, "the ad plays on main while the hold is on: " + passedThrough);
+    assert(maxReloadsInAnyMinute(state.reloads) <= 2, "at most 2 reloads in any 60 s");
+  } finally {
+    state.restore();
+  }
+});
+
+function sharedRingHarness() {
+  const clock = { now: 1700000000000, bAds: true, stamps: [] };
+  const realNow = Date.now;
+  Date.now = () => clock.now;
+  clock.restore = () => {
+    Date.now = realNow;
+  };
+  clock.reloadRoom = () => {
+    while (clock.stamps.length && clock.now - clock.stamps[0] >= 60000) clock.stamps.shift();
+    return clock.stamps.length < 2;
+  };
+  clock.claim = () => {
+    if (!clock.reloadRoom()) return false;
+    clock.stamps.push(clock.now);
+    return true;
+  };
+  clock.makeGuard = () => createPlaylistGuard({
+    handoffGraceMs: 0,
+    reloadRoom: clock.reloadRoom,
+    reload: clock.claim,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("/channel/hls/") && value.includes("token=live")) return playlistResponse(twoRungMaster({ bandwidth: 1000000, resolution: "852x480", frameRate: "30.000" }));
+      if (value.includes("/channel/hls/")) return playlistResponse(masterFor("https://video.example/pip-variant.m3u8"));
+      if (value.includes("a-variant")) return playlistResponse(cleanMedia);
+      if (value.includes("b-variant")) return playlistResponse(clock.bAds ? adMedia : cleanMedia);
+      if (value.includes("pip-variant")) return playlistResponse(pipMedia);
+      return new Response("missing", { status: 404 });
+    },
+    async gql(body) {
+      return tokenFor(body);
+    },
+    status() {},
+  });
+  return clock;
+}
+
+Deno.test("two guards share one ceiling when the page gives them one ring", async () => {
+  const ring = sharedRingHarness();
+  try {
+    const first = ring.makeGuard();
+    const second = ring.makeGuard();
+    await first(masterUrlForTests);
+    await second(masterUrlForTests);
+    ring.now += 1000;
+    ring.claim();
+    ring.claim();
+    const media = await (await second("https://video.example/b-variant.m3u8")).text();
+    await flushReload();
+    assert(media.includes("ads.example"), "a guard that never reloaded still sees the other guard's count and passes the ad");
+    assertEquals(ring.stamps.length, 2, "no third reload inside the minute");
+    ring.now += 61000;
+    const swapped = await (await first("https://video.example/b-variant.m3u8")).text();
+    await flushReload();
+    assert(swapped.includes("pip-live.ts"), "the swap works again once the ring has room");
+  } finally {
+    ring.restore();
+  }
+});
+
+Deno.test("a held leave reload goes out as soon as there is room, before any new swap", async () => {
+  const ring = sharedRingHarness();
+  try {
+    const guard = ring.makeGuard();
+    await guard(masterUrlForTests);
+    ring.now += 1000;
+    await guard("https://video.example/b-variant.m3u8");
+    await flushReload();
+    assertEquals(ring.stamps.length, 1, "the swap reloaded once");
+    // Another source uses the second slot, then the break ends.
+    ring.now += 18000;
+    ring.claim();
+    ring.bAds = false;
+    ring.now += 1000;
+    await guard("https://video.example/pip-variant.m3u8");
+    await flushReload();
+    assertEquals(ring.stamps.length, 2, "the leave reload is held by the ceiling");
+    // A new break starts while the leave is still waiting.
+    ring.bAds = true;
+    ring.now += 5000;
+    const early = await (await guard("https://video.example/b-variant.m3u8")).text();
+    await flushReload();
+    assert(early.includes("ads.example"), "no new swap while the leave is waiting");
+    assertEquals(ring.stamps.length, 2, "nothing goes out without room");
+    // The first slot ages out: the held leave takes it; a swap in the same poll rides on that one reload.
+    ring.now += 37000;
+    const after = await (await guard("https://video.example/b-variant.m3u8")).text();
+    await flushReload();
+    assertEquals(ring.stamps.length, 2, "the held leave reload used the free slot");
+    assertEquals(ring.stamps[1], ring.now, "and it went out on this poll");
+    assert(after.length > 0, "the poll is answered");
+  } finally {
+    ring.restore();
   }
 });
