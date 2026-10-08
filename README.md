@@ -4,7 +4,7 @@
   <img src="media/readme-hero.jpg" alt="twitch-adblock — always-on ad blocking for Twitch and YouTube" width="900">
 </p>
 
-**Stable:** [twitch-adblock-0.1.18.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.18/twitch-adblock-0.1.18.zip) · **Beta:** [twitch-adblock-0.1.19.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.19/twitch-adblock-0.1.19.zip) · Twitch live + YouTube
+**Stable:** [twitch-adblock-0.1.18.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.18/twitch-adblock-0.1.18.zip) · **Beta:** [twitch-adblock-0.1.20.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.20/twitch-adblock-0.1.20.zip) · Twitch live + YouTube
 
 ---
 
@@ -22,22 +22,21 @@
   <img src="media/readme-install.jpg" alt="Install in 5 steps" width="900">
 </p>
 
-1. Download a [release zip](https://github.com/gecko-of-shadow/twitch-adblock/releases) (not a random git checkout). Use **0.1.18** for stable playback. Use the **0.1.19 beta** only when you want the temporary debug popup.
+1. Download a [release zip](https://github.com/gecko-of-shadow/twitch-adblock/releases) (not a random git checkout). Use **0.1.18** for stable playback. Use the **0.1.20 beta** to try the new midroll handling (it keeps the temporary debug popup).
 2. Unzip → `chrome://extensions` → Developer mode → **Load unpacked** → pick the folder with `manifest.json`.
 3. While this is loaded, turn off uBlock’s `twitch.tv##+js(twitch-videoad)` / video-swap-new **and any other Twitch ad extension** (purple lightning icons included). **One ad script per page.** Two scripts on the same Twitch tab can freeze video while chat still moves.
 
 ---
 
-## What’s new in 0.1.19 (beta)
+## What’s new in 0.1.20 (beta)
 
-**Beta prerelease.** Temporary debug build. **v0.1.18 stays the stable playback release.**
+**Beta prerelease.** **v0.1.18 stays the stable playback release.**
 
-Debug is **off** until the popup is switched on. With debug off, playback follows the 0.1.18 path: clean backups swap, dirty backups fail open, and a long midroll is not stripped into a frozen live-hold.
-
-- Popup: **ON**, **OFF**, and **Copy debug**.
-- ON keeps a short in-memory ring of playback decisions (backup, fail-open, reload). Nothing is uploaded.
-- Copy stays on this device. Token and auth query values are stripped before they are stored.
-- A debug failure cannot change the response. The player still fail-opens.
+- **Midrolls after a normal page load are caught.** A midroll that starts while you watch swaps to the backup stream without a manual page reload.
+- **Backup first.** If the first backup turns dirty, the next clean backup is tried. Real ads pass through only when every backup is dirty or unreachable, so the video keeps playing.
+- **No A/V loops.** Ad slots are dropped without repeating a live segment, and segment numbers stay steady between refreshes.
+- **Player banners.** Stream display ad wrappers that cover or squeeze the live picture are hidden. Anything that holds the video is never hidden.
+- **Temporary debug popup** (ON / OFF / Copy debug) stays. Copy now reads the player's frame.
 
 <p align="center">
   <img src="media/whats-new.jpg" alt="Playback stays up through long midrolls" width="900">

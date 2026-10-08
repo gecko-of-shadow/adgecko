@@ -56,7 +56,7 @@
 
   function copyText() {
     if (latest && latest.text) return latest.text;
-    return "twitch-adblock 0.1.19 debug\non=false\n(no events)";
+    return "twitch-adblock 0.1.20 debug\non=false\n(no events)";
   }
 
   function markCopied(ok) {
