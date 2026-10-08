@@ -274,6 +274,24 @@ function installTwitchAdblockPlaylist(target) {
     return hasUpcomingAd(windows, times);
   }
 
+  // Why a playlist counts as an ad break, for the debug log only.
+  function adReason(text) {
+    const lines = linesOf(text);
+    const windows = adWindows(lines);
+    const times = segmentTimes(lines);
+    for (let i = 0; i < lines.length - 1; i++) {
+      const line = lines[i];
+      if (!line.startsWith("#EXTINF")) continue;
+      const next = (lines[i + 1] || "").trim();
+      if (!next || next.startsWith("#")) continue;
+      if (isAdInf(line)) return "inf";
+      if (isAdSegmentUrl(next)) return "url";
+      const time = times.get(i);
+      if (Number.isFinite(time) && inAdWindow(time, windows)) return "range";
+    }
+    return hasUpcomingAd(windows, times) ? "upcoming" : "none";
+  }
+
   function mediaSequence(lines) {
     const line = lines.find((item) => item.startsWith("#EXT-X-MEDIA-SEQUENCE:"));
     if (!line) return 0;
@@ -478,6 +496,7 @@ function installTwitchAdblockPlaylist(target) {
     hasStitchedAd,
     removeMafAds,
     hasAdBreak,
+    adReason,
     isMidroll,
     isMasterPlaylist,
     isLivePlaylistUrl,

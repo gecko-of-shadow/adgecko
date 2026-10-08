@@ -834,3 +834,149 @@ Deno.test("a stitched range at the live edge swaps before any ad segment is list
   await flushReload();
   assertEquals(reloads, ["reload"]);
 });
+
+function twoRungMaster(second) {
+  return [
+    "#EXTM3U",
+    '#EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=2560x1440,CODECS="avc1.640034",FRAME-RATE=60.000',
+    "https://video.example/a-variant.m3u8",
+    `#EXT-X-STREAM-INF:BANDWIDTH=${second.bandwidth},RESOLUTION=${second.resolution},CODECS="avc1.4D401F",FRAME-RATE=${second.frameRate}`,
+    "https://video.example/b-variant.m3u8",
+  ].join("\n");
+}
+
+function loopHarness(second) {
+  const state = { now: 1700000000000, reloads: [], backupMasterFetches: 0 };
+  const realNow = Date.now;
+  Date.now = () => state.now;
+  state.restore = () => {
+    Date.now = realNow;
+  };
+  state.guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("/channel/hls/") && value.includes("token=live")) return playlistResponse(twoRungMaster(second));
+      if (value.includes("/channel/hls/")) {
+        state.backupMasterFetches++;
+        return playlistResponse([
+          "#EXTM3U",
+          '#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,CODECS="avc1.640028",FRAME-RATE=60.000',
+          "https://video.example/pip-variant.m3u8",
+        ].join("\n"));
+      }
+      if (value.includes("a-variant")) return playlistResponse(cleanMedia);
+      if (value.includes("b-variant")) return playlistResponse(state.bAds === false ? cleanMedia : adMedia);
+      if (value.includes("pip-variant")) return playlistResponse(pipMedia);
+      return new Response("missing", { status: 404 });
+    },
+    async gql(body) {
+      return tokenFor(body);
+    },
+    reload() {
+      state.reloads.push(state.now);
+    },
+    status() {},
+  });
+  return state;
+}
+
+function maxReloadsInAnyMinute(stamps) {
+  let worst = 0;
+  for (const start of stamps) {
+    worst = Math.max(worst, stamps.filter((stamp) => stamp >= start && stamp < start + 60000).length);
+  }
+  return worst;
+}
+
+Deno.test("the ad rung is the one probed after the reload, so a clean first rung cannot undo the swap", async () => {
+  const state = loopHarness({ bandwidth: 1000000, resolution: "852x480", frameRate: "30.000" });
+  try {
+    await state.guard(masterUrlForTests);
+    for (let cycle = 0; cycle < 8; cycle++) {
+      state.now += 3000;
+      const media = await (await state.guard("https://video.example/b-variant.m3u8")).text();
+      assert(media.includes("pip-live.ts") && !media.includes("ads.example"), "the ad rung is answered with the backup");
+      await flushReload();
+      state.now += 400;
+      const master = await (await state.guard(masterUrlForTests)).text();
+      assert(master.includes("pip-variant.m3u8") && !master.includes("a-variant.m3u8"), "the new master keeps the backup while the ad rung still has ads");
+      await flushReload();
+    }
+    assertEquals(state.reloads.length, 1, "one reload for the whole break, not one per cycle");
+  } finally {
+    state.restore();
+  }
+});
+
+Deno.test("a swap undone by the next master holds on main instead of looping reloads", async () => {
+  // Both rungs look identical to the probe; only the one the player uses carries ads.
+  const state = loopHarness({ bandwidth: 7900000, resolution: "2560x1440", frameRate: "60.000" });
+  try {
+    await state.guard(masterUrlForTests);
+    let passedThrough = 0;
+    for (let cycle = 0; cycle < 12; cycle++) {
+      state.now += 4000;
+      const media = await (await state.guard("https://video.example/b-variant.m3u8")).text();
+      if (media.includes("ads.example")) passedThrough++;
+      await flushReload();
+      state.now += 400;
+      await state.guard(masterUrlForTests);
+      await flushReload();
+    }
+    assert(state.reloads.length <= 2, "no reload loop: " + state.reloads.length);
+    assert(passedThrough >= 9, "after the first false alarm the ad plays on main instead of swapping again: " + passedThrough);
+    assert(maxReloadsInAnyMinute(state.reloads) <= 2, "at most 2 reloads in any 60 s");
+
+    state.bAds = false;
+    state.now += 90000;
+    const clean = await (await state.guard("https://video.example/b-variant.m3u8")).text();
+    assert(!clean.includes("ads.example"), "main plays normally once the break is over");
+  } finally {
+    state.restore();
+  }
+});
+
+Deno.test("repeated breaks never reload the player more than twice in any 60 s", async () => {
+  const state = loopHarness({ bandwidth: 1000000, resolution: "852x480", frameRate: "30.000" });
+  try {
+    await state.guard(masterUrlForTests);
+    for (let breakIndex = 0; breakIndex < 12; breakIndex++) {
+      state.bAds = true;
+      state.now += 5000;
+      await state.guard("https://video.example/b-variant.m3u8");
+      await flushReload();
+      state.now += 1000;
+      state.bAds = false;
+      await state.guard("https://video.example/pip-variant.m3u8");
+      await flushReload();
+      state.now += 1000;
+      await state.guard(masterUrlForTests);
+      await flushReload();
+    }
+    assert(state.reloads.length >= 2, "the breaks did swap at least once");
+    assert(maxReloadsInAnyMinute(state.reloads) <= 2, "at most 2 reloads in any 60 s: " + JSON.stringify(state.reloads));
+  } finally {
+    state.restore();
+  }
+});
+
+Deno.test("a normal break costs one swap reload and one return reload, within the ceiling", async () => {
+  const state = loopHarness({ bandwidth: 1000000, resolution: "852x480", frameRate: "30.000" });
+  try {
+    await state.guard(masterUrlForTests);
+    state.now += 1000;
+    await state.guard("https://video.example/b-variant.m3u8");
+    await flushReload();
+    assertEquals(state.reloads.length, 1, "the swap reloads once");
+    state.now += 20000;
+    state.bAds = false;
+    await state.guard("https://video.example/pip-variant.m3u8");
+    await flushReload();
+    assertEquals(state.reloads.length, 2, "the way back to main reloads too");
+    state.restore();
+  } catch (error) {
+    state.restore();
+    throw error;
+  }
+});

@@ -79,12 +79,19 @@ Deno.test("a clean live master keeps the channel session so a later midroll stil
   assert(swapped.includes("https://video.example/live.ts"), "the ad variant is swapped while the session exists");
 
   mainClean = true;
-  await guard(masterUrl);
-  mainClean = false;
-  // A midroll that starts after a clean page load must not need a manual reload.
-  const after = await (await guard("https://video.example/live-variant.m3u8")).text();
-  assert(!after.includes("https://ads.example/ad.ts"), "the later midroll is not passed through");
-  assert(after.includes("https://video.example/live.ts"), "the later midroll is answered with the backup");
+  const realNow = Date.now;
+  const start = realNow();
+  Date.now = () => start + 20000;
+  try {
+    await guard(masterUrl);
+    mainClean = false;
+    // A midroll that starts after a clean page load must not need a manual reload.
+    const after = await (await guard("https://video.example/live-variant.m3u8")).text();
+    assert(!after.includes("https://ads.example/ad.ts"), "the later midroll is not passed through");
+    assert(after.includes("https://video.example/live.ts"), "the later midroll is answered with the backup");
+  } finally {
+    Date.now = realNow;
+  }
 });
 
 Deno.test("old variant urls are evicted and the current one still swaps", async () => {

@@ -621,6 +621,18 @@ function createPlaylistGuard(env) {
   const playbackHash = "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9";
   const playbackQuery = "query PlaybackAccessToken($login: String!, $isLive: Boolean!, $vodID: ID!, $isVod: Boolean!, $playerType: String!, $platform: String!) { streamPlaybackAccessToken(channelName: $login, params: {platform: $platform, playerBackend: \"mediaplayer\", playerType: $playerType}) @include(if: $isLive) { value signature __typename } }";
 
+  // Hard ceiling, whatever the cause: the player is never reset more than this many
+  // times inside the window. A reload that the ceiling holds back waits for room.
+  const reloadCeiling = 2;
+  const reloadWindowMs = 60000;
+  // A backup that the next master call throws away within this long was a false alarm.
+  // The break is then left to play on main for a while instead of swapping again.
+  const flapMs = 15000;
+  const holdBaseMs = 60000;
+  const holdMaxMs = 240000;
+  const flapMemoryMs = 300000;
+  const reloadStamps = [];
+  let reloadWanted = false;
   let reloadQueued = false;
   function trace(kind, detail) {
     try {
@@ -631,8 +643,20 @@ function createPlaylistGuard(env) {
       // Debug never changes the playlist response.
     }
   }
+  function reloadRoom() {
+    const now = Date.now();
+    while (reloadStamps.length && now - reloadStamps[0] >= reloadWindowMs) reloadStamps.shift();
+    return reloadStamps.length < reloadCeiling;
+  }
   function scheduleReload() {
-    if (reloadQueued) return;
+    if (reloadQueued) return true;
+    if (!reloadRoom()) {
+      reloadWanted = true;
+      trace("reload", "held-by-ceiling");
+      return false;
+    }
+    reloadWanted = false;
+    reloadStamps.push(Date.now());
     reloadQueued = true;
     trace("reload", "queued");
     // Macrotask: the clean playlist Response must reach the player before setSrc
@@ -641,6 +665,12 @@ function createPlaylistGuard(env) {
       reloadQueued = false;
       env.reload();
     }, 0);
+    return true;
+  }
+  // A leave reload that the ceiling held back goes out as soon as there is room, so
+  // the player never stays on a backup that nobody is watching over.
+  function releaseHeldReload() {
+    if (reloadWanted && !reloadQueued && reloadRoom()) scheduleReload();
   }
 
 
@@ -772,6 +802,11 @@ function createPlaylistGuard(env) {
         spares: [],
         round: null,
         movingOffAt: 0,
+        backupAt: 0,
+        holdUntil: 0,
+        flaps: 0,
+        flapAt: 0,
+        adRung: null,
         ledger: playlist.createStripLedger(),
         reloadedForBackup: false,
         requestedAds: new Set(),
@@ -854,12 +889,26 @@ function createPlaylistGuard(env) {
     return false;
   }
 
+  // The swap was undone by the very next master call, so the ad evidence did not hold
+  // up. Stay on main (ads play, nothing is stripped) and wait before trying again.
+  function holdAfterFalseAlarm(session) {
+    const now = Date.now();
+    if (now - session.flapAt > flapMemoryMs) session.flaps = 0;
+    session.flaps += 1;
+    session.flapAt = now;
+    const wait = Math.min(holdBaseMs * Math.pow(2, session.flaps - 1), holdMaxMs);
+    session.holdUntil = now + wait;
+    trace("playback", "hold " + Math.round(wait / 1000) + "s");
+  }
+
   // servingMain: this master response already hands the player the main ladder,
   // so it needs neither the moving-off guard nor another reload.
   function leaveBackup(session, servingMain) {
     const wasUsing = session.usingBackup;
     const handoff = wasUsing && !servingMain;
     trace("playback", wasUsing ? "leave-backup" : "clear-break");
+    if (wasUsing && servingMain && Date.now() - session.backupAt < flapMs) holdAfterFalseAlarm(session);
+    session.adRung = null;
     // video-swap-new IsMovingOffBackupEncodings: ignore ad tags until the next
     // master poll so leave+reload cannot immediately re-enter backup.
     if (handoff) {
@@ -971,6 +1020,12 @@ function createPlaylistGuard(env) {
     return tokenFrom(json);
   }
 
+  function adRungUrl(session, masterText, masterUrl) {
+    if (!session.adRung) return "";
+    const picked = playlist.pickVariant(masterText, session.adRung);
+    return picked ? absoluteVariant(picked, masterUrl) : "";
+  }
+
   async function sampleHasAds(masterText, masterUrl, knownUrl, knownBody, found) {
     const variants = playlist.listVariants(masterText);
     if (!variants.length) return playlist.hasAdBreak(masterText) || null;
@@ -1051,7 +1106,9 @@ function createPlaylistGuard(env) {
       if (!session.usingBackup) env.status(false);
       return null;
     }
-    const ads = await sampleHasAds(liveText, masterUrl, knownUrl, knownBody);
+    // A master call has no media playlist of its own. Probe the rung the break was seen
+    // on, so one rung cannot say "ad" while another says "clean" and flip the swap.
+    const ads = await sampleHasAds(liveText, masterUrl, knownUrl || adRungUrl(session, liveText, masterUrl), knownBody);
     if (ads === false) {
       if (session.usingBackup || session.failOpen) trace("playback", "clean");
       // Keep the session: a midroll that starts later on these media playlists must
@@ -1068,6 +1125,11 @@ function createPlaylistGuard(env) {
     if (session.usingBackup && session.served && Date.now() < session.retryAt) {
       indexStreamUrls(channel, session.served, masterUrl, true);
       return session.served;
+    }
+    // A swap that was just undone stays undone for a while: the ad plays on main.
+    if (!session.usingBackup && Date.now() < session.holdUntil) {
+      trace("playback", "hold");
+      return null;
     }
     // Fail-open pass-through while the retry window is open. Keep the latch for
     // the whole midroll — clearing it every 30s re-stripped live holds under the
@@ -1087,6 +1149,10 @@ function createPlaylistGuard(env) {
       failOpenShowAds(session);
     }
 
+    if (!session.usingBackup && !reloadRoom()) {
+      trace("playback", "reload-ceiling");
+      return null;
+    }
     const found = await findCleanBackups(session, channel, masterUrl, liveText);
     if (found.length) {
       const late = session.spares;
@@ -1107,6 +1173,7 @@ function createPlaylistGuard(env) {
     session.failOpenReloaded = false;
     session.served = playlist.mapVariantsToBackup(liveText, best.master, best.href);
     session.servedCleanUrl = best.cleanUrl || "";
+    if (!session.usingBackup) session.backupAt = Date.now();
     session.usingBackup = true;
     session.retryAt = Date.now() + 30000;
     session.tried.clear();
@@ -1229,6 +1296,11 @@ function createPlaylistGuard(env) {
     }
     if (movingOff(session)) return null;
     if (!playlist.hasAdBreak(text)) return null;
+    const rung = session.variants.get(url) || null;
+    if (!session.usingBackup) {
+      session.adRung = rung;
+      trace("playback", "ad-seen " + playlist.adReason(text) + (rung && rung.resolution ? " " + rung.resolution : ""));
+    }
     return await backupMaster(session.masterUrl, session.liveMaster, url, text, async (current, name, mapped) => {
       if (!mapped || !current.usingBackup) return null;
       const body = await serveBackupBody(current, name, url);
@@ -1277,6 +1349,7 @@ function createPlaylistGuard(env) {
   }
 
   async function handlePlaylist(url, init) {
+    releaseHeldReload();
     const response = await env.fetch(url, init);
     if (!response.ok) return response;
     const text = await response.text();
@@ -1288,6 +1361,7 @@ function createPlaylistGuard(env) {
         const channel = playlist.channelFromPlaylistUrl(url);
         // Same reset point as video-swap-new after encodings m3u8: handoff complete.
         const existing = channel ? sessions.get(channel) : null;
+        reloadWanted = false;
         if (existing) {
           existing.movingOffBackup = false;
           // A master fetch starts a new player instance with fresh segment numbering.
