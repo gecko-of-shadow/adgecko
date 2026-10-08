@@ -20,14 +20,35 @@ const install = new Function(
   `${debugSource.replace(/\ninstallTwitchAdblockDebug\(globalThis[\s\S]*$/, "")}\nreturn installTwitchAdblockDebug;`,
 )();
 
+function memoryStorage(initial) {
+  const store = new Map(initial || []);
+  return {
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => store.set(key, String(value)),
+  };
+}
+
 function fresh(worker) {
   const target = {};
-  install(target, worker === true);
+  install(target, worker === true, memoryStorage());
   return target;
 }
 
-Deno.test("debug is off until asked, and an off recorder does no work", () => {
+Deno.test("a fresh page has debug on by default, and a player worker starts off", () => {
+  const page = fresh(false);
+  assertEquals(page.on, true, "a fresh install records with no user action");
+  assert(page.dump().includes("on=true"), "dump says debug is on");
+  assert(page.dump().includes("on by default"), "the default is logged");
+  const worker = fresh(true);
+  assertEquals(worker.on, false, "a player worker waits for the page to switch it on");
+});
+
+Deno.test("a saved off switch beats the default, and an off recorder does no work", () => {
+  const saved = {};
+  install(saved, false, memoryStorage([["twitch-adblock-debug", "0"]]));
+  assertEquals(saved.on, false, "a tab the user turned off stays off after a refresh");
   const debug = fresh(false);
+  debug.setEnabled(false);
   assertEquals(debug.on, false);
   assertEquals(debug.version, manifest.version);
   let called = false;
@@ -41,8 +62,8 @@ Deno.test("debug is off until asked, and an off recorder does no work", () => {
   });
   assertEquals(called, false, "off mode does not build log lines");
   assert(!debug.dump().includes("should-not-run"), "off mode stores nothing");
+  assert(!saved.dump().includes("on by default"), "an off tab logs nothing");
   assert(debug.dump().includes("on=false"), "dump says debug is off");
-  assert(debug.dump().includes("(no events)"), "empty ring is explicit");
 });
 
 Deno.test("the ring redacts secrets, drops repeats, and stays bounded", () => {
@@ -65,7 +86,7 @@ Deno.test("the ring redacts secrets, drops repeats, and stays bounded", () => {
   assert(!text.includes("aaa.bbb.ccc"), "bearer value is not stored");
   assert(!text.includes("viewer@example.com"), "email is not stored");
   const logged = text.split("\n").filter((line) => line.startsWith("+"));
-  assertEquals(logged.length, 4, "the repeated playlist line is stored once");
+  assertEquals(logged.length, 5, "the default line and the repeated playlist line are each stored once");
   for (let i = 0; i < 100; i++) debug.note("playback", "event " + i);
   const capped = debug.dump().split("\n").filter((line) => line.startsWith("+"));
   assertEquals(capped.length, 80, "the ring keeps the newest 80 lines");

@@ -39,6 +39,7 @@
 - **No A/V loops.** Ad slots are dropped without repeating a live segment, and segment numbers stay steady between refreshes.
 - **Player banners.** Stream display ad wrappers that cover or squeeze the live picture are hidden. Anything that holds the video is never hidden.
 - **Temporary debug popup** (ON / OFF / Copy debug) stays. Copy now reads the player's frame.
+- **Debug on by default (temporary).** A fresh install records the in-memory debug log with no action needed. Tokens are still redacted, the log stays on your device, and OFF in the popup turns it off for that tab.
 
 <p align="center">
   <img src="media/whats-new.jpg" alt="Playback stays up through long midrolls" width="900">

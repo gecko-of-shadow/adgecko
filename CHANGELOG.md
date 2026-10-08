@@ -10,6 +10,7 @@
 - A stitched ad range that starts just past the newest segment counts as an ad break.
 - `stripAds` drops ad slots that live video follows, never lists a live segment twice, and keeps segment numbers steady across refreshes. A break at the live edge passes through until it ends.
 - Stream display ad wrappers are hidden unless they hold the video.
+- Debug on by default (temporary): a fresh install records the in-memory debug log with no user action. Token redaction and local-only copies are unchanged, and OFF in the popup still turns it off for that tab. The version stays 0.1.20.
 - The debug popup moved into `src/`. Copy reads the top frame, and longer token and session query names are redacted.
 
 Earlier versions: see the [releases page](https://github.com/gecko-of-shadow/twitch-adblock/releases) and the git tags.
