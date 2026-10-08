@@ -34,6 +34,8 @@
 
 - **Midrolls after a normal page load are caught.** A midroll that starts while you watch swaps to the backup stream without a manual page reload.
 - **Backup first.** If the first backup turns dirty, the next clean backup is tried. Real ads pass through only when every backup is dirty or unreachable, so the video keeps playing.
+- **At most two player reloads per break** (one to enter the backup, one to leave). A backup that gets its own ad plays it rather than hopping again.
+- **Newer Twitch “maf” ad breaks.** The single ad marker is removed from live playlists. Video, sound, and segment numbers are untouched, with no backup swap and no reload.
 - **No A/V loops.** Ad slots are dropped without repeating a live segment, and segment numbers stay steady between refreshes.
 - **Player banners.** Stream display ad wrappers that cover or squeeze the live picture are hidden. Anything that holds the video is never hidden.
 - **Temporary debug popup** (ON / OFF / Copy debug) stays. Copy now reads the player's frame.
