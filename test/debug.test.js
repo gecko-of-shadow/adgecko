@@ -1,6 +1,5 @@
 import debugSource from "../src/debug.js" with { type: "text" };
-import pageSource from "../src/page.js" with { type: "text" };
-import playlistSource from "../src/playlist.js" with { type: "text" };
+import vendorSource from "../src/vendor/video-swap-new.user.js" with { type: "text" };
 import popupSource from "../src/popup.js" with { type: "text" };
 import popupHtml from "../src/popup.html" with { type: "text" };
 import bridgeSource from "../src/debug-bridge.js" with { type: "text" };
@@ -167,115 +166,23 @@ Deno.test("popup copy surface is local and has no playback hooks", () => {
   assert(!popupSource.includes("chrome.scripting"), "popup does not inject scripts");
   assert(!bridgeSource.includes("chrome.storage"), "bridge does not use extension storage");
   assert(!bridgeSource.includes("chrome.scripting"), "bridge does not inject scripts");
-  assert(pageSource.includes('typeof installTwitchAdblockDebug === "function"'), "missing debug boot still builds a worker");
-  assert(pageSource.includes('type: "debug-set"'), "the page can tell a player worker the switch");
-  assert(pageSource.includes("Debug never changes the playlist response."), "playlist tracing is guarded");
-  for (const source of [pageSource, playlistSource, debugSource]) {
-    assert(!source.includes("chrome."), "playback files do not call chrome");
+  for (const source of [vendorSource, debugSource]) {
+    assert(!source.includes("chrome."), "playback/debug files do not call chrome");
   }
 });
 
-const playlist = new Function(`${playlistSource}\nreturn TwitchAdblockPlaylist;`)();
-globalThis.TwitchAdblockPlaylist = playlist;
-const guardSource = pageSource.slice(pageSource.indexOf("function createPlaylistGuard"));
-const createPlaylistGuard = new Function(`${guardSource}\nreturn createPlaylistGuard;`)();
-
-function playlistResponse(body) {
-  return new Response(body, { status: 200, headers: { "Content-Type": "application/vnd.apple.mpegurl" } });
-}
-
-const adMedia = [
-  "#EXTM3U",
-  '#EXT-X-DATERANGE:ID="stitched-ad-1",CLASS="twitch-stitched-ad",START-DATE="2024-01-07T20:10:40.960Z",DURATION=15',
-  "#EXTINF:2.0,",
-  "https://ads.example/ad.ts",
-].join("\n");
-
-function masterFor(urls) {
-  const lines = ["#EXTM3U"];
-  for (const url of urls) {
-    lines.push('#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720,CODECS="avc1.4D401F",FRAME-RATE=30.000');
-    lines.push(url);
-  }
-  return lines.join("\n");
-}
-
-Deno.test("a throwing debug hook still fail-opens the midroll", async () => {
-  const previous = globalThis.TwitchAdblockDebug;
-  let calls = 0;
-  globalThis.TwitchAdblockDebug = {
-    on: true,
-    trace() {
-      calls += 1;
-      throw new Error("debug failed");
-    },
-  };
-  try {
-    const guard = createPlaylistGuard({
-      handoffGraceMs: 0,
-      async fetch(url) {
-        const value = String(url);
-        if (value.includes("token=live")) return playlistResponse(masterFor(["https://video.example/live-variant.m3u8"]));
-        if (value.includes("/channel/hls/")) return playlistResponse(masterFor(["https://video.example/embed-variant.m3u8"]));
-        if (value.includes("live-variant") || value.includes("embed-variant") || value.includes("autoplay-variant") || value.includes("pip-variant")) {
-          return playlistResponse(adMedia);
-        }
-        return new Response("segment", { status: 200 });
-      },
-      async gql(body) {
-        return JSON.stringify({
-          data: { streamPlaybackAccessToken: { value: body.variables.playerType, signature: "sig" } },
-        });
-      },
-      reload() {},
-      status() {},
-    });
-    const master = await guard("https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live");
-    const masterText = await master.text();
-    assert(masterText.includes("live-variant.m3u8"), "a broken debug log still returns the live master");
-    const media = await guard("https://video.example/live-variant.m3u8");
-    const mediaText = await media.text();
-    assert(mediaText.includes("ads.example"), "a broken debug log still passes the midroll through");
-    assert(calls > 0, "debug on still attempted to record");
-  } finally {
-    if (previous === undefined) delete globalThis.TwitchAdblockDebug;
-    else globalThis.TwitchAdblockDebug = previous;
-  }
-});
-
-Deno.test("debug off does not call the recorder during playback", async () => {
-  const previous = globalThis.TwitchAdblockDebug;
-  let calls = 0;
-  globalThis.TwitchAdblockDebug = {
-    on: false,
-    trace() {
-      calls += 1;
-      throw new Error("should not record");
-    },
-  };
-  try {
-    const guard = createPlaylistGuard({
-      handoffGraceMs: 0,
-      async fetch(url) {
-        const value = String(url);
-        if (value.includes("/channel/hls/") || value.includes(".m3u8")) {
-          return playlistResponse(masterFor(["https://video.example/v1.m3u8"]));
-        }
-        return playlistResponse("#EXTM3U\n#EXTINF:2.0,\nhttps://video.example/live.ts");
-      },
-      async gql() {
-        return "{}";
-      },
-      reload() {},
-      status() {},
-    });
-    const master = await guard("https://usher.ttvnw.net/api/v2/channel/hls/Some_Channel.m3u8?token=live&sig=live");
-    assert((await master.text()).includes("#EXTM3U"), "clean playback still returns a playlist");
-    assertEquals(calls, 0, "debug off does not enter the recorder");
-  } finally {
-    if (previous === undefined) delete globalThis.TwitchAdblockDebug;
-    else globalThis.TwitchAdblockDebug = previous;
-  }
+Deno.test("manifest keeps YouTube debug + isolated bridge; Twitch is vendor MAIN only", () => {
+  assertEquals(manifest.action.default_popup, "src/popup.html");
+  const youtube = manifest.content_scripts.find((script) => (script.js || []).includes("src/youtube.js"));
+  assertEquals(youtube.js, ["src/debug.js", "src/youtube.js"]);
+  const twitch = manifest.content_scripts.find((script) =>
+    (script.js || []).includes("src/vendor/video-swap-new.user.js")
+  );
+  assertEquals(twitch.js, ["src/vendor/video-swap-new.user.js"]);
+  assertEquals(twitch.world, "MAIN");
+  const bridge = manifest.content_scripts.find((script) => (script.js || []).includes("src/debug-bridge.js"));
+  assert(bridge, "debug popup bridge is a content script");
+  assert(bridge.world !== "MAIN", "debug bridge stays out of the page world");
 });
 
 Deno.test("Copy reads the top frame and query secrets with longer names are redacted", () => {
