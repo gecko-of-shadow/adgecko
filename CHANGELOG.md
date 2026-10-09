@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- The toolbar icon is a gecko head.
+- Twitch live still uses upstream video-swap-new. YouTube ad stripping and the temporary debug popup stay.
+
 ## 0.2.0
 
 - Twitch live midrolls use the upstream TwitchAdSolutions **video-swap-new** userscript (v1.55), copied unmodified into `src/vendor/` and run as the MAIN-world `document_start` script.
