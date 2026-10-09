@@ -24,6 +24,18 @@
         "*://*.twitch.tv/*"
       ],
       "js": [
+        "src/debug.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "*://twitch.tv/*",
+        "*://*.twitch.tv/*"
+      ],
+      "js": [
         "src/vendor/video-swap-new.user.js"
       ],
       "run_at": "document_start",

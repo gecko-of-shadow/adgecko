@@ -3,6 +3,7 @@ import vendorSource from "../src/vendor/video-swap-new.user.js" with { type: "te
 import popupSource from "../src/popup.js" with { type: "text" };
 import popupHtml from "../src/popup.html" with { type: "text" };
 import bridgeSource from "../src/debug-bridge.js" with { type: "text" };
+import youtubeSource from "../src/youtube.js" with { type: "text" };
 import manifest from "../manifest.json" with { type: "json" };
 
 function assert(condition, label) {
@@ -202,4 +203,173 @@ Deno.test("Copy reads the top frame and query secrets with longer names are reda
   const text = debug.dump();
   assert(!text.includes("secret1") && !text.includes("secret2"), "token and session values are not stored");
   assert(text.includes("allow_source=true"), "non-secret query values remain");
+});
+
+const installReply = new Function(
+  `${debugSource.replace(/\ninstallTwitchAdblockDebug\(globalThis[\s\S]*$/, "")}\nreturn installDebugPopupReply;`,
+)();
+
+function pageHost(hostname, bannerText) {
+  const listeners = [];
+  const overlay = bannerText
+    ? {
+      style: { display: "block" },
+      querySelector(sel) {
+        return sel === "p" ? { textContent: bannerText } : null;
+      },
+    }
+    : null;
+  const host = {
+    location: { hostname },
+    document: {
+      documentElement: { nodeType: 1 },
+      querySelector(sel) {
+        return sel === ".adblock-overlay" ? overlay : null;
+      },
+    },
+    MutationObserver: class {
+      constructor(callback) {
+        this.callback = callback;
+        this.disconnected = false;
+        this.observing = false;
+      }
+      observe() {
+        this.observing = true;
+      }
+      disconnect() {
+        this.disconnected = true;
+        this.observing = false;
+      }
+    },
+    addEventListener(type, fn) {
+      if (type === "message") listeners.push(fn);
+    },
+    postMessage(data) {
+      const event = { source: host, data };
+      for (const fn of listeners.slice()) fn(event);
+    },
+  };
+  host.TwitchAdblockDebug = {};
+  install(host.TwitchAdblockDebug, false, memoryStorage());
+  installReply(host);
+  return host;
+}
+
+function runBridge(host) {
+  const sent = [];
+  const chrome = {
+    runtime: {
+      lastError: null,
+      sendMessage(message, callback) {
+        sent.push(message);
+        if (callback) callback();
+      },
+      onMessage: {
+        addListener(fn) {
+          chrome.runtime._listener = fn;
+        },
+      },
+    },
+  };
+  const run = new Function(
+    "window",
+    "chrome",
+    "loc",
+    `const location = loc;\n${bridgeSource}`,
+  );
+  run(host, chrome, host.location);
+  return {
+    sent,
+    ask(message) {
+      chrome.runtime._listener(message);
+    },
+  };
+}
+
+Deno.test("Twitch MAIN loads the debug reply before the unmodified vendor script", () => {
+  const vendor = manifest.content_scripts.find((script) =>
+    (script.js || []).includes("src/vendor/video-swap-new.user.js")
+  );
+  assertEquals(vendor.js, ["src/vendor/video-swap-new.user.js"], "vendor entry stays the userscript alone");
+  const reply = manifest.content_scripts.find((script) =>
+    script.world === "MAIN" && (script.js || []).join(",") === "src/debug.js" &&
+    (script.matches || []).some((match) => match.includes("twitch.tv"))
+  );
+  assert(reply, "Twitch top frame loads debug.js in the page world");
+  assertEquals(reply.run_at, "document_start");
+  assert(reply.all_frames !== true, "the popup talks to the top frame only");
+  assert(
+    manifest.content_scripts.indexOf(reply) < manifest.content_scripts.indexOf(vendor),
+    "the reply is installed before video-swap-new",
+  );
+  assert(!debugSource.includes("twitchAdSolutionsVersion"), "debug.js does not trip the vendor version gate");
+  assert(!debugSource.includes("window.Worker") && !debugSource.includes("globalThis.Worker"), "debug.js does not wrap Worker");
+  assert(!vendorSource.includes("installDebugPopupReply"), "the vendor file is not edited to answer the popup");
+  assert(debugSource.includes('type: "state"'), "debug.js sends the popup answer");
+  assert(!youtubeSource.includes('type: "state"'), "youtube.js does not answer a second time");
+});
+
+Deno.test("a Twitch ON press is answered with real events and does not turn itself on", () => {
+  const idle = pageHost("www.twitch.tv", "Blocking midroll ads");
+  assertEquals(idle.TwitchAdblockDebug.on, false, "loading the reply leaves debug off");
+  const off = runBridge(idle);
+  off.ask({ source: "twitch-adblock-debug", type: "get", gen: 1 });
+  assertEquals(off.sent.length, 1, "a Twitch tab answers a read");
+  assertEquals(off.sent[0].on, false);
+  assertEquals(off.sent[0].type, "state");
+  assert(off.sent[0].text.includes("on=false"), "a read reports off");
+  assert(off.sent[0].text.includes("(no events)"), "a read does not invent events");
+  assert(!off.sent[0].text.includes("Blocking midroll ads"), "off mode does not copy the banner");
+  assertEquals(idle.TwitchAdblockDebug.on, false, "reading the switch does not turn it on");
+
+  const host = pageHost("www.twitch.tv", "Blocking midroll ads");
+  const popup = runBridge(host);
+  popup.ask({ source: "twitch-adblock-debug", type: "set", on: true, gen: 4 });
+  assertEquals(host.TwitchAdblockDebug.on, true);
+  assertEquals(popup.sent.length, 1, "ON is answered");
+  assertEquals(popup.sent[0].gen, 4);
+  assertEquals(popup.sent[0].on, true);
+  const copied = popup.sent[0].text;
+  assert(copied.includes("on=true"), "Copy debug reports the switch");
+  assert(!copied.includes("(no events)"), "Copy debug is not the empty fallback");
+  assert(copied.includes("debug on"), "turning the switch on is recorded");
+  assert(copied.includes("Blocking midroll ads"), "the visible blocking label is recorded");
+  assert(!copied.includes("token="), "the banner line is not a place to stash secrets");
+
+  popup.ask({ source: "twitch-adblock-debug", type: "set", on: false, gen: 5 });
+  assertEquals(host.TwitchAdblockDebug.on, false, "OFF stays off");
+  assert(popup.sent[1].text.includes("on=false"));
+  host.TwitchAdblockDebug.note("banner", "after-off");
+  assert(!host.TwitchAdblockDebug.dump().includes("after-off"), "OFF does not keep recording");
+});
+
+Deno.test("YouTube still answers ON from debug.js and a later Twitch label is copied", () => {
+  const youtube = pageHost("www.youtube.com");
+  const youtubePopup = runBridge(youtube);
+  youtubePopup.ask({ source: "twitch-adblock-debug", type: "get", gen: 1 });
+  assertEquals(youtube.TwitchAdblockDebug.on, false, "opening the YouTube popup does not turn debug on");
+  youtubePopup.ask({ source: "twitch-adblock-debug", type: "set", on: true, gen: 2 });
+  assertEquals(youtubePopup.sent[1].on, true);
+  assert(youtubePopup.sent[1].text.includes("debug on"), "YouTube Copy debug includes the on event");
+  assert(!youtubePopup.sent[1].text.includes("(no events)"));
+  assertEquals(youtube.TwitchAdblockDebug._bannerWatch, undefined, "YouTube does not watch the Twitch label");
+
+  const host = pageHost("www.twitch.tv");
+  const popup = runBridge(host);
+  popup.ask({ source: "twitch-adblock-debug", type: "set", on: true, gen: 1 });
+  assert(!popup.sent[0].text.includes("Blocking midroll ads"), "no label yet");
+  host.document.querySelector = (sel) => {
+    if (sel !== ".adblock-overlay") return null;
+    return {
+      style: { display: "block" },
+      querySelector(inner) {
+        return inner === "p" ? { textContent: "Blocking midroll ads" } : null;
+      },
+    };
+  };
+  host.TwitchAdblockDebug._bannerWatch.callback();
+  popup.ask({ source: "twitch-adblock-debug", type: "get", gen: 3 });
+  assertEquals(host.TwitchAdblockDebug.on, true);
+  assert(popup.sent[1].text.includes("Blocking midroll ads"), "the next read includes the label");
+  assert(!popup.sent[1].text.includes("(no events)"));
 });

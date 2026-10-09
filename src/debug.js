@@ -121,4 +121,119 @@ function installTwitchAdblockDebug(target, worker, storage) {
   }
 }
 
+// Answers the popup from the page world. The isolated bridge only forwards messages.
+function installDebugPopupReply(host) {
+  if (!host || host.__twitchAdblockDebugReply) return;
+  const target = host.TwitchAdblockDebug;
+  if (!target || typeof host.addEventListener !== "function") return;
+  host.__twitchAdblockDebugReply = true;
+
+  function onTwitch() {
+    try {
+      const name = String(host.location && host.location.hostname ? host.location.hostname : "");
+      return name === "twitch.tv" || name.endsWith(".twitch.tv");
+    } catch {
+      return false;
+    }
+  }
+
+  function bannerLine() {
+    try {
+      const doc = host.document;
+      if (!doc || typeof doc.querySelector !== "function") return "";
+      const overlay = doc.querySelector(".adblock-overlay");
+      if (!overlay || !overlay.style || overlay.style.display === "none") return "";
+      const node = typeof overlay.querySelector === "function" ? overlay.querySelector("p") : null;
+      return String(node && node.textContent ? node.textContent : "").trim();
+    } catch {
+      return "";
+    }
+  }
+
+  function noteBanner() {
+    if (target.on !== true) return;
+    const line = bannerLine();
+    if (line) {
+      target._bannerSeen = true;
+      target.note("banner", line);
+      return;
+    }
+    if (target._bannerSeen) target.note("banner", "clear");
+    target._bannerSeen = false;
+  }
+
+  function watchBanner() {
+    if (!onTwitch()) return;
+    noteBanner();
+    if (target._bannerWatch) return;
+    const Observer = host.MutationObserver;
+    const root = host.document && host.document.documentElement;
+    if (typeof Observer !== "function" || !root) return;
+    try {
+      const observer = new Observer(function () {
+        noteBanner();
+      });
+      observer.observe(root, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["style", "class"],
+      });
+      target._bannerWatch = observer;
+    } catch {
+      // The label watch is optional. Playback does not use it.
+    }
+  }
+
+  function unwatchBanner() {
+    const observer = target._bannerWatch;
+    target._bannerWatch = null;
+    if (observer && typeof observer.disconnect === "function") {
+      try {
+        observer.disconnect();
+      } catch {
+        // Stopping the watch must not affect playback.
+      }
+    }
+  }
+
+  if (target.on === true) watchBanner();
+
+  host.addEventListener("message", function (event) {
+    try {
+      if (!event || event.source !== host) return;
+      const data = event.data;
+      if (!data || data.source !== "twitch-adblock-debug") return;
+      if (data.type !== "set" && data.type !== "get") return;
+      const debug = host.TwitchAdblockDebug;
+      if (!debug) return;
+      if (data.type === "set" && debug.on !== (data.on === true)) {
+        const next = data.on === true;
+        if (!next) debug.note("debug", "off");
+        debug.setEnabled(next);
+        if (next) {
+          debug.note("debug", "on");
+          watchBanner();
+        } else {
+          unwatchBanner();
+        }
+      } else if (debug.on === true) {
+        noteBanner();
+      }
+      host.postMessage({
+        source: "twitch-adblock-debug",
+        type: "state",
+        on: debug.on === true,
+        text: debug.dump(),
+        version: debug.version || "",
+        gen: data.gen,
+      }, "*");
+    } catch {
+      // The debug popup must not affect playback.
+    }
+  });
+}
+
 installTwitchAdblockDebug(globalThis.TwitchAdblockDebug = globalThis.TwitchAdblockDebug || {});
+installDebugPopupReply(globalThis);
