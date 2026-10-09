@@ -16,7 +16,7 @@ A Chrome extension that blocks ads on Twitch live streams and YouTube. It is fre
 - **YouTube:** removes player ads and the Sponsored cards on the home page.
 - VODs and clips pass through untouched.
 
-## Current version: v0.2.0
+## Current stable build: v0.2.0
 
 <img src="docs/whats-new.png" width="800" alt="What's new: Twitch path is upstream video-swap-new; YouTube and the debug popup stay">
 
