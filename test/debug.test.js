@@ -33,13 +33,19 @@ function fresh(worker) {
   return target;
 }
 
-Deno.test("a fresh page has debug on by default, and a player worker starts off", () => {
+Deno.test("a fresh page leaves debug off, and a player worker stays off", () => {
   const page = fresh(false);
-  assertEquals(page.on, true, "a fresh install records with no user action");
-  assert(page.dump().includes("on=true"), "dump says debug is on");
-  assert(page.dump().includes("on by default"), "the default is logged");
+  assertEquals(page.on, false, "a fresh install does not record until someone turns it on");
+  assert(page.dump().includes("on=false"), "dump says debug is off");
+  assert(!page.dump().includes("on by default"), "nothing turns debug on by itself");
+  let called = false;
+  page.note("playback", () => {
+    called = true;
+    return "should-not-run";
+  });
+  assertEquals(called, false, "an untouched page does not build log lines");
   const worker = fresh(true);
-  assertEquals(worker.on, false, "a player worker waits for the page to switch it on");
+  assertEquals(worker.on, false, "a player worker stays off");
 });
 
 Deno.test("a saved off switch beats the default, and an off recorder does no work", () => {
@@ -85,7 +91,7 @@ Deno.test("the ring redacts secrets, drops repeats, and stays bounded", () => {
   assert(!text.includes("aaa.bbb.ccc"), "bearer value is not stored");
   assert(!text.includes("viewer@example.com"), "email is not stored");
   const logged = text.split("\n").filter((line) => line.startsWith("+"));
-  assertEquals(logged.length, 5, "the default line and the repeated playlist line are each stored once");
+  assertEquals(logged.length, 4, "turning debug on does not add an automatic line, and the repeated playlist line is stored once");
   for (let i = 0; i < 100; i++) debug.note("playback", "event " + i);
   const capped = debug.dump().split("\n").filter((line) => line.startsWith("+"));
   assertEquals(capped.length, 80, "the ring keeps the newest 80 lines");
@@ -159,6 +165,9 @@ Deno.test("popup copy surface is local and has no playback hooks", () => {
   assert(popupHtml.includes(">ON<"), "popup has ON");
   assert(popupHtml.includes(">OFF<"), "popup has OFF");
   assert(popupHtml.includes(">Copy debug<"), "popup has Copy debug");
+  assert(!popupHtml.includes("on by default"), "popup does not say debug turns itself on");
+  assert(!popupSource.includes("on by default"), "popup script does not turn debug on by itself");
+  assert(popupSource.includes('send("get")'), "opening the popup only reads the current switch");
   assert(popupHtml.includes('src="popup.js"'), "popup script is local");
   assert(!popupHtml.includes("innerHTML"), "popup html does not inject markup");
   assert(!popupSource.includes("innerHTML"), "popup script does not inject markup");

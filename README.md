@@ -16,21 +16,21 @@ A Chrome extension that blocks ads on Twitch live streams and YouTube. It is fre
 - **YouTube:** removes player ads and the Sponsored cards on the home page.
 - VODs and clips pass through untouched.
 
-## Current stable build: v0.2.1
+## Current stable build: v0.2.2
 
-<img src="docs/whats-new.png" width="800" alt="Current stable build v0.2.1. The toolbar icon is a gecko head. Twitch live uses video-swap-new. YouTube player ads and home Sponsored cards stay. Debug popup is on for now.">
+<img src="docs/whats-new.png" width="800" alt="Current stable build v0.2.2. The toolbar icon is a gecko head. Twitch live uses video-swap-new. YouTube player ads and home Sponsored cards stay. Debug stays off until you turn it on.">
 
-The toolbar icon is a gecko head. Twitch live still uses video-swap-new. YouTube blocking and the temporary debug popup are the same as before.
+The toolbar icon is a gecko head. Twitch live still uses video-swap-new. YouTube blocking is unchanged.
 
-A small debug popup is **on by default for now (temporary)** for YouTube and the popup log. It keeps a short log in memory on your device, hides login tokens, and sends nothing out. Open the extension popup to turn it off or to copy the log if you need to report a problem.
+Debug stays **off** until you turn it on. Copy debug is in the popup if you need a log. The log stays on your device, hides login tokens, and sends nothing out.
 
-Details are in the [v0.2.1 release notes](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.2.1).
+Details are in the [v0.2.2 release notes](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.2.2).
 
 ## Install
 
-<img src="docs/install-steps.png" width="800" alt="Install the current stable zip: download twitch-adblock-0.2.1.zip, unzip it, open chrome://extensions, turn on Developer mode, and Load unpacked the folder with manifest.json.">
+<img src="docs/install-steps.png" width="800" alt="Install the current stable zip: download twitch-adblock-0.2.2.zip, unzip it, open chrome://extensions, turn on Developer mode, and Load unpacked the folder with manifest.json.">
 
-**[Download twitch-adblock-0.2.1.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.2.1/twitch-adblock-0.2.1.zip)**
+**[Download twitch-adblock-0.2.2.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.2.2/twitch-adblock-0.2.2.zip)**
 
 1. Download the zip above and unzip it.
 2. Open `chrome://extensions` and turn on **Developer mode**.

@@ -7,6 +7,17 @@
   let generation = 0;
   let latest = null;
 
+  function packagedVersion() {
+    try {
+      return chrome.runtime.getManifest().version;
+    } catch {
+      return "";
+    }
+  }
+
+  const title = document.querySelector("h1");
+  if (title) title.textContent = "twitch-adblock " + packagedVersion();
+
   function render(state) {
     latest = state;
     if (!state) {
@@ -56,7 +67,7 @@
 
   function copyText() {
     if (latest && latest.text) return latest.text;
-    return "twitch-adblock 0.1.22 debug\non=false\n(no events)";
+    return "twitch-adblock " + packagedVersion() + " debug\non=false\n(no events)";
   }
 
   function markCopied(ok) {

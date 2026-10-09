@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- Debug stays off until you turn it on in the popup. Copy debug is still there.
+- Twitch live still uses upstream video-swap-new. YouTube ad stripping stays.
+
 ## 0.2.1
 
 - The toolbar icon is a gecko head.

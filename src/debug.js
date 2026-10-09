@@ -1,11 +1,11 @@
-// Temporary in-memory debug log. On by default in the page for now (temporary), off in player workers until the page says so. Never throws into playback.
+// Temporary in-memory debug log. Off until the popup turns it on. Player workers stay off until the page says so. Never throws into playback.
 function installTwitchAdblockDebug(target, worker, storage) {
   const CAP = 80;
   const FLAG = "twitch-adblock-debug";
   const ring = [];
   const isWorker = worker === true;
-  target.on = !isWorker;
-  target.version = "0.2.1";
+  target.on = false;
+  target.version = "0.2.2";
 
   function slot() {
     if (isWorker) return null;
@@ -119,7 +119,6 @@ function installTwitchAdblockDebug(target, worker, storage) {
       // Storage cannot be read, so the default stays.
     }
   }
-  if (target.on === true && !ring.length) target.note("debug", "on by default");
 }
 
 installTwitchAdblockDebug(globalThis.TwitchAdblockDebug = globalThis.TwitchAdblockDebug || {});
