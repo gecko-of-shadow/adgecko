@@ -1,5 +1,11 @@
 # twitch-adblock
 
+**Watch the live stream. The ad does not get the screen.**
+
+- The stream keeps playing. No black screen, no reload loop.
+- Works with several live tabs open.
+- Free. No account. Nothing is sent off your computer.
+
 <img src="docs/what-it-is.png" width="800" alt="twitch-adblock blocks Twitch and YouTube ads while the video keeps playing: no ad-break screens, no banners over the stream, no freezing">
 
 A Chrome extension that blocks ads on Twitch live streams and YouTube. It is free, runs only in your browser, and sends nothing anywhere.
