@@ -39,6 +39,20 @@ Deno.test("a live maf cue is a client-side ad and still not a backup break", () 
   assertEquals(playlist.hasAdBreak(cue), false);
   assertEquals(playlist.isClientAdCue("#EXTM3U\n#EXTINF:2.000,live\nhttps://video.example/live.ts\n"), false);
   assertEquals(playlist.isClientAdCue('#EXT-X-DATERANGE:CLASS="twitch-stitched-ad",DURATION=15'), false);
+  // The cue overlaps listed live segments. PLANNED-DURATION is not DURATION.
+  const overlapping = [
+    "#EXTM3U",
+    "#EXT-X-PROGRAM-DATE-TIME:2026-10-08T07:19:17.832Z",
+    "#EXTINF:2.000,live",
+    "https://video.example/live-a.ts",
+    "#EXT-X-PROGRAM-DATE-TIME:2026-10-08T07:19:19.832Z",
+    "#EXTINF:2.000,live",
+    "https://video.example/live-b.ts",
+    '#EXT-X-DATERANGE:ID="maf-1",CLASS="twitch-maf-ad",START-DATE="2026-10-08T07:19:00.000Z",PLANNED-DURATION=30.000',
+  ].join("\n");
+  assertEquals(playlist.isClientAdCue(overlapping), true);
+  assertEquals(playlist.hasAdBreak(overlapping), false);
+  assertEquals(playlist.removeMafAds(overlapping).removed, 1);
 });
 
 Deno.test("stitched ads and midrolls are labeled from the playlist text", () => {

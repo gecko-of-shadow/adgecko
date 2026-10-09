@@ -213,6 +213,8 @@ function installTwitchAdblockPlaylist(target) {
       if (!Number.isFinite(start)) continue;
       let end = Date.parse(attrs["END-DATE"] || "");
       if (!Number.isFinite(end)) {
+        // PLANNED-DURATION is the live maf cue. It is not a stitched-segment
+        // window: treating it as DURATION would start a backup swap.
         const duration = Number(attrs.DURATION);
         if (Number.isFinite(duration) && duration > 0) end = start + Math.round(duration * 1000);
       }

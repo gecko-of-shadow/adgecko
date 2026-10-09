@@ -471,27 +471,41 @@
     }
     hiddenClientAds.length = 0;
   }
+  let clientAdCueNoted = false;
+  let clientAdHiddenNoted = false;
   function noteClientAd(on) {
     // A VOD or clip must not keep a live skip armed after a client-side navigation.
     if (isVodOrClipLocation(location)) {
       if (!clientAdWanted && !clientBlocking) return;
       clientAdWanted = false;
+      clientAdCueNoted = false;
+      clientAdHiddenNoted = false;
       if (clientAdTimer) clearTimeout(clientAdTimer);
       clientAdTimer = 0;
       releaseHiddenClientAds();
       setClientNotice(false);
       return;
     }
-    clientAdWanted = on === true;
+    const next = on === true;
+    if (next && clientAdWanted) {
+      applyClientAdSkip();
+      return;
+    }
+    clientAdWanted = next;
     if (!clientAdWanted) {
       if (clientAdTimer) clearTimeout(clientAdTimer);
       clientAdTimer = 0;
       releaseHiddenClientAds();
       setClientNotice(false);
+      clientAdCueNoted = false;
+      clientAdHiddenNoted = false;
       trace("client-ad", "clear");
       return;
     }
-    trace("client-ad", "cue");
+    if (!clientAdCueNoted) {
+      clientAdCueNoted = true;
+      trace("client-ad", "cue");
+    }
     applyClientAdSkip();
     if (!clientAdTimer) {
       clientAdTimer = setTimeout(() => {
@@ -541,7 +555,10 @@
         return;
       }
     }
-    trace("client-ad", "hidden");
+    if (!clientAdHiddenNoted) {
+      clientAdHiddenNoted = true;
+      trace("client-ad", "hidden");
+    }
     setClientNotice(true);
   }
 
