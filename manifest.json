@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "twitch-adblock",
-  "version": "0.1.22",
-  "description": "Blocks video ads on Twitch and YouTube.",
+  "version": "0.2.0",
+  "description": "Blocks video ads on Twitch (TwitchAdSolutions video-swap-new, unmodified) and YouTube.",
   "action": {
     "default_popup": "src/popup.html",
     "default_title": "twitch-adblock",
@@ -19,22 +19,42 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://twitch.tv/*", "*://*.twitch.tv/*"],
-      "js": ["src/debug.js", "src/playlist.js", "src/page.js"],
+      "matches": [
+        "*://twitch.tv/*",
+        "*://*.twitch.tv/*"
+      ],
+      "js": [
+        "src/vendor/video-swap-new.user.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true
     },
     {
-      "matches": ["*://www.youtube.com/*", "*://m.youtube.com/*", "*://youtube.com/*"],
-      "js": ["src/debug.js", "src/youtube.js"],
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": [
+        "src/debug.js",
+        "src/youtube.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": false
     },
     {
-      "matches": ["*://twitch.tv/*", "*://*.twitch.tv/*", "*://www.youtube.com/*", "*://m.youtube.com/*", "*://youtube.com/*"],
-      "js": ["src/debug-bridge.js"],
+      "matches": [
+        "*://twitch.tv/*",
+        "*://*.twitch.tv/*",
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": [
+        "src/debug-bridge.js"
+      ],
       "run_at": "document_start",
       "all_frames": true
     }
