@@ -12,25 +12,25 @@ A Chrome extension that blocks ads on Twitch live streams and YouTube. It is fre
 
 ## What it does
 
-- **Twitch live:** when a midroll starts, it switches to an ad-free backup of the same stream and switches back when the break ends. If no clean backup is available, it lets the ad play instead of freezing your video.
+- **Twitch live:** uses the upstream TwitchAdSolutions video-swap-new script (unmodified). During a midroll it switches to an ad-free backup of the same stream and switches back when the break ends. If no clean backup is available, it lets the ad play instead of freezing your video.
 - **YouTube:** removes player ads and the Sponsored cards on the home page.
 - VODs and clips pass through untouched.
 
-## Current version: v0.1.22 (stable)
+## Current version: v0.2.0
 
-<img src="docs/whats-new.png" width="800" alt="What's new in v0.1.21: the black-screen reload loop is fixed, at most 2 player reloads per minute, it backs off after a false alarm so an ad may play instead of freezing, debug on by default (temporary), plus everything in v0.1.20">
+<img src="docs/whats-new.png" width="800" alt="What's new: Twitch path is upstream video-swap-new; YouTube and the debug popup stay">
 
-This is the stable build, and it is the only release right now. Midrolls are caught without a page reload, the player reloads at most twice per minute, it backs off after a false alarm (an ad may play instead of freezing), and newer Twitch ad markers are cleaned out of the stream.
+This build runs TwitchAdSolutions video-swap-new as the Twitch script. YouTube blocking and the temporary debug popup are the same as before.
 
-A small debug popup is **on by default for now (temporary)**. It keeps a short log in memory on your device, hides login tokens, and sends nothing out. Open the extension popup to turn it off or to copy the log if you need to report a problem.
+A small debug popup is **on by default for now (temporary)** for YouTube and the popup log. It keeps a short log in memory on your device, hides login tokens, and sends nothing out. Open the extension popup to turn it off or to copy the log if you need to report a problem.
 
-Details are in the [v0.1.22 release notes](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.1.22).
+Details are in the [v0.2.0 release notes](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.2.0).
 
 ## Install
 
 <img src="docs/install-steps.png" width="500" alt="How to install twitch-adblock in 6 steps">
 
-**[Download twitch-adblock-0.1.22.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.1.22/twitch-adblock-0.1.22.zip)**
+**[Download twitch-adblock-0.2.0.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.2.0/twitch-adblock-0.2.0.zip)**
 
 1. Download the zip above and unzip it.
 2. Open `chrome://extensions` and turn on **Developer mode**.
@@ -45,5 +45,5 @@ Details are in the [v0.1.22 release notes](https://github.com/gecko-of-shadow/tw
 
 - Backup swaps can change the picture quality briefly. Playback should keep going.
 - Ads already baked into a YouTube video file still play.
-- All releases are listed on the [releases page](https://github.com/gecko-of-shadow/twitch-adblock/releases).
+- Older builds stay on the [releases page](https://github.com/gecko-of-shadow/twitch-adblock/releases) if you need to go back (for example [v0.1.24](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.1.24)).
 - Development: `deno test --no-lock test/` · `bash scripts/release-gate.sh` · `bash scripts/pack-zip.sh`

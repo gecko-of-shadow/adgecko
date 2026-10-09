@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- Twitch live midrolls use the upstream TwitchAdSolutions **video-swap-new** userscript (v1.55), copied unmodified into `src/vendor/` and run as the MAIN-world `document_start` script.
+- The hand-written Twitch playlist rewrite (`src/page.js` / `src/playlist.js`) is removed.
+- YouTube player/home ad stripping and the temporary debug popup are unchanged.
+- MIT license for the vendored script is included in the zip.
+
 ## 0.1.22 — beta
 
 - Live client-side ad cues (a `twitch-maf-ad` marker on a playlist whose segments stay live) now hide that ad player and resume the live video. The player is not reloaded for this, and it does not start a backup swap. If hiding the ad would take the only picture, the ad plays.
