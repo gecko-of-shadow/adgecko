@@ -5,7 +5,7 @@ function installTwitchAdblockDebug(target, worker, storage) {
   const ring = [];
   const isWorker = worker === true;
   target.on = false;
-  target.version = "0.2.2";
+  target.version = "0.2.3";
 
   function slot() {
     if (isWorker) return null;
