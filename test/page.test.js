@@ -222,6 +222,70 @@ Deno.test("fail-open after exhausted backups skips strip without forced reload",
   const failOpenBody = source.slice(failOpenStart, failOpenEnd);
   assert(!failOpenBody.includes("scheduleReload"), "enter fail-open must not force reload (play-like-15)");
 });
+Deno.test("a live client-side ad player is hidden and a vod ad player is left alone", () => {
+  const start = source.indexOf("function isVodOrClipLocation");
+  const end = source.indexOf("function startTwitchAdblockWorker", start);
+  assert(start !== -1 && end !== -1, "skip helpers are page functions");
+  const block = source.slice(start, end);
+  assert(!block.includes("setSrc"), "skipping a client-side ad does not reload the player");
+  const api = new Function(`${block}\nreturn { isVodOrClipLocation, skipLiveClientAd };`)();
+  assertEquals(api.isVodOrClipLocation({ pathname: "/videos/1", hostname: "www.twitch.tv", search: "" }), true);
+  assertEquals(api.isVodOrClipLocation({ pathname: "/clip/abc", hostname: "www.twitch.tv", search: "" }), true);
+  assertEquals(api.isVodOrClipLocation({ pathname: "/", hostname: "clips.twitch.tv", search: "" }), true);
+  assertEquals(api.isVodOrClipLocation({ pathname: "/", hostname: "player.twitch.tv", search: "?video=1" }), true);
+  assertEquals(api.isVodOrClipLocation({ pathname: "/somechannel", hostname: "www.twitch.tv", search: "" }), false);
+
+  function node(className, children, opts) {
+    const el = {
+      className,
+      tag: opts && opts.tag || "div",
+      children: children || [],
+      paused: Boolean(opts && opts.paused),
+      ended: false,
+      style: { display: "", setProperty(key, value) { if (key === "display") this.display = value; } },
+      contains(other) {
+        if (other === el) return true;
+        return el.children.some((child) => child.contains(other));
+      },
+    };
+    return el;
+  }
+  function doc(root) {
+    const all = [];
+    (function walk(el) {
+      all.push(el);
+      for (const child of el.children) walk(child);
+    })(root);
+    return {
+      querySelectorAll(selector) {
+        if (selector === "video") return all.filter((el) => el.tag === "video");
+        return all.filter((el) => el.className.includes("client-side-video-ads") || el.className.includes("online-video-ad"));
+      },
+    };
+  }
+  const live = node("", [], { tag: "video", paused: true });
+  const ad = node("client-side-video-ads instream-player", []);
+  const root = node("video-player", [live, ad]);
+  const hidden = api.skipLiveClientAd(doc(root), { pathname: "/somechannel", hostname: "www.twitch.tv", search: "" });
+  assertEquals(hidden.action, "hidden");
+  assertEquals(hidden.roots, [ad]);
+  assertEquals(hidden.live, live);
+
+  const vodAd = node("client-side-video-ads instream-player", []);
+  const vod = api.skipLiveClientAd(doc(node("page", [vodAd])), { pathname: "/videos/9", hostname: "www.twitch.tv", search: "" });
+  assertEquals(vod.action, "vod");
+
+  const only = node("", [], { tag: "video" });
+  const wrapping = node("client-side-video-ads instream-player", [only]);
+  const blocked = api.skipLiveClientAd(doc(node("page", [wrapping])), { pathname: "/somechannel", hostname: "www.twitch.tv", search: "" });
+  assertEquals(blocked.action, "fail-open");
+  assertEquals(blocked.roots.length, 0);
+});
+
+Deno.test("the streak row is one stylesheet rule that cannot hide the player", () => {
+  assert(source.includes(".save-your-streak-side-nav-row:not(:has(video, .video-player)) { display: none !important; }"), "one rule hides only that row");
+});
+
 Deno.test("player-ad CSS hides only stream display ad wrappers that do not hold the video", () => {
   const start = source.indexOf("const PLAYER_AD_CSS = [");
   const end = source.indexOf("].join(", start);

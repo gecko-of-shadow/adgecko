@@ -27,9 +27,13 @@ function installTwitchAdblockPlaylist(target) {
       || source.includes("#EXT-X-CUE-OUT");
   }
 
-  // Twitch "maf" breaks are one DATERANGE on a playlist whose segments stay live; the
-  // player draws the ad itself. Only that line goes: segments and numbering stay, and
-  // it is never an ad break, so it cannot start a backup swap or a reload.
+  // A live maf cue is one DATERANGE. Segments stay live, so this is not an ad
+  // break and must not start a backup swap or a reload. The page skips the
+  // client-side player separately. VODs never reach that skip.
+  function isClientAdCue(text) {
+    return String(text || "").includes('CLASS="twitch-maf-ad"');
+  }
+
   function removeMafAds(text) {
     const source = String(text || "");
     if (!source.includes("twitch-maf-ad")) return { text: source, removed: 0 };
@@ -494,6 +498,7 @@ function installTwitchAdblockPlaylist(target) {
   Object.assign(target, {
     parseAttributes,
     hasStitchedAd,
+    isClientAdCue,
     removeMafAds,
     hasAdBreak,
     adReason,

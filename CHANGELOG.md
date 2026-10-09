@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.22 — beta
+
+- Live client-side ad cues (a `twitch-maf-ad` marker on a playlist whose segments stay live) now hide that ad player and resume the live video. The player is not reloaded for this, and it does not start a backup swap. If hiding the ad would take the only picture, the ad plays.
+- VODs and clips are unchanged.
+- The Save your Streak side-nav row is hidden by one stylesheet rule. The rule does not apply when that row contains the video.
+- The reload ceiling (2 player reloads in any 60 seconds) and the false-alarm hold are unchanged.
+- Debug stays on by default (temporary).
+
 ## 0.1.21 — beta
 
 - Fixes a reload loop on high-resolution (1440p60 source) channels where the player kept going black every few seconds during a midroll. After a swap, the new master was checked on the first rung only. That rung could look clean while the rung the player was on still had the ad, so the swap was undone and redone over and over. The check now follows the rung the ad was seen on.

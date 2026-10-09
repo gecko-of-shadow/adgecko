@@ -807,6 +807,48 @@ Deno.test("a maf ad break loses only its tag: no token request, no reload, no la
   }
 });
 
+Deno.test("a live maf cue asks the page to skip the client-side ad and does not reload", async () => {
+  const cues = [];
+  const reloads = [];
+  let tokens = 0;
+  let mediaText = "#EXTM3U\n#EXTINF:2.0,live\nhttps://video.example/live.ts";
+  const guard = createPlaylistGuard({
+    handoffGraceMs: 0,
+    async fetch(url) {
+      const value = String(url);
+      if (value.includes("/channel/hls/")) return playlistResponse(mainMaster);
+      if (value.includes("live-variant")) return playlistResponse(mediaText);
+      if (value.includes("/vod/")) return playlistResponse(mafAd);
+      return new Response("missing", { status: 404 });
+    },
+    async gql() {
+      tokens += 1;
+      return tokenFor({ variables: { playerType: "autoplay" } });
+    },
+    reload() {
+      reloads.push("reload");
+    },
+    status() {},
+    clientAd(on) {
+      cues.push(on === true);
+    },
+  });
+  await guard(masterUrlForTests);
+  mediaText = mafAd;
+  const media = await guard("https://video.example/live-variant.m3u8");
+  assert(!(await media.text()).includes("twitch-maf-ad"), "the player still does not receive the maf tag");
+  assert(cues.includes(true), "the live cue starts a client-side skip");
+  await flushReload();
+  assertEquals(reloads, [], "a client-side skip does not reload the player");
+  assertEquals(tokens, 0, "a client-side skip does not request a backup token");
+  mediaText = "#EXTM3U\n#EXTINF:2.0,live\nhttps://video.example/live.ts";
+  await guard("https://video.example/live-variant.m3u8");
+  assertEquals(cues.at(-1), false, "a later clean playlist ends the skip");
+  const vod = await guard("https://usher.ttvnw.net/vod/v2/123.m3u8");
+  assert((await vod.text()).includes("twitch-maf-ad"), "a vod playlist is not rewritten");
+  assertEquals(cues.filter((on) => on === true).length, 1, "the vod response does not start another skip");
+});
+
 Deno.test("a stitched range at the live edge swaps before any ad segment is listed", async () => {
   const upcoming = [
     "#EXTM3U",

@@ -33,6 +33,14 @@ Deno.test("channel names come from live usher paths", () => {
   assertEquals(playlist.channelFromPlaylistUrl("https://usher.ttvnw.net/vod/v2/123.m3u8"), null);
 });
 
+Deno.test("a live maf cue is a client-side ad and still not a backup break", () => {
+  const cue = '#EXTM3U\n#EXTINF:2.000,live\nhttps://video.example/live.ts\n#EXT-X-DATERANGE:ID="maf-1",CLASS="twitch-maf-ad",START-DATE="2026-10-08T07:14:27.761Z",PLANNED-DURATION=30.000\n';
+  assertEquals(playlist.isClientAdCue(cue), true);
+  assertEquals(playlist.hasAdBreak(cue), false);
+  assertEquals(playlist.isClientAdCue("#EXTM3U\n#EXTINF:2.000,live\nhttps://video.example/live.ts\n"), false);
+  assertEquals(playlist.isClientAdCue('#EXT-X-DATERANGE:CLASS="twitch-stitched-ad",DURATION=15'), false);
+});
+
 Deno.test("stitched ads and midrolls are labeled from the playlist text", () => {
   assertEquals(playlist.hasStitchedAd('#EXT-X-DATERANGE:ID="stitched-ad-1",CLASS="twitch-stitched-ad"'), true);
   assertEquals(playlist.hasStitchedAd('#EXT-X-DATERANGE:CLASS="twitch-maf-ad"'), true);

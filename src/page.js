@@ -32,7 +32,7 @@
         type: "state",
         on: debug.on === true,
         text: debug.dump(),
-        version: debug.version || "0.1.21",
+        version: debug.version || "0.1.22",
         gen: data.gen,
       }, "*");
     } catch {
@@ -45,6 +45,7 @@
     reload: reloadPlayer,
     reloadRoom,
     status: setNotice,
+    clientAd: noteClientAd,
   });
 
   window.fetch = async function (input, init) {
@@ -232,6 +233,7 @@
       }
     }
     if (data.type === "status") setNotice(Boolean(data.blocking));
+    if (data.type === "client-ad") noteClientAd(data.on === true);
   }
 
   async function pageGql(body) {
@@ -424,7 +426,18 @@
 
   let noticeBlocks = 0;
   let noticeOn = false;
+  let backupBlocking = false;
+  let clientBlocking = false;
   function setNotice(blocking) {
+    backupBlocking = Boolean(blocking);
+    renderNotice();
+  }
+  function setClientNotice(blocking) {
+    clientBlocking = Boolean(blocking);
+    renderNotice();
+  }
+  function renderNotice() {
+    const blocking = backupBlocking || clientBlocking;
     if (blocking) {
       if (!noticeOn) noticeBlocks += 1;
       noticeOn = true;
@@ -445,18 +458,107 @@
     if (notice.parentElement !== player) player.appendChild(notice);
   }
 
+  const hiddenClientAds = [];
+  let clientAdWanted = false;
+  let clientAdTimer = 0;
+  function releaseHiddenClientAds() {
+    for (const el of hiddenClientAds) {
+      try {
+        el.style.removeProperty("display");
+      } catch {
+        // The node is already gone.
+      }
+    }
+    hiddenClientAds.length = 0;
+  }
+  function noteClientAd(on) {
+    // A VOD or clip must not keep a live skip armed after a client-side navigation.
+    if (isVodOrClipLocation(location)) {
+      if (!clientAdWanted && !clientBlocking) return;
+      clientAdWanted = false;
+      if (clientAdTimer) clearTimeout(clientAdTimer);
+      clientAdTimer = 0;
+      releaseHiddenClientAds();
+      setClientNotice(false);
+      return;
+    }
+    clientAdWanted = on === true;
+    if (!clientAdWanted) {
+      if (clientAdTimer) clearTimeout(clientAdTimer);
+      clientAdTimer = 0;
+      releaseHiddenClientAds();
+      setClientNotice(false);
+      trace("client-ad", "clear");
+      return;
+    }
+    trace("client-ad", "cue");
+    applyClientAdSkip();
+    if (!clientAdTimer) {
+      clientAdTimer = setTimeout(() => {
+        clientAdTimer = 0;
+        if (clientAdWanted) applyClientAdSkip();
+      }, 500);
+    }
+  }
+  function applyClientAdSkip() {
+    let result;
+    try {
+      result = skipLiveClientAd(document, location);
+    } catch {
+      trace("client-ad", "fail-open");
+      return;
+    }
+    if (!result || result.action === "vod" || result.action === "none") return;
+    if (result.action === "fail-open") {
+      releaseHiddenClientAds();
+      setClientNotice(false);
+      trace("client-ad", "fail-open");
+      return;
+    }
+    for (const root of result.roots) {
+      try {
+        root.style.setProperty("display", "none", "important");
+        if (!hiddenClientAds.includes(root)) hiddenClientAds.push(root);
+      } catch {
+        // A node we cannot hide stays visible.
+      }
+    }
+    const live = result.live;
+    if (live && live.paused && !live.ended && typeof live.play === "function") {
+      try {
+        const pending = live.play();
+        if (pending && typeof pending.catch === "function") {
+          pending.catch(() => {
+            releaseHiddenClientAds();
+            setClientNotice(false);
+            trace("client-ad", "fail-open");
+          });
+        }
+      } catch {
+        releaseHiddenClientAds();
+        setClientNotice(false);
+        trace("client-ad", "fail-open");
+        return;
+      }
+    }
+    trace("client-ad", "hidden");
+    setClientNotice(true);
+  }
+
   // Stream display ads cover or squeeze the live picture. Hide only their wrappers,
   // and never an element that holds the video or the player box.
   const PLAYER_AD_CSS = [
     ".stream-display-ad__wrapper:not(:has(video, .video-player))",
     '[data-test-selector="sda-wrapper"]:not(:has(video, .video-player))',
   ].join(",\n") + " { display: none !important; }";
+  const STREAK_CSS = ".save-your-streak-side-nav-row:not(:has(video, .video-player)) { display: none !important; }";
+  const PLAYER_CSS = PLAYER_AD_CSS + "\n" + STREAK_CSS;
   hidePlayerAds();
 
   function hidePlayerAds() {
     try {
       const sheet = new CSSStyleSheet();
-      sheet.replaceSync(PLAYER_AD_CSS);
+      sheet.replaceSync(PLAYER_CSS);
       document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
       return;
     } catch {
@@ -465,7 +567,7 @@
     try {
       const style = document.createElement("style");
       style.id = "twitch-adblock-player-ads";
-      style.textContent = PLAYER_AD_CSS;
+      style.textContent = PLAYER_CSS;
       (document.head || document.documentElement).appendChild(style);
     } catch {
       // Playback does not depend on the banner sheet.
@@ -510,6 +612,30 @@
     // Firefox can refuse these hooks. The reload path still restores quality.
   }
 })();
+
+function isVodOrClipLocation(loc) {
+  const path = String(loc && loc.pathname || "");
+  const host = String(loc && loc.hostname || "");
+  const search = String(loc && loc.search || "");
+  if (host === "clips.twitch.tv" || host.startsWith("clips.")) return true;
+  if (path.includes("/videos/") || path.includes("/clip/")) return true;
+  if (/[?&](video|clip)=/i.test(search)) return true;
+  return false;
+}
+
+// Hide a live client-side ad player that is not the live video. A VOD or clip
+// page is left alone. If the only picture sits inside the ad player, do nothing.
+function skipLiveClientAd(doc, loc) {
+  if (isVodOrClipLocation(loc)) return { action: "vod", roots: [], live: null };
+  const roots = [...doc.querySelectorAll("[class*='client-side-video-ads'], [class*='online-video-ad']")];
+  if (!roots.length) return { action: "none", roots: [], live: null };
+  const videos = [...doc.querySelectorAll("video")];
+  const live = videos.find((video) => !roots.some((root) => root.contains(video))) || null;
+  if (!live) return { action: "fail-open", roots: [], live: null };
+  const hide = roots.filter((root) => !root.contains(live));
+  if (!hide.length) return { action: "fail-open", roots: [], live };
+  return { action: "hidden", roots: hide, live };
+}
 
 function startTwitchAdblockWorker() {
   const pending = new Map();
@@ -566,6 +692,9 @@ function startTwitchAdblockWorker() {
     },
     status(blocking) {
       postMessage({ source: "twitch-adblock", type: "status", blocking });
+    },
+    clientAd(on) {
+      postMessage({ source: "twitch-adblock", type: "client-ad", on: on === true });
     },
   });
   self.fetch = async function (input, init) {
@@ -1407,6 +1536,25 @@ function createPlaylistGuard(env) {
     return result.text;
   }
 
+  // True only after a live maf cue, so a clean master cannot clear it and a
+  // VOD (never handled here) cannot start it. Not a backup swap and not a reload.
+  let clientAdLatched = false;
+  function signalClientAd(url, text) {
+    if (typeof env.clientAd !== "function") return;
+    try {
+      if (playlist.isClientAdCue(text)) {
+        clientAdLatched = true;
+        env.clientAd(true);
+        return;
+      }
+      if (!clientAdLatched || playlist.isMasterPlaylist(text) || !streamByUrl.has(url)) return;
+      clientAdLatched = false;
+      env.clientAd(false);
+    } catch {
+      // A skip signal must not change the playlist response.
+    }
+  }
+
   async function handlePlaylist(url, init) {
     releaseHeldReload();
     const response = await env.fetch(url, init);
@@ -1416,6 +1564,7 @@ function createPlaylistGuard(env) {
       return textResponse(text, response.headers.get("content-type") || "text/plain");
     }
     try {
+      signalClientAd(url, text);
       if (playlist.channelFromPlaylistUrl(url) && playlist.isMasterPlaylist(text)) {
         const channel = playlist.channelFromPlaylistUrl(url);
         // Same reset point as video-swap-new after encodings m3u8: handoff complete.
