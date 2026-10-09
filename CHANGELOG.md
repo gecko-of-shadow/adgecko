@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+- On a Twitch tab, ON answers the popup. Copy debug includes the log from that tab, including the on-screen blocking label when it is showing.
+- Debug stays off until you turn it on. Opening the popup does not turn it on.
+- Twitch live still uses upstream video-swap-new. YouTube ad stripping stays.
+
 ## 0.2.2
 
 - Debug stays off until you turn it on in the popup. Copy debug is still there.

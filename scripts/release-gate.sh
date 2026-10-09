@@ -172,6 +172,20 @@ if twitch.get("all_frames") is not True:
     print("FAIL  Twitch all_frames", twitch.get("all_frames")); sys.exit(1)
 print("PASS  Twitch host coverage", sorted(got_t))
 
+reply = next((s for s in scripts if s.get("world") == "MAIN" and s.get("js") == ["src/debug.js"]), None)
+if not reply:
+    print("FAIL  Twitch debug reply script missing"); sys.exit(1)
+got_r = set(reply.get("matches") or [])
+if got_r != need_t:
+    print("FAIL  Twitch debug reply matches", sorted(got_r)); sys.exit(1)
+if reply.get("run_at") != "document_start":
+    print("FAIL  Twitch debug reply run_at", reply.get("run_at")); sys.exit(1)
+if reply.get("all_frames") is True:
+    print("FAIL  Twitch debug reply must stay on the top frame"); sys.exit(1)
+if scripts.index(reply) > scripts.index(twitch):
+    print("FAIL  Twitch debug reply must load before the vendor script"); sys.exit(1)
+print("PASS  Twitch debug reply loads in the top frame before the vendor script")
+
 if not youtube:
     print("FAIL  YouTube content_script missing"); sys.exit(1)
 need_y = {"*://www.youtube.com/*", "*://m.youtube.com/*", "*://youtube.com/*"}

@@ -301,33 +301,6 @@ function startYoutubeAdblock() {
     trace("fail-open", "youtube");
   }
 
-  window.addEventListener("message", (event) => {
-    try {
-      if (event.source !== window) return;
-      const data = event.data;
-      if (!data || data.source !== "twitch-adblock-debug") return;
-      if (data.type !== "set" && data.type !== "get") return;
-      const debug = globalThis.TwitchAdblockDebug;
-      if (!debug) return;
-      if (data.type === "set" && debug.on !== (data.on === true)) {
-        const next = data.on === true;
-        if (!next) debug.note("debug", "off");
-        debug.setEnabled(next);
-        if (next) debug.note("debug", "on");
-      }
-      window.postMessage({
-        source: "twitch-adblock-debug",
-        type: "state",
-        on: debug.on === true,
-        text: debug.dump(),
-        version: debug.version || "0.1.22",
-        gen: data.gen,
-      }, "*");
-    } catch {
-      // The debug popup must not affect playback.
-    }
-  });
-
   const api = {};
   installYoutubeAdblock(api);
   const nativeFetch = window.fetch.bind(window);
