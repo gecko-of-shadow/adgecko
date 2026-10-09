@@ -33,6 +33,28 @@ Deno.test("channel names come from live usher paths", () => {
   assertEquals(playlist.channelFromPlaylistUrl("https://usher.ttvnw.net/vod/v2/123.m3u8"), null);
 });
 
+Deno.test("a live maf cue is a client-side ad and still not a backup break", () => {
+  const cue = '#EXTM3U\n#EXTINF:2.000,live\nhttps://video.example/live.ts\n#EXT-X-DATERANGE:ID="maf-1",CLASS="twitch-maf-ad",START-DATE="2026-10-08T07:14:27.761Z",PLANNED-DURATION=30.000\n';
+  assertEquals(playlist.isClientAdCue(cue), true);
+  assertEquals(playlist.hasAdBreak(cue), false);
+  assertEquals(playlist.isClientAdCue("#EXTM3U\n#EXTINF:2.000,live\nhttps://video.example/live.ts\n"), false);
+  assertEquals(playlist.isClientAdCue('#EXT-X-DATERANGE:CLASS="twitch-stitched-ad",DURATION=15'), false);
+  // The cue overlaps listed live segments. PLANNED-DURATION is not DURATION.
+  const overlapping = [
+    "#EXTM3U",
+    "#EXT-X-PROGRAM-DATE-TIME:2026-10-08T07:19:17.832Z",
+    "#EXTINF:2.000,live",
+    "https://video.example/live-a.ts",
+    "#EXT-X-PROGRAM-DATE-TIME:2026-10-08T07:19:19.832Z",
+    "#EXTINF:2.000,live",
+    "https://video.example/live-b.ts",
+    '#EXT-X-DATERANGE:ID="maf-1",CLASS="twitch-maf-ad",START-DATE="2026-10-08T07:19:00.000Z",PLANNED-DURATION=30.000',
+  ].join("\n");
+  assertEquals(playlist.isClientAdCue(overlapping), true);
+  assertEquals(playlist.hasAdBreak(overlapping), false);
+  assertEquals(playlist.removeMafAds(overlapping).removed, 1);
+});
+
 Deno.test("stitched ads and midrolls are labeled from the playlist text", () => {
   assertEquals(playlist.hasStitchedAd('#EXT-X-DATERANGE:ID="stitched-ad-1",CLASS="twitch-stitched-ad"'), true);
   assertEquals(playlist.hasStitchedAd('#EXT-X-DATERANGE:CLASS="twitch-maf-ad"'), true);
@@ -97,7 +119,7 @@ Deno.test("audio-only rungs stay on the backup audio playlist", () => {
   assertEquals(variants[1].codecs, "mp4a.40.2");
 });
 
-Deno.test("ad playlists repeat the live segment and drop stitched metadata", () => {
+Deno.test("ad slots that live video follows are dropped with their stitched metadata", () => {
   const playlistText = [
     "#EXTM3U",
     '#EXT-X-DATERANGE:ID="stitched-ad-1",CLASS="twitch-stitched-ad",X-TV-TWITCH-AD-URL="https://ads.example/click"',
@@ -116,7 +138,7 @@ Deno.test("ad playlists repeat the live segment and drop stitched metadata", () 
   assertEquals(stripped.text.includes("https://video.example/live1.ts"), true);
 });
 
-Deno.test("an all-ad playlist records the segment urls when no live segment exists", () => {
+Deno.test("an all-ad playlist passes real ads through instead of blanking", () => {
   const playlistText = [
     "#EXTM3U",
     '#EXT-X-DATERANGE:ID="stitched-ad-1"',
@@ -124,12 +146,13 @@ Deno.test("an all-ad playlist records the segment urls when no live segment exis
     "https://ads.example/only.ts",
   ].join("\n");
   const stripped = playlist.stripAds(playlistText);
-  assertEquals(stripped.adUrls, ["https://ads.example/only.ts"]);
-  assertEquals(stripped.text.includes("#EXTINF:2.0,live"), true);
-  assertEquals(stripped.text.includes("https://ads.example/only.ts"), true);
+  assertEquals(stripped.adUrls, []);
+  assertEquals(stripped.stripped, false);
+  assertEquals(stripped.passed, true);
+  assertEquals(stripped.text, playlistText);
 });
 
-Deno.test("an ad between live segments repeats the newest preceding segment", () => {
+Deno.test("an ad that live video follows is dropped and a break at the live edge passes through", () => {
   const playlistText = [
     "#EXTM3U",
     "#EXTINF:2.0,live",
@@ -148,23 +171,28 @@ Deno.test("an ad between live segments repeats the newest preceding segment", ()
   ].join("\n");
   const stripped = playlist.stripAds(playlistText);
   assertEquals(stripped.adUrls, []);
-  assertEquals(stripped.text.includes("https://ads.example/"), false);
+  assertEquals(stripped.passed, true);
   const urls = stripped.text.split("\n").filter((line) => line.startsWith("https://"));
+  // No live hold: nothing is listed twice, so A/V cannot loop one segment.
   assertEquals(urls, [
     "https://video.example/live1.ts",
     "https://video.example/live2.ts",
-    "https://video.example/live2.ts",
-    "https://video.example/live2.ts",
     "https://video.example/live3.ts",
-    "https://video.example/live3.ts",
+    "https://ads.example/ad3.ts",
   ]);
+  assertEquals(new Set(urls).size, urls.length);
+  // Markers stay while an ad still plays.
+  assertEquals(stripped.text.includes("stitched-ad"), true);
 });
 
 Deno.test("an ad path marked live is not reused as the clean segment", () => {
   const onlyAd = "#EXTM3U\n#EXTINF:2.0,live\nhttps://video.example/adsquared/only.ts";
   const stripped = playlist.stripAds(onlyAd);
-  assertEquals(stripped.stripped, true);
-  assertEquals(stripped.adUrls, ["https://video.example/adsquared/only.ts"]);
+  // No live video after the ad: pass the real segment through (never blank or starve).
+  assertEquals(stripped.stripped, false);
+  assertEquals(stripped.passed, true);
+  assertEquals(stripped.adUrls, []);
+  assertEquals(stripped.text.includes("https://video.example/adsquared/only.ts"), true);
 
   const mixed = [
     "#EXTM3U",
@@ -260,4 +288,153 @@ Deno.test("blank segment is a short mpeg-ts with a pat, pmt, and pts", () => {
   assertEquals(bytes[bytes.length - 13], 0x01);
   assertEquals(bytes[bytes.length - 12], 0xe0);
   assertEquals(bytes[bytes.length - 6], 0x21);
+});
+
+function windowText(start, segments) {
+  const lines = ["#EXTM3U", `#EXT-X-MEDIA-SEQUENCE:${start}`];
+  for (const [kind, url] of segments) {
+    lines.push(kind === "ad" ? "#EXTINF:2.0," : "#EXTINF:2.0,live");
+    lines.push(url);
+  }
+  return lines.join("\n");
+}
+
+function numbered(text) {
+  const lines = text.split("\n");
+  const sequenceLine = lines.find((line) => line.startsWith("#EXT-X-MEDIA-SEQUENCE:"));
+  let next = sequenceLine ? Number(sequenceLine.split(":")[1]) : 0;
+  const out = [];
+  for (const line of lines) {
+    if (line.startsWith("https://")) out.push([next++, line]);
+  }
+  return out;
+}
+
+Deno.test("dropped ad slots keep every live segment on one number across refreshes", () => {
+  const stream = [
+    ["live", "https://video.example/l1.ts"],
+    ["live", "https://video.example/l2.ts"],
+    ["ad", "https://ads.example/a1.ts"],
+    ["live", "https://video.example/l3.ts"],
+    ["live", "https://video.example/l4.ts"],
+    ["live", "https://video.example/l5.ts"],
+    ["live", "https://video.example/l6.ts"],
+  ];
+  const ledger = playlist.createStripLedger();
+  const numberOf = new Map();
+  const urlAt = new Map();
+  for (let start = 0; start + 4 <= stream.length; start++) {
+    const result = playlist.stripAds(windowText(100 + start, stream.slice(start, start + 4)), ledger);
+    for (const [sequence, url] of numbered(result.text)) {
+      assertEquals(url.includes("ads.example"), false, "the ad slot never reaches the player");
+      if (numberOf.has(url)) assertEquals(numberOf.get(url), sequence, `${url} keeps its number`);
+      if (urlAt.has(sequence)) assertEquals(urlAt.get(sequence), url, `number ${sequence} keeps its segment`);
+      numberOf.set(url, sequence);
+      urlAt.set(sequence, url);
+    }
+  }
+  assertEquals([...numberOf.keys()].length, 6, "every live segment was listed");
+});
+
+Deno.test("ad slots at the head of the window keep the next live number stable", () => {
+  const ledger = playlist.createStripLedger();
+  const first = playlist.stripAds(windowText(200, [
+    ["ad", "https://ads.example/a1.ts"],
+    ["ad", "https://ads.example/a2.ts"],
+    ["live", "https://video.example/l1.ts"],
+    ["live", "https://video.example/l2.ts"],
+  ]), ledger);
+  const second = playlist.stripAds(windowText(201, [
+    ["ad", "https://ads.example/a2.ts"],
+    ["live", "https://video.example/l1.ts"],
+    ["live", "https://video.example/l2.ts"],
+    ["live", "https://video.example/l3.ts"],
+  ]), ledger);
+  const third = playlist.stripAds(windowText(202, [
+    ["live", "https://video.example/l1.ts"],
+    ["live", "https://video.example/l2.ts"],
+    ["live", "https://video.example/l3.ts"],
+    ["live", "https://video.example/l4.ts"],
+  ]), ledger);
+  assertEquals(numbered(first.text), [[200, "https://video.example/l1.ts"], [201, "https://video.example/l2.ts"]]);
+  assertEquals(numbered(second.text)[0], [200, "https://video.example/l1.ts"]);
+  assertEquals(numbered(third.text).at(-1), [203, "https://video.example/l4.ts"]);
+});
+
+Deno.test("a break that reached the live edge keeps passing through until the playlist is clean", () => {
+  const ledger = playlist.createStripLedger();
+  const windows = [
+    windowText(300, [["live", "https://video.example/l1.ts"], ["live", "https://video.example/l2.ts"], ["ad", "https://ads.example/a1.ts"]]),
+    windowText(301, [["live", "https://video.example/l2.ts"], ["ad", "https://ads.example/a1.ts"], ["ad", "https://ads.example/a2.ts"]]),
+    windowText(302, [["ad", "https://ads.example/a1.ts"], ["ad", "https://ads.example/a2.ts"], ["live", "https://video.example/l3.ts"]]),
+  ];
+  for (const text of windows) {
+    const result = playlist.stripAds(text, ledger);
+    assertEquals(result.passed, true);
+    assertEquals(result.text, text, "a running break is not renumbered or starved");
+  }
+  const clean = windowText(305, [["live", "https://video.example/l3.ts"], ["live", "https://video.example/l4.ts"]]);
+  assertEquals(playlist.stripAds(clean, ledger).passed, false);
+  assertEquals(ledger.passing, false, "the next break starts fresh");
+});
+
+Deno.test("a stitched range that starts after the newest segment is caught as a break", () => {
+  const upcoming = [
+    "#EXTM3U",
+    "#EXT-X-PROGRAM-DATE-TIME:2024-01-07T20:10:36.000Z",
+    "#EXTINF:2.000,live",
+    "https://video.example/live1.ts",
+    "#EXTINF:2.000,live",
+    "https://video.example/live2.ts",
+    '#EXT-X-DATERANGE:ID="stitched-ad-1",CLASS="twitch-stitched-ad",START-DATE="2024-01-07T20:10:40.000Z",DURATION=30',
+    "#EXT-X-TWITCH-PREFETCH:https://ads.example/next.ts",
+  ].join("\n");
+  assertEquals(playlist.hasAdBreak(upcoming), true);
+  const result = playlist.stripAds(upcoming);
+  assertEquals(result.passed, true);
+  assertEquals(result.text, upcoming);
+  const far = upcoming.replace("2024-01-07T20:10:40.000Z", "2024-01-07T20:20:40.000Z");
+  assertEquals(playlist.hasAdBreak(far), false, "a range far past the live edge is not a break yet");
+});
+
+Deno.test("a window a little behind the newest one keeps the ledger numbering", () => {
+  const ledger = playlist.createStripLedger();
+  playlist.stripAds(windowText(400, [
+    ["live", "https://video.example/l1.ts"],
+    ["ad", "https://ads.example/a1.ts"],
+    ["ad", "https://ads.example/a2.ts"],
+    ["live", "https://video.example/l2.ts"],
+  ]), ledger);
+  const ahead = playlist.stripAds(windowText(402, [
+    ["ad", "https://ads.example/a2.ts"],
+    ["live", "https://video.example/l2.ts"],
+    ["live", "https://video.example/l3.ts"],
+  ]), ledger);
+  const stale = playlist.stripAds(windowText(401, [
+    ["ad", "https://ads.example/a1.ts"],
+    ["ad", "https://ads.example/a2.ts"],
+    ["live", "https://video.example/l2.ts"],
+  ]), ledger);
+  assertEquals(numbered(ahead.text)[0], [401, "https://video.example/l2.ts"]);
+  assertEquals(numbered(stale.text), [[401, "https://video.example/l2.ts"]]);
+  const raw = playlist.stripAds(windowText(403, [
+    ["live", "https://video.example/l2.ts"],
+    ["live", "https://video.example/l3.ts"],
+  ]), ledger, true);
+  assertEquals(numbered(raw.text)[0], [401, "https://video.example/l2.ts"], "raw answers keep the dropped offset");
+});
+
+Deno.test("a read-only pass never changes the ledger", () => {
+  const ledger = playlist.createStripLedger();
+  playlist.stripAds(windowText(500, [
+    ["live", "https://video.example/l1.ts"],
+    ["ad", "https://ads.example/a1.ts"],
+    ["live", "https://video.example/l2.ts"],
+  ]), ledger);
+  const before = JSON.stringify({ dropped: [...ledger.dropped], base: ledger.base, first: ledger.first, passing: ledger.passing });
+  const far = windowText(100, [["live", "https://video.example/other.ts"]]);
+  assertEquals(playlist.stripAds(far, ledger, true).text, far, "a far stream is answered unchanged");
+  playlist.stripAds(windowText(510, [["ad", "https://ads.example/x.ts"], ["live", "https://video.example/l9.ts"]]), ledger, true);
+  const after = JSON.stringify({ dropped: [...ledger.dropped], base: ledger.base, first: ledger.first, passing: ledger.passing });
+  assertEquals(after, before);
 });

@@ -10,12 +10,42 @@
   let authorization = "";
 
   const nativeFetch = window.fetch.bind(window);
+  const playerWorkers = new Set();
   warnConflictOnce(window.fetch, window.Worker);
+  window.addEventListener("message", (event) => {
+    try {
+      if (event.source !== window) return;
+      const data = event.data;
+      if (!data || data.source !== "twitch-adblock-debug") return;
+      if (data.type !== "set" && data.type !== "get") return;
+      const debug = globalThis.TwitchAdblockDebug;
+      if (!debug) return;
+      if (data.type === "set" && debug.on !== (data.on === true)) {
+        const next = data.on === true;
+        if (!next) debug.note("debug", "off");
+        debug.setEnabled(next);
+        if (next) debug.note("debug", "on");
+        tellWorkers(next);
+      }
+      window.postMessage({
+        source: "twitch-adblock-debug",
+        type: "state",
+        on: debug.on === true,
+        text: debug.dump(),
+        version: debug.version || "0.1.22",
+        gen: data.gen,
+      }, "*");
+    } catch {
+      // The debug popup must not affect playback.
+    }
+  });
   const guard = createPlaylistGuard({
     fetch: nativeFetch,
     gql: pageGql,
     reload: reloadPlayer,
+    reloadRoom,
     status: setNotice,
+    clientAd: noteClientAd,
   });
 
   window.fetch = async function (input, init) {
@@ -25,6 +55,7 @@
       return await guard(request.input, request.init);
     } catch (error) {
       console.log("twitch-adblock failed open", error);
+      trace("fail-open", "page-fetch");
       return nativeFetch(replay, init);
     }
   };
@@ -52,10 +83,15 @@
       console.log("twitch-adblock could not read the player worker", error);
     }
     if (!source) return new NativeWorker(url, options);
+    // Chat and other page workers also use twitch.tv blob URLs. Only inject into
+    // workers that look like the live player so their fetch/GQL path stays native.
+    if (!isPlayerWorkerSource(source)) return new NativeWorker(url, options);
     const blobUrl = URL.createObjectURL(new Blob([workerPrelude() + "\n" + source], { type: "text/javascript" }));
     const worker = new NativeWorker(blobUrl, options);
     let released = false;
+    let held = worker;
     function releaseWorker() {
+      if (held) playerWorkers.delete(held);
       if (released) return;
       released = true;
       URL.revokeObjectURL(blobUrl);
@@ -63,6 +99,20 @@
     }
     worker.addEventListener("message", onWorkerMessage, true);
     worker.addEventListener("error", releaseWorker);
+    try {
+      if (typeof WeakRef === "function") held = new WeakRef(worker);
+      playerWorkers.add(held);
+      while (playerWorkers.size > 8) {
+        const oldest = playerWorkers.values().next().value;
+        playerWorkers.delete(oldest);
+      }
+      if (globalThis.TwitchAdblockDebug && globalThis.TwitchAdblockDebug.on === true) {
+        worker.postMessage({ source: "twitch-adblock", type: "debug-set", on: true });
+      }
+      trace("worker", "hooked");
+    } catch {
+      // Debug setup must not block the player worker.
+    }
     const nativeTerminate = worker.terminate;
     worker.terminate = function () {
       releaseWorker();
@@ -103,14 +153,48 @@
     const workerHooked = forced || (typeof workerFn === "function" && !isNativeFunction(workerFn));
     if (!fetchHooked && !workerHooked) return;
     globalThis.__twitchAdblockConflictWarned = true;
+    trace("conflict", "fetch-or-worker");
     console.warn(
-      "twitch-adblock: another script already patched fetch or Worker (for example uBlock Origin's twitch-videoad). Disable that filter while using twitch-adblock so only one ad script runs.",
+      "twitch-adblock: another script already patched fetch or Worker (uBlock twitch-videoad, TTV adblock, or a similar Twitch extension). Disable those while using twitch-adblock — two hooks freeze midrolls into a spinner.",
     );
   }
 
+  function trace(kind, detail) {
+    try {
+      const debug = globalThis.TwitchAdblockDebug;
+      if (!debug || debug.on !== true) return;
+      debug.trace(kind, detail);
+    } catch {
+      // Debug never changes playback.
+    }
+  }
+
+  function tellWorkers(on) {
+    for (const held of [...playerWorkers]) {
+      const worker = held && typeof held.deref === "function" ? held.deref() : held;
+      if (!worker) {
+        playerWorkers.delete(held);
+        continue;
+      }
+      try {
+        worker.postMessage({ source: "twitch-adblock", type: "debug-set", on: on === true });
+      } catch {
+        playerWorkers.delete(held);
+      }
+    }
+  }
+
   function workerPrelude() {
+    let debugBoot = "";
+    try {
+      if (typeof installTwitchAdblockDebug === "function") {
+        debugBoot = installTwitchAdblockDebug.toString() + "\ninstallTwitchAdblockDebug(globalThis.TwitchAdblockDebug = {}, true);\n";
+      }
+    } catch {
+      debugBoot = "";
+    }
     return [
-      installTwitchAdblockPlaylist.toString(),
+      debugBoot + installTwitchAdblockPlaylist.toString(),
       "installTwitchAdblockPlaylist(globalThis.TwitchAdblockPlaylist = {});",
       rewritePlaybackBody.toString(),
       createPlaylistGuard.toString(),
@@ -123,6 +207,15 @@
     const data = event.data;
     if (!data || data.source !== "twitch-adblock") return;
     event.stopImmediatePropagation();
+    if (data.type === "debug") {
+      try {
+        const debug = globalThis.TwitchAdblockDebug;
+        if (debug && data.entry) debug.note(data.entry.kind, data.entry.detail);
+      } catch {
+        // Ignore a bad debug entry.
+      }
+      return;
+    }
     if (data.type === "gql") {
       const worker = event.currentTarget;
       pageGql(data.body).then(
@@ -131,8 +224,16 @@
       );
       return;
     }
-    if (data.type === "reload") reloadPlayer();
+    if (data.type === "reload") {
+      // The worker's own ring is only advisory. Tell it when the page's ring said no,
+      // so it keeps the reload wanted instead of believing the player was reset.
+      const worker = event.currentTarget;
+      if (reloadPlayer() === false && !reloadRoom()) {
+        worker.postMessage({ source: "twitch-adblock", type: "reload-refused" });
+      }
+    }
     if (data.type === "status") setNotice(Boolean(data.blocking));
+    if (data.type === "client-ad") noteClientAd(data.on === true);
   }
 
   async function pageGql(body) {
@@ -209,6 +310,11 @@
     }
   }
 
+  function isPlayerWorkerSource(source) {
+    const text = String(source || "");
+    return /usher\.ttvnw\.net|PlaybackAccessToken|\/channel\/hls\/|#EXTM3U|stitched-ad|amazon-ivs/i.test(text);
+  }
+
   function readTextSync(url) {
     const request = new XMLHttpRequest();
     request.open("GET", url, false);
@@ -245,13 +351,42 @@
     return null;
   }
 
+  const reloadCeiling = 2;
+  const reloadWindowMs = 60000;
+  const reloadStamps = [];
+  function reloadRoom() {
+    const now = Date.now();
+    while (reloadStamps.length && now - reloadStamps[0] >= reloadWindowMs) reloadStamps.shift();
+    return reloadStamps.length < reloadCeiling;
+  }
+  function claimReload() {
+    if (!reloadRoom()) return false;
+    reloadStamps.push(Date.now());
+    return true;
+  }
+
   function reloadPlayer() {
+    function trace(kind, detail) {
+      try {
+        const debug = globalThis.TwitchAdblockDebug;
+        if (!debug || debug.on !== true) return;
+        debug.trace(kind, detail);
+      } catch {
+        // A debug note must not skip setSrc or the quality restore.
+      }
+    }
     const found = findPlayer();
     if (!found || !found.player || !found.state) {
       console.log("twitch-adblock could not find the player");
-      return;
+      trace("reload", "player-missing");
+      return false;
     }
-    if (typeof found.player.isPaused === "function" && found.player.isPaused()) return;
+    if (!claimReload()) {
+      trace("reload", "refused-by-ceiling");
+      return false;
+    }
+    // A stalled midroll player often reports paused. Skipping reload left the viewer
+    // stuck on the backup with a spinner after the ad ended — always refresh.
     const quality = safeGet("video-quality");
     const muted = safeGet("video-muted");
     const volume = safeGet("volume");
@@ -260,14 +395,18 @@
       if (typeof found.player.play === "function") found.player.play();
     } catch (error) {
       console.log("twitch-adblock reload failed", error);
-      return;
+      trace("reload", "reload-failed");
+      return false;
     }
+    trace("reload", "setSrc");
     setTimeout(() => {
       if (quality) safeSet("video-quality", quality);
       if (muted) safeSet("video-muted", muted);
       if (volume) safeSet("volume", volume);
     }, 800);
+    return true;
   }
+
 
   function safeGet(key) {
     try {
@@ -287,7 +426,18 @@
 
   let noticeBlocks = 0;
   let noticeOn = false;
+  let backupBlocking = false;
+  let clientBlocking = false;
   function setNotice(blocking) {
+    backupBlocking = Boolean(blocking);
+    renderNotice();
+  }
+  function setClientNotice(blocking) {
+    clientBlocking = Boolean(blocking);
+    renderNotice();
+  }
+  function renderNotice() {
+    const blocking = backupBlocking || clientBlocking;
     if (blocking) {
       if (!noticeOn) noticeBlocks += 1;
       noticeOn = true;
@@ -308,6 +458,139 @@
     if (notice.parentElement !== player) player.appendChild(notice);
   }
 
+  const hiddenClientAds = [];
+  let clientAdWanted = false;
+  let clientAdTimer = 0;
+  function releaseHiddenClientAds() {
+    for (const el of hiddenClientAds) {
+      try {
+        el.style.removeProperty("display");
+      } catch {
+        // The node is already gone.
+      }
+    }
+    hiddenClientAds.length = 0;
+  }
+  let clientAdCueNoted = false;
+  let clientAdHiddenNoted = false;
+  function noteClientAd(on) {
+    // A VOD or clip must not keep a live skip armed after a client-side navigation.
+    if (isVodOrClipLocation(location)) {
+      if (!clientAdWanted && !clientBlocking) return;
+      clientAdWanted = false;
+      clientAdCueNoted = false;
+      clientAdHiddenNoted = false;
+      if (clientAdTimer) clearTimeout(clientAdTimer);
+      clientAdTimer = 0;
+      releaseHiddenClientAds();
+      setClientNotice(false);
+      return;
+    }
+    const next = on === true;
+    if (next && clientAdWanted) {
+      applyClientAdSkip();
+      return;
+    }
+    clientAdWanted = next;
+    if (!clientAdWanted) {
+      if (clientAdTimer) clearTimeout(clientAdTimer);
+      clientAdTimer = 0;
+      releaseHiddenClientAds();
+      setClientNotice(false);
+      clientAdCueNoted = false;
+      clientAdHiddenNoted = false;
+      trace("client-ad", "clear");
+      return;
+    }
+    if (!clientAdCueNoted) {
+      clientAdCueNoted = true;
+      trace("client-ad", "cue");
+    }
+    applyClientAdSkip();
+    if (!clientAdTimer) {
+      clientAdTimer = setTimeout(() => {
+        clientAdTimer = 0;
+        if (clientAdWanted) applyClientAdSkip();
+      }, 500);
+    }
+  }
+  function applyClientAdSkip() {
+    let result;
+    try {
+      result = skipLiveClientAd(document, location);
+    } catch {
+      trace("client-ad", "fail-open");
+      return;
+    }
+    if (!result || result.action === "vod" || result.action === "none") return;
+    if (result.action === "fail-open") {
+      releaseHiddenClientAds();
+      setClientNotice(false);
+      trace("client-ad", "fail-open");
+      return;
+    }
+    for (const root of result.roots) {
+      try {
+        root.style.setProperty("display", "none", "important");
+        if (!hiddenClientAds.includes(root)) hiddenClientAds.push(root);
+      } catch {
+        // A node we cannot hide stays visible.
+      }
+    }
+    const live = result.live;
+    if (live && live.paused && !live.ended && typeof live.play === "function") {
+      try {
+        const pending = live.play();
+        if (pending && typeof pending.catch === "function") {
+          pending.catch(() => {
+            releaseHiddenClientAds();
+            setClientNotice(false);
+            trace("client-ad", "fail-open");
+          });
+        }
+      } catch {
+        releaseHiddenClientAds();
+        setClientNotice(false);
+        trace("client-ad", "fail-open");
+        return;
+      }
+    }
+    if (!clientAdHiddenNoted) {
+      clientAdHiddenNoted = true;
+      trace("client-ad", "hidden");
+    }
+    setClientNotice(true);
+  }
+
+  // Stream display ads cover or squeeze the live picture. Hide only their wrappers,
+  // and never an element that holds the video or the player box.
+  const PLAYER_AD_CSS = [
+    ".stream-display-ad__wrapper:not(:has(video, .video-player))",
+    '[data-test-selector="sda-wrapper"]:not(:has(video, .video-player))',
+  ].join(",\n") + " { display: none !important; }";
+  const STREAK_CSS = ".save-your-streak-side-nav-row:not(:has(video, .video-player)) { display: none !important; }";
+  const PLAYER_CSS = PLAYER_AD_CSS + "\n" + STREAK_CSS;
+  hidePlayerAds();
+
+  function hidePlayerAds() {
+    try {
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(PLAYER_CSS);
+      document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+      return;
+    } catch {
+      // Older engines: fall back to a style element.
+    }
+    try {
+      const style = document.createElement("style");
+      style.id = "twitch-adblock-player-ads";
+      style.textContent = PLAYER_CSS;
+      (document.head || document.documentElement).appendChild(style);
+    } catch {
+      // Playback does not depend on the banner sheet.
+    }
+  }
+
   // Twitch pauses a background tab when document.hidden is true. Keep the
   // stream playing through an ad break. visibilityState is left alone.
   try {
@@ -320,8 +603,9 @@
   } catch {
     // Another script already defined it.
   }
-  document.addEventListener("visibilitychange", (event) => {
-    event.stopImmediatePropagation();
+  // Do not stopImmediatePropagation — Twitch chat/pubsub reconnect after a
+  // player reload listens for visibilitychange. hidden is already spoofed.
+  document.addEventListener("visibilitychange", () => {
     const video = document.querySelector("video");
     if (video && video.paused && !video.ended) {
       video.play().catch(() => {});
@@ -346,12 +630,56 @@
   }
 })();
 
+function isVodOrClipLocation(loc) {
+  const path = String(loc && loc.pathname || "");
+  const host = String(loc && loc.hostname || "");
+  const search = String(loc && loc.search || "");
+  if (host === "clips.twitch.tv" || host.startsWith("clips.")) return true;
+  if (path.includes("/videos/") || path.includes("/clip/")) return true;
+  if (/[?&](video|clip)=/i.test(search)) return true;
+  return false;
+}
+
+// Hide a live client-side ad player that is not the live video. A VOD or clip
+// page is left alone. If the only picture sits inside the ad player, do nothing.
+function skipLiveClientAd(doc, loc) {
+  if (isVodOrClipLocation(loc)) return { action: "vod", roots: [], live: null };
+  const roots = [...doc.querySelectorAll("[class*='client-side-video-ads'], [class*='online-video-ad']")];
+  if (!roots.length) return { action: "none", roots: [], live: null };
+  const videos = [...doc.querySelectorAll("video")];
+  const live = videos.find((video) => !roots.some((root) => root.contains(video))) || null;
+  if (!live) return { action: "fail-open", roots: [], live: null };
+  const hide = roots.filter((root) => !root.contains(live));
+  if (!hide.length) return { action: "fail-open", roots: [], live };
+  return { action: "hidden", roots: hide, live };
+}
+
 function startTwitchAdblockWorker() {
   const pending = new Map();
   const gqlWaitMs = 15000;
   self.addEventListener("message", (event) => {
     const data = event.data;
-    if (!data || data.source !== "twitch-adblock" || data.type !== "gql-result") return;
+    if (!data || data.source !== "twitch-adblock") return;
+    if (data.type === "debug-set") {
+      event.stopImmediatePropagation();
+      try {
+        const debug = globalThis.TwitchAdblockDebug;
+        if (debug && typeof debug.setEnabled === "function") debug.setEnabled(data.on === true);
+      } catch {
+        // A debug toggle must not break worker fetches.
+      }
+      return;
+    }
+    if (data.type === "reload-refused") {
+      event.stopImmediatePropagation();
+      try {
+        if (typeof guard === "function" && typeof guard.reloadRefused === "function") guard.reloadRefused();
+      } catch {
+        // A late refusal must not break worker fetches.
+      }
+      return;
+    }
+    if (data.type !== "gql-result") return;
     event.stopImmediatePropagation();
     const waiter = pending.get(data.id);
     if (!waiter) return;
@@ -382,6 +710,9 @@ function startTwitchAdblockWorker() {
     status(blocking) {
       postMessage({ source: "twitch-adblock", type: "status", blocking });
     },
+    clientAd(on) {
+      postMessage({ source: "twitch-adblock", type: "client-ad", on: on === true });
+    },
   });
   self.fetch = async function (input, init) {
     const replay = typeof Request !== "undefined" && input instanceof Request ? input.clone() : input;
@@ -404,6 +735,12 @@ function startTwitchAdblockWorker() {
       return await guard(nextInput, nextInit);
     } catch (error) {
       console.log("twitch-adblock failed open", error);
+      try {
+        const debug = globalThis.TwitchAdblockDebug;
+        if (debug && debug.on === true) debug.trace("fail-open", "worker-fetch");
+      } catch {
+        // Fail open even when the debug log is broken.
+      }
       return nativeFetch(replay, init);
     }
   };
@@ -455,15 +792,91 @@ function createPlaylistGuard(env) {
   const variantLimit = 64;
   const sessionLimit = 8;
   const sessionTtl = 120000;
-  // Prefer typically-clean player types first; autoplay often still carries ads.
-  const backupTypes = ["picture-by-picture", "embed", "autoplay"];
+  // Match TwitchAdSolutions video-swap-new try order (lower quality while blocked is OK).
+  const backupTypes = ["autoplay", "picture-by-picture", "embed"];
   const handoffGraceMs = env.handoffGraceMs == null ? 150 : Number(env.handoffGraceMs);
+  // The moving-off guard normally ends at the next master fetch. If the player
+  // reload never refetches the master, expire it so the next midroll is still caught.
+  const movingOffMs = 10000;
+  // A stalled backup request must not hold the player's playlist fetch for long.
+  const probeDeadlineMs = env.probeDeadlineMs == null ? 2000 : Number(env.probeDeadlineMs);
   const playbackHash = "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9";
   const playbackQuery = "query PlaybackAccessToken($login: String!, $isLive: Boolean!, $vodID: ID!, $isVod: Boolean!, $playerType: String!, $platform: String!) { streamPlaybackAccessToken(channelName: $login, params: {platform: $platform, playerBackend: \"mediaplayer\", playerType: $playerType}) @include(if: $isLive) { value signature __typename } }";
 
-  function scheduleReload() {
-    queueMicrotask(() => env.reload());
+  // Hard ceiling, whatever the cause: the player is never reset more than this many
+  // times inside the window. A reload that the ceiling holds back waits for room.
+  const reloadCeiling = 2;
+  const reloadWindowMs = 60000;
+  // A backup that the next master call throws away within this long was a false alarm.
+  // The break is then left to play on main for a while instead of swapping again.
+  const flapMs = 15000;
+  const holdBaseMs = 60000;
+  const holdMaxMs = 240000;
+  const flapMemoryMs = 300000;
+  // Inside the page, env.reloadRoom is the one ring every guard shares. A worker has no
+  // view of it, so its own ring is only advisory and the page still has the last word.
+  const sharedRoom = typeof env.reloadRoom === "function" ? env.reloadRoom : null;
+  const reloadStamps = [];
+  let reloadWanted = false;
+  let reloadWantedAt = 0;
+  let reloadRetryAt = 0;
+  let reloadQueued = false;
+  function trace(kind, detail) {
+    try {
+      const debug = globalThis.TwitchAdblockDebug;
+      if (!debug || debug.on !== true) return;
+      debug.trace(kind, detail);
+    } catch {
+      // Debug never changes the playlist response.
+    }
   }
+  function reloadRoom() {
+    if (sharedRoom) return sharedRoom();
+    const now = Date.now();
+    while (reloadStamps.length && now - reloadStamps[0] >= reloadWindowMs) reloadStamps.shift();
+    return reloadStamps.length < reloadCeiling;
+  }
+  function scheduleReload() {
+    if (reloadQueued) return true;
+    if (!reloadRoom()) {
+      reloadWanted = true;
+      reloadWantedAt = Date.now();
+      trace("reload", "held-by-ceiling");
+      return false;
+    }
+    reloadWanted = false;
+    if (!sharedRoom) reloadStamps.push(Date.now());
+    reloadQueued = true;
+    trace("reload", "queued");
+    // Macrotask: the clean playlist Response must reach the player before setSrc
+    // resets usher. A microtask can run reload too early and leave a spinner.
+    setTimeout(() => {
+      reloadQueued = false;
+      if (env.reload() === false) reloadRefused();
+    }, 0);
+    return true;
+  }
+  // The page's ring said no to a reload this guard thought it had room for. The reload
+  // is still owed: give the stamp back and retry once there is room.
+  function reloadRefused() {
+    if (!sharedRoom) reloadStamps.pop();
+    reloadWanted = true;
+    reloadWantedAt = Date.now();
+    reloadRetryAt = reloadWantedAt + 5000;
+    trace("reload", "refused-by-page");
+  }
+  // A leave reload that the ceiling held back goes out as soon as there is room, so
+  // the player never stays on a backup that nobody is watching over.
+  function releaseHeldReload() {
+    if (!reloadWanted || reloadQueued) return;
+    const now = Date.now();
+    if (now - reloadWantedAt > reloadWindowMs * 2) {
+      reloadWanted = false;
+      return;
+    }
+    if (now >= reloadRetryAt && reloadRoom()) scheduleReload();
+  }
+
 
   function backupMatchScore(mainText, backupText) {
     const main = playlist.listVariants(mainText);
@@ -486,11 +899,11 @@ function createPlaylistGuard(env) {
     return score;
   }
 
-  function pickBestBackup(candidates) {
+  function rankBackups(candidates) {
     return candidates.slice().sort((left, right) => {
       if (right.score !== left.score) return right.score - left.score;
       return backupTypes.indexOf(left.playerType) - backupTypes.indexOf(right.playerType);
-    })[0] || null;
+    });
   }
 
   function canonical(url) {
@@ -583,7 +996,22 @@ function createPlaylistGuard(env) {
         tried: new Set(),
         retryAt: 0,
         usingBackup: false,
+        movingOffBackup: false,
+        // video-swap-new: when every backup type is dirty/dead, pass through real ads
+        // instead of stripping the midroll playlist into a frozen spinner.
+        failOpen: false,
+        failOpenReloaded: false,
         served: "",
+        servedCleanUrl: "",
+        spares: [],
+        round: null,
+        movingOffAt: 0,
+        backupAt: 0,
+        holdUntil: 0,
+        flaps: 0,
+        flapAt: 0,
+        adRung: null,
+        ledger: playlist.createStripLedger(),
         reloadedForBackup: false,
         requestedAds: new Set(),
         variants: new Map(),
@@ -591,6 +1019,7 @@ function createPlaylistGuard(env) {
         masterUrl: "",
         liveMaster: "",
         mainVariantUrl: "",
+        mainProbeFails: 0,
         seenAt: Date.now(),
       };
       sessions.set(channel, session);
@@ -656,23 +1085,115 @@ function createPlaylistGuard(env) {
     env.fetch(adUrl).then((response) => response.arrayBuffer()).catch(() => {});
   }
 
-  async function maybeReturnToMain(session) {
-    if (!session.mainVariantUrl) return;
-    const body = await fetchPlaylist(session.mainVariantUrl);
-    if (body == null) return;
-    if (playlist.hasAdBreak(body)) {
-      consumePreroll(session, body);
-      return;
-    }
+  function movingOff(session) {
+    if (!session.movingOffBackup) return false;
+    if (Date.now() - session.movingOffAt < movingOffMs) return true;
+    session.movingOffBackup = false;
+    trace("playback", "moving-off-expired");
+    return false;
+  }
+
+  // The swap was undone by the very next master call, so the ad evidence did not hold
+  // up. Stay on main (ads play, nothing is stripped) and wait before trying again.
+  function holdAfterFalseAlarm(session) {
+    const now = Date.now();
+    if (now - session.flapAt > flapMemoryMs) session.flaps = 0;
+    session.flaps += 1;
+    session.flapAt = now;
+    const wait = Math.min(holdBaseMs * Math.pow(2, session.flaps - 1), holdMaxMs);
+    session.holdUntil = now + wait;
+    trace("playback", "hold " + Math.round(wait / 1000) + "s");
+  }
+
+  // servingMain: this master response already hands the player the main ladder,
+  // so it needs neither the moving-off guard nor another reload.
+  function leaveBackup(session, servingMain, deadMain) {
     const wasUsing = session.usingBackup;
+    const handoff = wasUsing && !servingMain;
+    trace("playback", wasUsing ? "leave-backup" : "clear-break");
+    if (wasUsing && !deadMain && Date.now() - session.backupAt < flapMs) holdAfterFalseAlarm(session);
+    session.adRung = null;
+    // video-swap-new IsMovingOffBackupEncodings: ignore ad tags until the next
+    // master poll so leave+reload cannot immediately re-enter backup.
+    if (handoff) {
+      session.movingOffBackup = true;
+      session.movingOffAt = Date.now();
+    }
     session.usingBackup = false;
+    session.failOpen = false;
+    session.failOpenReloaded = false;
     session.served = "";
+    session.servedCleanUrl = "";
+    session.spares = [];
+    session.round = null;
     session.backupUrls.clear();
     session.tried.clear();
     session.reloadedForBackup = false;
     session.requestedAds.clear();
+    session.mainProbeFails = 0;
     env.status(false);
-    if (wasUsing) scheduleReload();
+    // Reload only when leaving a latched backup (0.1.15). Clearing fail-open
+    // alone must not thrash the player — forced reloads starved buffers on
+    // ad-heavy live channels into a permanent spinner while chat kept moving.
+    if (handoff) scheduleReload();
+  }
+
+  // When every backup type is dirty/dead: latch fail-open and pass real ads
+  // through (do not strip into a blank playlist). Do NOT force a player reload
+  // here — 0.1.16's enter/exit reloads froze ad-heavy streams at ~0 buffer.
+  function failOpenShowAds(session) {
+    session.failOpen = true;
+    session.failOpenReloaded = true;
+    session.usingBackup = false;
+    session.served = "";
+    session.servedCleanUrl = "";
+    session.spares = [];
+    session.round = null;
+    session.backupUrls.clear();
+    session.reloadedForBackup = false;
+    env.status(false);
+    trace("playback", "fail-open");
+  }
+
+  async function maybeReturnToMain(session) {
+    if (!session.usingBackup) return;
+
+    // Prefer the cached main media URL when it still resolves.
+    if (session.mainVariantUrl) {
+      const body = await fetchPlaylist(session.mainVariantUrl);
+      if (body != null) {
+        session.mainProbeFails = 0;
+        if (playlist.hasAdBreak(body)) {
+          consumePreroll(session, body);
+          return;
+        }
+        leaveBackup(session);
+        return;
+      }
+    }
+
+    // CDN rungs rotate: refresh the live master and probe again before staying on backup.
+    if (session.masterUrl) {
+      const master = await fetchPlaylist(session.masterUrl);
+      if (master != null) {
+        const channel = playlist.channelFromPlaylistUrl(session.masterUrl);
+        if (channel) rememberMain(session, channel, session.masterUrl, master);
+        const ads = await sampleHasAds(master, session.masterUrl, session.mainVariantUrl);
+        if (ads === true) {
+          session.mainProbeFails = 0;
+          return;
+        }
+        if (ads === false) {
+          leaveBackup(session);
+          return;
+        }
+      }
+    }
+
+    // Fail open: leave the dead-main backup path (0.1.15). If the next main poll
+    // is still midroll with no clean backup, runBackup latches fail-open pass-through.
+    session.mainProbeFails += 1;
+    if (session.mainProbeFails >= 3) leaveBackup(session, false, true);
   }
 
   async function playbackToken(channel, playerType) {
@@ -703,7 +1224,13 @@ function createPlaylistGuard(env) {
     return tokenFrom(json);
   }
 
-  async function sampleHasAds(masterText, masterUrl, knownUrl, knownBody) {
+  function adRungUrl(session, masterText, masterUrl) {
+    if (!session.adRung) return "";
+    const picked = playlist.pickVariant(masterText, session.adRung);
+    return picked ? absoluteVariant(picked, masterUrl) : "";
+  }
+
+  async function sampleHasAds(masterText, masterUrl, knownUrl, knownBody, found) {
     const variants = playlist.listVariants(masterText);
     if (!variants.length) return playlist.hasAdBreak(masterText) || null;
     // Prefer a known media body / the first listed rung, then the rest. Stop on the
@@ -741,14 +1268,15 @@ function createPlaylistGuard(env) {
       if (!body.startsWith("#EXTM3U")) continue;
       sawPlaylist = true;
       if (playlist.hasAdBreak(body)) return true;
+      if (found) found.url = variantUrl;
       return false;
     }
     return sawPlaylist ? false : null;
   }
 
-  async function backupMaster(masterUrl, liveText, knownUrl, knownBody) {
-    const channel = playlist.channelFromPlaylistUrl(masterUrl);
-    if (!channel) return null;
+  // One backup decision per channel at a time: probes, adoption, and the walk to
+  // the next clean type all run behind this gate.
+  async function underGate(channel, work) {
     let session = ensureSession(channel);
     while (session.inflight) {
       await session.inflight;
@@ -760,27 +1288,36 @@ function createPlaylistGuard(env) {
     });
     session.inflight = gate;
     try {
-      return await runBackup(session, channel, masterUrl, liveText, knownUrl, knownBody);
+      return await work(session);
     } finally {
       release();
       if (session.inflight === gate) session.inflight = null;
     }
   }
 
+  async function backupMaster(masterUrl, liveText, knownUrl, knownBody, after) {
+    const channel = playlist.channelFromPlaylistUrl(masterUrl);
+    if (!channel) return null;
+    return await underGate(channel, async (session) => {
+      const mapped = await runBackup(session, channel, masterUrl, liveText, knownUrl, knownBody);
+      return after ? await after(session, channel, mapped) : mapped;
+    });
+  }
+
   async function runBackup(session, channel, masterUrl, liveText, knownUrl, knownBody) {
     rememberMain(session, channel, masterUrl, liveText);
-    const ads = await sampleHasAds(liveText, masterUrl, knownUrl, knownBody);
+    if (movingOff(session)) {
+      if (!session.usingBackup) env.status(false);
+      return null;
+    }
+    // A master call has no media playlist of its own. Probe the rung the break was seen
+    // on, so one rung cannot say "ad" while another says "clean" and flip the swap.
+    const ads = await sampleHasAds(liveText, masterUrl, knownUrl || adRungUrl(session, liveText, masterUrl), knownBody);
     if (ads === false) {
-      const wasUsing = session.usingBackup;
-      session.usingBackup = false;
-      session.served = "";
-      session.backupUrls.clear();
-      session.tried.clear();
-      session.reloadedForBackup = false;
-      session.requestedAds.clear();
-      env.status(false);
-      if (wasUsing) scheduleReload();
-      if (sessionIsFinished(session)) dropSession(channel);
+      if (session.usingBackup || session.failOpen) trace("playback", "clean");
+      // Keep the session: a midroll that starts later on these media playlists must
+      // still find its master. Idle sessions age out through evictSessions.
+      leaveBackup(session, !knownUrl);
       return null;
     }
     if (ads === null) {
@@ -793,23 +1330,73 @@ function createPlaylistGuard(env) {
       indexStreamUrls(channel, session.served, masterUrl, true);
       return session.served;
     }
+    // A swap that was just undone stays undone for a while: the ad plays on main.
+    if (!session.usingBackup && Date.now() < session.holdUntil) {
+      trace("playback", "hold");
+      return null;
+    }
+    // Fail-open pass-through while the retry window is open. Keep the latch for
+    // the whole midroll — clearing it every 30s re-stripped live holds under the
+    // Twitch ad UI and froze long breaks (stuck → brief play → freeze again).
+    if (session.failOpen && Date.now() < session.retryAt) {
+      trace("playback", "fail-open-hold");
+      return null;
+    }
     if (session.tried.size >= backupTypes.length) {
-      if (Date.now() < session.retryAt) return session.served || null;
+      if (Date.now() < session.retryAt) {
+        failOpenShowAds(session);
+        return null;
+      }
+      // Retry backup types after the window, but stay in fail-open so media polls
+      // keep serving real ads until a clean backup actually latches.
       session.tried.clear();
+      failOpenShowAds(session);
     }
 
-    const best = await findCleanBackup(session, channel, masterUrl, liveText);
-    if (best) {
-      session.served = playlist.mapVariantsToBackup(liveText, best.master, best.href);
-      session.usingBackup = true;
-      session.retryAt = Date.now() + 30000;
-      session.tried.clear();
-      indexStreamUrls(channel, session.served, best.href, true);
+    // A leave reload still waiting for room goes out before any new swap starts.
+    if (!session.usingBackup && (reloadWanted || !reloadRoom())) {
+      trace("playback", "reload-ceiling");
+      return null;
+    }
+    const found = await findCleanBackups(session, channel, masterUrl, liveText);
+    if (found.length) {
+      const late = session.spares;
+      adoptBackup(session, channel, liveText, found[0]);
+      session.spares = rankBackups(found.slice(1).concat(late));
       return session.served;
     }
 
     session.retryAt = Date.now() + 30000;
+    trace("playback", "no-backup");
+    // All backup player types were dirty or unreachable — show ads (gold behavior).
+    if (session.tried.size >= backupTypes.length) failOpenShowAds(session);
     return session.served || null;
+  }
+
+  function adoptBackup(session, channel, liveText, best) {
+    session.failOpen = false;
+    session.failOpenReloaded = false;
+    session.served = playlist.mapVariantsToBackup(liveText, best.master, best.href);
+    session.servedCleanUrl = best.cleanUrl || "";
+    if (!session.usingBackup) session.backupAt = Date.now();
+    session.usingBackup = true;
+    session.retryAt = Date.now() + 30000;
+    session.tried.clear();
+    indexStreamUrls(channel, session.served, best.href, true);
+    trace("playback", "backup " + best.playerType);
+  }
+
+  // The rung the player asked for first, then the rung the probe saw clean.
+  async function cleanBackupBody(session, url) {
+    const urls = [];
+    const picked = playlist.pickVariant(session.served, session.variants.get(url) || null);
+    if (picked) urls.push(absoluteVariant(picked, session.masterUrl));
+    if (session.servedCleanUrl && !urls.includes(session.servedCleanUrl)) urls.push(session.servedCleanUrl);
+    for (const candidate of urls) {
+      const body = await fetchPlaylist(candidate);
+      if (body != null && !playlist.hasAdBreak(body)) return body;
+    }
+    return null;
   }
 
   async function probeBackupType(channel, masterUrl, liveText, playerType) {
@@ -823,39 +1410,65 @@ function createPlaylistGuard(env) {
       const response = await env.fetch(url.href);
       if (!response.ok) return null;
       const master = await response.text();
-      const probe = await sampleHasAds(master, url.href);
+      const found = { url: "" };
+      const probe = await sampleHasAds(master, url.href, "", "", found);
       if (probe === null || probe === true) return null;
       return {
         playerType,
         master,
         href: url.href,
+        cleanUrl: found.url,
         score: backupMatchScore(liveText, master),
       };
     } catch (error) {
       console.log("twitch-adblock backup failed", playerType, error);
+      trace("playback", "backup-failed " + playerType);
       return null;
     }
   }
 
-  async function findCleanBackup(session, channel, masterUrl, liveText) {
+  // Resolves with every clean backup that answered within the grace window, best
+  // first. Clean answers that arrive later are kept as spares for this round.
+  async function findCleanBackups(session, channel, masterUrl, liveText) {
     const pending = backupTypes.filter((playerType) => !session.tried.has(playerType));
     for (const playerType of pending) session.tried.add(playerType);
-    if (!pending.length) return null;
+    if (!pending.length) return [];
+    let settle;
+    const round = {
+      open: true,
+      settled: new Promise((resolve) => {
+        settle = resolve;
+      }),
+    };
+    session.round = round;
+    session.spares = [];
 
     return await new Promise((resolve) => {
       const clean = [];
       let remaining = pending.length;
       let graceTimer = null;
       let done = false;
+      const deadline = setTimeout(() => {
+        finish();
+        closeRound();
+      }, probeDeadlineMs);
+      function closeRound() {
+        if (!round.open) return;
+        round.open = false;
+        clearTimeout(deadline);
+        settle();
+      }
       function finish() {
         if (done) return;
         done = true;
         if (graceTimer != null) clearTimeout(graceTimer);
-        resolve(pickBestBackup(clean));
+        resolve(rankBackups(clean));
       }
       function onResult(result) {
         remaining -= 1;
-        if (result) {
+        if (result && done) {
+          if (session.round === round) session.spares = rankBackups(session.spares.concat([result]));
+        } else if (result) {
           clean.push(result);
           if (graceTimer == null && handoffGraceMs > 0) {
             graceTimer = setTimeout(finish, handoffGraceMs);
@@ -863,7 +1476,10 @@ function createPlaylistGuard(env) {
             finish();
           }
         }
-        if (remaining === 0) finish();
+        if (remaining === 0) {
+          finish();
+          closeRound();
+        }
       }
       for (const playerType of pending) {
         probeBackupType(channel, masterUrl, liveText, playerType).then(onResult, () => onResult(null));
@@ -879,24 +1495,85 @@ function createPlaylistGuard(env) {
     session.seenAt = Date.now();
     if (session.backupUrls.has(url)) {
       await maybeReturnToMain(session);
+      // A backup that gets its own ad plays it through (stripAds pass mode) instead of
+      // hopping to another type, so a break costs at most two reloads: enter and leave.
       return session.usingBackup ? text : null;
     }
+    if (movingOff(session)) return null;
     if (!playlist.hasAdBreak(text)) return null;
-    const mapped = await backupMaster(session.masterUrl, session.liveMaster, url, text);
-    if (!mapped || !session.usingBackup) return null;
-    const picked = playlist.pickVariant(mapped, session.variants.get(url) || null);
-    if (!picked) return null;
-    const body = await fetchPlaylist(absoluteVariant(picked, session.masterUrl));
-    if (body == null || playlist.hasAdBreak(body)) return null;
-    if (!session.reloadedForBackup) {
-      session.reloadedForBackup = true;
-      // Let the clean media response reach the player before forcing a src refresh.
-      scheduleReload();
+    const rung = session.variants.get(url) || null;
+    if (!session.usingBackup) {
+      session.adRung = rung;
+      trace("playback", "ad-seen " + playlist.adReason(text) + (rung && rung.resolution ? " " + rung.resolution : ""));
+    }
+    return await backupMaster(session.masterUrl, session.liveMaster, url, text, async (current, name, mapped) => {
+      if (!mapped || !current.usingBackup) return null;
+      const body = await serveBackupBody(current, name, url);
+      if (body == null) {
+        // Real ads pass only once every clean backup is spent.
+        if (current.usingBackup) {
+          trace("playback", "backups-spent");
+          failOpenShowAds(current);
+          current.retryAt = Date.now() + 30000;
+        }
+        return null;
+      }
+      if (!current.reloadedForBackup) {
+        current.reloadedForBackup = true;
+        // Let the clean media response reach the player before forcing a src refresh.
+        scheduleReload();
+      }
+      return body;
+    });
+  }
+
+  // Backup first (video-swap-new): a dirty or missing backup rung moves on to the
+  // next clean player type, after waiting briefly for probes still in flight.
+  async function serveBackupBody(session, channel, url) {
+    let body = await cleanBackupBody(session, url);
+    while (body == null && session.usingBackup) {
+      if (!session.spares.length && session.round && session.round.open) await session.round.settled;
+      if (!session.usingBackup || !session.spares.length) break;
+      const next = session.spares.shift();
+      trace("playback", "backup-dirty next " + next.playerType);
+      adoptBackup(session, channel, session.liveMaster, next);
+      body = await cleanBackupBody(session, url);
     }
     return body;
   }
 
+  // Raw answers still follow the segment numbering of any slots dropped earlier.
+  function throughLedger(session, text) {
+    return session ? playlist.stripAds(text, session.ledger, true).text : text;
+  }
+
+  function withoutMafAd(body) {
+    const result = playlist.removeMafAds(body);
+    if (result.removed) trace("playlist", "maf-ad tag removed");
+    return result.text;
+  }
+
+  // True only after a live maf cue, so a clean master cannot clear it and a
+  // VOD (never handled here) cannot start it. Not a backup swap and not a reload.
+  let clientAdLatched = false;
+  function signalClientAd(url, text) {
+    if (typeof env.clientAd !== "function") return;
+    try {
+      if (playlist.isClientAdCue(text)) {
+        clientAdLatched = true;
+        env.clientAd(true);
+        return;
+      }
+      if (!clientAdLatched || playlist.isMasterPlaylist(text) || !streamByUrl.has(url)) return;
+      clientAdLatched = false;
+      env.clientAd(false);
+    } catch {
+      // A skip signal must not change the playlist response.
+    }
+  }
+
   async function handlePlaylist(url, init) {
+    releaseHeldReload();
     const response = await env.fetch(url, init);
     if (!response.ok) return response;
     const text = await response.text();
@@ -904,24 +1581,65 @@ function createPlaylistGuard(env) {
       return textResponse(text, response.headers.get("content-type") || "text/plain");
     }
     try {
+      signalClientAd(url, text);
       if (playlist.channelFromPlaylistUrl(url) && playlist.isMasterPlaylist(text)) {
+        const channel = playlist.channelFromPlaylistUrl(url);
+        // Same reset point as video-swap-new after encodings m3u8: handoff complete.
+        const existing = channel ? sessions.get(channel) : null;
+        reloadWanted = false;
+        if (existing) {
+          existing.movingOffBackup = false;
+          // A master fetch starts a new player instance with fresh segment numbering.
+          existing.ledger = playlist.createStripLedger();
+        }
         const replacement = await backupMaster(url, text);
+        const session = channel ? sessions.get(channel) : null;
+        if (session) env.status(Boolean(session.usingBackup));
+        // Fail-open: do not rewrite the live ladder — player needs real ad stream.
+        if (session && session.failOpen && !replacement) {
+          trace("playlist", "pass-master");
+          return textResponse(playlist.writeServerTime(text, playlist.readServerTime(text)));
+        }
         const timed = playlist.writeServerTime(replacement || text, playlist.readServerTime(text));
         return textResponse(playlist.stripAds(timed).text);
       }
+      const channel = streamByUrl.get(url);
+      const session = channel ? sessions.get(channel) : null;
       const swapped = await backupMedia(url, text);
-      const stripped = playlist.stripAds(swapped || text);
-      if (stripped.adUrls.length) rememberBlocked(stripped.adUrls);
-      env.status(stripped.stripped);
-      if (swapped) env.status(Boolean(swapped));
-      return textResponse(stripped.text);
+      // Midroll ended after fail-open: clear the latch quietly. No reload —
+      // the live playlist is already clean; a forced setSrc starved buffers.
+      if (session && session.failOpen && !swapped && !playlist.hasAdBreak(text)) {
+        session.failOpen = false;
+        session.failOpenReloaded = false;
+        env.status(false);
+        trace("playlist", "midroll-ended");
+        return textResponse(withoutMafAd(throughLedger(session, text)));
+      }
+      // No clean backup body + still midroll: pass real ads through. backupMedia has
+      // already tried every clean backup, so this is the exhausted (or unknown) case.
+      // Never strip main into a live-hold under Twitch "taking an ad break" UI.
+      if (!swapped && playlist.hasAdBreak(text)) {
+        env.status(false);
+        trace("playlist", "pass-midroll");
+        return textResponse(withoutMafAd(throughLedger(session, text)));
+      }
+      const stripped = playlist.stripAds(swapped || text, session ? session.ledger : null);
+      if (stripped.adUrls.length) {
+        rememberBlocked(stripped.adUrls);
+        trace("playlist", "strip " + stripped.adUrls.length);
+      }
+      // Gold banner is !!BackupEncodings — only while we are on a backup stream.
+      const latest = channel ? sessions.get(channel) : null;
+      env.status(Boolean(latest && latest.usingBackup && !stripped.passed));
+      return textResponse(withoutMafAd(stripped.text));
     } catch (error) {
       console.log("twitch-adblock playlist failed", error);
+      trace("playlist", "failed-open");
       return textResponse(text);
     }
   }
 
-  return async function guardedFetch(input, init) {
+  async function guardedFetch(input, init) {
     const raw = requestUrl(input);
     if (!raw) return env.fetch(input, init);
     const url = canonical(raw);
@@ -938,5 +1656,7 @@ function createPlaylistGuard(env) {
       return handlePlaylist(parentless.href, init);
     }
     return handlePlaylist(url, init);
-  };
+  }
+  guardedFetch.reloadRefused = reloadRefused;
+  return guardedFetch;
 }

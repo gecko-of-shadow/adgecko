@@ -64,10 +64,10 @@ Deno.test("backup graphql uses only headers gql.twitch.tv allows", () => {
   assert(!source.includes('defineProperty(document, "visibilityState"'), "Twitch reads document.hidden, not this spoof");
 });
 
-Deno.test("backup player types prefer typically clean streams", () => {
+Deno.test("backup player types match video-swap-new try order", () => {
   assert(
-    source.includes('const backupTypes = ["picture-by-picture", "embed", "autoplay"];'),
-    "try picture-by-picture and embed before autoplay",
+    source.includes('const backupTypes = ["autoplay", "picture-by-picture", "embed"];'),
+    "try autoplay then picture-by-picture then embed",
   );
   assert(!source.includes("mobile_web"), "does not request a mobile web backup");
   assert(
@@ -78,7 +78,8 @@ Deno.test("backup player types prefer typically clean streams", () => {
   assert(source.includes("backupMatchScore"), "a clean backup is scored against the live ladder");
   assert(source.includes("handoffGraceMs"), "a short grace window can pick a better quality peer");
   assert(source.includes("scheduleReload"), "reload waits for the clean playlist response");
-  assert(source.includes("}, 800);"), "quality restores sooner after a player reload");
+  assert(source.includes('setSrc({ isNewMediaPlayerInstance: true, refreshAccessToken: true })'), "usher switches via setSrc");
+  assert(source.includes("}, 800);"), "settings are restored after the new instance boots");
 });
 
 Deno.test("a conflict with another Twitch ad script is logged once", () => {
@@ -110,7 +111,7 @@ Deno.test("a picture-by-picture token request is dropped before the chat mini pl
 
 Deno.test("a midroll variant is answered with the backup stream", () => {
   assert(source.includes("const streamByUrl = new Map();"), "variant urls stay tied to the channel");
-  assert(source.includes("if (!session.reloadedForBackup)"), "reload once when the player is already on the ad playlist");
+  assert(source.includes("if (!current.reloadedForBackup)"), "reload once when the player is already on the ad playlist");
   assert(source.includes("session.mainVariantUrl"), "the main variant is checked so playback can return");
   assert(source.includes("json.streamPlaybackAccessToken"), "embed tokens may sit on the response root");
   assert(source.includes("await env.gql(body)"), "backup tokens use the original gql fetch");
@@ -120,6 +121,52 @@ Deno.test("a midroll variant is answered with the backup stream", () => {
 Deno.test("a background tab stays visible to the player", () => {
   assert(source.includes('defineProperty(document, "hidden"'), "Twitch pauses when document.hidden is true");
   assert(source.includes("lowLatencyModeEnabled"), "a reload keeps the low-latency setting");
+});
+
+Deno.test("reloadPlayer still refreshes when the stalled player reports paused", () => {
+  const start = source.indexOf("function reloadPlayer");
+  const end = source.indexOf("function safeGet", start);
+  const block = source.slice(start, end);
+  assert(block.includes("setSrc"), "reload still refreshes the player source");
+  assert(!block.includes("isPaused"), "do not skip reload when a midroll stall looks paused");
+});
+
+Deno.test("visibilitychange does not block Twitch chat reconnect listeners", () => {
+  const start = source.indexOf('document.addEventListener("visibilitychange"');
+  assert(start !== -1, "visibilitychange listener exists");
+  const block = source.slice(start, start + 350);
+  assert(!block.includes("stopImmediatePropagation"), "do not swallow other visibilitychange listeners after player reload");
+  assert(block.includes("video.play()"), "still resume a paused video when the tab changes");
+});
+
+Deno.test("only player-looking workers get the playlist prelude", () => {
+  assert(source.includes("isPlayerWorkerSource"), "gate worker injection on source markers");
+  assert(source.includes("usher.ttvnw.net") || source.includes("PlaybackAccessToken"), "player markers include live HLS or token strings");
+  const workerCtor = source.slice(source.indexOf("function TwitchAdblockWorker"), source.indexOf("TwitchAdblockWorker.prototype"));
+  assert(workerCtor.includes("isPlayerWorkerSource(source)"), "non-player blob workers stay native");
+});
+
+Deno.test("scheduleReload coalesces to one player reload per turn", () => {
+  const start = source.indexOf("function scheduleReload");
+  const end = source.indexOf("function backupMatchScore", start);
+  const block = source.slice(start, end);
+  assert(block.includes("reloadQueued"), "a second scheduleReload in the same turn is ignored");
+  assert(block.includes("setTimeout"), "reload waits a macrotask so the playlist Response lands first");
+  assert(!block.includes("queueMicrotask"), "a microtask would setSrc before the fetch resolves");
+});
+
+Deno.test("reloadPlayer always resets src after a midroll handoff", () => {
+  const start = source.indexOf("function reloadPlayer");
+  const end = source.indexOf("function safeGet", start);
+  const block = source.slice(start, end);
+  assert(block.includes('setSrc({ isNewMediaPlayerInstance: true, refreshAccessToken: true })'), "usher switches via setSrc");
+  assert(!block.includes("isPaused()"), "a paused buffering spinner must still reset");
+  assert(block.includes("found.player.play"), "playback is nudged immediately after setSrc");
+  // 0.1.13 latched mute / spinner: pin before setSrc, deferred HTMLVideoElement play, 1000ms rewrite.
+  assert(!block.includes("getHTMLVideoElement"), "no deferred HTMLVideoElement play after setSrc");
+  assert(!block.includes("}, 1000);"), "no second settings rewrite at 1000ms");
+  const setSrcAt = block.indexOf("setSrc");
+  assert(setSrcAt !== -1 && !block.slice(0, setSrcAt).includes("safeSet("), "do not pin settings before setSrc");
 });
 
 Deno.test("player maps and worker waits do not live for the whole tab", () => {
@@ -132,8 +179,128 @@ Deno.test("player maps and worker waits do not live for the whole tab", () => {
   assert(source.includes("clearTimeout(waiter.timer)"), "a graphql reply cancels the wait");
 });
 
-Deno.test("the blocking label follows the media playlist, not the live master", () => {
+Deno.test("the blocking label follows backup stay, like video-swap-new", () => {
   assert(!source.includes("env.status(true)"), "a live master must not latch the label on");
-  assert(source.includes("env.status(stripped.stripped)"), "media playlists show the label only while a segment was replaced");
+  assert(!source.includes("env.status(stripped.stripped)"), "strip-only must not drive the notice");
+  assert(
+    source.includes("env.status(Boolean(latest && latest.usingBackup && !stripped.passed))")
+      || source.includes("env.status(Boolean(session && session.usingBackup))"),
+    "media notice matches BackupEncodings-style stay",
+  );
   assert(source.includes("if (!session.usingBackup) env.status(false);"), "an unknown probe clears the label when no backup is playing");
+});
+
+Deno.test("return-to-main refreshes a rotated live ladder and fails open", () => {
+  const start = source.indexOf("async function maybeReturnToMain");
+  const end = source.indexOf("async function playbackToken", start);
+  const body = source.slice(start, end);
+  assert(body.includes("leaveBackup"), "clearing backup state is shared");
+  assert(body.includes("sampleHasAds"), "a stale mainVariantUrl re-probes via the live master");
+  assert(body.includes("mainProbeFails"), "unreachable main/master probes are counted");
+  assert(body.includes("mainProbeFails >= 3"), "fail open after repeated probe failures");
+});
+
+Deno.test("leaveBackup uses video-swap-new moving-off guard", () => {
+  assert(source.includes("movingOffBackup"), "session tracks IsMovingOffBackupEncodings");
+  assert(/if \(handoff\) \{\s*session\.movingOffBackup = true;\s*session\.movingOffAt = Date\.now\(\);/.test(source), "leave sets the guard before reload");
+  assert(source.includes("const handoff = wasUsing && !servingMain;"), "a master that already serves main needs no guard");
+  assert(source.includes("const movingOffMs = 10000"), "a guard the master never clears still expires");
+  assert(source.includes("movingOffBackup = false"), "master poll clears the guard");
+  assert(source.includes('const backupTypes = ["autoplay", "picture-by-picture", "embed"]'), "backup try order matches video-swap-new");
+});
+
+Deno.test("fail-open after exhausted backups skips strip without forced reload", () => {
+  assert(source.includes("function failOpenShowAds"), "shared fail-open helper exists");
+  assert(source.includes("session.failOpen"), "session tracks fail-open like gold exhausted BackupEncodingsStatus");
+  assert(source.includes("failOpenShowAds(session)"), "exhausted backups enter fail-open");
+  assert(source.includes("if (!swapped && playlist.hasAdBreak(text))"), "main midroll without backup always passes ads");
+  assert(source.includes("if (session && session.failOpen && !replacement)"), "fail-open master keeps the live ladder");
+  assert(source.includes("if (handoff) scheduleReload()"), "leaveBackup reloads only after a latched backup");
+  assert(!source.includes("stripped.adUrls.length && playlist.hasAdBreak"), "do not gate pass-through on empty adUrls");
+  const failOpenStart = source.indexOf("function failOpenShowAds");
+  const failOpenEnd = source.indexOf("async function maybeReturnToMain", failOpenStart);
+  const failOpenBody = source.slice(failOpenStart, failOpenEnd);
+  assert(!failOpenBody.includes("scheduleReload"), "enter fail-open must not force reload (play-like-15)");
+});
+Deno.test("a live client-side ad player is hidden and a vod ad player is left alone", () => {
+  const start = source.indexOf("function isVodOrClipLocation");
+  const end = source.indexOf("function startTwitchAdblockWorker", start);
+  assert(start !== -1 && end !== -1, "skip helpers are page functions");
+  const block = source.slice(start, end);
+  assert(!block.includes("setSrc"), "skipping a client-side ad does not reload the player");
+  const api = new Function(`${block}\nreturn { isVodOrClipLocation, skipLiveClientAd };`)();
+  assertEquals(api.isVodOrClipLocation({ pathname: "/videos/1", hostname: "www.twitch.tv", search: "" }), true);
+  assertEquals(api.isVodOrClipLocation({ pathname: "/clip/abc", hostname: "www.twitch.tv", search: "" }), true);
+  assertEquals(api.isVodOrClipLocation({ pathname: "/", hostname: "clips.twitch.tv", search: "" }), true);
+  assertEquals(api.isVodOrClipLocation({ pathname: "/", hostname: "player.twitch.tv", search: "?video=1" }), true);
+  assertEquals(api.isVodOrClipLocation({ pathname: "/somechannel", hostname: "www.twitch.tv", search: "" }), false);
+
+  function node(className, children, opts) {
+    const el = {
+      className,
+      tag: opts && opts.tag || "div",
+      children: children || [],
+      paused: Boolean(opts && opts.paused),
+      ended: false,
+      style: { display: "", setProperty(key, value) { if (key === "display") this.display = value; } },
+      contains(other) {
+        if (other === el) return true;
+        return el.children.some((child) => child.contains(other));
+      },
+    };
+    return el;
+  }
+  function doc(root) {
+    const all = [];
+    (function walk(el) {
+      all.push(el);
+      for (const child of el.children) walk(child);
+    })(root);
+    return {
+      querySelectorAll(selector) {
+        if (selector === "video") return all.filter((el) => el.tag === "video");
+        return all.filter((el) => el.className.includes("client-side-video-ads") || el.className.includes("online-video-ad"));
+      },
+    };
+  }
+  const live = node("", [], { tag: "video", paused: true });
+  const ad = node("client-side-video-ads instream-player", []);
+  const root = node("video-player", [live, ad]);
+  const hidden = api.skipLiveClientAd(doc(root), { pathname: "/somechannel", hostname: "www.twitch.tv", search: "" });
+  assertEquals(hidden.action, "hidden");
+  assertEquals(hidden.roots, [ad]);
+  assertEquals(hidden.live, live);
+
+  const vodAd = node("client-side-video-ads instream-player", []);
+  const vod = api.skipLiveClientAd(doc(node("page", [vodAd])), { pathname: "/videos/9", hostname: "www.twitch.tv", search: "" });
+  assertEquals(vod.action, "vod");
+
+  const only = node("", [], { tag: "video" });
+  const wrapping = node("client-side-video-ads instream-player", [only]);
+  const blocked = api.skipLiveClientAd(doc(node("page", [wrapping])), { pathname: "/somechannel", hostname: "www.twitch.tv", search: "" });
+  assertEquals(blocked.action, "fail-open");
+  assertEquals(blocked.roots.length, 0);
+});
+
+Deno.test("the streak row is one stylesheet rule that cannot hide the player", () => {
+  assert(source.includes(".save-your-streak-side-nav-row:not(:has(video, .video-player)) { display: none !important; }"), "one rule hides only that row");
+});
+
+Deno.test("player-ad CSS hides only stream display ad wrappers that do not hold the video", () => {
+  const start = source.indexOf("const PLAYER_AD_CSS = [");
+  const end = source.indexOf("].join(", start);
+  assert(start !== -1 && end !== -1, "player-ad CSS is defined");
+  const selectors = [...source.slice(start, end).matchAll(/(["'])((?:(?!\1).)+)\1/g)].map((match) => match[2]);
+  assertEquals(selectors, [
+    ".stream-display-ad__wrapper:not(:has(video, .video-player))",
+    '[data-test-selector="sda-wrapper"]:not(:has(video, .video-player))',
+  ]);
+  assert(source.includes("hidePlayerAds();"), "the sheet is installed at document_start");
+  assert(source.includes("display: none !important"), "wrappers are hidden, not resized");
+});
+
+Deno.test("a page refusal of a worker reload is sent back to that worker", () => {
+  assert(source.includes('type: "reload-refused"'), "the page tells the worker");
+  assert(source.includes('data.type === "reload-refused"'), "the worker listens for it");
+  assert(source.includes("guard.reloadRefused()"), "the worker hands it to its guard");
 });

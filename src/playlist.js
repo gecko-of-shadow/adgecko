@@ -27,6 +27,25 @@ function installTwitchAdblockPlaylist(target) {
       || source.includes("#EXT-X-CUE-OUT");
   }
 
+  // A live maf cue is one DATERANGE. Segments stay live, so this is not an ad
+  // break and must not start a backup swap or a reload. The page skips the
+  // client-side player separately. VODs never reach that skip.
+  function isClientAdCue(text) {
+    return String(text || "").includes('CLASS="twitch-maf-ad"');
+  }
+
+  function removeMafAds(text) {
+    const source = String(text || "");
+    if (!source.includes("twitch-maf-ad")) return { text: source, removed: 0 };
+    let removed = 0;
+    const kept = source.split("\n").filter((line) => {
+      if (!line.startsWith("#EXT-X-DATERANGE:") || !line.includes('CLASS="twitch-maf-ad"')) return true;
+      removed += 1;
+      return false;
+    });
+    return { text: kept.join("\n"), removed };
+  }
+
   function isMidroll(text) {
     return /"midroll"/i.test(String(text || ""));
   }
@@ -194,6 +213,8 @@ function installTwitchAdblockPlaylist(target) {
       if (!Number.isFinite(start)) continue;
       let end = Date.parse(attrs["END-DATE"] || "");
       if (!Number.isFinite(end)) {
+        // PLANNED-DURATION is the live maf cue. It is not a stitched-segment
+        // window: treating it as DURATION would start a backup swap.
         const duration = Number(attrs.DURATION);
         if (Number.isFinite(duration) && duration > 0) end = start + Math.round(duration * 1000);
       }
@@ -227,6 +248,18 @@ function installTwitchAdblockPlaylist(target) {
     return windows.some(([start, end]) => time >= start && time < end);
   }
 
+  // A stitched range that starts after the newest listed segment is a break that
+  // has only reached the prefetch lines. video-swap-new reacts to the ad tag itself.
+  const upcomingHorizonMs = 10000;
+  function hasUpcomingAd(windows, times) {
+    let newest = NaN;
+    for (const time of times.values()) {
+      if (!Number.isFinite(newest) || time > newest) newest = time;
+    }
+    if (!Number.isFinite(newest)) return false;
+    return windows.some(([start]) => start > newest && start - newest <= upcomingHorizonMs);
+  }
+
   function isAdSegmentLine(lines, index, windows, times) {
     const line = lines[index];
     if (!line || !line.startsWith("#EXTINF")) return false;
@@ -244,67 +277,150 @@ function installTwitchAdblockPlaylist(target) {
     for (let i = 0; i < lines.length - 1; i++) {
       if (isAdSegmentLine(lines, i, windows, times)) return true;
     }
-    return false;
+    return hasUpcomingAd(windows, times);
   }
 
-  function stripAds(text) {
+  // Why a playlist counts as an ad break, for the debug log only.
+  function adReason(text) {
     const lines = linesOf(text);
     const windows = adWindows(lines);
     const times = segmentTimes(lines);
-    const marked = lines.some((line, index) => {
-      if (line.startsWith("#EXTINF") && line.includes("Amazon")) return true;
-      return isAdSegmentLine(lines, index, windows, times);
-    });
-    if (!marked) return { text: lines.join("\n"), adUrls: [], stripped: false };
+    for (let i = 0; i < lines.length - 1; i++) {
+      const line = lines[i];
+      if (!line.startsWith("#EXTINF")) continue;
+      const next = (lines[i + 1] || "").trim();
+      if (!next || next.startsWith("#")) continue;
+      if (isAdInf(line)) return "inf";
+      if (isAdSegmentUrl(next)) return "url";
+      const time = times.get(i);
+      if (Number.isFinite(time) && inAdWindow(time, windows)) return "range";
+    }
+    return hasUpcomingAd(windows, times) ? "upcoming" : "none";
+  }
 
-    function cleanLiveUrl(index) {
-      const line = lines[index] || "";
-      if (!line.startsWith("#EXTINF") || !line.includes(",live") || line.includes("Amazon")) return "";
-      if (!lines[index + 1] || lines[index + 1].startsWith("#")) return "";
-      if (isAdSegmentLine(lines, index, windows, times)) return "";
-      return lines[index + 1].trim();
+  function mediaSequence(lines) {
+    const line = lines.find((item) => item.startsWith("#EXT-X-MEDIA-SEQUENCE:"));
+    if (!line) return 0;
+    const value = Number(line.slice("#EXT-X-MEDIA-SEQUENCE:".length).trim());
+    return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+  }
+
+  function createStripLedger() {
+    return { dropped: new Set(), base: 0, first: NaN, passing: false };
+  }
+
+  function droppedBelow(book, sequence) {
+    let count = book.base;
+    for (const value of book.dropped) {
+      if (value < sequence) count += 1;
+    }
+    return count;
+  }
+
+  // A window this many segments behind the newest one (a stale edge, another
+  // rendition) is read through the ledger; a bigger jump back is a new stream.
+  const staleWindow = 15;
+
+  // Drop ad slots that live video follows, and renumber through a ledger kept
+  // across refreshes so no live segment is listed twice or replayed. A break at the
+  // live edge passes through unmodified until it ends: dropping it starves the player.
+  // readOnly applies earlier drops and numbering without dropping anything new.
+  function stripAds(text, ledger, readOnly) {
+    const lines = linesOf(text);
+    const unchanged = lines.join("\n");
+    const numbered = lines.some((line) => line.startsWith("#EXT-X-MEDIA-SEQUENCE:"));
+    const book = numbered && ledger && ledger.dropped instanceof Set ? ledger : createStripLedger();
+    const windows = adWindows(lines);
+    const times = segmentTimes(lines);
+    const firstSequence = mediaSequence(lines);
+    let frozen = readOnly === true;
+    if (Number.isFinite(book.first) && firstSequence < book.first) {
+      if (book.first - firstSequence > staleWindow) {
+        if (frozen) return { text: unchanged, adUrls: [], stripped: false, passed: false };
+        book.dropped.clear();
+        book.base = 0;
+        book.passing = false;
+        book.first = NaN;
+      } else {
+        frozen = true;
+      }
+    }
+    if (!frozen) {
+      book.first = firstSequence;
+      for (const value of [...book.dropped]) {
+        if (value >= firstSequence - staleWindow) continue;
+        book.dropped.delete(value);
+        book.base += 1;
+      }
     }
 
-    const followingClean = new Array(lines.length).fill("");
-    let upcoming = "";
-    for (let i = lines.length - 1; i >= 0; i--) {
-      followingClean[i] = upcoming;
-      const clean = cleanLiveUrl(i);
-      if (clean) upcoming = clean;
+    const segments = [];
+    for (let i = 0; i < lines.length - 1; i++) {
+      if (!lines[i].startsWith("#EXTINF")) continue;
+      const next = lines[i + 1].trim();
+      if (!next || next.startsWith("#")) continue;
+      const sequence = firstSequence + segments.length;
+      segments.push({ index: i, sequence, ad: book.dropped.has(sequence) || isAdSegmentLine(lines, i, windows, times) });
+    }
+    const upcoming = hasUpcomingAd(windows, times);
+    const anyAd = upcoming || segments.some((segment) => segment.ad);
+    if (!anyAd && !frozen) book.passing = false;
+    const lastLive = segments.reduce((last, segment) => (segment.ad ? last : segment.index), -1);
+    const fresh = segments.filter((segment) => segment.ad && !book.dropped.has(segment.sequence));
+    const dropNow = frozen || book.passing || upcoming ? [] : fresh.filter((segment) => segment.index < lastLive);
+    for (const segment of dropNow) book.dropped.add(segment.sequence);
+    const passedAds = fresh.filter((segment) => !book.dropped.has(segment.sequence));
+    if ((passedAds.length || upcoming) && !frozen) book.passing = true;
+
+    const dropped = new Set(segments.filter((segment) => book.dropped.has(segment.sequence)).map((segment) => segment.index));
+    const firstKept = segments.find((segment) => !dropped.has(segment.index));
+    const outSequence = firstKept ? firstKept.sequence - droppedBelow(book, firstKept.sequence) : firstSequence - book.base;
+    // Ad markers stay while any ad still plays so Twitch's ad UI can finish cleanly.
+    const cleanMarkers = dropped.size > 0 && !passedAds.length && !upcoming;
+    const passed = anyAd && (book.passing || passedAds.length > 0 || upcoming);
+    if (!dropped.size && !cleanMarkers && outSequence === firstSequence) {
+      return { text: unchanged, adUrls: [], stripped: false, passed };
     }
 
-    const adUrls = [];
     const kept = [];
-    let replaced = false;
-    let previousClean = "";
+    let held = [];
+    let carryBreak = false;
+    let wroteSequence = false;
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]
-        .replaceAll(/(X-TV-TWITCH-AD-URL=")[^"]*(")/g, "$1https://twitch.tv$2")
-        .replaceAll(/(X-TV-TWITCH-AD-CLICK-TRACKING-URL=")[^"]*(")/g, "$1https://twitch.tv$2");
-      if (line.startsWith("#EXT-X-TWITCH-PREFETCH:")) continue;
-      if (line.startsWith("#") && hasStitchedAd(line)) continue;
-      const clean = cleanLiveUrl(i);
-      if (clean) previousClean = clean;
-      const nextUrl = lines[i + 1] && !lines[i + 1].startsWith("#") ? lines[i + 1].trim() : "";
-      const adSegment = isAdSegmentLine(lines, i, windows, times);
-      if (adSegment) {
-        replaced = true;
-        const duration = line.slice("#EXTINF:".length).split(",")[0];
-        const adUrl = nextUrl;
-        const anchor = previousClean || followingClean[i];
-        kept.push(`#EXTINF:${duration},live`);
-        if (anchor) {
-          kept.push(anchor);
-        } else {
-          kept.push(adUrl);
-          adUrls.push(adUrl);
-        }
+      let line = lines[i];
+      if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) {
+        kept.push(`#EXT-X-MEDIA-SEQUENCE:${outSequence}`);
+        wroteSequence = true;
+        continue;
+      }
+      if (cleanMarkers) {
+        if (line.startsWith("#EXT-X-TWITCH-PREFETCH:")) continue;
+        if (line.startsWith("#") && hasStitchedAd(line)) continue;
+        line = line
+          .replaceAll(/(X-TV-TWITCH-AD-URL=")[^"]*(")/g, "$1https://twitch.tv$2")
+          .replaceAll(/(X-TV-TWITCH-AD-CLICK-TRACKING-URL=")[^"]*(")/g, "$1https://twitch.tv$2");
+      }
+      if (line.startsWith("#EXT-X-PROGRAM-DATE-TIME:") || line.trim() === "#EXT-X-DISCONTINUITY") {
+        held.push(line);
+        continue;
+      }
+      if (dropped.has(i)) {
+        // The live video after a dropped slot still starts a new timeline.
+        if (held.some((tag) => tag.trim() === "#EXT-X-DISCONTINUITY")) carryBreak = true;
+        held = [];
         i += 1;
         continue;
       }
-      kept.push(line);
+      if (line.startsWith("#EXTINF")) {
+        if (carryBreak && !held.some((tag) => tag.trim() === "#EXT-X-DISCONTINUITY")) kept.push("#EXT-X-DISCONTINUITY");
+        carryBreak = false;
+      }
+      kept.push(...held, line);
+      held = [];
     }
-    return { text: kept.join("\n"), adUrls, stripped: replaced };
+    kept.push(...held);
+    if (!wroteSequence && outSequence !== firstSequence) kept.splice(1, 0, `#EXT-X-MEDIA-SEQUENCE:${outSequence}`);
+    return { text: kept.join("\n"), adUrls: [], stripped: dropped.size > 0 || cleanMarkers, passed };
   }
 
   function mpegCrc32(bytes) {
@@ -384,7 +500,10 @@ function installTwitchAdblockPlaylist(target) {
   Object.assign(target, {
     parseAttributes,
     hasStitchedAd,
+    isClientAdCue,
+    removeMafAds,
     hasAdBreak,
+    adReason,
     isMidroll,
     isMasterPlaylist,
     isLivePlaylistUrl,
@@ -394,6 +513,7 @@ function installTwitchAdblockPlaylist(target) {
     listVariants,
     pickVariant,
     mapVariantsToBackup,
+    createStripLedger,
     stripAds,
     firstAdSegmentUrl,
     blankSegmentBytes,

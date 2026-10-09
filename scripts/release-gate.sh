@@ -73,8 +73,8 @@ pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; FAILS=$((FAILS + 1)); }
 section() { echo; echo "=== $* ==="; }
 
-REQUIRED=(manifest.json src/page.js src/playlist.js src/youtube.js icons/icon16.png icons/icon48.png icons/icon128.png)
-ALLOWED_RE='^(manifest\.json|src/page\.js|src/playlist\.js|src/youtube\.js|icons/icon16\.png|icons/icon48\.png|icons/icon128\.png)$'
+REQUIRED=(manifest.json src/popup.html src/popup.js src/debug.js src/debug-bridge.js src/page.js src/playlist.js src/youtube.js icons/icon16.png icons/icon48.png icons/icon128.png)
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/debug\.js|src/debug-bridge\.js|src/page\.js|src/playlist\.js|src/youtube\.js|icons/icon16\.png|icons/icon48\.png|icons/icon128\.png)$'
 
 section "1. Package allowlist + version"
 VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$PKG/manifest.json")"
@@ -125,7 +125,18 @@ else
   pass "repo mode: allowlist checked on shippable paths only"
 fi
 if [[ "$ALLOW_OK" -eq 1 ]]; then pass "shippable file allowlist"; else fail "shippable file allowlist"; fi
-if [[ -f "$PKG/src/popup.html" ]]; then fail "popup.html must not ship"; else pass "no popup.html in package"; fi
+if [[ -f "$PKG/src/popup.html" && -f "$PKG/src/popup.js" ]]; then
+  pass "temporary debug popup is packaged"
+else
+  fail "temporary debug popup files missing"
+fi
+if [[ -f "$PKG/popup.html" || -f "$PKG/popup.js" ]]; then fail "popup must live in src/ (zip holds manifest.json, src/, icons/ only)"; else pass "popup lives in src/"; fi
+if rg -n --pcre2 '<script(?![^>]*\bsrc="popup\.js")|onclick=|javascript:' "$PKG/src/popup.html" >/tmp/gate-popup.txt 2>/dev/null; then
+  cat /tmp/gate-popup.txt
+  fail "popup.html must load only popup.js"
+else
+  pass "popup.html loads only popup.js"
+fi
 echo "  package bytes: $SIZE"
 if [[ "$SIZE" -gt 5000000 ]]; then fail "package unexpectedly large (>5MB)"; else pass "package size sane"; fi
 
@@ -151,7 +162,7 @@ need_t = {"*://twitch.tv/*", "*://*.twitch.tv/*"}
 got_t = set(twitch.get("matches") or [])
 if not need_t <= got_t:
     print("FAIL  Twitch matches missing", need_t - got_t); sys.exit(1)
-if twitch.get("js") != ["src/playlist.js", "src/page.js"]:
+if twitch.get("js") != ["src/debug.js", "src/playlist.js", "src/page.js"]:
     print("FAIL  Twitch js order", twitch.get("js")); sys.exit(1)
 print("PASS  Twitch host coverage", sorted(got_t))
 
@@ -165,7 +176,26 @@ if youtube.get("world") != "MAIN":
     print("FAIL  YouTube world", youtube.get("world")); sys.exit(1)
 if youtube.get("all_frames") is True:
     print("FAIL  YouTube should not use all_frames"); sys.exit(1)
+if youtube.get("js") != ["src/debug.js", "src/youtube.js"]:
+    print("FAIL  YouTube js order", youtube.get("js")); sys.exit(1)
 print("PASS  YouTube host coverage", sorted(got_y))
+
+if m.get("action", {}).get("default_popup") != "src/popup.html":
+    print("FAIL  debug popup must be action.default_popup"); sys.exit(1)
+print("PASS  action popup is src/popup.html")
+
+bridge = next((s for s in scripts if "src/debug-bridge.js" in (s.get("js") or [])), None)
+if not bridge:
+    print("FAIL  debug bridge content script missing"); sys.exit(1)
+if bridge.get("world") == "MAIN":
+    print("FAIL  debug bridge must stay out of the page world"); sys.exit(1)
+if bridge.get("js") != ["src/debug-bridge.js"]:
+    print("FAIL  debug bridge js", bridge.get("js")); sys.exit(1)
+need_b = need_t | need_y
+got_b = set(bridge.get("matches") or [])
+if got_b != need_b:
+    print("FAIL  debug bridge host scope", sorted(got_b)); sys.exit(1)
+print("PASS  debug bridge is isolated and host-scoped")
 
 joined = " ".join(sorted(got_t | got_y))
 for host in ("music.youtube.com", "studio.youtube.com", "youtubekids.com"):
@@ -176,28 +206,29 @@ PY
 
 section "3. Dangerous APIs + identity / phone-home"
 SCAN_ROOT="$PKG/src"
-if rg -n --pcre2 '\beval\s*\(|\.innerHTML\s*=|document\.write\s*\(|importScripts\s*\(|chrome\.identity|browser\.identity|navigator\.sendBeacon|geolocation|webkitRTCPeerConnection|\bRTCPeerConnection\b' "$SCAN_ROOT" >/tmp/gate-danger.txt 2>/dev/null; then
+SCAN_PATHS=("$SCAN_ROOT")
+if rg -n --pcre2 '\beval\s*\(|\.innerHTML\s*=|document\.write\s*\(|importScripts\s*\(|chrome\.identity|browser\.identity|navigator\.sendBeacon|geolocation|webkitRTCPeerConnection|\bRTCPeerConnection\b' "${SCAN_PATHS[@]}" >/tmp/gate-danger.txt 2>/dev/null; then
   cat /tmp/gate-danger.txt
   fail "dangerous API hits in packaged src"
 else
   pass "no eval/innerHTML/identity/beacon/RTC in packaged src"
 fi
 
-if rg -n 'new Function\s*\(' "$SCAN_ROOT" >/tmp/gate-fn.txt 2>/dev/null; then
+if rg -n 'new Function\s*\(' "${SCAN_PATHS[@]}" >/tmp/gate-fn.txt 2>/dev/null; then
   cat /tmp/gate-fn.txt
   fail "new Function in packaged src"
 else
   pass "no new Function in packaged src"
 fi
 
-if rg -ni --pcre2 '@gmail\.|@cursor\.|api[_-]?key\s*[:=]|password\s*[:=]|BEGIN (RSA |OPENSSH )?PRIVATE' "$PKG/manifest.json" "$PKG/src" >/tmp/gate-id.txt 2>/dev/null; then
+if rg -ni --pcre2 '@gmail\.|@cursor\.|api[_-]?key\s*[:=]|password\s*[:=]|BEGIN (RSA |OPENSSH )?PRIVATE' "$PKG/manifest.json" "${SCAN_PATHS[@]}" >/tmp/gate-id.txt 2>/dev/null; then
   cat /tmp/gate-id.txt
   fail "possible identity/secret strings in package"
 else
   pass "no obvious identity/secret strings"
 fi
 
-if rg -ni 'doubleclick|googlesyndication|sentry\.io|mixpanel|amplitude\.com|segment\.io|google-analytics|hotjar|clarity\.ms' "$SCAN_ROOT" >/tmp/gate-track.txt 2>/dev/null; then
+if rg -ni 'doubleclick|googlesyndication|sentry\.io|mixpanel|amplitude\.com|segment\.io|google-analytics|hotjar|clarity\.ms' "${SCAN_PATHS[@]}" >/tmp/gate-track.txt 2>/dev/null; then
   cat /tmp/gate-track.txt
   fail "tracker/ad-network strings"
 else
@@ -232,12 +263,30 @@ for path, url in urls:
 PY
 
 section "4. Privileged extension API usage"
-if rg -n --pcre2 '\bchrome\.|\bbrowser\.' "$SCAN_ROOT" >/tmp/gate-ext.txt 2>/dev/null; then
-  cat /tmp/gate-ext.txt
-  fail "chrome.*/browser.* usage in packaged src"
-else
-  pass "no chrome.*/browser.* in packaged src"
-fi
+python3 - "$PKG" <<'PY' || FAILS=$((FAILS + 1))
+import pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+bad = []
+playback = ["src/page.js", "src/playlist.js", "src/youtube.js", "src/debug.js"]
+for rel in playback:
+    text = (root / rel).read_text(errors="replace")
+    if re.search(r"\bchrome\.|\bbrowser\.", text):
+        bad.append(rel + " uses chrome/browser")
+for rel in ["src/popup.js", "src/debug-bridge.js"]:
+    path = root / rel
+    if not path.is_file():
+        bad.append("missing " + rel)
+        continue
+    text = path.read_text(errors="replace")
+    for match in re.finditer(r"\b(chrome|browser)\.([A-Za-z0-9_]+)", text):
+        if match.group(1) != "chrome" or match.group(2) not in {"runtime", "tabs"}:
+            bad.append(f"{rel}: {match.group(0)}")
+if bad:
+    print("FAIL  extension API scope:")
+    print("\n".join(bad))
+    sys.exit(1)
+print("PASS  playback scripts have no chrome APIs; debug UI is runtime/tabs only")
+PY
 
 section "5. Deno bug / logic / memory / race / youtube"
 if [[ -n "${TEST_ROOT}" && -d "${TEST_ROOT}/test" ]]; then
