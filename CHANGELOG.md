@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.9 — beta
+
+- Some other videos still sat on a black loading screen after 0.2.8, with the length already known and the player already trying to play. One well-known video was often ready in a couple of seconds on 0.2.8. This beta also clears the video start-buffer target in the playback response, and turns off the server start-buffer switch, including when that switch’s policies arrive as a list. When that switch is present, the player is told not to wait on the server’s bandwidth pick. The video address stays. Nothing seeks or pauses.
+- Stable Latest stays v0.2.3. This beta replaces the 0.2.8 try.
+
 ## 0.2.8 — beta
 
 - YouTube’s “Experiencing interruptions?” toast is removed when it appears, including when YouTube puts it back. Other toasts stay. This does not start the picture by itself.

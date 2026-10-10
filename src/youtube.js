@@ -188,16 +188,28 @@ function installYoutubeAdblock(target) {
   }
 
   // The player will not show the first picture until minReadaheadMs of media
-  // is buffered. That wait lives on the start and resume policies. Zeroing it
-  // leaves the bandwidth floor and the video urls alone.
+  // is buffered. That wait lives on the start and resume policies, including
+  // when those policies are arrays. Zeroing it leaves the bandwidth floor and
+  // the video urls alone. The server start switch is turned off so a leftover
+  // policy cannot put the wait back.
   function zeroPolicyList(list) {
     const items = Array.isArray(list) ? list : list && typeof list === "object" ? [list] : null;
     if (!items) return false;
     let changed = false;
     for (const item of items) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      if (Array.isArray(item)) {
+        if (zeroPolicyList(item)) changed = true;
+        continue;
+      }
+      if (!item || typeof item !== "object") continue;
       if (typeof item.minReadaheadMs === "number" && item.minReadaheadMs !== 0) {
         item.minReadaheadMs = 0;
+        changed = true;
+      }
+      if (item.startMinReadaheadPolicy && item.startMinReadaheadPolicy !== list && zeroPolicyList(item.startMinReadaheadPolicy)) {
+        changed = true;
+      }
+      if (item.resumeMinReadaheadPolicy && item.resumeMinReadaheadPolicy !== list && zeroPolicyList(item.resumeMinReadaheadPolicy)) {
         changed = true;
       }
     }
@@ -205,13 +217,35 @@ function installYoutubeAdblock(target) {
   }
 
   function zeroStartPolicies(node) {
-    if (!node || typeof node !== "object" || Array.isArray(node)) return false;
-    const policy = node.playbackStartPolicy && typeof node.playbackStartPolicy === "object"
-      ? node.playbackStartPolicy
-      : node;
+    if (!node || typeof node !== "object") return false;
+    if (Array.isArray(node)) return zeroPolicyList(node);
     let changed = false;
-    if (zeroPolicyList(policy.startMinReadaheadPolicy)) changed = true;
-    if (zeroPolicyList(policy.resumeMinReadaheadPolicy)) changed = true;
+    if (zeroPolicyList(node.startMinReadaheadPolicy)) changed = true;
+    if (zeroPolicyList(node.resumeMinReadaheadPolicy)) changed = true;
+    if (typeof node.minReadaheadMs === "number" && node.minReadaheadMs !== 0) {
+      node.minReadaheadMs = 0;
+      changed = true;
+    }
+    const policy = node.playbackStartPolicy;
+    if (policy && typeof policy === "object" && policy !== node && zeroStartPolicies(policy)) changed = true;
+    const start = node.serverPlaybackStartConfig;
+    if (start && typeof start === "object" && !Array.isArray(start)) {
+      if (Object.prototype.hasOwnProperty.call(start, "enable") && start.enable !== false) {
+        start.enable = false;
+        changed = true;
+      }
+      if (start !== node && zeroStartPolicies(start)) changed = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(node, "enable") && node.playbackStartPolicy && node.enable !== false) {
+      node.enable = false;
+      changed = true;
+    }
+    // Only when this object also carries the server start switch. A normal
+    // server-picked quality setting, and the video address, stay.
+    if (node.useServerDrivenAbr === true && start && typeof start === "object") {
+      node.useServerDrivenAbr = false;
+      changed = true;
+    }
     return changed;
   }
 
@@ -269,7 +303,9 @@ function installYoutubeAdblock(target) {
   function stripResponseText(text, url) {
     const kind = kindFor(url);
     if (!kind || typeof text !== "string") return { text, blocked: false };
-    const startHold = text.includes("startMinReadaheadPolicy") || text.includes("resumeMinReadaheadPolicy");
+    const startHold = text.includes("startMinReadaheadPolicy")
+      || text.includes("resumeMinReadaheadPolicy")
+      || text.includes("serverPlaybackStartConfig");
     if (!textLooksLikeAds(text) && !startHold) return { text, blocked: false };
     try {
       const parsed = nativeJSONParse(text);
@@ -378,9 +414,12 @@ function installYoutubeAdblock(target) {
     return { type: type.value, size: size.value, headerLen: size.next };
   }
 
-  // Zeros every top-level field 4 varint already in the slice. The player
-  // reads the first backoffTimeMs and stops, so a later unknown field must
-  // not put that wait back. A walk that stops early still keeps the zeros.
+  // Zeros every top-level field 4 (backoffTimeMs) and field 2
+  // (targetVideoReadaheadMs) already in the slice. The player reads the first
+  // backoff and stops, so a later unknown field must not put that wait back.
+  // Field 2 is the video buffer target that can still hold a black start
+  // after the backoff is 0. Field 1, the audio target, stays. A walk that
+  // stops early still keeps the zeros.
   function zeroBackoffFields(bytes, start, end) {
     let index = start;
     while (index < end) {
@@ -391,7 +430,7 @@ function installYoutubeAdblock(target) {
       if (wire === 0) {
         const val = readProtoVarint(bytes, key.next, end);
         if (!val) return;
-        if (field === 4) zeroVarint(bytes, key.next, val.next);
+        if (field === 4 || field === 2) zeroVarint(bytes, key.next, val.next);
         index = val.next;
       } else if (wire === 2) {
         const len = readProtoVarint(bytes, key.next, end);
