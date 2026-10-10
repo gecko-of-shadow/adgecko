@@ -208,11 +208,9 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   // Version stamp stays 0.2.3 until a coordinated beta cut (debug.js hardcodes the same string).
   assertEquals(manifest.version, "0.2.3");
   assertEquals(manifest.action.default_popup, "src/popup.html");
-  // General-adblock beta: DNR + storage only. No host_permissions / background.
-  assertEquals(manifest.permissions, ["declarativeNetRequest", "storage"]);
+  assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
   assertEquals(manifest.host_permissions, undefined);
-  assertEquals(manifest.background, undefined);
-  // Popup GeneralSettings.RULESET_ID === "general"; packed file stays general-network.json.
+  assertEquals(manifest.background.service_worker, "src/general-background.js");
   assertEquals(manifest.declarative_net_request.rule_resources[0].id, "general");
   assertEquals(manifest.declarative_net_request.rule_resources[0].enabled, true);
   assertEquals(manifest.declarative_net_request.rule_resources[0].path, "src/rules/general-network.json");

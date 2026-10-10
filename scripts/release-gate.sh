@@ -81,6 +81,8 @@ REQUIRED=(
   manifest.json
   src/popup.html
   src/popup.js
+  src/general-settings.js
+  src/general-background.js
   src/debug.js
   src/debug-bridge.js
   src/vendor/video-swap-new.user.js
@@ -93,6 +95,12 @@ REQUIRED=(
   icons/icon16.png
   icons/icon48.png
   icons/icon128.png
+  icons/icon16-working.png
+  icons/icon48-working.png
+  icons/icon128-working.png
+  icons/icon16-off.png
+  icons/icon48-off.png
+  icons/icon128-off.png
 )
 # Shippable paths. Cosmetic hide, popup worker, list rules, and stream exclusion module.
 ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/debug\.js|src/debug-bridge\.js|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|exclusions|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
@@ -210,9 +218,8 @@ import json, sys
 m = json.load(open(sys.argv[1]))
 rules_path = sys.argv[2]
 bad = []
-
-# Forbid stronger / identity / background surfaces. Phase 0 allows DNR + storage only.
-forbidden_keys = ("host_permissions", "background", "externally_connectable", "oauth2", "key")
+# DNR + storage, plus the popup UI worker. No host access and no auto-update.
+forbidden_keys = ("host_permissions", "externally_connectable", "oauth2", "key")
 for key in forbidden_keys:
     if m.get(key):
         bad.append(f"{key}={m.get(key)!r}")
@@ -276,10 +283,13 @@ else:
         if r.get("id") == "general" and path != "src/rules/general-network.json":
             bad.append(f"general ruleset path must be src/rules/general-network.json, got {path!r}")
 
+bg = m.get("background") or {}
+if bg.get("service_worker") != "src/general-background.js":
+    bad.append(f"background={bg!r} (want service_worker src/general-background.js)")
 if bad:
     print("FAIL  privileged / permission fields:", "; ".join(bad))
     sys.exit(1)
-print("PASS  permissions are declarativeNetRequest + storage only (no host/background)")
+print("PASS  permissions are storage + declarativeNetRequest; UI worker only; no host access")
 
 scripts = m.get("content_scripts") or []
 twitch = next((s for s in scripts if "src/vendor/video-swap-new.user.js" in (s.get("js") or [])), None)
@@ -504,15 +514,14 @@ for rel in playback:
     text = (root / rel).read_text(errors="replace")
     if re.search(r"\bchrome\.|\bbrowser\.", text):
         bad.append(rel + " uses chrome/browser")
-
-# Popup / bridge / optional cosmetic may use a narrow chrome surface for general adblock.
-# cosmetic.js: chrome.storage.local / onChanged + chrome.runtime.getURL / lastError.
-allowed_by_file = {
-    "src/popup.js": {"runtime", "tabs", "storage", "declarativeNetRequest", "action"},
+allowed = {
+    "src/popup.js": {"runtime", "tabs", "storage"},
     "src/debug-bridge.js": {"runtime", "tabs"},
+    "src/general-settings.js": set(),
+    "src/general-background.js": {"runtime", "storage", "action", "declarativeNetRequest"},
     "src/cosmetic.js": {"runtime", "storage"},
 }
-for rel, allowed in allowed_by_file.items():
+for rel, ok_ns in allowed.items():
     path = root / rel
     if not path.is_file():
         if rel in ("src/popup.js", "src/debug-bridge.js"):
@@ -520,13 +529,17 @@ for rel, allowed in allowed_by_file.items():
         continue
     text = path.read_text(errors="replace")
     for match in re.finditer(r"\b(chrome|browser)\.([A-Za-z0-9_]+)", text):
-        if match.group(1) != "chrome" or match.group(2) not in allowed:
+        if match.group(1) != "chrome" or match.group(2) not in ok_ns:
             bad.append(f"{rel}: {match.group(0)}")
+# No auto-fetch timers in the UI worker.
+bg = (root / "src/general-background.js").read_text(errors="replace")
+if re.search(r"\bchrome\.alarms\b|\bsetInterval\b", bg):
+    bad.append("src/general-background.js must not schedule list fetches")
 if bad:
     print("FAIL  extension API scope:")
     print("\n".join(bad))
     sys.exit(1)
-print("PASS  playback scripts have no chrome APIs; UI may use runtime/tabs/storage/DNR/action")
+print("PASS  playback scripts have no chrome APIs; general UI APIs are scoped")
 PY
 
 section "5. Deno bug / logic / memory / race / youtube"
