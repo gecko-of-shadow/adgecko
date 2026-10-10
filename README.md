@@ -85,6 +85,8 @@ Turn off other Twitch or YouTube ad blockers while this is loaded. Two ad blocke
 
 <img src="docs/cards-main/install/06-debug.png" width="800" alt="Step 6: Debug starts off. Turn it on only if you need a log.">
 
+**[Open Releases to download →](https://github.com/gecko-of-shadow/twitch-adblock/releases/latest)**
+
 Debug starts **OFF**. Leave it off for normal watching.
 
 If something looks wrong:
