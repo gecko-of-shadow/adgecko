@@ -1,0 +1,8006 @@
+{
+  "note": "Generic EasyList ## selectors only (sample). Cosmetic agent owns application; DNR does not use this file.",
+  "count": 2000,
+  "rules": [
+    {
+      "selector": "#AC_ad",
+      "source_line": "###AC_ad"
+    },
+    {
+      "selector": "#AD_160",
+      "source_line": "###AD_160"
+    },
+    {
+      "selector": "#AD_300",
+      "source_line": "###AD_300"
+    },
+    {
+      "selector": "#AD_468x60",
+      "source_line": "###AD_468x60"
+    },
+    {
+      "selector": "#AD_ROW",
+      "source_line": "###AD_ROW"
+    },
+    {
+      "selector": "#AD_text",
+      "source_line": "###AD_text"
+    },
+    {
+      "selector": "#ADbox",
+      "source_line": "###ADbox"
+    },
+    {
+      "selector": "#Ad-3-Slider",
+      "source_line": "###Ad-3-Slider"
+    },
+    {
+      "selector": "#Ad-4-Slider",
+      "source_line": "###Ad-4-Slider"
+    },
+    {
+      "selector": "#Ad-Container",
+      "source_line": "###Ad-Container"
+    },
+    {
+      "selector": "#Ad-Content",
+      "source_line": "###Ad-Content"
+    },
+    {
+      "selector": "#Ad-Top",
+      "source_line": "###Ad-Top"
+    },
+    {
+      "selector": "#AdBar",
+      "source_line": "###AdBar"
+    },
+    {
+      "selector": "#AdBigBox",
+      "source_line": "###AdBigBox"
+    },
+    {
+      "selector": "#AdBillboard",
+      "source_line": "###AdBillboard"
+    },
+    {
+      "selector": "#AdBottomLeader",
+      "source_line": "###AdBottomLeader"
+    },
+    {
+      "selector": "#AdBottomRight",
+      "source_line": "###AdBottomRight"
+    },
+    {
+      "selector": "#AdBox2",
+      "source_line": "###AdBox2"
+    },
+    {
+      "selector": "#AdColumn",
+      "source_line": "###AdColumn"
+    },
+    {
+      "selector": "#AdContainerTop",
+      "source_line": "###AdContainerTop"
+    },
+    {
+      "selector": "#AdContent",
+      "source_line": "###AdContent"
+    },
+    {
+      "selector": "#AdDisclaimer",
+      "source_line": "###AdDisclaimer"
+    },
+    {
+      "selector": "#AdMiddle",
+      "source_line": "###AdMiddle"
+    },
+    {
+      "selector": "#AdPopUp",
+      "source_line": "###AdPopUp"
+    },
+    {
+      "selector": "#AdRectangleBanner",
+      "source_line": "###AdRectangleBanner"
+    },
+    {
+      "selector": "#AdSense1",
+      "source_line": "###AdSense1"
+    },
+    {
+      "selector": "#AdSense2",
+      "source_line": "###AdSense2"
+    },
+    {
+      "selector": "#AdSense3",
+      "source_line": "###AdSense3"
+    },
+    {
+      "selector": "#AdServer",
+      "source_line": "###AdServer"
+    },
+    {
+      "selector": "#AdSkyscraper",
+      "source_line": "###AdSkyscraper"
+    },
+    {
+      "selector": "#AdSlot_megabanner",
+      "source_line": "###AdSlot_megabanner"
+    },
+    {
+      "selector": "#AdSpaceLeaderboard",
+      "source_line": "###AdSpaceLeaderboard"
+    },
+    {
+      "selector": "#AdTop",
+      "source_line": "###AdTop"
+    },
+    {
+      "selector": "#AdTopLeader",
+      "source_line": "###AdTopLeader"
+    },
+    {
+      "selector": "#AdWidgetContainer",
+      "source_line": "###AdWidgetContainer"
+    },
+    {
+      "selector": "#AdWrapperSuperCA",
+      "source_line": "###AdWrapperSuperCA"
+    },
+    {
+      "selector": "#AdZone1",
+      "source_line": "###AdZone1"
+    },
+    {
+      "selector": "#AdZone2",
+      "source_line": "###AdZone2"
+    },
+    {
+      "selector": "#Ad_BelowContent",
+      "source_line": "###Ad_BelowContent"
+    },
+    {
+      "selector": "#Ad_Block",
+      "source_line": "###Ad_Block"
+    },
+    {
+      "selector": "#Ad_TopLeaderboard",
+      "source_line": "###Ad_TopLeaderboard"
+    },
+    {
+      "selector": "#Adbanner",
+      "source_line": "###Adbanner"
+    },
+    {
+      "selector": "#Adlabel",
+      "source_line": "###Adlabel"
+    },
+    {
+      "selector": "#AdsBannerTop",
+      "source_line": "###AdsBannerTop"
+    },
+    {
+      "selector": "#AdsBillboard",
+      "source_line": "###AdsBillboard"
+    },
+    {
+      "selector": "#AdsBottomContainer",
+      "source_line": "###AdsBottomContainer"
+    },
+    {
+      "selector": "#AdsContent",
+      "source_line": "###AdsContent"
+    },
+    {
+      "selector": "#AdsDiv",
+      "source_line": "###AdsDiv"
+    },
+    {
+      "selector": "#AdsFrame",
+      "source_line": "###AdsFrame"
+    },
+    {
+      "selector": "#AdsPubperform",
+      "source_line": "###AdsPubperform"
+    },
+    {
+      "selector": "#AdsRight",
+      "source_line": "###AdsRight"
+    },
+    {
+      "selector": "#AdsSky",
+      "source_line": "###AdsSky"
+    },
+    {
+      "selector": "#AdsTopContainer",
+      "source_line": "###AdsTopContainer"
+    },
+    {
+      "selector": "#AdsWrap",
+      "source_line": "###AdsWrap"
+    },
+    {
+      "selector": "#Ads_BA_BS",
+      "source_line": "###Ads_BA_BS"
+    },
+    {
+      "selector": "#Ads_BA_BUT",
+      "source_line": "###Ads_BA_BUT"
+    },
+    {
+      "selector": "#Ads_BA_BUT2",
+      "source_line": "###Ads_BA_BUT2"
+    },
+    {
+      "selector": "#Ads_BA_BUT_box",
+      "source_line": "###Ads_BA_BUT_box"
+    },
+    {
+      "selector": "#Ads_BA_CAD",
+      "source_line": "###Ads_BA_CAD"
+    },
+    {
+      "selector": "#Ads_BA_CAD2",
+      "source_line": "###Ads_BA_CAD2"
+    },
+    {
+      "selector": "#Ads_BA_FLB",
+      "source_line": "###Ads_BA_FLB"
+    },
+    {
+      "selector": "#Ads_BA_SKY",
+      "source_line": "###Ads_BA_SKY"
+    },
+    {
+      "selector": "#Ads_BA_VID",
+      "source_line": "###Ads_BA_VID"
+    },
+    {
+      "selector": "#Ads_TFM_BS",
+      "source_line": "###Ads_TFM_BS"
+    },
+    {
+      "selector": "#Ads_google_bottom_wide",
+      "source_line": "###Ads_google_bottom_wide"
+    },
+    {
+      "selector": "#Adsense300x250",
+      "source_line": "###Adsense300x250"
+    },
+    {
+      "selector": "#AdsenseBottom",
+      "source_line": "###AdsenseBottom"
+    },
+    {
+      "selector": "#AdsenseTop",
+      "source_line": "###AdsenseTop"
+    },
+    {
+      "selector": "#Adsterra",
+      "source_line": "###Adsterra"
+    },
+    {
+      "selector": "#Adv10",
+      "source_line": "###Adv10"
+    },
+    {
+      "selector": "#Adv11",
+      "source_line": "###Adv11"
+    },
+    {
+      "selector": "#Adv8",
+      "source_line": "###Adv8"
+    },
+    {
+      "selector": "#Adv9",
+      "source_line": "###Adv9"
+    },
+    {
+      "selector": "#AdvContainer",
+      "source_line": "###AdvContainer"
+    },
+    {
+      "selector": "#AdvFooter",
+      "source_line": "###AdvFooter"
+    },
+    {
+      "selector": "#AdvHeader",
+      "source_line": "###AdvHeader"
+    },
+    {
+      "selector": "#Adv_Footer",
+      "source_line": "###Adv_Footer"
+    },
+    {
+      "selector": "#AdvertMid1",
+      "source_line": "###AdvertMid1"
+    },
+    {
+      "selector": "#AdvertMid2",
+      "source_line": "###AdvertMid2"
+    },
+    {
+      "selector": "#AdvertMpu",
+      "source_line": "###AdvertMpu"
+    },
+    {
+      "selector": "#AdvertPanel",
+      "source_line": "###AdvertPanel"
+    },
+    {
+      "selector": "#AdvertText",
+      "source_line": "###AdvertText"
+    },
+    {
+      "selector": "#AdvertiseFrame",
+      "source_line": "###AdvertiseFrame"
+    },
+    {
+      "selector": "#Advertisement1",
+      "source_line": "###Advertisement1"
+    },
+    {
+      "selector": "#Advertisement2",
+      "source_line": "###Advertisement2"
+    },
+    {
+      "selector": "#AdvertisementDiv",
+      "source_line": "###AdvertisementDiv"
+    },
+    {
+      "selector": "#AdvertisementLeaderboard",
+      "source_line": "###AdvertisementLeaderboard"
+    },
+    {
+      "selector": "#Advertisements",
+      "source_line": "###Advertisements"
+    },
+    {
+      "selector": "#AdvertisingDiv_0",
+      "source_line": "###AdvertisingDiv_0"
+    },
+    {
+      "selector": "#Advertorial",
+      "source_line": "###Advertorial"
+    },
+    {
+      "selector": "#Advertorials",
+      "source_line": "###Advertorials"
+    },
+    {
+      "selector": "#AnchorAd",
+      "source_line": "###AnchorAd"
+    },
+    {
+      "selector": "#ArticleContentAd",
+      "source_line": "###ArticleContentAd"
+    },
+    {
+      "selector": "#Banner728x90",
+      "source_line": "###Banner728x90"
+    },
+    {
+      "selector": "#BannerAd",
+      "source_line": "###BannerAd"
+    },
+    {
+      "selector": "#BannerAds",
+      "source_line": "###BannerAds"
+    },
+    {
+      "selector": "#BannerAdvert",
+      "source_line": "###BannerAdvert"
+    },
+    {
+      "selector": "#BannerAdvertisement",
+      "source_line": "###BannerAdvertisement"
+    },
+    {
+      "selector": "#BigBoxAd",
+      "source_line": "###BigBoxAd"
+    },
+    {
+      "selector": "#BigboxAdUnit",
+      "source_line": "###BigboxAdUnit"
+    },
+    {
+      "selector": "#BodyAd",
+      "source_line": "###BodyAd"
+    },
+    {
+      "selector": "#BodyTopAds",
+      "source_line": "###BodyTopAds"
+    },
+    {
+      "selector": "#Body_Ad8_divAdd",
+      "source_line": "###Body_Ad8_divAdd"
+    },
+    {
+      "selector": "#BotAd",
+      "source_line": "###BotAd"
+    },
+    {
+      "selector": "#BottomAdContainer",
+      "source_line": "###BottomAdContainer"
+    },
+    {
+      "selector": "#BottomRightAdWrapper",
+      "source_line": "###BottomRightAdWrapper"
+    },
+    {
+      "selector": "#ButtonAd",
+      "source_line": "###ButtonAd"
+    },
+    {
+      "selector": "#ContentAd",
+      "source_line": "###ContentAd"
+    },
+    {
+      "selector": "#Content_CA_AD_0_BC",
+      "source_line": "###Content_CA_AD_0_BC"
+    },
+    {
+      "selector": "#Content_CA_AD_1_BC",
+      "source_line": "###Content_CA_AD_1_BC"
+    },
+    {
+      "selector": "#DFP_top_leaderboard",
+      "source_line": "###DFP_top_leaderboard"
+    },
+    {
+      "selector": "#FooterAd",
+      "source_line": "###FooterAd"
+    },
+    {
+      "selector": "#FooterAdBlock",
+      "source_line": "###FooterAdBlock"
+    },
+    {
+      "selector": "#FooterAdContainer",
+      "source_line": "###FooterAdContainer"
+    },
+    {
+      "selector": "#FreeStarVideoAdContainer",
+      "source_line": "###FreeStarVideoAdContainer"
+    },
+    {
+      "selector": "#GoogleAd",
+      "source_line": "###GoogleAd"
+    },
+    {
+      "selector": "#GoogleAd1",
+      "source_line": "###GoogleAd1"
+    },
+    {
+      "selector": "#GoogleAd2",
+      "source_line": "###GoogleAd2"
+    },
+    {
+      "selector": "#GoogleAd3",
+      "source_line": "###GoogleAd3"
+    },
+    {
+      "selector": "#GoogleAdRight",
+      "source_line": "###GoogleAdRight"
+    },
+    {
+      "selector": "#GoogleAdTop",
+      "source_line": "###GoogleAdTop"
+    },
+    {
+      "selector": "#GoogleAdsense",
+      "source_line": "###GoogleAdsense"
+    },
+    {
+      "selector": "#HP1-ad",
+      "source_line": "###HP1-ad"
+    },
+    {
+      "selector": "#HP2-ad",
+      "source_line": "###HP2-ad"
+    },
+    {
+      "selector": "#HeadAd",
+      "source_line": "###HeadAd"
+    },
+    {
+      "selector": "#HeaderAD",
+      "source_line": "###HeaderAD"
+    },
+    {
+      "selector": "#HeaderAd",
+      "source_line": "###HeaderAd"
+    },
+    {
+      "selector": "#HeaderAdBlock",
+      "source_line": "###HeaderAdBlock"
+    },
+    {
+      "selector": "#HeaderAdsBlock",
+      "source_line": "###HeaderAdsBlock"
+    },
+    {
+      "selector": "#HeroAd",
+      "source_line": "###HeroAd"
+    },
+    {
+      "selector": "#HomeAd1",
+      "source_line": "###HomeAd1"
+    },
+    {
+      "selector": "#IFrameAd",
+      "source_line": "###IFrameAd"
+    },
+    {
+      "selector": "#IFrameAd1",
+      "source_line": "###IFrameAd1"
+    },
+    {
+      "selector": "#IK-ad-area",
+      "source_line": "###IK-ad-area"
+    },
+    {
+      "selector": "#IK-ad-block",
+      "source_line": "###IK-ad-block"
+    },
+    {
+      "selector": "#IM_AD",
+      "source_line": "###IM_AD"
+    },
+    {
+      "selector": "#LayoutBottomAdBox",
+      "source_line": "###LayoutBottomAdBox"
+    },
+    {
+      "selector": "#LayoutHomeAdBoxBottom",
+      "source_line": "###LayoutHomeAdBoxBottom"
+    },
+    {
+      "selector": "#LeftAd",
+      "source_line": "###LeftAd"
+    },
+    {
+      "selector": "#LeftAd1",
+      "source_line": "###LeftAd1"
+    },
+    {
+      "selector": "#MPUAdSpace",
+      "source_line": "###MPUAdSpace"
+    },
+    {
+      "selector": "#MPUadvertising",
+      "source_line": "###MPUadvertising"
+    },
+    {
+      "selector": "#MainAd",
+      "source_line": "###MainAd"
+    },
+    {
+      "selector": "#NR-Ads",
+      "source_line": "###NR-Ads"
+    },
+    {
+      "selector": "#PromotionAdBox",
+      "source_line": "###PromotionAdBox"
+    },
+    {
+      "selector": "#RightAd",
+      "source_line": "###RightAd"
+    },
+    {
+      "selector": "#RightAdBlock",
+      "source_line": "###RightAdBlock"
+    },
+    {
+      "selector": "#RightAdSpace",
+      "source_line": "###RightAdSpace"
+    },
+    {
+      "selector": "#RightAdvertisement",
+      "source_line": "###RightAdvertisement"
+    },
+    {
+      "selector": "#SidebarAd",
+      "source_line": "###SidebarAd"
+    },
+    {
+      "selector": "#SidebarAdContainer",
+      "source_line": "###SidebarAdContainer"
+    },
+    {
+      "selector": "#SitenavAdslot",
+      "source_line": "###SitenavAdslot"
+    },
+    {
+      "selector": "#SkyAd",
+      "source_line": "###SkyAd"
+    },
+    {
+      "selector": "#SkyscraperAD",
+      "source_line": "###SkyscraperAD"
+    },
+    {
+      "selector": "#SponsoredAd",
+      "source_line": "###SponsoredAd"
+    },
+    {
+      "selector": "#SponsoredAds",
+      "source_line": "###SponsoredAds"
+    },
+    {
+      "selector": "#SponsoredLinks",
+      "source_line": "###SponsoredLinks"
+    },
+    {
+      "selector": "#SponsorsAds",
+      "source_line": "###SponsorsAds"
+    },
+    {
+      "selector": "#StickyBannerAd",
+      "source_line": "###StickyBannerAd"
+    },
+    {
+      "selector": "#Top-ad",
+      "source_line": "###Top-ad"
+    },
+    {
+      "selector": "#TopADs",
+      "source_line": "###TopADs"
+    },
+    {
+      "selector": "#TopAd",
+      "source_line": "###TopAd"
+    },
+    {
+      "selector": "#TopAd0",
+      "source_line": "###TopAd0"
+    },
+    {
+      "selector": "#TopAdBox",
+      "source_line": "###TopAdBox"
+    },
+    {
+      "selector": "#TopAdContainer",
+      "source_line": "###TopAdContainer"
+    },
+    {
+      "selector": "#TopAdPlacement",
+      "source_line": "###TopAdPlacement"
+    },
+    {
+      "selector": "#TopAdPos",
+      "source_line": "###TopAdPos"
+    },
+    {
+      "selector": "#TopAdTable",
+      "source_line": "###TopAdTable"
+    },
+    {
+      "selector": "#TopAdvert",
+      "source_line": "###TopAdvert"
+    },
+    {
+      "selector": "#TopBannerAd",
+      "source_line": "###TopBannerAd"
+    },
+    {
+      "selector": "#TopRightRadvertisement",
+      "source_line": "###TopRightRadvertisement"
+    },
+    {
+      "selector": "#VPNAdvert",
+      "source_line": "###VPNAdvert"
+    },
+    {
+      "selector": "#WelcomeAd",
+      "source_line": "###WelcomeAd"
+    },
+    {
+      "selector": "#aad-header-1",
+      "source_line": "###aad-header-1"
+    },
+    {
+      "selector": "#aad-header-2",
+      "source_line": "###aad-header-2"
+    },
+    {
+      "selector": "#aad-header-3",
+      "source_line": "###aad-header-3"
+    },
+    {
+      "selector": "#ab_adblock",
+      "source_line": "###ab_adblock"
+    },
+    {
+      "selector": "#above-comments-ad",
+      "source_line": "###above-comments-ad"
+    },
+    {
+      "selector": "#above-fold-ad",
+      "source_line": "###above-fold-ad"
+    },
+    {
+      "selector": "#above-footer-ads",
+      "source_line": "###above-footer-ads"
+    },
+    {
+      "selector": "#aboveAd",
+      "source_line": "###aboveAd"
+    },
+    {
+      "selector": "#aboveNodeAds",
+      "source_line": "###aboveNodeAds"
+    },
+    {
+      "selector": "#above_button_ad",
+      "source_line": "###above_button_ad"
+    },
+    {
+      "selector": "#aboveplayerad",
+      "source_line": "###aboveplayerad"
+    },
+    {
+      "selector": "#abovepostads",
+      "source_line": "###abovepostads"
+    },
+    {
+      "selector": "#acm-ad-tag-lawrence_dfp_mobile_arkadium",
+      "source_line": "###acm-ad-tag-lawrence_dfp_mobile_arkadium"
+    },
+    {
+      "selector": "#ad--article--home-mobile-paramount-wrapper",
+      "source_line": "###ad--article--home-mobile-paramount-wrapper"
+    },
+    {
+      "selector": "#ad--article-bottom-wrapper",
+      "source_line": "###ad--article-bottom-wrapper"
+    },
+    {
+      "selector": "#ad--article-top",
+      "source_line": "###ad--article-top"
+    },
+    {
+      "selector": "#ad--sidebar",
+      "source_line": "###ad--sidebar"
+    },
+    {
+      "selector": "#ad-0",
+      "source_line": "###ad-0"
+    },
+    {
+      "selector": "#ad-1",
+      "source_line": "###ad-1"
+    },
+    {
+      "selector": "#ad-125x125",
+      "source_line": "###ad-125x125"
+    },
+    {
+      "selector": "#ad-160",
+      "source_line": "###ad-160"
+    },
+    {
+      "selector": "#ad-160x600",
+      "source_line": "###ad-160x600"
+    },
+    {
+      "selector": "#ad-2",
+      "source_line": "###ad-2"
+    },
+    {
+      "selector": "#ad-2-160x600",
+      "source_line": "###ad-2-160x600"
+    },
+    {
+      "selector": "#ad-250",
+      "source_line": "###ad-250"
+    },
+    {
+      "selector": "#ad-250x300",
+      "source_line": "###ad-250x300"
+    },
+    {
+      "selector": "#ad-3",
+      "source_line": "###ad-3"
+    },
+    {
+      "selector": "#ad-3-300x250",
+      "source_line": "###ad-3-300x250"
+    },
+    {
+      "selector": "#ad-300",
+      "source_line": "###ad-300"
+    },
+    {
+      "selector": "#ad-300-250",
+      "source_line": "###ad-300-250"
+    },
+    {
+      "selector": "#ad-300-additional",
+      "source_line": "###ad-300-additional"
+    },
+    {
+      "selector": "#ad-300-detail",
+      "source_line": "###ad-300-detail"
+    },
+    {
+      "selector": "#ad-300-sidebar",
+      "source_line": "###ad-300-sidebar"
+    },
+    {
+      "selector": "#ad-300X250-2",
+      "source_line": "###ad-300X250-2"
+    },
+    {
+      "selector": "#ad-300a",
+      "source_line": "###ad-300a"
+    },
+    {
+      "selector": "#ad-300b",
+      "source_line": "###ad-300b"
+    },
+    {
+      "selector": "#ad-300x250",
+      "source_line": "###ad-300x250"
+    },
+    {
+      "selector": "#ad-300x250-0",
+      "source_line": "###ad-300x250-0"
+    },
+    {
+      "selector": "#ad-300x250-2",
+      "source_line": "###ad-300x250-2"
+    },
+    {
+      "selector": "#ad-300x250-b",
+      "source_line": "###ad-300x250-b"
+    },
+    {
+      "selector": "#ad-300x250-sidebar",
+      "source_line": "###ad-300x250-sidebar"
+    },
+    {
+      "selector": "#ad-300x250-wrapper",
+      "source_line": "###ad-300x250-wrapper"
+    },
+    {
+      "selector": "#ad-300x250_mid",
+      "source_line": "###ad-300x250_mid"
+    },
+    {
+      "selector": "#ad-300x250_mobile",
+      "source_line": "###ad-300x250_mobile"
+    },
+    {
+      "selector": "#ad-300x250_top",
+      "source_line": "###ad-300x250_top"
+    },
+    {
+      "selector": "#ad-300x600_top",
+      "source_line": "###ad-300x600_top"
+    },
+    {
+      "selector": "#ad-4",
+      "source_line": "###ad-4"
+    },
+    {
+      "selector": "#ad-5",
+      "source_line": "###ad-5"
+    },
+    {
+      "selector": "#ad-6",
+      "source_line": "###ad-6"
+    },
+    {
+      "selector": "#ad-7",
+      "source_line": "###ad-7"
+    },
+    {
+      "selector": "#ad-728",
+      "source_line": "###ad-728"
+    },
+    {
+      "selector": "#ad-728-90",
+      "source_line": "###ad-728-90"
+    },
+    {
+      "selector": "#ad-728x90",
+      "source_line": "###ad-728x90"
+    },
+    {
+      "selector": "#ad-8",
+      "source_line": "###ad-8"
+    },
+    {
+      "selector": "#ad-9",
+      "source_line": "###ad-9"
+    },
+    {
+      "selector": "#ad-Content_1",
+      "source_line": "###ad-Content_1"
+    },
+    {
+      "selector": "#ad-Content_2",
+      "source_line": "###ad-Content_2"
+    },
+    {
+      "selector": "#ad-Rectangle_1",
+      "source_line": "###ad-Rectangle_1"
+    },
+    {
+      "selector": "#ad-Rectangle_2",
+      "source_line": "###ad-Rectangle_2"
+    },
+    {
+      "selector": "#ad-Superbanner",
+      "source_line": "###ad-Superbanner"
+    },
+    {
+      "selector": "#ad-a",
+      "source_line": "###ad-a"
+    },
+    {
+      "selector": "#ad-ads",
+      "source_line": "###ad-ads"
+    },
+    {
+      "selector": "#ad-advertorial",
+      "source_line": "###ad-advertorial"
+    },
+    {
+      "selector": "#ad-affiliate",
+      "source_line": "###ad-affiliate"
+    },
+    {
+      "selector": "#ad-after",
+      "source_line": "###ad-after"
+    },
+    {
+      "selector": "#ad-anchor",
+      "source_line": "###ad-anchor"
+    },
+    {
+      "selector": "#ad-around-the-web",
+      "source_line": "###ad-around-the-web"
+    },
+    {
+      "selector": "#ad-article",
+      "source_line": "###ad-article"
+    },
+    {
+      "selector": "#ad-article-in",
+      "source_line": "###ad-article-in"
+    },
+    {
+      "selector": "#ad-aside-1",
+      "source_line": "###ad-aside-1"
+    },
+    {
+      "selector": "#ad-background",
+      "source_line": "###ad-background"
+    },
+    {
+      "selector": "#ad-ban",
+      "source_line": "###ad-ban"
+    },
+    {
+      "selector": "#ad-banner-1",
+      "source_line": "###ad-banner-1"
+    },
+    {
+      "selector": "#ad-banner-atf",
+      "source_line": "###ad-banner-atf"
+    },
+    {
+      "selector": "#ad-banner-bottom",
+      "source_line": "###ad-banner-bottom"
+    },
+    {
+      "selector": "#ad-banner-btf",
+      "source_line": "###ad-banner-btf"
+    },
+    {
+      "selector": "#ad-banner-desktop",
+      "source_line": "###ad-banner-desktop"
+    },
+    {
+      "selector": "#ad-banner-image",
+      "source_line": "###ad-banner-image"
+    },
+    {
+      "selector": "#ad-banner-placement",
+      "source_line": "###ad-banner-placement"
+    },
+    {
+      "selector": "#ad-banner-top",
+      "source_line": "###ad-banner-top"
+    },
+    {
+      "selector": "#ad-banner-wrap",
+      "source_line": "###ad-banner-wrap"
+    },
+    {
+      "selector": "#ad-banner_atf-label",
+      "source_line": "###ad-banner_atf-label"
+    },
+    {
+      "selector": "#ad-bar",
+      "source_line": "###ad-bar"
+    },
+    {
+      "selector": "#ad-base",
+      "source_line": "###ad-base"
+    },
+    {
+      "selector": "#ad-bb-content",
+      "source_line": "###ad-bb-content"
+    },
+    {
+      "selector": "#ad-below-content",
+      "source_line": "###ad-below-content"
+    },
+    {
+      "selector": "#ad-bg",
+      "source_line": "###ad-bg"
+    },
+    {
+      "selector": "#ad-big",
+      "source_line": "###ad-big"
+    },
+    {
+      "selector": "#ad-bigbox",
+      "source_line": "###ad-bigbox"
+    },
+    {
+      "selector": "#ad-bigsize",
+      "source_line": "###ad-bigsize"
+    },
+    {
+      "selector": "#ad-billboard",
+      "source_line": "###ad-billboard"
+    },
+    {
+      "selector": "#ad-billboard-atf",
+      "source_line": "###ad-billboard-atf"
+    },
+    {
+      "selector": "#ad-billboard-bottom",
+      "source_line": "###ad-billboard-bottom"
+    },
+    {
+      "selector": "#ad-billboard01",
+      "source_line": "###ad-billboard01"
+    },
+    {
+      "selector": "#ad-blade",
+      "source_line": "###ad-blade"
+    },
+    {
+      "selector": "#ad-block",
+      "source_line": "###ad-block"
+    },
+    {
+      "selector": "#ad-block-125",
+      "source_line": "###ad-block-125"
+    },
+    {
+      "selector": "#ad-block-aa",
+      "source_line": "###ad-block-aa"
+    },
+    {
+      "selector": "#ad-block-bottom",
+      "source_line": "###ad-block-bottom"
+    },
+    {
+      "selector": "#ad-block-container",
+      "source_line": "###ad-block-container"
+    },
+    {
+      "selector": "#ad-border",
+      "source_line": "###ad-border"
+    },
+    {
+      "selector": "#ad-bottom",
+      "source_line": "###ad-bottom"
+    },
+    {
+      "selector": "#ad-bottom-banner",
+      "source_line": "###ad-bottom-banner"
+    },
+    {
+      "selector": "#ad-bottom-fixed",
+      "source_line": "###ad-bottom-fixed"
+    },
+    {
+      "selector": "#ad-bottom-right-container",
+      "source_line": "###ad-bottom-right-container"
+    },
+    {
+      "selector": "#ad-bottom-wrapper",
+      "source_line": "###ad-bottom-wrapper"
+    },
+    {
+      "selector": "#ad-box",
+      "source_line": "###ad-box"
+    },
+    {
+      "selector": "#ad-box-1",
+      "source_line": "###ad-box-1"
+    },
+    {
+      "selector": "#ad-box-2",
+      "source_line": "###ad-box-2"
+    },
+    {
+      "selector": "#ad-box-bottom",
+      "source_line": "###ad-box-bottom"
+    },
+    {
+      "selector": "#ad-box-halfpage",
+      "source_line": "###ad-box-halfpage"
+    },
+    {
+      "selector": "#ad-box-leaderboard",
+      "source_line": "###ad-box-leaderboard"
+    },
+    {
+      "selector": "#ad-box-left",
+      "source_line": "###ad-box-left"
+    },
+    {
+      "selector": "#ad-box-rectangle",
+      "source_line": "###ad-box-rectangle"
+    },
+    {
+      "selector": "#ad-box-rectangle-2",
+      "source_line": "###ad-box-rectangle-2"
+    },
+    {
+      "selector": "#ad-box-right",
+      "source_line": "###ad-box-right"
+    },
+    {
+      "selector": "#ad-box1",
+      "source_line": "###ad-box1"
+    },
+    {
+      "selector": "#ad-box2",
+      "source_line": "###ad-box2"
+    },
+    {
+      "selector": "#ad-boxes",
+      "source_line": "###ad-boxes"
+    },
+    {
+      "selector": "#ad-break",
+      "source_line": "###ad-break"
+    },
+    {
+      "selector": "#ad-bs",
+      "source_line": "###ad-bs"
+    },
+    {
+      "selector": "#ad-btm",
+      "source_line": "###ad-btm"
+    },
+    {
+      "selector": "#ad-buttons",
+      "source_line": "###ad-buttons"
+    },
+    {
+      "selector": "#ad-campaign",
+      "source_line": "###ad-campaign"
+    },
+    {
+      "selector": "#ad-carousel",
+      "source_line": "###ad-carousel"
+    },
+    {
+      "selector": "#ad-case",
+      "source_line": "###ad-case"
+    },
+    {
+      "selector": "#ad-center",
+      "source_line": "###ad-center"
+    },
+    {
+      "selector": "#ad-chips",
+      "source_line": "###ad-chips"
+    },
+    {
+      "selector": "#ad-circfooter",
+      "source_line": "###ad-circfooter"
+    },
+    {
+      "selector": "#ad-code",
+      "source_line": "###ad-code"
+    },
+    {
+      "selector": "#ad-col",
+      "source_line": "###ad-col"
+    },
+    {
+      "selector": "#ad-container-banner",
+      "source_line": "###ad-container-banner"
+    },
+    {
+      "selector": "#ad-container-fullpage",
+      "source_line": "###ad-container-fullpage"
+    },
+    {
+      "selector": "#ad-container-inner",
+      "source_line": "###ad-container-inner"
+    },
+    {
+      "selector": "#ad-container-leaderboard",
+      "source_line": "###ad-container-leaderboard"
+    },
+    {
+      "selector": "#ad-container-mpu",
+      "source_line": "###ad-container-mpu"
+    },
+    {
+      "selector": "#ad-container-outer",
+      "source_line": "###ad-container-outer"
+    },
+    {
+      "selector": "#ad-container-overlay",
+      "source_line": "###ad-container-overlay"
+    },
+    {
+      "selector": "#ad-container-top-placeholder",
+      "source_line": "###ad-container-top-placeholder"
+    },
+    {
+      "selector": "#ad-container1",
+      "source_line": "###ad-container1"
+    },
+    {
+      "selector": "#ad-contentad",
+      "source_line": "###ad-contentad"
+    },
+    {
+      "selector": "#ad-desktop-bottom",
+      "source_line": "###ad-desktop-bottom"
+    },
+    {
+      "selector": "#ad-desktop-takeover-home",
+      "source_line": "###ad-desktop-takeover-home"
+    },
+    {
+      "selector": "#ad-desktop-takeover-int",
+      "source_line": "###ad-desktop-takeover-int"
+    },
+    {
+      "selector": "#ad-desktop-top",
+      "source_line": "###ad-desktop-top"
+    },
+    {
+      "selector": "#ad-desktop-wrap",
+      "source_line": "###ad-desktop-wrap"
+    },
+    {
+      "selector": "#ad-discover",
+      "source_line": "###ad-discover"
+    },
+    {
+      "selector": "#ad-display-ad",
+      "source_line": "###ad-display-ad"
+    },
+    {
+      "selector": "#ad-display-ad-placeholder",
+      "source_line": "###ad-display-ad-placeholder"
+    },
+    {
+      "selector": "#ad-div-leaderboard",
+      "source_line": "###ad-div-leaderboard"
+    },
+    {
+      "selector": "#ad-drawer",
+      "source_line": "###ad-drawer"
+    },
+    {
+      "selector": "#ad-ear",
+      "source_line": "###ad-ear"
+    },
+    {
+      "selector": "#ad-extra-flat",
+      "source_line": "###ad-extra-flat"
+    },
+    {
+      "selector": "#ad-featured-right",
+      "source_line": "###ad-featured-right"
+    },
+    {
+      "selector": "#ad-fixed-bottom",
+      "source_line": "###ad-fixed-bottom"
+    },
+    {
+      "selector": "#ad-flex-top",
+      "source_line": "###ad-flex-top"
+    },
+    {
+      "selector": "#ad-flyout",
+      "source_line": "###ad-flyout"
+    },
+    {
+      "selector": "#ad-footer-728x90",
+      "source_line": "###ad-footer-728x90"
+    },
+    {
+      "selector": "#ad-framework-top",
+      "source_line": "###ad-framework-top"
+    },
+    {
+      "selector": "#ad-front-btf",
+      "source_line": "###ad-front-btf"
+    },
+    {
+      "selector": "#ad-front-footer",
+      "source_line": "###ad-front-footer"
+    },
+    {
+      "selector": "#ad-full-width",
+      "source_line": "###ad-full-width"
+    },
+    {
+      "selector": "#ad-fullbanner-btf",
+      "source_line": "###ad-fullbanner-btf"
+    },
+    {
+      "selector": "#ad-fullbanner-outer",
+      "source_line": "###ad-fullbanner-outer"
+    },
+    {
+      "selector": "#ad-fullwidth",
+      "source_line": "###ad-fullwidth"
+    },
+    {
+      "selector": "#ad-googleAdSense",
+      "source_line": "###ad-googleAdSense"
+    },
+    {
+      "selector": "#ad-gutter-left",
+      "source_line": "###ad-gutter-left"
+    },
+    {
+      "selector": "#ad-gutter-right",
+      "source_line": "###ad-gutter-right"
+    },
+    {
+      "selector": "#ad-halfpage",
+      "source_line": "###ad-halfpage"
+    },
+    {
+      "selector": "#ad-halfpage1",
+      "source_line": "###ad-halfpage1"
+    },
+    {
+      "selector": "#ad-halfpage2",
+      "source_line": "###ad-halfpage2"
+    },
+    {
+      "selector": "#ad-head",
+      "source_line": "###ad-head"
+    },
+    {
+      "selector": "#ad-header-1",
+      "source_line": "###ad-header-1"
+    },
+    {
+      "selector": "#ad-header-2",
+      "source_line": "###ad-header-2"
+    },
+    {
+      "selector": "#ad-header-3",
+      "source_line": "###ad-header-3"
+    },
+    {
+      "selector": "#ad-header-left",
+      "source_line": "###ad-header-left"
+    },
+    {
+      "selector": "#ad-header-mad",
+      "source_line": "###ad-header-mad"
+    },
+    {
+      "selector": "#ad-header-mobile",
+      "source_line": "###ad-header-mobile"
+    },
+    {
+      "selector": "#ad-header-right",
+      "source_line": "###ad-header-right"
+    },
+    {
+      "selector": "#ad-holder",
+      "source_line": "###ad-holder"
+    },
+    {
+      "selector": "#ad-horizontal",
+      "source_line": "###ad-horizontal"
+    },
+    {
+      "selector": "#ad-horizontal-header",
+      "source_line": "###ad-horizontal-header"
+    },
+    {
+      "selector": "#ad-horizontal-top",
+      "source_line": "###ad-horizontal-top"
+    },
+    {
+      "selector": "#ad-incontent",
+      "source_line": "###ad-incontent"
+    },
+    {
+      "selector": "#ad-index",
+      "source_line": "###ad-index"
+    },
+    {
+      "selector": "#ad-inline-block",
+      "source_line": "###ad-inline-block"
+    },
+    {
+      "selector": "#ad-label2",
+      "source_line": "###ad-label2"
+    },
+    {
+      "selector": "#ad-large-banner-top",
+      "source_line": "###ad-large-banner-top"
+    },
+    {
+      "selector": "#ad-large-header",
+      "source_line": "###ad-large-header"
+    },
+    {
+      "selector": "#ad-lb-secondary",
+      "source_line": "###ad-lb-secondary"
+    },
+    {
+      "selector": "#ad-leadboard1",
+      "source_line": "###ad-leadboard1"
+    },
+    {
+      "selector": "#ad-leadboard2",
+      "source_line": "###ad-leadboard2"
+    },
+    {
+      "selector": "#ad-leader",
+      "source_line": "###ad-leader"
+    },
+    {
+      "selector": "#ad-leader-atf",
+      "source_line": "###ad-leader-atf"
+    },
+    {
+      "selector": "#ad-leader-container",
+      "source_line": "###ad-leader-container"
+    },
+    {
+      "selector": "#ad-leader-wrapper",
+      "source_line": "###ad-leader-wrapper"
+    },
+    {
+      "selector": "#ad-leaderboard",
+      "source_line": "###ad-leaderboard"
+    },
+    {
+      "selector": "#ad-leaderboard-atf",
+      "source_line": "###ad-leaderboard-atf"
+    },
+    {
+      "selector": "#ad-leaderboard-bottom",
+      "source_line": "###ad-leaderboard-bottom"
+    },
+    {
+      "selector": "#ad-leaderboard-container",
+      "source_line": "###ad-leaderboard-container"
+    },
+    {
+      "selector": "#ad-leaderboard-footer",
+      "source_line": "###ad-leaderboard-footer"
+    },
+    {
+      "selector": "#ad-leaderboard-header",
+      "source_line": "###ad-leaderboard-header"
+    },
+    {
+      "selector": "#ad-leaderboard-spot",
+      "source_line": "###ad-leaderboard-spot"
+    },
+    {
+      "selector": "#ad-leaderboard-top",
+      "source_line": "###ad-leaderboard-top"
+    },
+    {
+      "selector": "#ad-leaderboard970x90home",
+      "source_line": "###ad-leaderboard970x90home"
+    },
+    {
+      "selector": "#ad-leaderboard970x90int",
+      "source_line": "###ad-leaderboard970x90int"
+    },
+    {
+      "selector": "#ad-leaderboard_bottom",
+      "source_line": "###ad-leaderboard_bottom"
+    },
+    {
+      "selector": "#ad-leadertop",
+      "source_line": "###ad-leadertop"
+    },
+    {
+      "selector": "#ad-lrec",
+      "source_line": "###ad-lrec"
+    },
+    {
+      "selector": "#ad-m-rec-content",
+      "source_line": "###ad-m-rec-content"
+    },
+    {
+      "selector": "#ad-main",
+      "source_line": "###ad-main"
+    },
+    {
+      "selector": "#ad-main-bottom",
+      "source_line": "###ad-main-bottom"
+    },
+    {
+      "selector": "#ad-main-top",
+      "source_line": "###ad-main-top"
+    },
+    {
+      "selector": "#ad-manager",
+      "source_line": "###ad-manager"
+    },
+    {
+      "selector": "#ad-masthead",
+      "source_line": "###ad-masthead"
+    },
+    {
+      "selector": "#ad-medium",
+      "source_line": "###ad-medium"
+    },
+    {
+      "selector": "#ad-medium-lower",
+      "source_line": "###ad-medium-lower"
+    },
+    {
+      "selector": "#ad-medium-rectangle",
+      "source_line": "###ad-medium-rectangle"
+    },
+    {
+      "selector": "#ad-medrec",
+      "source_line": "###ad-medrec"
+    },
+    {
+      "selector": "#ad-medrec__first",
+      "source_line": "###ad-medrec__first"
+    },
+    {
+      "selector": "#ad-mid",
+      "source_line": "###ad-mid"
+    },
+    {
+      "selector": "#ad-mid-rect",
+      "source_line": "###ad-mid-rect"
+    },
+    {
+      "selector": "#ad-middle",
+      "source_line": "###ad-middle"
+    },
+    {
+      "selector": "#ad-midpage",
+      "source_line": "###ad-midpage"
+    },
+    {
+      "selector": "#ad-minibar",
+      "source_line": "###ad-minibar"
+    },
+    {
+      "selector": "#ad-module",
+      "source_line": "###ad-module"
+    },
+    {
+      "selector": "#ad-mpu",
+      "source_line": "###ad-mpu"
+    },
+    {
+      "selector": "#ad-mrec",
+      "source_line": "###ad-mrec"
+    },
+    {
+      "selector": "#ad-mrec2",
+      "source_line": "###ad-mrec2"
+    },
+    {
+      "selector": "#ad-new",
+      "source_line": "###ad-new"
+    },
+    {
+      "selector": "#ad-north",
+      "source_line": "###ad-north"
+    },
+    {
+      "selector": "#ad-one",
+      "source_line": "###ad-one"
+    },
+    {
+      "selector": "#ad-other",
+      "source_line": "###ad-other"
+    },
+    {
+      "selector": "#ad-output",
+      "source_line": "###ad-output"
+    },
+    {
+      "selector": "#ad-overlay",
+      "source_line": "###ad-overlay"
+    },
+    {
+      "selector": "#ad-page-1",
+      "source_line": "###ad-page-1"
+    },
+    {
+      "selector": "#ad-pan3l",
+      "source_line": "###ad-pan3l"
+    },
+    {
+      "selector": "#ad-panel",
+      "source_line": "###ad-panel"
+    },
+    {
+      "selector": "#ad-pencil",
+      "source_line": "###ad-pencil"
+    },
+    {
+      "selector": "#ad-performance",
+      "source_line": "###ad-performance"
+    },
+    {
+      "selector": "#ad-performanceFullbanner1",
+      "source_line": "###ad-performanceFullbanner1"
+    },
+    {
+      "selector": "#ad-performanceRectangle1",
+      "source_line": "###ad-performanceRectangle1"
+    },
+    {
+      "selector": "#ad-placeholder",
+      "source_line": "###ad-placeholder"
+    },
+    {
+      "selector": "#ad-placeholder-horizontal",
+      "source_line": "###ad-placeholder-horizontal"
+    },
+    {
+      "selector": "#ad-placeholder-vertical",
+      "source_line": "###ad-placeholder-vertical"
+    },
+    {
+      "selector": "#ad-placement",
+      "source_line": "###ad-placement"
+    },
+    {
+      "selector": "#ad-plate",
+      "source_line": "###ad-plate"
+    },
+    {
+      "selector": "#ad-player",
+      "source_line": "###ad-player"
+    },
+    {
+      "selector": "#ad-popup",
+      "source_line": "###ad-popup"
+    },
+    {
+      "selector": "#ad-popup-home",
+      "source_line": "###ad-popup-home"
+    },
+    {
+      "selector": "#ad-popup-int",
+      "source_line": "###ad-popup-int"
+    },
+    {
+      "selector": "#ad-post",
+      "source_line": "###ad-post"
+    },
+    {
+      "selector": "#ad-promo",
+      "source_line": "###ad-promo"
+    },
+    {
+      "selector": "#ad-push",
+      "source_line": "###ad-push"
+    },
+    {
+      "selector": "#ad-pushdown",
+      "source_line": "###ad-pushdown"
+    },
+    {
+      "selector": "#ad-r",
+      "source_line": "###ad-r"
+    },
+    {
+      "selector": "#ad-rec-atf",
+      "source_line": "###ad-rec-atf"
+    },
+    {
+      "selector": "#ad-rec-btf",
+      "source_line": "###ad-rec-btf"
+    },
+    {
+      "selector": "#ad-rec-btf-top",
+      "source_line": "###ad-rec-btf-top"
+    },
+    {
+      "selector": "#ad-rect",
+      "source_line": "###ad-rect"
+    },
+    {
+      "selector": "#ad-rectangle",
+      "source_line": "###ad-rectangle"
+    },
+    {
+      "selector": "#ad-rectangle1",
+      "source_line": "###ad-rectangle1"
+    },
+    {
+      "selector": "#ad-rectangle1-outer",
+      "source_line": "###ad-rectangle1-outer"
+    },
+    {
+      "selector": "#ad-rectangle2",
+      "source_line": "###ad-rectangle2"
+    },
+    {
+      "selector": "#ad-rectangle3",
+      "source_line": "###ad-rectangle3"
+    },
+    {
+      "selector": "#ad-results",
+      "source_line": "###ad-results"
+    },
+    {
+      "selector": "#ad-right",
+      "source_line": "###ad-right"
+    },
+    {
+      "selector": "#ad-right-bar-tall",
+      "source_line": "###ad-right-bar-tall"
+    },
+    {
+      "selector": "#ad-right-container",
+      "source_line": "###ad-right-container"
+    },
+    {
+      "selector": "#ad-right-sidebar",
+      "source_line": "###ad-right-sidebar"
+    },
+    {
+      "selector": "#ad-right-top",
+      "source_line": "###ad-right-top"
+    },
+    {
+      "selector": "#ad-right2",
+      "source_line": "###ad-right2"
+    },
+    {
+      "selector": "#ad-right3",
+      "source_line": "###ad-right3"
+    },
+    {
+      "selector": "#ad-rotator",
+      "source_line": "###ad-rotator"
+    },
+    {
+      "selector": "#ad-row",
+      "source_line": "###ad-row"
+    },
+    {
+      "selector": "#ad-section",
+      "source_line": "###ad-section"
+    },
+    {
+      "selector": "#ad-separator",
+      "source_line": "###ad-separator"
+    },
+    {
+      "selector": "#ad-shop",
+      "source_line": "###ad-shop"
+    },
+    {
+      "selector": "#ad-side",
+      "source_line": "###ad-side"
+    },
+    {
+      "selector": "#ad-side-text",
+      "source_line": "###ad-side-text"
+    },
+    {
+      "selector": "#ad-sidebar",
+      "source_line": "###ad-sidebar"
+    },
+    {
+      "selector": "#ad-sidebar-btf",
+      "source_line": "###ad-sidebar-btf"
+    },
+    {
+      "selector": "#ad-sidebar-container",
+      "source_line": "###ad-sidebar-container"
+    },
+    {
+      "selector": "#ad-sidebar-mad",
+      "source_line": "###ad-sidebar-mad"
+    },
+    {
+      "selector": "#ad-sidebar-mad-wrapper",
+      "source_line": "###ad-sidebar-mad-wrapper"
+    },
+    {
+      "selector": "#ad-sidebar1",
+      "source_line": "###ad-sidebar1"
+    },
+    {
+      "selector": "#ad-sidebar2",
+      "source_line": "###ad-sidebar2"
+    },
+    {
+      "selector": "#ad-site-header",
+      "source_line": "###ad-site-header"
+    },
+    {
+      "selector": "#ad-skin",
+      "source_line": "###ad-skin"
+    },
+    {
+      "selector": "#ad-skm-below-content",
+      "source_line": "###ad-skm-below-content"
+    },
+    {
+      "selector": "#ad-sky",
+      "source_line": "###ad-sky"
+    },
+    {
+      "selector": "#ad-skyscraper",
+      "source_line": "###ad-skyscraper"
+    },
+    {
+      "selector": "#ad-slideshow",
+      "source_line": "###ad-slideshow"
+    },
+    {
+      "selector": "#ad-slideshow2",
+      "source_line": "###ad-slideshow2"
+    },
+    {
+      "selector": "#ad-slot",
+      "source_line": "###ad-slot"
+    },
+    {
+      "selector": "#ad-slot-1",
+      "source_line": "###ad-slot-1"
+    },
+    {
+      "selector": "#ad-slot-2",
+      "source_line": "###ad-slot-2"
+    },
+    {
+      "selector": "#ad-slot-3",
+      "source_line": "###ad-slot-3"
+    },
+    {
+      "selector": "#ad-slot-4",
+      "source_line": "###ad-slot-4"
+    },
+    {
+      "selector": "#ad-slot-5",
+      "source_line": "###ad-slot-5"
+    },
+    {
+      "selector": "#ad-slot-502",
+      "source_line": "###ad-slot-502"
+    },
+    {
+      "selector": "#ad-slot-lb",
+      "source_line": "###ad-slot-lb"
+    },
+    {
+      "selector": "#ad-slot-right",
+      "source_line": "###ad-slot-right"
+    },
+    {
+      "selector": "#ad-slot-top",
+      "source_line": "###ad-slot-top"
+    },
+    {
+      "selector": "#ad-slot1",
+      "source_line": "###ad-slot1"
+    },
+    {
+      "selector": "#ad-slot2",
+      "source_line": "###ad-slot2"
+    },
+    {
+      "selector": "#ad-slot4",
+      "source_line": "###ad-slot4"
+    },
+    {
+      "selector": "#ad-slug-wrapper",
+      "source_line": "###ad-slug-wrapper"
+    },
+    {
+      "selector": "#ad-small-banner",
+      "source_line": "###ad-small-banner"
+    },
+    {
+      "selector": "#ad-space",
+      "source_line": "###ad-space"
+    },
+    {
+      "selector": "#ad-space-big",
+      "source_line": "###ad-space-big"
+    },
+    {
+      "selector": "#ad-splash",
+      "source_line": "###ad-splash"
+    },
+    {
+      "selector": "#ad-sponsors",
+      "source_line": "###ad-sponsors"
+    },
+    {
+      "selector": "#ad-spot",
+      "source_line": "###ad-spot"
+    },
+    {
+      "selector": "#ad-spot-bottom",
+      "source_line": "###ad-spot-bottom"
+    },
+    {
+      "selector": "#ad-spot-one",
+      "source_line": "###ad-spot-one"
+    },
+    {
+      "selector": "#ad-standard",
+      "source_line": "###ad-standard"
+    },
+    {
+      "selector": "#ad-standard-wrap",
+      "source_line": "###ad-standard-wrap"
+    },
+    {
+      "selector": "#ad-stickers",
+      "source_line": "###ad-stickers"
+    },
+    {
+      "selector": "#ad-sticky-footer-container",
+      "source_line": "###ad-sticky-footer-container"
+    },
+    {
+      "selector": "#ad-story-right",
+      "source_line": "###ad-story-right"
+    },
+    {
+      "selector": "#ad-story-top",
+      "source_line": "###ad-story-top"
+    },
+    {
+      "selector": "#ad-stripe",
+      "source_line": "###ad-stripe"
+    },
+    {
+      "selector": "#ad-target",
+      "source_line": "###ad-target"
+    },
+    {
+      "selector": "#ad-teaser",
+      "source_line": "###ad-teaser"
+    },
+    {
+      "selector": "#ad-text",
+      "source_line": "###ad-text"
+    },
+    {
+      "selector": "#ad-three",
+      "source_line": "###ad-three"
+    },
+    {
+      "selector": "#ad-top",
+      "source_line": "###ad-top"
+    },
+    {
+      "selector": "#ad-top-250",
+      "source_line": "###ad-top-250"
+    },
+    {
+      "selector": "#ad-top-300x250",
+      "source_line": "###ad-top-300x250"
+    },
+    {
+      "selector": "#ad-top-728",
+      "source_line": "###ad-top-728"
+    },
+    {
+      "selector": "#ad-top-banner",
+      "source_line": "###ad-top-banner"
+    },
+    {
+      "selector": "#ad-top-leaderboard",
+      "source_line": "###ad-top-leaderboard"
+    },
+    {
+      "selector": "#ad-top-left",
+      "source_line": "###ad-top-left"
+    },
+    {
+      "selector": "#ad-top-lock",
+      "source_line": "###ad-top-lock"
+    },
+    {
+      "selector": "#ad-top-low",
+      "source_line": "###ad-top-low"
+    },
+    {
+      "selector": "#ad-top-right",
+      "source_line": "###ad-top-right"
+    },
+    {
+      "selector": "#ad-top-right-container",
+      "source_line": "###ad-top-right-container"
+    },
+    {
+      "selector": "#ad-top-text-low",
+      "source_line": "###ad-top-text-low"
+    },
+    {
+      "selector": "#ad-top-wrap",
+      "source_line": "###ad-top-wrap"
+    },
+    {
+      "selector": "#ad-top-wrapper",
+      "source_line": "###ad-top-wrapper"
+    },
+    {
+      "selector": "#ad-tower",
+      "source_line": "###ad-tower"
+    },
+    {
+      "selector": "#ad-two",
+      "source_line": "###ad-two"
+    },
+    {
+      "selector": "#ad-undefined",
+      "source_line": "###ad-undefined"
+    },
+    {
+      "selector": "#ad-unit-right-bottom-160-600",
+      "source_line": "###ad-unit-right-bottom-160-600"
+    },
+    {
+      "selector": "#ad-unit-right-middle-300-250",
+      "source_line": "###ad-unit-right-middle-300-250"
+    },
+    {
+      "selector": "#ad-unit-top-banner",
+      "source_line": "###ad-unit-top-banner"
+    },
+    {
+      "selector": "#ad-vip-article",
+      "source_line": "###ad-vip-article"
+    },
+    {
+      "selector": "#ad-west",
+      "source_line": "###ad-west"
+    },
+    {
+      "selector": "#ad-wide-leaderboard",
+      "source_line": "###ad-wide-leaderboard"
+    },
+    {
+      "selector": "#ad-wrap",
+      "source_line": "###ad-wrap"
+    },
+    {
+      "selector": "#ad-wrap2",
+      "source_line": "###ad-wrap2"
+    },
+    {
+      "selector": "#ad-wrapper",
+      "source_line": "###ad-wrapper"
+    },
+    {
+      "selector": "#ad-wrapper-728x90",
+      "source_line": "###ad-wrapper-728x90"
+    },
+    {
+      "selector": "#ad-wrapper-footer-1",
+      "source_line": "###ad-wrapper-footer-1"
+    },
+    {
+      "selector": "#ad-wrapper-main-1",
+      "source_line": "###ad-wrapper-main-1"
+    },
+    {
+      "selector": "#ad-wrapper-sidebar-1",
+      "source_line": "###ad-wrapper-sidebar-1"
+    },
+    {
+      "selector": "#ad-wrapper-top-1",
+      "source_line": "###ad-wrapper-top-1"
+    },
+    {
+      "selector": "#ad1-placeholder",
+      "source_line": "###ad1-placeholder"
+    },
+    {
+      "selector": "#ad125x125",
+      "source_line": "###ad125x125"
+    },
+    {
+      "selector": "#ad160",
+      "source_line": "###ad160"
+    },
+    {
+      "selector": "#ad160600",
+      "source_line": "###ad160600"
+    },
+    {
+      "selector": "#ad160x600",
+      "source_line": "###ad160x600"
+    },
+    {
+      "selector": "#ad250",
+      "source_line": "###ad250"
+    },
+    {
+      "selector": "#ad300",
+      "source_line": "###ad300"
+    },
+    {
+      "selector": "#ad300-250",
+      "source_line": "###ad300-250"
+    },
+    {
+      "selector": "#ad300_250",
+      "source_line": "###ad300_250"
+    },
+    {
+      "selector": "#ad336",
+      "source_line": "###ad336"
+    },
+    {
+      "selector": "#ad336x280",
+      "source_line": "###ad336x280"
+    },
+    {
+      "selector": "#ad468",
+      "source_line": "###ad468"
+    },
+    {
+      "selector": "#ad468x60",
+      "source_line": "###ad468x60"
+    },
+    {
+      "selector": "#ad480x60",
+      "source_line": "###ad480x60"
+    },
+    {
+      "selector": "#ad6",
+      "source_line": "###ad6"
+    },
+    {
+      "selector": "#ad600",
+      "source_line": "###ad600"
+    },
+    {
+      "selector": "#ad728",
+      "source_line": "###ad728"
+    },
+    {
+      "selector": "#ad72890",
+      "source_line": "###ad72890"
+    },
+    {
+      "selector": "#ad728Box",
+      "source_line": "###ad728Box"
+    },
+    {
+      "selector": "#ad728Header",
+      "source_line": "###ad728Header"
+    },
+    {
+      "selector": "#ad728Mid",
+      "source_line": "###ad728Mid"
+    },
+    {
+      "selector": "#ad728Top",
+      "source_line": "###ad728Top"
+    },
+    {
+      "selector": "#ad728Wrapper",
+      "source_line": "###ad728Wrapper"
+    },
+    {
+      "selector": "#ad728X90",
+      "source_line": "###ad728X90"
+    },
+    {
+      "selector": "#ad728foot",
+      "source_line": "###ad728foot"
+    },
+    {
+      "selector": "#ad728h",
+      "source_line": "###ad728h"
+    },
+    {
+      "selector": "#ad728top",
+      "source_line": "###ad728top"
+    },
+    {
+      "selector": "#ad728x90",
+      "source_line": "###ad728x90"
+    },
+    {
+      "selector": "#ad728x90_1",
+      "source_line": "###ad728x90_1"
+    },
+    {
+      "selector": "#ad90",
+      "source_line": "###ad90"
+    },
+    {
+      "selector": "#ad900",
+      "source_line": "###ad900"
+    },
+    {
+      "selector": "#ad970",
+      "source_line": "###ad970"
+    },
+    {
+      "selector": "#ad970x90_exp",
+      "source_line": "###ad970x90_exp"
+    },
+    {
+      "selector": "#adATF300x250",
+      "source_line": "###adATF300x250"
+    },
+    {
+      "selector": "#adATF728x90",
+      "source_line": "###adATF728x90"
+    },
+    {
+      "selector": "#adATFLeaderboard",
+      "source_line": "###adATFLeaderboard"
+    },
+    {
+      "selector": "#adAside",
+      "source_line": "###adAside"
+    },
+    {
+      "selector": "#adBTF300x250",
+      "source_line": "###adBTF300x250"
+    },
+    {
+      "selector": "#adBadges",
+      "source_line": "###adBadges"
+    },
+    {
+      "selector": "#adBanner1",
+      "source_line": "###adBanner1"
+    },
+    {
+      "selector": "#adBanner336x280",
+      "source_line": "###adBanner336x280"
+    },
+    {
+      "selector": "#adBannerBottom",
+      "source_line": "###adBannerBottom"
+    },
+    {
+      "selector": "#adBannerHeader",
+      "source_line": "###adBannerHeader"
+    },
+    {
+      "selector": "#adBannerSpacer",
+      "source_line": "###adBannerSpacer"
+    },
+    {
+      "selector": "#adBannerTable",
+      "source_line": "###adBannerTable"
+    },
+    {
+      "selector": "#adBannerTop",
+      "source_line": "###adBannerTop"
+    },
+    {
+      "selector": "#adBar",
+      "source_line": "###adBar"
+    },
+    {
+      "selector": "#adBelt",
+      "source_line": "###adBelt"
+    },
+    {
+      "selector": "#adBillboard",
+      "source_line": "###adBillboard"
+    },
+    {
+      "selector": "#adBlock01",
+      "source_line": "###adBlock01"
+    },
+    {
+      "selector": "#adBlockBanner",
+      "source_line": "###adBlockBanner"
+    },
+    {
+      "selector": "#adBlockContainer",
+      "source_line": "###adBlockContainer"
+    },
+    {
+      "selector": "#adBlockContent",
+      "source_line": "###adBlockContent"
+    },
+    {
+      "selector": "#adBlockOverlay",
+      "source_line": "###adBlockOverlay"
+    },
+    {
+      "selector": "#adBlocks",
+      "source_line": "###adBlocks"
+    },
+    {
+      "selector": "#adBottom",
+      "source_line": "###adBottom"
+    },
+    {
+      "selector": "#adBox",
+      "source_line": "###adBox"
+    },
+    {
+      "selector": "#adBrandDev",
+      "source_line": "###adBrandDev"
+    },
+    {
+      "selector": "#adBrandingStation",
+      "source_line": "###adBrandingStation"
+    },
+    {
+      "selector": "#adBreak",
+      "source_line": "###adBreak"
+    },
+    {
+      "selector": "#adCarousel",
+      "source_line": "###adCarousel"
+    },
+    {
+      "selector": "#adChannel",
+      "source_line": "###adChannel"
+    },
+    {
+      "selector": "#adChoiceFooter",
+      "source_line": "###adChoiceFooter"
+    },
+    {
+      "selector": "#adChoices",
+      "source_line": "###adChoices"
+    },
+    {
+      "selector": "#adChoicesIcon",
+      "source_line": "###adChoicesIcon"
+    },
+    {
+      "selector": "#adChoicesLogo",
+      "source_line": "###adChoicesLogo"
+    },
+    {
+      "selector": "#adCol",
+      "source_line": "###adCol"
+    },
+    {
+      "selector": "#adColumn",
+      "source_line": "###adColumn"
+    },
+    {
+      "selector": "#adColumn3",
+      "source_line": "###adColumn3"
+    },
+    {
+      "selector": "#adComponentWrapper",
+      "source_line": "###adComponentWrapper"
+    },
+    {
+      "selector": "#adContainer",
+      "source_line": "###adContainer"
+    },
+    {
+      "selector": "#adContainer_1",
+      "source_line": "###adContainer_1"
+    },
+    {
+      "selector": "#adContainer_2",
+      "source_line": "###adContainer_2"
+    },
+    {
+      "selector": "#adContainer_3",
+      "source_line": "###adContainer_3"
+    },
+    {
+      "selector": "#adContent",
+      "source_line": "###adContent"
+    },
+    {
+      "selector": "#adContentHolder",
+      "source_line": "###adContentHolder"
+    },
+    {
+      "selector": "#adContext",
+      "source_line": "###adContext"
+    },
+    {
+      "selector": "#adDiv",
+      "source_line": "###adDiv"
+    },
+    {
+      "selector": "#adDiv0",
+      "source_line": "###adDiv0"
+    },
+    {
+      "selector": "#adDiv1",
+      "source_line": "###adDiv1"
+    },
+    {
+      "selector": "#adDiv300",
+      "source_line": "###adDiv300"
+    },
+    {
+      "selector": "#adDiv4",
+      "source_line": "###adDiv4"
+    },
+    {
+      "selector": "#adDiv728",
+      "source_line": "###adDiv728"
+    },
+    {
+      "selector": "#adDivContainer",
+      "source_line": "###adDivContainer"
+    },
+    {
+      "selector": "#adFiller",
+      "source_line": "###adFiller"
+    },
+    {
+      "selector": "#adFlashDiv",
+      "source_line": "###adFlashDiv"
+    },
+    {
+      "selector": "#adFooter",
+      "source_line": "###adFooter"
+    },
+    {
+      "selector": "#adFot",
+      "source_line": "###adFot"
+    },
+    {
+      "selector": "#adFrame",
+      "source_line": "###adFrame"
+    },
+    {
+      "selector": "#adGallery",
+      "source_line": "###adGallery"
+    },
+    {
+      "selector": "#adGoogleText",
+      "source_line": "###adGoogleText"
+    },
+    {
+      "selector": "#adHeader",
+      "source_line": "###adHeader"
+    },
+    {
+      "selector": "#adHeaderTop",
+      "source_line": "###adHeaderTop"
+    },
+    {
+      "selector": "#adHeaderWrapper",
+      "source_line": "###adHeaderWrapper"
+    },
+    {
+      "selector": "#adHeading",
+      "source_line": "###adHeading"
+    },
+    {
+      "selector": "#adHeightstory",
+      "source_line": "###adHeightstory"
+    },
+    {
+      "selector": "#adHolder",
+      "source_line": "###adHolder"
+    },
+    {
+      "selector": "#adHolder1",
+      "source_line": "###adHolder1"
+    },
+    {
+      "selector": "#adHolder2",
+      "source_line": "###adHolder2"
+    },
+    {
+      "selector": "#adHolder3",
+      "source_line": "###adHolder3"
+    },
+    {
+      "selector": "#adHolder4",
+      "source_line": "###adHolder4"
+    },
+    {
+      "selector": "#adHolder5",
+      "source_line": "###adHolder5"
+    },
+    {
+      "selector": "#adHolder6",
+      "source_line": "###adHolder6"
+    },
+    {
+      "selector": "#adHome",
+      "source_line": "###adHome"
+    },
+    {
+      "selector": "#adHomeTop",
+      "source_line": "###adHomeTop"
+    },
+    {
+      "selector": "#adIframe",
+      "source_line": "###adIframe"
+    },
+    {
+      "selector": "#adInhouse",
+      "source_line": "###adInhouse"
+    },
+    {
+      "selector": "#adIsland",
+      "source_line": "###adIsland"
+    },
+    {
+      "selector": "#adLB",
+      "source_line": "###adLB"
+    },
+    {
+      "selector": "#adLabel",
+      "source_line": "###adLabel"
+    },
+    {
+      "selector": "#adLarge",
+      "source_line": "###adLarge"
+    },
+    {
+      "selector": "#adLayer",
+      "source_line": "###adLayer"
+    },
+    {
+      "selector": "#adLayerTop",
+      "source_line": "###adLayerTop"
+    },
+    {
+      "selector": "#adLayout",
+      "source_line": "###adLayout"
+    },
+    {
+      "selector": "#adLeader",
+      "source_line": "###adLeader"
+    },
+    {
+      "selector": "#adLeaderTop",
+      "source_line": "###adLeaderTop"
+    },
+    {
+      "selector": "#adLeaderboard",
+      "source_line": "###adLeaderboard"
+    },
+    {
+      "selector": "#adLeaderboard-middle",
+      "source_line": "###adLeaderboard-middle"
+    },
+    {
+      "selector": "#adLeft",
+      "source_line": "###adLeft"
+    },
+    {
+      "selector": "#adLink",
+      "source_line": "###adLink"
+    },
+    {
+      "selector": "#adLink1",
+      "source_line": "###adLink1"
+    },
+    {
+      "selector": "#adLounge",
+      "source_line": "###adLounge"
+    },
+    {
+      "selector": "#adLrec",
+      "source_line": "###adLrec"
+    },
+    {
+      "selector": "#adMOBILETOP",
+      "source_line": "###adMOBILETOP"
+    },
+    {
+      "selector": "#adMPU",
+      "source_line": "###adMPU"
+    },
+    {
+      "selector": "#adMPUHolder",
+      "source_line": "###adMPUHolder"
+    },
+    {
+      "selector": "#adMain",
+      "source_line": "###adMain"
+    },
+    {
+      "selector": "#adMarketplace",
+      "source_line": "###adMarketplace"
+    },
+    {
+      "selector": "#adMed",
+      "source_line": "###adMed"
+    },
+    {
+      "selector": "#adMedRect",
+      "source_line": "###adMedRect"
+    },
+    {
+      "selector": "#adMediumRectangle",
+      "source_line": "###adMediumRectangle"
+    },
+    {
+      "selector": "#adMeld",
+      "source_line": "###adMeld"
+    },
+    {
+      "selector": "#adMessage",
+      "source_line": "###adMessage"
+    },
+    {
+      "selector": "#adMid2",
+      "source_line": "###adMid2"
+    },
+    {
+      "selector": "#adModal",
+      "source_line": "###adModal"
+    },
+    {
+      "selector": "#adMpu",
+      "source_line": "###adMpu"
+    },
+    {
+      "selector": "#adMpuBottom",
+      "source_line": "###adMpuBottom"
+    },
+    {
+      "selector": "#adOuter",
+      "source_line": "###adOuter"
+    },
+    {
+      "selector": "#adPartnerLinks",
+      "source_line": "###adPartnerLinks"
+    },
+    {
+      "selector": "#adPlaceHolder1",
+      "source_line": "###adPlaceHolder1"
+    },
+    {
+      "selector": "#adPlaceHolder2",
+      "source_line": "###adPlaceHolder2"
+    },
+    {
+      "selector": "#adPlacement_1",
+      "source_line": "###adPlacement_1"
+    },
+    {
+      "selector": "#adPlacement_2",
+      "source_line": "###adPlacement_2"
+    },
+    {
+      "selector": "#adPlacement_3",
+      "source_line": "###adPlacement_3"
+    },
+    {
+      "selector": "#adPlacement_4",
+      "source_line": "###adPlacement_4"
+    },
+    {
+      "selector": "#adPlacement_7",
+      "source_line": "###adPlacement_7"
+    },
+    {
+      "selector": "#adPlacement_8",
+      "source_line": "###adPlacement_8"
+    },
+    {
+      "selector": "#adPlacement_9",
+      "source_line": "###adPlacement_9"
+    },
+    {
+      "selector": "#adPlacer",
+      "source_line": "###adPlacer"
+    },
+    {
+      "selector": "#adPopover",
+      "source_line": "###adPopover"
+    },
+    {
+      "selector": "#adPopup",
+      "source_line": "###adPopup"
+    },
+    {
+      "selector": "#adPosition0",
+      "source_line": "###adPosition0"
+    },
+    {
+      "selector": "#adPosition14",
+      "source_line": "###adPosition14"
+    },
+    {
+      "selector": "#adPosition5",
+      "source_line": "###adPosition5"
+    },
+    {
+      "selector": "#adPosition6",
+      "source_line": "###adPosition6"
+    },
+    {
+      "selector": "#adPosition7",
+      "source_line": "###adPosition7"
+    },
+    {
+      "selector": "#adPosition9",
+      "source_line": "###adPosition9"
+    },
+    {
+      "selector": "#adPush",
+      "source_line": "###adPush"
+    },
+    {
+      "selector": "#adPushdown1",
+      "source_line": "###adPushdown1"
+    },
+    {
+      "selector": "#adReady",
+      "source_line": "###adReady"
+    },
+    {
+      "selector": "#adRight",
+      "source_line": "###adRight"
+    },
+    {
+      "selector": "#adRight1",
+      "source_line": "###adRight1"
+    },
+    {
+      "selector": "#adRight2",
+      "source_line": "###adRight2"
+    },
+    {
+      "selector": "#adRight3",
+      "source_line": "###adRight3"
+    },
+    {
+      "selector": "#adRight4",
+      "source_line": "###adRight4"
+    },
+    {
+      "selector": "#adRight5",
+      "source_line": "###adRight5"
+    },
+    {
+      "selector": "#adScraper",
+      "source_line": "###adScraper"
+    },
+    {
+      "selector": "#adSection",
+      "source_line": "###adSection"
+    },
+    {
+      "selector": "#adSenseBox",
+      "source_line": "###adSenseBox"
+    },
+    {
+      "selector": "#adSenseModule",
+      "source_line": "###adSenseModule"
+    },
+    {
+      "selector": "#adSenseWrapper",
+      "source_line": "###adSenseWrapper"
+    },
+    {
+      "selector": "#adSet",
+      "source_line": "###adSet"
+    },
+    {
+      "selector": "#adSide",
+      "source_line": "###adSide"
+    },
+    {
+      "selector": "#adSide1-container",
+      "source_line": "###adSide1-container"
+    },
+    {
+      "selector": "#adSideButton",
+      "source_line": "###adSideButton"
+    },
+    {
+      "selector": "#adSidebar",
+      "source_line": "###adSidebar"
+    },
+    {
+      "selector": "#adSite",
+      "source_line": "###adSite"
+    },
+    {
+      "selector": "#adSkin",
+      "source_line": "###adSkin"
+    },
+    {
+      "selector": "#adSkinBackdrop",
+      "source_line": "###adSkinBackdrop"
+    },
+    {
+      "selector": "#adSkinLeft",
+      "source_line": "###adSkinLeft"
+    },
+    {
+      "selector": "#adSkinRight",
+      "source_line": "###adSkinRight"
+    },
+    {
+      "selector": "#adSky",
+      "source_line": "###adSky"
+    },
+    {
+      "selector": "#adSkyPosition",
+      "source_line": "###adSkyPosition"
+    },
+    {
+      "selector": "#adSkyscraper",
+      "source_line": "###adSkyscraper"
+    },
+    {
+      "selector": "#adSlider",
+      "source_line": "###adSlider"
+    },
+    {
+      "selector": "#adSlot-dmpu",
+      "source_line": "###adSlot-dmpu"
+    },
+    {
+      "selector": "#adSlot-dontMissLarge",
+      "source_line": "###adSlot-dontMissLarge"
+    },
+    {
+      "selector": "#adSlot-leader",
+      "source_line": "###adSlot-leader"
+    },
+    {
+      "selector": "#adSlot-leaderBottom",
+      "source_line": "###adSlot-leaderBottom"
+    },
+    {
+      "selector": "#adSlot1",
+      "source_line": "###adSlot1"
+    },
+    {
+      "selector": "#adSlot2",
+      "source_line": "###adSlot2"
+    },
+    {
+      "selector": "#adSlot3",
+      "source_line": "###adSlot3"
+    },
+    {
+      "selector": "#adSlot4",
+      "source_line": "###adSlot4"
+    },
+    {
+      "selector": "#adSlug",
+      "source_line": "###adSlug"
+    },
+    {
+      "selector": "#adSpace",
+      "source_line": "###adSpace"
+    },
+    {
+      "selector": "#adSpaceBottom",
+      "source_line": "###adSpaceBottom"
+    },
+    {
+      "selector": "#adSpaceHeight",
+      "source_line": "###adSpaceHeight"
+    },
+    {
+      "selector": "#adSpacer",
+      "source_line": "###adSpacer"
+    },
+    {
+      "selector": "#adSpecial",
+      "source_line": "###adSpecial"
+    },
+    {
+      "selector": "#adSqb",
+      "source_line": "###adSqb"
+    },
+    {
+      "selector": "#adSquare",
+      "source_line": "###adSquare"
+    },
+    {
+      "selector": "#adStrip",
+      "source_line": "###adStrip"
+    },
+    {
+      "selector": "#adSuperbanner",
+      "source_line": "###adSuperbanner"
+    },
+    {
+      "selector": "#adTag",
+      "source_line": "###adTag"
+    },
+    {
+      "selector": "#adText",
+      "source_line": "###adText"
+    },
+    {
+      "selector": "#adTextLink",
+      "source_line": "###adTextLink"
+    },
+    {
+      "selector": "#adTile",
+      "source_line": "###adTile"
+    },
+    {
+      "selector": "#adTop",
+      "source_line": "###adTop"
+    },
+    {
+      "selector": "#adTopContent",
+      "source_line": "###adTopContent"
+    },
+    {
+      "selector": "#adTopLREC",
+      "source_line": "###adTopLREC"
+    },
+    {
+      "selector": "#adTopLarge",
+      "source_line": "###adTopLarge"
+    },
+    {
+      "selector": "#adTopModule",
+      "source_line": "###adTopModule"
+    },
+    {
+      "selector": "#adTower",
+      "source_line": "###adTower"
+    },
+    {
+      "selector": "#adUnderArticle",
+      "source_line": "###adUnderArticle"
+    },
+    {
+      "selector": "#adUnit",
+      "source_line": "###adUnit"
+    },
+    {
+      "selector": "#adWideSkyscraper",
+      "source_line": "###adWideSkyscraper"
+    },
+    {
+      "selector": "#adWrap",
+      "source_line": "###adWrap"
+    },
+    {
+      "selector": "#adWrapper",
+      "source_line": "###adWrapper"
+    },
+    {
+      "selector": "#adWrapperSky",
+      "source_line": "###adWrapperSky"
+    },
+    {
+      "selector": "#ad_1",
+      "source_line": "###ad_1"
+    },
+    {
+      "selector": "#ad_160",
+      "source_line": "###ad_160"
+    },
+    {
+      "selector": "#ad_160_600",
+      "source_line": "###ad_160_600"
+    },
+    {
+      "selector": "#ad_160_600_2",
+      "source_line": "###ad_160_600_2"
+    },
+    {
+      "selector": "#ad_160x160",
+      "source_line": "###ad_160x160"
+    },
+    {
+      "selector": "#ad_160x600",
+      "source_line": "###ad_160x600"
+    },
+    {
+      "selector": "#ad_2",
+      "source_line": "###ad_2"
+    },
+    {
+      "selector": "#ad_250",
+      "source_line": "###ad_250"
+    },
+    {
+      "selector": "#ad_250x250",
+      "source_line": "###ad_250x250"
+    },
+    {
+      "selector": "#ad_3",
+      "source_line": "###ad_3"
+    },
+    {
+      "selector": "#ad_300",
+      "source_line": "###ad_300"
+    },
+    {
+      "selector": "#ad_300_250",
+      "source_line": "###ad_300_250"
+    },
+    {
+      "selector": "#ad_300_250_1",
+      "source_line": "###ad_300_250_1"
+    },
+    {
+      "selector": "#ad_300x250",
+      "source_line": "###ad_300x250"
+    },
+    {
+      "selector": "#ad_336",
+      "source_line": "###ad_336"
+    },
+    {
+      "selector": "#ad_4",
+      "source_line": "###ad_4"
+    },
+    {
+      "selector": "#ad_468_60",
+      "source_line": "###ad_468_60"
+    },
+    {
+      "selector": "#ad_468x60",
+      "source_line": "###ad_468x60"
+    },
+    {
+      "selector": "#ad_5",
+      "source_line": "###ad_5"
+    },
+    {
+      "selector": "#ad_728",
+      "source_line": "###ad_728"
+    },
+    {
+      "selector": "#ad_728_90",
+      "source_line": "###ad_728_90"
+    },
+    {
+      "selector": "#ad_728x90",
+      "source_line": "###ad_728x90"
+    },
+    {
+      "selector": "#ad_8",
+      "source_line": "###ad_8"
+    },
+    {
+      "selector": "#ad_9",
+      "source_line": "###ad_9"
+    },
+    {
+      "selector": "#ad_B1",
+      "source_line": "###ad_B1"
+    },
+    {
+      "selector": "#ad_Banner",
+      "source_line": "###ad_Banner"
+    },
+    {
+      "selector": "#ad_Bottom",
+      "source_line": "###ad_Bottom"
+    },
+    {
+      "selector": "#ad_LargeRec01",
+      "source_line": "###ad_LargeRec01"
+    },
+    {
+      "selector": "#ad_Middle",
+      "source_line": "###ad_Middle"
+    },
+    {
+      "selector": "#ad_Middle1",
+      "source_line": "###ad_Middle1"
+    },
+    {
+      "selector": "#ad_Pushdown",
+      "source_line": "###ad_Pushdown"
+    },
+    {
+      "selector": "#ad_R1",
+      "source_line": "###ad_R1"
+    },
+    {
+      "selector": "#ad_Right",
+      "source_line": "###ad_Right"
+    },
+    {
+      "selector": "#ad_Top",
+      "source_line": "###ad_Top"
+    },
+    {
+      "selector": "#ad_Wrap",
+      "source_line": "###ad_Wrap"
+    },
+    {
+      "selector": "#ad__billboard",
+      "source_line": "###ad__billboard"
+    },
+    {
+      "selector": "#ad_ad",
+      "source_line": "###ad_ad"
+    },
+    {
+      "selector": "#ad_adsense",
+      "source_line": "###ad_adsense"
+    },
+    {
+      "selector": "#ad_after_header_1",
+      "source_line": "###ad_after_header_1"
+    },
+    {
+      "selector": "#ad_anchor",
+      "source_line": "###ad_anchor"
+    },
+    {
+      "selector": "#ad_area",
+      "source_line": "###ad_area"
+    },
+    {
+      "selector": "#ad_article1_1",
+      "source_line": "###ad_article1_1"
+    },
+    {
+      "selector": "#ad_article1_2",
+      "source_line": "###ad_article1_2"
+    },
+    {
+      "selector": "#ad_article2_1",
+      "source_line": "###ad_article2_1"
+    },
+    {
+      "selector": "#ad_article2_2",
+      "source_line": "###ad_article2_2"
+    },
+    {
+      "selector": "#ad_article3_1",
+      "source_line": "###ad_article3_1"
+    },
+    {
+      "selector": "#ad_article3_2",
+      "source_line": "###ad_article3_2"
+    },
+    {
+      "selector": "#ad_banner",
+      "source_line": "###ad_banner"
+    },
+    {
+      "selector": "#ad_banner_1",
+      "source_line": "###ad_banner_1"
+    },
+    {
+      "selector": "#ad_banner_468x60",
+      "source_line": "###ad_banner_468x60"
+    },
+    {
+      "selector": "#ad_banner_728x90",
+      "source_line": "###ad_banner_728x90"
+    },
+    {
+      "selector": "#ad_banner_bot",
+      "source_line": "###ad_banner_bot"
+    },
+    {
+      "selector": "#ad_banner_top",
+      "source_line": "###ad_banner_top"
+    },
+    {
+      "selector": "#ad_banners",
+      "source_line": "###ad_banners"
+    },
+    {
+      "selector": "#ad_bar",
+      "source_line": "###ad_bar"
+    },
+    {
+      "selector": "#ad_bar_rect",
+      "source_line": "###ad_bar_rect"
+    },
+    {
+      "selector": "#ad_before_header",
+      "source_line": "###ad_before_header"
+    },
+    {
+      "selector": "#ad_bg",
+      "source_line": "###ad_bg"
+    },
+    {
+      "selector": "#ad_bg_image",
+      "source_line": "###ad_bg_image"
+    },
+    {
+      "selector": "#ad_big",
+      "source_line": "###ad_big"
+    },
+    {
+      "selector": "#ad_bigbox",
+      "source_line": "###ad_bigbox"
+    },
+    {
+      "selector": "#ad_bigbox_companion",
+      "source_line": "###ad_bigbox_companion"
+    },
+    {
+      "selector": "#ad_bigrectangle",
+      "source_line": "###ad_bigrectangle"
+    },
+    {
+      "selector": "#ad_billboard",
+      "source_line": "###ad_billboard"
+    },
+    {
+      "selector": "#ad_block",
+      "source_line": "###ad_block"
+    },
+    {
+      "selector": "#ad_block_0",
+      "source_line": "###ad_block_0"
+    },
+    {
+      "selector": "#ad_block_1",
+      "source_line": "###ad_block_1"
+    },
+    {
+      "selector": "#ad_block_2",
+      "source_line": "###ad_block_2"
+    },
+    {
+      "selector": "#ad_block_mpu",
+      "source_line": "###ad_block_mpu"
+    },
+    {
+      "selector": "#ad_bnr_atf_01",
+      "source_line": "###ad_bnr_atf_01"
+    },
+    {
+      "selector": "#ad_bnr_atf_02",
+      "source_line": "###ad_bnr_atf_02"
+    },
+    {
+      "selector": "#ad_bnr_atf_03",
+      "source_line": "###ad_bnr_atf_03"
+    },
+    {
+      "selector": "#ad_bnr_btf_07",
+      "source_line": "###ad_bnr_btf_07"
+    },
+    {
+      "selector": "#ad_bnr_btf_08",
+      "source_line": "###ad_bnr_btf_08"
+    },
+    {
+      "selector": "#ad_body",
+      "source_line": "###ad_body"
+    },
+    {
+      "selector": "#ad_bottom",
+      "source_line": "###ad_bottom"
+    },
+    {
+      "selector": "#ad_box_top",
+      "source_line": "###ad_box_top"
+    },
+    {
+      "selector": "#ad_branding",
+      "source_line": "###ad_branding"
+    },
+    {
+      "selector": "#ad_bsb",
+      "source_line": "###ad_bsb"
+    },
+    {
+      "selector": "#ad_bsb_cont",
+      "source_line": "###ad_bsb_cont"
+    },
+    {
+      "selector": "#ad_btmslot",
+      "source_line": "###ad_btmslot"
+    },
+    {
+      "selector": "#ad_button",
+      "source_line": "###ad_button"
+    },
+    {
+      "selector": "#ad_buttons",
+      "source_line": "###ad_buttons"
+    },
+    {
+      "selector": "#ad_cell",
+      "source_line": "###ad_cell"
+    },
+    {
+      "selector": "#ad_center",
+      "source_line": "###ad_center"
+    },
+    {
+      "selector": "#ad_choices",
+      "source_line": "###ad_choices"
+    },
+    {
+      "selector": "#ad_close",
+      "source_line": "###ad_close"
+    },
+    {
+      "selector": "#ad_closebtn",
+      "source_line": "###ad_closebtn"
+    },
+    {
+      "selector": "#ad_comments",
+      "source_line": "###ad_comments"
+    },
+    {
+      "selector": "#ad_cont",
+      "source_line": "###ad_cont"
+    },
+    {
+      "selector": "#ad_cont_superbanner",
+      "source_line": "###ad_cont_superbanner"
+    },
+    {
+      "selector": "#ad_container",
+      "source_line": "###ad_container"
+    },
+    {
+      "selector": "#ad_container_0",
+      "source_line": "###ad_container_0"
+    },
+    {
+      "selector": "#ad_container_300x250",
+      "source_line": "###ad_container_300x250"
+    },
+    {
+      "selector": "#ad_container_side",
+      "source_line": "###ad_container_side"
+    },
+    {
+      "selector": "#ad_container_sidebar",
+      "source_line": "###ad_container_sidebar"
+    },
+    {
+      "selector": "#ad_container_top",
+      "source_line": "###ad_container_top"
+    },
+    {
+      "selector": "#ad_content",
+      "source_line": "###ad_content"
+    },
+    {
+      "selector": "#ad_content_1",
+      "source_line": "###ad_content_1"
+    },
+    {
+      "selector": "#ad_content_2",
+      "source_line": "###ad_content_2"
+    },
+    {
+      "selector": "#ad_content_3",
+      "source_line": "###ad_content_3"
+    },
+    {
+      "selector": "#ad_content_fullsize",
+      "source_line": "###ad_content_fullsize"
+    },
+    {
+      "selector": "#ad_content_primary",
+      "source_line": "###ad_content_primary"
+    },
+    {
+      "selector": "#ad_content_right",
+      "source_line": "###ad_content_right"
+    },
+    {
+      "selector": "#ad_content_top",
+      "source_line": "###ad_content_top"
+    },
+    {
+      "selector": "#ad_content_wrap",
+      "source_line": "###ad_content_wrap"
+    },
+    {
+      "selector": "#ad_contentslot_1",
+      "source_line": "###ad_contentslot_1"
+    },
+    {
+      "selector": "#ad_contentslot_2",
+      "source_line": "###ad_contentslot_2"
+    },
+    {
+      "selector": "#ad_creative_2",
+      "source_line": "###ad_creative_2"
+    },
+    {
+      "selector": "#ad_creative_3",
+      "source_line": "###ad_creative_3"
+    },
+    {
+      "selector": "#ad_creative_5",
+      "source_line": "###ad_creative_5"
+    },
+    {
+      "selector": "#ad_dfp_rec1",
+      "source_line": "###ad_dfp_rec1"
+    },
+    {
+      "selector": "#ad_display_300_250",
+      "source_line": "###ad_display_300_250"
+    },
+    {
+      "selector": "#ad_display_728_90",
+      "source_line": "###ad_display_728_90"
+    },
+    {
+      "selector": "#ad_div",
+      "source_line": "###ad_div"
+    },
+    {
+      "selector": "#ad_div_bottom",
+      "source_line": "###ad_div_bottom"
+    },
+    {
+      "selector": "#ad_div_top",
+      "source_line": "###ad_div_top"
+    },
+    {
+      "selector": "#ad_feedback",
+      "source_line": "###ad_feedback"
+    },
+    {
+      "selector": "#ad_foot",
+      "source_line": "###ad_foot"
+    },
+    {
+      "selector": "#ad_footer",
+      "source_line": "###ad_footer"
+    },
+    {
+      "selector": "#ad_footer1",
+      "source_line": "###ad_footer1"
+    },
+    {
+      "selector": "#ad_footerAd",
+      "source_line": "###ad_footerAd"
+    },
+    {
+      "selector": "#ad_frame",
+      "source_line": "###ad_frame"
+    },
+    {
+      "selector": "#ad_frame1",
+      "source_line": "###ad_frame1"
+    },
+    {
+      "selector": "#ad_from_bottom",
+      "source_line": "###ad_from_bottom"
+    },
+    {
+      "selector": "#ad_fullbanner",
+      "source_line": "###ad_fullbanner"
+    },
+    {
+      "selector": "#ad_gallery",
+      "source_line": "###ad_gallery"
+    },
+    {
+      "selector": "#ad_gallery_bot",
+      "source_line": "###ad_gallery_bot"
+    },
+    {
+      "selector": "#ad_global_300x250",
+      "source_line": "###ad_global_300x250"
+    },
+    {
+      "selector": "#ad_global_above_footer",
+      "source_line": "###ad_global_above_footer"
+    },
+    {
+      "selector": "#ad_global_header",
+      "source_line": "###ad_global_header"
+    },
+    {
+      "selector": "#ad_global_header1",
+      "source_line": "###ad_global_header1"
+    },
+    {
+      "selector": "#ad_global_header2",
+      "source_line": "###ad_global_header2"
+    },
+    {
+      "selector": "#ad_h3",
+      "source_line": "###ad_h3"
+    },
+    {
+      "selector": "#ad_halfpage",
+      "source_line": "###ad_halfpage"
+    },
+    {
+      "selector": "#ad_head",
+      "source_line": "###ad_head"
+    },
+    {
+      "selector": "#ad_header",
+      "source_line": "###ad_header"
+    },
+    {
+      "selector": "#ad_header_1",
+      "source_line": "###ad_header_1"
+    },
+    {
+      "selector": "#ad_header_container",
+      "source_line": "###ad_header_container"
+    },
+    {
+      "selector": "#ad_holder",
+      "source_line": "###ad_holder"
+    },
+    {
+      "selector": "#ad_home",
+      "source_line": "###ad_home"
+    },
+    {
+      "selector": "#ad_home_middle",
+      "source_line": "###ad_home_middle"
+    },
+    {
+      "selector": "#ad_horizontal",
+      "source_line": "###ad_horizontal"
+    },
+    {
+      "selector": "#ad_houseslot_a",
+      "source_line": "###ad_houseslot_a"
+    },
+    {
+      "selector": "#ad_houseslot_b",
+      "source_line": "###ad_houseslot_b"
+    },
+    {
+      "selector": "#ad_hp",
+      "source_line": "###ad_hp"
+    },
+    {
+      "selector": "#ad_img",
+      "source_line": "###ad_img"
+    },
+    {
+      "selector": "#ad_interthread",
+      "source_line": "###ad_interthread"
+    },
+    {
+      "selector": "#ad_island",
+      "source_line": "###ad_island"
+    },
+    {
+      "selector": "#ad_island2",
+      "source_line": "###ad_island2"
+    },
+    {
+      "selector": "#ad_label",
+      "source_line": "###ad_label"
+    },
+    {
+      "selector": "#ad_large",
+      "source_line": "###ad_large"
+    },
+    {
+      "selector": "#ad_large_rectangular",
+      "source_line": "###ad_large_rectangular"
+    },
+    {
+      "selector": "#ad_lateral",
+      "source_line": "###ad_lateral"
+    },
+    {
+      "selector": "#ad_layer",
+      "source_line": "###ad_layer"
+    },
+    {
+      "selector": "#ad_ldb",
+      "source_line": "###ad_ldb"
+    },
+    {
+      "selector": "#ad_lead1",
+      "source_line": "###ad_lead1"
+    },
+    {
+      "selector": "#ad_leader",
+      "source_line": "###ad_leader"
+    },
+    {
+      "selector": "#ad_leaderBoard",
+      "source_line": "###ad_leaderBoard"
+    },
+    {
+      "selector": "#ad_leaderboard",
+      "source_line": "###ad_leaderboard"
+    },
+    {
+      "selector": "#ad_leaderboard_top",
+      "source_line": "###ad_leaderboard_top"
+    },
+    {
+      "selector": "#ad_left",
+      "source_line": "###ad_left"
+    },
+    {
+      "selector": "#ad_left_1",
+      "source_line": "###ad_left_1"
+    },
+    {
+      "selector": "#ad_left_2",
+      "source_line": "###ad_left_2"
+    },
+    {
+      "selector": "#ad_left_3",
+      "source_line": "###ad_left_3"
+    },
+    {
+      "selector": "#ad_left_skyscraper",
+      "source_line": "###ad_left_skyscraper"
+    },
+    {
+      "selector": "#ad_left_top",
+      "source_line": "###ad_left_top"
+    },
+    {
+      "selector": "#ad_leftslot",
+      "source_line": "###ad_leftslot"
+    },
+    {
+      "selector": "#ad_link",
+      "source_line": "###ad_link"
+    },
+    {
+      "selector": "#ad_links",
+      "source_line": "###ad_links"
+    },
+    {
+      "selector": "#ad_links_footer",
+      "source_line": "###ad_links_footer"
+    },
+    {
+      "selector": "#ad_lnk",
+      "source_line": "###ad_lnk"
+    },
+    {
+      "selector": "#ad_lrec",
+      "source_line": "###ad_lrec"
+    },
+    {
+      "selector": "#ad_lwr_square",
+      "source_line": "###ad_lwr_square"
+    },
+    {
+      "selector": "#ad_main",
+      "source_line": "###ad_main"
+    },
+    {
+      "selector": "#ad_main_leader",
+      "source_line": "###ad_main_leader"
+    },
+    {
+      "selector": "#ad_main_top",
+      "source_line": "###ad_main_top"
+    },
+    {
+      "selector": "#ad_marginal",
+      "source_line": "###ad_marginal"
+    },
+    {
+      "selector": "#ad_marker",
+      "source_line": "###ad_marker"
+    },
+    {
+      "selector": "#ad_mast",
+      "source_line": "###ad_mast"
+    },
+    {
+      "selector": "#ad_med_rect",
+      "source_line": "###ad_med_rect"
+    },
+    {
+      "selector": "#ad_medium",
+      "source_line": "###ad_medium"
+    },
+    {
+      "selector": "#ad_medium_rectangle",
+      "source_line": "###ad_medium_rectangle"
+    },
+    {
+      "selector": "#ad_medium_rectangular",
+      "source_line": "###ad_medium_rectangular"
+    },
+    {
+      "selector": "#ad_mediumrectangle",
+      "source_line": "###ad_mediumrectangle"
+    },
+    {
+      "selector": "#ad_message",
+      "source_line": "###ad_message"
+    },
+    {
+      "selector": "#ad_middle",
+      "source_line": "###ad_middle"
+    },
+    {
+      "selector": "#ad_middle_bottom",
+      "source_line": "###ad_middle_bottom"
+    },
+    {
+      "selector": "#ad_midstrip",
+      "source_line": "###ad_midstrip"
+    },
+    {
+      "selector": "#ad_mobile",
+      "source_line": "###ad_mobile"
+    },
+    {
+      "selector": "#ad_module",
+      "source_line": "###ad_module"
+    },
+    {
+      "selector": "#ad_mpu",
+      "source_line": "###ad_mpu"
+    },
+    {
+      "selector": "#ad_mpu2",
+      "source_line": "###ad_mpu2"
+    },
+    {
+      "selector": "#ad_mpu300x250",
+      "source_line": "###ad_mpu300x250"
+    },
+    {
+      "selector": "#ad_mrec",
+      "source_line": "###ad_mrec"
+    },
+    {
+      "selector": "#ad_mrec1",
+      "source_line": "###ad_mrec1"
+    },
+    {
+      "selector": "#ad_mrec2",
+      "source_line": "###ad_mrec2"
+    },
+    {
+      "selector": "#ad_mrec_intext",
+      "source_line": "###ad_mrec_intext"
+    },
+    {
+      "selector": "#ad_mrec_intext2",
+      "source_line": "###ad_mrec_intext2"
+    },
+    {
+      "selector": "#ad_new",
+      "source_line": "###ad_new"
+    },
+    {
+      "selector": "#ad_news_article",
+      "source_line": "###ad_news_article"
+    },
+    {
+      "selector": "#ad_newsletter",
+      "source_line": "###ad_newsletter"
+    },
+    {
+      "selector": "#ad_one",
+      "source_line": "###ad_one"
+    },
+    {
+      "selector": "#ad_overlay",
+      "source_line": "###ad_overlay"
+    },
+    {
+      "selector": "#ad_overlayer",
+      "source_line": "###ad_overlayer"
+    },
+    {
+      "selector": "#ad_panel",
+      "source_line": "###ad_panel"
+    },
+    {
+      "selector": "#ad_panorama_top",
+      "source_line": "###ad_panorama_top"
+    },
+    {
+      "selector": "#ad_pencil",
+      "source_line": "###ad_pencil"
+    },
+    {
+      "selector": "#ad_place",
+      "source_line": "###ad_place"
+    },
+    {
+      "selector": "#ad_placeholder",
+      "source_line": "###ad_placeholder"
+    },
+    {
+      "selector": "#ad_player",
+      "source_line": "###ad_player"
+    },
+    {
+      "selector": "#ad_plugs",
+      "source_line": "###ad_plugs"
+    },
+    {
+      "selector": "#ad_popup_background",
+      "source_line": "###ad_popup_background"
+    },
+    {
+      "selector": "#ad_popup_wrapper",
+      "source_line": "###ad_popup_wrapper"
+    },
+    {
+      "selector": "#ad_post",
+      "source_line": "###ad_post"
+    },
+    {
+      "selector": "#ad_poster",
+      "source_line": "###ad_poster"
+    },
+    {
+      "selector": "#ad_primary",
+      "source_line": "###ad_primary"
+    },
+    {
+      "selector": "#ad_publicidad",
+      "source_line": "###ad_publicidad"
+    },
+    {
+      "selector": "#ad_rail",
+      "source_line": "###ad_rail"
+    },
+    {
+      "selector": "#ad_rec_01",
+      "source_line": "###ad_rec_01"
+    },
+    {
+      "selector": "#ad_rect",
+      "source_line": "###ad_rect"
+    },
+    {
+      "selector": "#ad_rect1",
+      "source_line": "###ad_rect1"
+    },
+    {
+      "selector": "#ad_rect2",
+      "source_line": "###ad_rect2"
+    },
+    {
+      "selector": "#ad_rect3",
+      "source_line": "###ad_rect3"
+    },
+    {
+      "selector": "#ad_rect_body",
+      "source_line": "###ad_rect_body"
+    },
+    {
+      "selector": "#ad_rect_bottom",
+      "source_line": "###ad_rect_bottom"
+    },
+    {
+      "selector": "#ad_rect_btf_01",
+      "source_line": "###ad_rect_btf_01"
+    },
+    {
+      "selector": "#ad_rect_btf_02",
+      "source_line": "###ad_rect_btf_02"
+    },
+    {
+      "selector": "#ad_rect_btf_03",
+      "source_line": "###ad_rect_btf_03"
+    },
+    {
+      "selector": "#ad_rect_btf_04",
+      "source_line": "###ad_rect_btf_04"
+    },
+    {
+      "selector": "#ad_rect_btf_05",
+      "source_line": "###ad_rect_btf_05"
+    },
+    {
+      "selector": "#ad_rectangle",
+      "source_line": "###ad_rectangle"
+    },
+    {
+      "selector": "#ad_region1",
+      "source_line": "###ad_region1"
+    },
+    {
+      "selector": "#ad_region2",
+      "source_line": "###ad_region2"
+    },
+    {
+      "selector": "#ad_region3",
+      "source_line": "###ad_region3"
+    },
+    {
+      "selector": "#ad_region5",
+      "source_line": "###ad_region5"
+    },
+    {
+      "selector": "#ad_results",
+      "source_line": "###ad_results"
+    },
+    {
+      "selector": "#ad_right",
+      "source_line": "###ad_right"
+    },
+    {
+      "selector": "#ad_right_box",
+      "source_line": "###ad_right_box"
+    },
+    {
+      "selector": "#ad_right_top",
+      "source_line": "###ad_right_top"
+    },
+    {
+      "selector": "#ad_rightslot",
+      "source_line": "###ad_rightslot"
+    },
+    {
+      "selector": "#ad_rotator-2",
+      "source_line": "###ad_rotator-2"
+    },
+    {
+      "selector": "#ad_rotator-3",
+      "source_line": "###ad_rotator-3"
+    },
+    {
+      "selector": "#ad_row",
+      "source_line": "###ad_row"
+    },
+    {
+      "selector": "#ad_row_home",
+      "source_line": "###ad_row_home"
+    },
+    {
+      "selector": "#ad_rr_1",
+      "source_line": "###ad_rr_1"
+    },
+    {
+      "selector": "#ad_sec",
+      "source_line": "###ad_sec"
+    },
+    {
+      "selector": "#ad_sec_div",
+      "source_line": "###ad_sec_div"
+    },
+    {
+      "selector": "#ad_secondary",
+      "source_line": "###ad_secondary"
+    },
+    {
+      "selector": "#ad_short",
+      "source_line": "###ad_short"
+    },
+    {
+      "selector": "#ad_sidebar",
+      "source_line": "###ad_sidebar"
+    },
+    {
+      "selector": "#ad_sidebar1",
+      "source_line": "###ad_sidebar1"
+    },
+    {
+      "selector": "#ad_sidebar2",
+      "source_line": "###ad_sidebar2"
+    },
+    {
+      "selector": "#ad_sidebar3",
+      "source_line": "###ad_sidebar3"
+    },
+    {
+      "selector": "#ad_sidebar_1",
+      "source_line": "###ad_sidebar_1"
+    },
+    {
+      "selector": "#ad_sidebar_left_container",
+      "source_line": "###ad_sidebar_left_container"
+    },
+    {
+      "selector": "#ad_sidebar_news",
+      "source_line": "###ad_sidebar_news"
+    },
+    {
+      "selector": "#ad_sidebar_top",
+      "source_line": "###ad_sidebar_top"
+    },
+    {
+      "selector": "#ad_sidebody",
+      "source_line": "###ad_sidebody"
+    },
+    {
+      "selector": "#ad_site_header",
+      "source_line": "###ad_site_header"
+    },
+    {
+      "selector": "#ad_sitebar",
+      "source_line": "###ad_sitebar"
+    },
+    {
+      "selector": "#ad_skin",
+      "source_line": "###ad_skin"
+    },
+    {
+      "selector": "#ad_slot",
+      "source_line": "###ad_slot"
+    },
+    {
+      "selector": "#ad_slot_bottom",
+      "source_line": "###ad_slot_bottom"
+    },
+    {
+      "selector": "#ad_slot_leaderboard",
+      "source_line": "###ad_slot_leaderboard"
+    },
+    {
+      "selector": "#ad_small",
+      "source_line": "###ad_small"
+    },
+    {
+      "selector": "#ad_space_top",
+      "source_line": "###ad_space_top"
+    },
+    {
+      "selector": "#ad_sponsored",
+      "source_line": "###ad_sponsored"
+    },
+    {
+      "selector": "#ad_spot_a",
+      "source_line": "###ad_spot_a"
+    },
+    {
+      "selector": "#ad_spot_b",
+      "source_line": "###ad_spot_b"
+    },
+    {
+      "selector": "#ad_spotlight",
+      "source_line": "###ad_spotlight"
+    },
+    {
+      "selector": "#ad_square",
+      "source_line": "###ad_square"
+    },
+    {
+      "selector": "#ad_squares",
+      "source_line": "###ad_squares"
+    },
+    {
+      "selector": "#ad_ss",
+      "source_line": "###ad_ss"
+    },
+    {
+      "selector": "#ad_stck",
+      "source_line": "###ad_stck"
+    },
+    {
+      "selector": "#ad_sticky_wrap",
+      "source_line": "###ad_sticky_wrap"
+    },
+    {
+      "selector": "#ad_strip",
+      "source_line": "###ad_strip"
+    },
+    {
+      "selector": "#ad_superbanner",
+      "source_line": "###ad_superbanner"
+    },
+    {
+      "selector": "#ad_table",
+      "source_line": "###ad_table"
+    },
+    {
+      "selector": "#ad_takeover",
+      "source_line": "###ad_takeover"
+    },
+    {
+      "selector": "#ad_tall",
+      "source_line": "###ad_tall"
+    },
+    {
+      "selector": "#ad_tbl",
+      "source_line": "###ad_tbl"
+    },
+    {
+      "selector": "#ad_top",
+      "source_line": "###ad_top"
+    },
+    {
+      "selector": "#ad_topBanner",
+      "source_line": "###ad_topBanner"
+    },
+    {
+      "selector": "#ad_topScroller",
+      "source_line": "###ad_topScroller"
+    },
+    {
+      "selector": "#ad_top_728x90",
+      "source_line": "###ad_top_728x90"
+    },
+    {
+      "selector": "#ad_top_banner",
+      "source_line": "###ad_top_banner"
+    },
+    {
+      "selector": "#ad_top_bar",
+      "source_line": "###ad_top_bar"
+    },
+    {
+      "selector": "#ad_top_holder",
+      "source_line": "###ad_top_holder"
+    },
+    {
+      "selector": "#ad_topbanner",
+      "source_line": "###ad_topbanner"
+    },
+    {
+      "selector": "#ad_topmob",
+      "source_line": "###ad_topmob"
+    },
+    {
+      "selector": "#ad_topnav",
+      "source_line": "###ad_topnav"
+    },
+    {
+      "selector": "#ad_topslot",
+      "source_line": "###ad_topslot"
+    },
+    {
+      "selector": "#ad_two",
+      "source_line": "###ad_two"
+    },
+    {
+      "selector": "#ad_txt",
+      "source_line": "###ad_txt"
+    },
+    {
+      "selector": "#ad_under_game",
+      "source_line": "###ad_under_game"
+    },
+    {
+      "selector": "#ad_unit",
+      "source_line": "###ad_unit"
+    },
+    {
+      "selector": "#ad_unit1",
+      "source_line": "###ad_unit1"
+    },
+    {
+      "selector": "#ad_unit2",
+      "source_line": "###ad_unit2"
+    },
+    {
+      "selector": "#ad_vertical",
+      "source_line": "###ad_vertical"
+    },
+    {
+      "selector": "#ad_video_abovePlayer",
+      "source_line": "###ad_video_abovePlayer"
+    },
+    {
+      "selector": "#ad_video_belowPlayer",
+      "source_line": "###ad_video_belowPlayer"
+    },
+    {
+      "selector": "#ad_video_large",
+      "source_line": "###ad_video_large"
+    },
+    {
+      "selector": "#ad_video_root",
+      "source_line": "###ad_video_root"
+    },
+    {
+      "selector": "#ad_wallpaper",
+      "source_line": "###ad_wallpaper"
+    },
+    {
+      "selector": "#ad_wide",
+      "source_line": "###ad_wide"
+    },
+    {
+      "selector": "#ad_wide_box",
+      "source_line": "###ad_wide_box"
+    },
+    {
+      "selector": "#ad_wideboard",
+      "source_line": "###ad_wideboard"
+    },
+    {
+      "selector": "#ad_widget",
+      "source_line": "###ad_widget"
+    },
+    {
+      "selector": "#ad_widget_1",
+      "source_line": "###ad_widget_1"
+    },
+    {
+      "selector": "#ad_window",
+      "source_line": "###ad_window"
+    },
+    {
+      "selector": "#ad_wp",
+      "source_line": "###ad_wp"
+    },
+    {
+      "selector": "#ad_wp_base",
+      "source_line": "###ad_wp_base"
+    },
+    {
+      "selector": "#ad_wrap",
+      "source_line": "###ad_wrap"
+    },
+    {
+      "selector": "#ad_wrapper",
+      "source_line": "###ad_wrapper"
+    },
+    {
+      "selector": "#ad_wrapper1",
+      "source_line": "###ad_wrapper1"
+    },
+    {
+      "selector": "#ad_wrapper2",
+      "source_line": "###ad_wrapper2"
+    },
+    {
+      "selector": "#ad_xrail_top",
+      "source_line": "###ad_xrail_top"
+    },
+    {
+      "selector": "#ad_zone",
+      "source_line": "###ad_zone"
+    },
+    {
+      "selector": "#adaptvcompanion",
+      "source_line": "###adaptvcompanion"
+    },
+    {
+      "selector": "#adb_bottom",
+      "source_line": "###adb_bottom"
+    },
+    {
+      "selector": "#adbackground",
+      "source_line": "###adbackground"
+    },
+    {
+      "selector": "#adbanner-container",
+      "source_line": "###adbanner-container"
+    },
+    {
+      "selector": "#adbanner1",
+      "source_line": "###adbanner1"
+    },
+    {
+      "selector": "#adbannerbox",
+      "source_line": "###adbannerbox"
+    },
+    {
+      "selector": "#adbannerdiv",
+      "source_line": "###adbannerdiv"
+    },
+    {
+      "selector": "#adbannerleft",
+      "source_line": "###adbannerleft"
+    },
+    {
+      "selector": "#adbannerright",
+      "source_line": "###adbannerright"
+    },
+    {
+      "selector": "#adbannerwidget",
+      "source_line": "###adbannerwidget"
+    },
+    {
+      "selector": "#adbar",
+      "source_line": "###adbar"
+    },
+    {
+      "selector": "#adbig",
+      "source_line": "###adbig"
+    },
+    {
+      "selector": "#adblade",
+      "source_line": "###adblade"
+    },
+    {
+      "selector": "#adblade_ad",
+      "source_line": "###adblade_ad"
+    },
+    {
+      "selector": "#adblock-big",
+      "source_line": "###adblock-big"
+    },
+    {
+      "selector": "#adblock-leaderboard",
+      "source_line": "###adblock-leaderboard"
+    },
+    {
+      "selector": "#adblock-small",
+      "source_line": "###adblock-small"
+    },
+    {
+      "selector": "#adblock1",
+      "source_line": "###adblock1"
+    },
+    {
+      "selector": "#adblock2",
+      "source_line": "###adblock2"
+    },
+    {
+      "selector": "#adblock4",
+      "source_line": "###adblock4"
+    },
+    {
+      "selector": "#adblockbottom",
+      "source_line": "###adblockbottom"
+    },
+    {
+      "selector": "#adbn",
+      "source_line": "###adbn"
+    },
+    {
+      "selector": "#adbnr",
+      "source_line": "###adbnr"
+    },
+    {
+      "selector": "#adboard",
+      "source_line": "###adboard"
+    },
+    {
+      "selector": "#adbody",
+      "source_line": "###adbody"
+    },
+    {
+      "selector": "#adbottom",
+      "source_line": "###adbottom"
+    },
+    {
+      "selector": "#adbottomleft",
+      "source_line": "###adbottomleft"
+    },
+    {
+      "selector": "#adbottomright",
+      "source_line": "###adbottomright"
+    },
+    {
+      "selector": "#adbox",
+      "source_line": "###adbox"
+    },
+    {
+      "selector": "#adbox--hot_news_ad",
+      "source_line": "###adbox--hot_news_ad"
+    },
+    {
+      "selector": "#adbox--page_bottom_ad",
+      "source_line": "###adbox--page_bottom_ad"
+    },
+    {
+      "selector": "#adbox--page_top_ad",
+      "source_line": "###adbox--page_top_ad"
+    },
+    {
+      "selector": "#adbox-inarticle",
+      "source_line": "###adbox-inarticle"
+    },
+    {
+      "selector": "#adbox-topbanner",
+      "source_line": "###adbox-topbanner"
+    },
+    {
+      "selector": "#adbox1",
+      "source_line": "###adbox1"
+    },
+    {
+      "selector": "#adbox2",
+      "source_line": "###adbox2"
+    },
+    {
+      "selector": "#adbox_content",
+      "source_line": "###adbox_content"
+    },
+    {
+      "selector": "#adbox_right",
+      "source_line": "###adbox_right"
+    },
+    {
+      "selector": "#adbutton",
+      "source_line": "###adbutton"
+    },
+    {
+      "selector": "#adbuttons",
+      "source_line": "###adbuttons"
+    },
+    {
+      "selector": "#adcell",
+      "source_line": "###adcell"
+    },
+    {
+      "selector": "#adcenter",
+      "source_line": "###adcenter"
+    },
+    {
+      "selector": "#adcenter2",
+      "source_line": "###adcenter2"
+    },
+    {
+      "selector": "#adcenter4",
+      "source_line": "###adcenter4"
+    },
+    {
+      "selector": "#adchoices-icon",
+      "source_line": "###adchoices-icon"
+    },
+    {
+      "selector": "#adchoicesBtn",
+      "source_line": "###adchoicesBtn"
+    },
+    {
+      "selector": "#adclear",
+      "source_line": "###adclear"
+    },
+    {
+      "selector": "#adclose",
+      "source_line": "###adclose"
+    },
+    {
+      "selector": "#adcolContent",
+      "source_line": "###adcolContent"
+    },
+    {
+      "selector": "#adcolumn",
+      "source_line": "###adcolumn"
+    },
+    {
+      "selector": "#adcontainer",
+      "source_line": "###adcontainer"
+    },
+    {
+      "selector": "#adcontainer1",
+      "source_line": "###adcontainer1"
+    },
+    {
+      "selector": "#adcontainer2",
+      "source_line": "###adcontainer2"
+    },
+    {
+      "selector": "#adcontainer3",
+      "source_line": "###adcontainer3"
+    },
+    {
+      "selector": "#adcontainer5",
+      "source_line": "###adcontainer5"
+    },
+    {
+      "selector": "#adcontainerRight",
+      "source_line": "###adcontainerRight"
+    },
+    {
+      "selector": "#adcontainer_ad_content_top",
+      "source_line": "###adcontainer_ad_content_top"
+    },
+    {
+      "selector": "#adcontent1",
+      "source_line": "###adcontent1"
+    },
+    {
+      "selector": "#adcontent2",
+      "source_line": "###adcontent2"
+    },
+    {
+      "selector": "#adcontextlinks",
+      "source_line": "###adcontextlinks"
+    },
+    {
+      "selector": "#addbottomleft",
+      "source_line": "###addbottomleft"
+    },
+    {
+      "selector": "#addemam-wrapper",
+      "source_line": "###addemam-wrapper"
+    },
+    {
+      "selector": "#addvert",
+      "source_line": "###addvert"
+    },
+    {
+      "selector": "#adfactor-label",
+      "source_line": "###adfactor-label"
+    },
+    {
+      "selector": "#adfloat",
+      "source_line": "###adfloat"
+    },
+    {
+      "selector": "#adfooter",
+      "source_line": "###adfooter"
+    },
+    {
+      "selector": "#adfooter_728x90",
+      "source_line": "###adfooter_728x90"
+    },
+    {
+      "selector": "#adframe:not(frameset)",
+      "source_line": "###adframe:not(frameset)"
+    },
+    {
+      "selector": "#adframetop",
+      "source_line": "###adframetop"
+    },
+    {
+      "selector": "#adfreeDeskSpace",
+      "source_line": "###adfreeDeskSpace"
+    },
+    {
+      "selector": "#adhalfpage",
+      "source_line": "###adhalfpage"
+    },
+    {
+      "selector": "#adhead",
+      "source_line": "###adhead"
+    },
+    {
+      "selector": "#adheader",
+      "source_line": "###adheader"
+    },
+    {
+      "selector": "#adhesion",
+      "source_line": "###adhesion"
+    },
+    {
+      "selector": "#adhesionAdSlot",
+      "source_line": "###adhesionAdSlot"
+    },
+    {
+      "selector": "#adhesionUnit",
+      "source_line": "###adhesionUnit"
+    },
+    {
+      "selector": "#adhide",
+      "source_line": "###adhide"
+    },
+    {
+      "selector": "#adholder",
+      "source_line": "###adholder"
+    },
+    {
+      "selector": "#adholderContainerHeader",
+      "source_line": "###adholderContainerHeader"
+    },
+    {
+      "selector": "#adhome",
+      "source_line": "###adhome"
+    },
+    {
+      "selector": "#adhomepage",
+      "source_line": "###adhomepage"
+    },
+    {
+      "selector": "#adjacency",
+      "source_line": "###adjacency"
+    },
+    {
+      "selector": "#adlabel",
+      "source_line": "###adlabel"
+    },
+    {
+      "selector": "#adlabelFooter",
+      "source_line": "###adlabelFooter"
+    },
+    {
+      "selector": "#adlabelfooter",
+      "source_line": "###adlabelfooter"
+    },
+    {
+      "selector": "#adlabelheader",
+      "source_line": "###adlabelheader"
+    },
+    {
+      "selector": "#adlanding",
+      "source_line": "###adlanding"
+    },
+    {
+      "selector": "#adlayer",
+      "source_line": "###adlayer"
+    },
+    {
+      "selector": "#adlayerContainer",
+      "source_line": "###adlayerContainer"
+    },
+    {
+      "selector": "#adlayerad",
+      "source_line": "###adlayerad"
+    },
+    {
+      "selector": "#adleaderboard",
+      "source_line": "###adleaderboard"
+    },
+    {
+      "selector": "#adleft",
+      "source_line": "###adleft"
+    },
+    {
+      "selector": "#adlinks",
+      "source_line": "###adlinks"
+    },
+    {
+      "selector": "#adlrec",
+      "source_line": "###adlrec"
+    },
+    {
+      "selector": "#adm-inline-article-ad-1",
+      "source_line": "###adm-inline-article-ad-1"
+    },
+    {
+      "selector": "#adm-inline-article-ad-2",
+      "source_line": "###adm-inline-article-ad-2"
+    },
+    {
+      "selector": "#admain",
+      "source_line": "###admain"
+    },
+    {
+      "selector": "#admasthead",
+      "source_line": "###admasthead"
+    },
+    {
+      "selector": "#admid",
+      "source_line": "###admid"
+    },
+    {
+      "selector": "#admobilefoot",
+      "source_line": "###admobilefoot"
+    },
+    {
+      "selector": "#admobilefootinside",
+      "source_line": "###admobilefootinside"
+    },
+    {
+      "selector": "#admobilemiddle",
+      "source_line": "###admobilemiddle"
+    },
+    {
+      "selector": "#admobiletop",
+      "source_line": "###admobiletop"
+    },
+    {
+      "selector": "#admobiletopinside",
+      "source_line": "###admobiletopinside"
+    },
+    {
+      "selector": "#admod2",
+      "source_line": "###admod2"
+    },
+    {
+      "selector": "#admpubottom",
+      "source_line": "###admpubottom"
+    },
+    {
+      "selector": "#admpubottom2",
+      "source_line": "###admpubottom2"
+    },
+    {
+      "selector": "#admpufoot",
+      "source_line": "###admpufoot"
+    },
+    {
+      "selector": "#admpumiddle",
+      "source_line": "###admpumiddle"
+    },
+    {
+      "selector": "#admpumiddle2",
+      "source_line": "###admpumiddle2"
+    },
+    {
+      "selector": "#admputop2",
+      "source_line": "###admputop2"
+    },
+    {
+      "selector": "#admsg",
+      "source_line": "###admsg"
+    },
+    {
+      "selector": "#adnet",
+      "source_line": "###adnet"
+    },
+    {
+      "selector": "#adnorth",
+      "source_line": "###adnorth"
+    },
+    {
+      "selector": "#ados1",
+      "source_line": "###ados1"
+    },
+    {
+      "selector": "#ados2",
+      "source_line": "###ados2"
+    },
+    {
+      "selector": "#ados3",
+      "source_line": "###ados3"
+    },
+    {
+      "selector": "#ados4",
+      "source_line": "###ados4"
+    },
+    {
+      "selector": "#adplace",
+      "source_line": "###adplace"
+    },
+    {
+      "selector": "#adplacement",
+      "source_line": "###adplacement"
+    },
+    {
+      "selector": "#adpos-top",
+      "source_line": "###adpos-top"
+    },
+    {
+      "selector": "#adpos2",
+      "source_line": "###adpos2"
+    },
+    {
+      "selector": "#adposition",
+      "source_line": "###adposition"
+    },
+    {
+      "selector": "#adposition1",
+      "source_line": "###adposition1"
+    },
+    {
+      "selector": "#adposition10",
+      "source_line": "###adposition10"
+    },
+    {
+      "selector": "#adposition1_container",
+      "source_line": "###adposition1_container"
+    },
+    {
+      "selector": "#adposition2",
+      "source_line": "###adposition2"
+    },
+    {
+      "selector": "#adposition3",
+      "source_line": "###adposition3"
+    },
+    {
+      "selector": "#adposition4",
+      "source_line": "###adposition4"
+    },
+    {
+      "selector": "#adpositionbottom",
+      "source_line": "###adpositionbottom"
+    },
+    {
+      "selector": "#adrect",
+      "source_line": "###adrect"
+    },
+    {
+      "selector": "#adright",
+      "source_line": "###adright"
+    },
+    {
+      "selector": "#adright2",
+      "source_line": "###adright2"
+    },
+    {
+      "selector": "#adrightbottom",
+      "source_line": "###adrightbottom"
+    },
+    {
+      "selector": "#adrightrail",
+      "source_line": "###adrightrail"
+    },
+    {
+      "selector": "#adriver_middle",
+      "source_line": "###adriver_middle"
+    },
+    {
+      "selector": "#adriver_top",
+      "source_line": "###adriver_top"
+    },
+    {
+      "selector": "#adrotator",
+      "source_line": "###adrotator"
+    },
+    {
+      "selector": "#adrow",
+      "source_line": "###adrow"
+    },
+    {
+      "selector": "#adrow1",
+      "source_line": "###adrow1"
+    },
+    {
+      "selector": "#adrow3",
+      "source_line": "###adrow3"
+    },
+    {
+      "selector": "#ads-1",
+      "source_line": "###ads-1"
+    },
+    {
+      "selector": "#ads-125",
+      "source_line": "###ads-125"
+    },
+    {
+      "selector": "#ads-200",
+      "source_line": "###ads-200"
+    },
+    {
+      "selector": "#ads-250",
+      "source_line": "###ads-250"
+    },
+    {
+      "selector": "#ads-300",
+      "source_line": "###ads-300"
+    },
+    {
+      "selector": "#ads-300-250",
+      "source_line": "###ads-300-250"
+    },
+    {
+      "selector": "#ads-336x280",
+      "source_line": "###ads-336x280"
+    },
+    {
+      "selector": "#ads-468",
+      "source_line": "###ads-468"
+    },
+    {
+      "selector": "#ads-5",
+      "source_line": "###ads-5"
+    },
+    {
+      "selector": "#ads-728x90",
+      "source_line": "###ads-728x90"
+    },
+    {
+      "selector": "#ads-728x90-I3",
+      "source_line": "###ads-728x90-I3"
+    },
+    {
+      "selector": "#ads-728x90-I4",
+      "source_line": "###ads-728x90-I4"
+    },
+    {
+      "selector": "#ads-area",
+      "source_line": "###ads-area"
+    },
+    {
+      "selector": "#ads-article-left",
+      "source_line": "###ads-article-left"
+    },
+    {
+      "selector": "#ads-banner",
+      "source_line": "###ads-banner"
+    },
+    {
+      "selector": "#ads-banner-top",
+      "source_line": "###ads-banner-top"
+    },
+    {
+      "selector": "#ads-bar",
+      "source_line": "###ads-bar"
+    },
+    {
+      "selector": "#ads-before-content",
+      "source_line": "###ads-before-content"
+    },
+    {
+      "selector": "#ads-bg",
+      "source_line": "###ads-bg"
+    },
+    {
+      "selector": "#ads-bg-mobile",
+      "source_line": "###ads-bg-mobile"
+    },
+    {
+      "selector": "#ads-billboard",
+      "source_line": "###ads-billboard"
+    },
+    {
+      "selector": "#ads-block",
+      "source_line": "###ads-block"
+    },
+    {
+      "selector": "#ads-blog",
+      "source_line": "###ads-blog"
+    },
+    {
+      "selector": "#ads-bot",
+      "source_line": "###ads-bot"
+    },
+    {
+      "selector": "#ads-bottom",
+      "source_line": "###ads-bottom"
+    },
+    {
+      "selector": "#ads-col",
+      "source_line": "###ads-col"
+    },
+    {
+      "selector": "#ads-container",
+      "source_line": "###ads-container"
+    },
+    {
+      "selector": "#ads-container-2",
+      "source_line": "###ads-container-2"
+    },
+    {
+      "selector": "#ads-container-anchor",
+      "source_line": "###ads-container-anchor"
+    },
+    {
+      "selector": "#ads-container-single",
+      "source_line": "###ads-container-single"
+    },
+    {
+      "selector": "#ads-container-top",
+      "source_line": "###ads-container-top"
+    },
+    {
+      "selector": "#ads-content",
+      "source_line": "###ads-content"
+    },
+    {
+      "selector": "#ads-content-double",
+      "source_line": "###ads-content-double"
+    },
+    {
+      "selector": "#ads-footer",
+      "source_line": "###ads-footer"
+    },
+    {
+      "selector": "#ads-footer-inner",
+      "source_line": "###ads-footer-inner"
+    },
+    {
+      "selector": "#ads-footer-wrap",
+      "source_line": "###ads-footer-wrap"
+    },
+    {
+      "selector": "#ads-google",
+      "source_line": "###ads-google"
+    },
+    {
+      "selector": "#ads-header",
+      "source_line": "###ads-header"
+    },
+    {
+      "selector": "#ads-header-728",
+      "source_line": "###ads-header-728"
+    },
+    {
+      "selector": "#ads-home-468",
+      "source_line": "###ads-home-468"
+    },
+    {
+      "selector": "#ads-horizontal",
+      "source_line": "###ads-horizontal"
+    },
+    {
+      "selector": "#ads-inread",
+      "source_line": "###ads-inread"
+    },
+    {
+      "selector": "#ads-inside-content",
+      "source_line": "###ads-inside-content"
+    },
+    {
+      "selector": "#ads-leader",
+      "source_line": "###ads-leader"
+    },
+    {
+      "selector": "#ads-leaderboard",
+      "source_line": "###ads-leaderboard"
+    },
+    {
+      "selector": "#ads-leaderboard1",
+      "source_line": "###ads-leaderboard1"
+    },
+    {
+      "selector": "#ads-left",
+      "source_line": "###ads-left"
+    },
+    {
+      "selector": "#ads-left-top",
+      "source_line": "###ads-left-top"
+    },
+    {
+      "selector": "#ads-lrec",
+      "source_line": "###ads-lrec"
+    },
+    {
+      "selector": "#ads-main",
+      "source_line": "###ads-main"
+    },
+    {
+      "selector": "#ads-middle",
+      "source_line": "###ads-middle"
+    },
+    {
+      "selector": "#ads-mpu",
+      "source_line": "###ads-mpu"
+    },
+    {
+      "selector": "#ads-outer",
+      "source_line": "###ads-outer"
+    },
+    {
+      "selector": "#ads-pagetop",
+      "source_line": "###ads-pagetop"
+    },
+    {
+      "selector": "#ads-panel",
+      "source_line": "###ads-panel"
+    },
+    {
+      "selector": "#ads-pop",
+      "source_line": "###ads-pop"
+    },
+    {
+      "selector": "#ads-position-header-desktop",
+      "source_line": "###ads-position-header-desktop"
+    },
+    {
+      "selector": "#ads-right",
+      "source_line": "###ads-right"
+    },
+    {
+      "selector": "#ads-right-bottom",
+      "source_line": "###ads-right-bottom"
+    },
+    {
+      "selector": "#ads-right-skyscraper",
+      "source_line": "###ads-right-skyscraper"
+    },
+    {
+      "selector": "#ads-right-top",
+      "source_line": "###ads-right-top"
+    },
+    {
+      "selector": "#ads-slot",
+      "source_line": "###ads-slot"
+    },
+    {
+      "selector": "#ads-space",
+      "source_line": "###ads-space"
+    },
+    {
+      "selector": "#ads-superBanner",
+      "source_line": "###ads-superBanner"
+    },
+    {
+      "selector": "#ads-text",
+      "source_line": "###ads-text"
+    },
+    {
+      "selector": "#ads-top",
+      "source_line": "###ads-top"
+    },
+    {
+      "selector": "#ads-top-728",
+      "source_line": "###ads-top-728"
+    },
+    {
+      "selector": "#ads-top-wrap",
+      "source_line": "###ads-top-wrap"
+    },
+    {
+      "selector": "#ads-under-rotator",
+      "source_line": "###ads-under-rotator"
+    },
+    {
+      "selector": "#ads-vertical",
+      "source_line": "###ads-vertical"
+    },
+    {
+      "selector": "#ads-vertical-wrapper",
+      "source_line": "###ads-vertical-wrapper"
+    },
+    {
+      "selector": "#ads-wrap",
+      "source_line": "###ads-wrap"
+    },
+    {
+      "selector": "#ads-wrapper",
+      "source_line": "###ads-wrapper"
+    },
+    {
+      "selector": "#ads1",
+      "source_line": "###ads1"
+    },
+    {
+      "selector": "#ads120",
+      "source_line": "###ads120"
+    },
+    {
+      "selector": "#ads125",
+      "source_line": "###ads125"
+    },
+    {
+      "selector": "#ads1_box",
+      "source_line": "###ads1_box"
+    },
+    {
+      "selector": "#ads2",
+      "source_line": "###ads2"
+    },
+    {
+      "selector": "#ads2_block",
+      "source_line": "###ads2_block"
+    },
+    {
+      "selector": "#ads2_box",
+      "source_line": "###ads2_box"
+    },
+    {
+      "selector": "#ads2_container",
+      "source_line": "###ads2_container"
+    },
+    {
+      "selector": "#ads3",
+      "source_line": "###ads3"
+    },
+    {
+      "selector": "#ads300",
+      "source_line": "###ads300"
+    },
+    {
+      "selector": "#ads300-250",
+      "source_line": "###ads300-250"
+    },
+    {
+      "selector": "#ads300x200",
+      "source_line": "###ads300x200"
+    },
+    {
+      "selector": "#ads300x250",
+      "source_line": "###ads300x250"
+    },
+    {
+      "selector": "#ads300x250_2",
+      "source_line": "###ads300x250_2"
+    },
+    {
+      "selector": "#ads336x280",
+      "source_line": "###ads336x280"
+    },
+    {
+      "selector": "#ads4",
+      "source_line": "###ads4"
+    },
+    {
+      "selector": "#ads468x60",
+      "source_line": "###ads468x60"
+    },
+    {
+      "selector": "#ads50",
+      "source_line": "###ads50"
+    },
+    {
+      "selector": "#ads7",
+      "source_line": "###ads7"
+    },
+    {
+      "selector": "#ads728",
+      "source_line": "###ads728"
+    },
+    {
+      "selector": "#ads728bottom",
+      "source_line": "###ads728bottom"
+    },
+    {
+      "selector": "#ads728top",
+      "source_line": "###ads728top"
+    },
+    {
+      "selector": "#ads728x90",
+      "source_line": "###ads728x90"
+    },
+    {
+      "selector": "#ads728x90_2",
+      "source_line": "###ads728x90_2"
+    },
+    {
+      "selector": "#ads728x90top",
+      "source_line": "###ads728x90top"
+    },
+    {
+      "selector": "#adsBar",
+      "source_line": "###adsBar"
+    },
+    {
+      "selector": "#adsBottom",
+      "source_line": "###adsBottom"
+    },
+    {
+      "selector": "#adsContainer",
+      "source_line": "###adsContainer"
+    },
+    {
+      "selector": "#adsContent",
+      "source_line": "###adsContent"
+    },
+    {
+      "selector": "#adsDisplay",
+      "source_line": "###adsDisplay"
+    },
+    {
+      "selector": "#adsHeader",
+      "source_line": "###adsHeader"
+    },
+    {
+      "selector": "#adsHeading",
+      "source_line": "###adsHeading"
+    },
+    {
+      "selector": "#adsLREC",
+      "source_line": "###adsLREC"
+    },
+    {
+      "selector": "#adsLeft",
+      "source_line": "###adsLeft"
+    },
+    {
+      "selector": "#adsLinkFooter",
+      "source_line": "###adsLinkFooter"
+    },
+    {
+      "selector": "#adsMobileFixed",
+      "source_line": "###adsMobileFixed"
+    },
+    {
+      "selector": "#adsMpu",
+      "source_line": "###adsMpu"
+    },
+    {
+      "selector": "#adsPanel",
+      "source_line": "###adsPanel"
+    },
+    {
+      "selector": "#adsRight",
+      "source_line": "###adsRight"
+    },
+    {
+      "selector": "#adsRightDiv",
+      "source_line": "###adsRightDiv"
+    },
+    {
+      "selector": "#adsSectionLeft",
+      "source_line": "###adsSectionLeft"
+    },
+    {
+      "selector": "#adsSectionRight",
+      "source_line": "###adsSectionRight"
+    },
+    {
+      "selector": "#adsSquare",
+      "source_line": "###adsSquare"
+    },
+    {
+      "selector": "#adsTG",
+      "source_line": "###adsTG"
+    },
+    {
+      "selector": "#adsTN",
+      "source_line": "###adsTN"
+    },
+    {
+      "selector": "#adsTop",
+      "source_line": "###adsTop"
+    },
+    {
+      "selector": "#adsTopLeft",
+      "source_line": "###adsTopLeft"
+    },
+    {
+      "selector": "#adsTopMobileFixed",
+      "source_line": "###adsTopMobileFixed"
+    },
+    {
+      "selector": "#adsZone",
+      "source_line": "###adsZone"
+    },
+    {
+      "selector": "#adsZone1",
+      "source_line": "###adsZone1"
+    },
+    {
+      "selector": "#adsZone2",
+      "source_line": "###adsZone2"
+    },
+    {
+      "selector": "#ads_0_container",
+      "source_line": "###ads_0_container"
+    },
+    {
+      "selector": "#ads_160",
+      "source_line": "###ads_160"
+    },
+    {
+      "selector": "#ads_3",
+      "source_line": "###ads_3"
+    },
+    {
+      "selector": "#ads_300x250",
+      "source_line": "###ads_300x250"
+    },
+    {
+      "selector": "#ads_4",
+      "source_line": "###ads_4"
+    },
+    {
+      "selector": "#ads_728",
+      "source_line": "###ads_728"
+    },
+    {
+      "selector": "#ads_728x90",
+      "source_line": "###ads_728x90"
+    },
+    {
+      "selector": "#ads_728x90_top",
+      "source_line": "###ads_728x90_top"
+    },
+    {
+      "selector": "#ads_banner",
+      "source_line": "###ads_banner"
+    },
+    {
+      "selector": "#ads_banner1",
+      "source_line": "###ads_banner1"
+    },
+    {
+      "selector": "#ads_banner_header",
+      "source_line": "###ads_banner_header"
+    },
+    {
+      "selector": "#ads_belownav",
+      "source_line": "###ads_belownav"
+    },
+    {
+      "selector": "#ads_big",
+      "source_line": "###ads_big"
+    },
+    {
+      "selector": "#ads_block",
+      "source_line": "###ads_block"
+    },
+    {
+      "selector": "#ads_body_1",
+      "source_line": "###ads_body_1"
+    },
+    {
+      "selector": "#ads_body_2",
+      "source_line": "###ads_body_2"
+    },
+    {
+      "selector": "#ads_body_3",
+      "source_line": "###ads_body_3"
+    },
+    {
+      "selector": "#ads_body_4",
+      "source_line": "###ads_body_4"
+    },
+    {
+      "selector": "#ads_body_5",
+      "source_line": "###ads_body_5"
+    },
+    {
+      "selector": "#ads_body_6",
+      "source_line": "###ads_body_6"
+    },
+    {
+      "selector": "#ads_bottom",
+      "source_line": "###ads_bottom"
+    },
+    {
+      "selector": "#ads_box",
+      "source_line": "###ads_box"
+    },
+    {
+      "selector": "#ads_box1",
+      "source_line": "###ads_box1"
+    },
+    {
+      "selector": "#ads_box2",
+      "source_line": "###ads_box2"
+    },
+    {
+      "selector": "#ads_box_bottom",
+      "source_line": "###ads_box_bottom"
+    },
+    {
+      "selector": "#ads_box_right",
+      "source_line": "###ads_box_right"
+    },
+    {
+      "selector": "#ads_box_top",
+      "source_line": "###ads_box_top"
+    },
+    {
+      "selector": "#ads_button",
+      "source_line": "###ads_button"
+    },
+    {
+      "selector": "#ads_campaign",
+      "source_line": "###ads_campaign"
+    },
+    {
+      "selector": "#ads_catDiv",
+      "source_line": "###ads_catDiv"
+    },
+    {
+      "selector": "#ads_center",
+      "source_line": "###ads_center"
+    },
+    {
+      "selector": "#ads_center_banner",
+      "source_line": "###ads_center_banner"
+    },
+    {
+      "selector": "#ads_central",
+      "source_line": "###ads_central"
+    },
+    {
+      "selector": "#ads_combo2",
+      "source_line": "###ads_combo2"
+    },
+    {
+      "selector": "#ads_container",
+      "source_line": "###ads_container"
+    },
+    {
+      "selector": "#ads_content",
+      "source_line": "###ads_content"
+    },
+    {
+      "selector": "#ads_desktop_r1",
+      "source_line": "###ads_desktop_r1"
+    },
+    {
+      "selector": "#ads_desktop_r2",
+      "source_line": "###ads_desktop_r2"
+    },
+    {
+      "selector": "#ads_expand",
+      "source_line": "###ads_expand"
+    },
+    {
+      "selector": "#ads_footer",
+      "source_line": "###ads_footer"
+    },
+    {
+      "selector": "#ads_fullsize",
+      "source_line": "###ads_fullsize"
+    },
+    {
+      "selector": "#ads_h",
+      "source_line": "###ads_h"
+    },
+    {
+      "selector": "#ads_h1",
+      "source_line": "###ads_h1"
+    },
+    {
+      "selector": "#ads_h2",
+      "source_line": "###ads_h2"
+    },
+    {
+      "selector": "#ads_halfsize",
+      "source_line": "###ads_halfsize"
+    },
+    {
+      "selector": "#ads_header",
+      "source_line": "###ads_header"
+    },
+    {
+      "selector": "#ads_horiz",
+      "source_line": "###ads_horiz"
+    },
+    {
+      "selector": "#ads_horizontal",
+      "source_line": "###ads_horizontal"
+    },
+    {
+      "selector": "#ads_horz",
+      "source_line": "###ads_horz"
+    },
+    {
+      "selector": "#ads_in_modal",
+      "source_line": "###ads_in_modal"
+    },
+    {
+      "selector": "#ads_in_video",
+      "source_line": "###ads_in_video"
+    },
+    {
+      "selector": "#ads_insert_container",
+      "source_line": "###ads_insert_container"
+    },
+    {
+      "selector": "#ads_layout_bottom",
+      "source_line": "###ads_layout_bottom"
+    },
+    {
+      "selector": "#ads_lb",
+      "source_line": "###ads_lb"
+    },
+    {
+      "selector": "#ads_lb_frame",
+      "source_line": "###ads_lb_frame"
+    },
+    {
+      "selector": "#ads_leaderbottom",
+      "source_line": "###ads_leaderbottom"
+    },
+    {
+      "selector": "#ads_left",
+      "source_line": "###ads_left"
+    },
+    {
+      "selector": "#ads_left_top",
+      "source_line": "###ads_left_top"
+    },
+    {
+      "selector": "#ads_line",
+      "source_line": "###ads_line"
+    },
+    {
+      "selector": "#ads_medrect",
+      "source_line": "###ads_medrect"
+    },
+    {
+      "selector": "#ads_notice",
+      "source_line": "###ads_notice"
+    },
+    {
+      "selector": "#ads_overlay",
+      "source_line": "###ads_overlay"
+    },
+    {
+      "selector": "#ads_page_top",
+      "source_line": "###ads_page_top"
+    },
+    {
+      "selector": "#ads_place",
+      "source_line": "###ads_place"
+    },
+    {
+      "selector": "#ads_placeholder",
+      "source_line": "###ads_placeholder"
+    },
+    {
+      "selector": "#ads_player",
+      "source_line": "###ads_player"
+    },
+    {
+      "selector": "#ads_popup",
+      "source_line": "###ads_popup"
+    },
+    {
+      "selector": "#ads_right",
+      "source_line": "###ads_right"
+    },
+    {
+      "selector": "#ads_right_sidebar",
+      "source_line": "###ads_right_sidebar"
+    },
+    {
+      "selector": "#ads_right_top",
+      "source_line": "###ads_right_top"
+    },
+    {
+      "selector": "#ads_slide_div",
+      "source_line": "###ads_slide_div"
+    },
+    {
+      "selector": "#ads_space",
+      "source_line": "###ads_space"
+    },
+    {
+      "selector": "#ads_space_header",
+      "source_line": "###ads_space_header"
+    },
+    {
+      "selector": "#ads_superbanner1",
+      "source_line": "###ads_superbanner1"
+    },
+    {
+      "selector": "#ads_superbanner2",
+      "source_line": "###ads_superbanner2"
+    },
+    {
+      "selector": "#ads_superior",
+      "source_line": "###ads_superior"
+    },
+    {
+      "selector": "#ads_td",
+      "source_line": "###ads_td"
+    },
+    {
+      "selector": "#ads_text",
+      "source_line": "###ads_text"
+    },
+    {
+      "selector": "#ads_textlinks",
+      "source_line": "###ads_textlinks"
+    },
+    {
+      "selector": "#ads_title",
+      "source_line": "###ads_title"
+    },
+    {
+      "selector": "#ads_top2",
+      "source_line": "###ads_top2"
+    },
+    {
+      "selector": "#ads_top_banner",
+      "source_line": "###ads_top_banner"
+    },
+    {
+      "selector": "#ads_top_container",
+      "source_line": "###ads_top_container"
+    },
+    {
+      "selector": "#ads_top_content",
+      "source_line": "###ads_top_content"
+    },
+    {
+      "selector": "#ads_top_right",
+      "source_line": "###ads_top_right"
+    },
+    {
+      "selector": "#ads_top_sec",
+      "source_line": "###ads_top_sec"
+    },
+    {
+      "selector": "#ads_topbanner",
+      "source_line": "###ads_topbanner"
+    },
+    {
+      "selector": "#ads_tower_top",
+      "source_line": "###ads_tower_top"
+    },
+    {
+      "selector": "#ads_vert",
+      "source_line": "###ads_vert"
+    },
+    {
+      "selector": "#ads_video",
+      "source_line": "###ads_video"
+    },
+    {
+      "selector": "#ads_wide",
+      "source_line": "###ads_wide"
+    },
+    {
+      "selector": "#ads_wrapper",
+      "source_line": "###ads_wrapper"
+    },
+    {
+      "selector": "#adsbot",
+      "source_line": "###adsbot"
+    },
+    {
+      "selector": "#adsbottom",
+      "source_line": "###adsbottom"
+    },
+    {
+      "selector": "#adsbox-left",
+      "source_line": "###adsbox-left"
+    },
+    {
+      "selector": "#adsbox-right",
+      "source_line": "###adsbox-right"
+    },
+    {
+      "selector": "#adscenter",
+      "source_line": "###adscenter"
+    },
+    {
+      "selector": "#adscolumn",
+      "source_line": "###adscolumn"
+    },
+    {
+      "selector": "#adscontainer",
+      "source_line": "###adscontainer"
+    },
+    {
+      "selector": "#adscontent",
+      "source_line": "###adscontent"
+    },
+    {
+      "selector": "#adsdiv",
+      "source_line": "###adsdiv"
+    },
+    {
+      "selector": "#adsection",
+      "source_line": "###adsection"
+    },
+    {
+      "selector": "#adsense-2",
+      "source_line": "###adsense-2"
+    },
+    {
+      "selector": "#adsense-468x60",
+      "source_line": "###adsense-468x60"
+    },
+    {
+      "selector": "#adsense-area",
+      "source_line": "###adsense-area"
+    },
+    {
+      "selector": "#adsense-bottom",
+      "source_line": "###adsense-bottom"
+    },
+    {
+      "selector": "#adsense-container-bottom",
+      "source_line": "###adsense-container-bottom"
+    },
+    {
+      "selector": "#adsense-header",
+      "source_line": "###adsense-header"
+    },
+    {
+      "selector": "#adsense-link",
+      "source_line": "###adsense-link"
+    },
+    {
+      "selector": "#adsense-links",
+      "source_line": "###adsense-links"
+    },
+    {
+      "selector": "#adsense-middle",
+      "source_line": "###adsense-middle"
+    },
+    {
+      "selector": "#adsense-post",
+      "source_line": "###adsense-post"
+    },
+    {
+      "selector": "#adsense-right",
+      "source_line": "###adsense-right"
+    },
+    {
+      "selector": "#adsense-sidebar",
+      "source_line": "###adsense-sidebar"
+    },
+    {
+      "selector": "#adsense-tag",
+      "source_line": "###adsense-tag"
+    },
+    {
+      "selector": "#adsense-text",
+      "source_line": "###adsense-text"
+    },
+    {
+      "selector": "#adsense-top",
+      "source_line": "###adsense-top"
+    },
+    {
+      "selector": "#adsense-wrap",
+      "source_line": "###adsense-wrap"
+    },
+    {
+      "selector": "#adsense1",
+      "source_line": "###adsense1"
+    },
+    {
+      "selector": "#adsense2",
+      "source_line": "###adsense2"
+    },
+    {
+      "selector": "#adsense468",
+      "source_line": "###adsense468"
+    },
+    {
+      "selector": "#adsense6",
+      "source_line": "###adsense6"
+    },
+    {
+      "selector": "#adsense728",
+      "source_line": "###adsense728"
+    },
+    {
+      "selector": "#adsenseArea",
+      "source_line": "###adsenseArea"
+    },
+    {
+      "selector": "#adsenseContainer",
+      "source_line": "###adsenseContainer"
+    },
+    {
+      "selector": "#adsenseHeader",
+      "source_line": "###adsenseHeader"
+    },
+    {
+      "selector": "#adsenseLeft",
+      "source_line": "###adsenseLeft"
+    },
+    {
+      "selector": "#adsenseWrap",
+      "source_line": "###adsenseWrap"
+    },
+    {
+      "selector": "#adsense_banner_top",
+      "source_line": "###adsense_banner_top"
+    },
+    {
+      "selector": "#adsense_block",
+      "source_line": "###adsense_block"
+    },
+    {
+      "selector": "#adsense_bottom_ad",
+      "source_line": "###adsense_bottom_ad"
+    },
+    {
+      "selector": "#adsense_box",
+      "source_line": "###adsense_box"
+    },
+    {
+      "selector": "#adsense_box2",
+      "source_line": "###adsense_box2"
+    },
+    {
+      "selector": "#adsense_center",
+      "source_line": "###adsense_center"
+    },
+    {
+      "selector": "#adsense_image",
+      "source_line": "###adsense_image"
+    },
+    {
+      "selector": "#adsense_inline",
+      "source_line": "###adsense_inline"
+    },
+    {
+      "selector": "#adsense_leaderboard",
+      "source_line": "###adsense_leaderboard"
+    },
+    {
+      "selector": "#adsense_overlay",
+      "source_line": "###adsense_overlay"
+    },
+    {
+      "selector": "#adsense_r_side_sticky_container",
+      "source_line": "###adsense_r_side_sticky_container"
+    },
+    {
+      "selector": "#adsense_sidebar",
+      "source_line": "###adsense_sidebar"
+    },
+    {
+      "selector": "#adsense_top",
+      "source_line": "###adsense_top"
+    },
+    {
+      "selector": "#adsenseheader",
+      "source_line": "###adsenseheader"
+    },
+    {
+      "selector": "#adsensehorizontal",
+      "source_line": "###adsensehorizontal"
+    },
+    {
+      "selector": "#adsensempu",
+      "source_line": "###adsensempu"
+    },
+    {
+      "selector": "#adsenseskyscraper",
+      "source_line": "###adsenseskyscraper"
+    },
+    {
+      "selector": "#adsensetext",
+      "source_line": "###adsensetext"
+    },
+    {
+      "selector": "#adsensetop",
+      "source_line": "###adsensetop"
+    },
+    {
+      "selector": "#adsensewide",
+      "source_line": "###adsensewide"
+    },
+    {
+      "selector": "#adserv",
+      "source_line": "###adserv"
+    },
+    {
+      "selector": "#adsframe_2",
+      "source_line": "###adsframe_2"
+    },
+    {
+      "selector": "#adside",
+      "source_line": "###adside"
+    },
+    {
+      "selector": "#adsimage",
+      "source_line": "###adsimage"
+    },
+    {
+      "selector": "#adsitem",
+      "source_line": "###adsitem"
+    },
+    {
+      "selector": "#adskeeper",
+      "source_line": "###adskeeper"
+    },
+    {
+      "selector": "#adskinleft",
+      "source_line": "###adskinleft"
+    },
+    {
+      "selector": "#adskinlink",
+      "source_line": "###adskinlink"
+    },
+    {
+      "selector": "#adskinright",
+      "source_line": "###adskinright"
+    },
+    {
+      "selector": "#adskintop",
+      "source_line": "###adskintop"
+    },
+    {
+      "selector": "#adsky",
+      "source_line": "###adsky"
+    },
+    {
+      "selector": "#adskyscraper",
+      "source_line": "###adskyscraper"
+    },
+    {
+      "selector": "#adskyscraper_flex",
+      "source_line": "###adskyscraper_flex"
+    },
+    {
+      "selector": "#adsleft1",
+      "source_line": "###adsleft1"
+    },
+    {
+      "selector": "#adslider",
+      "source_line": "###adslider"
+    },
+    {
+      "selector": "#adslist",
+      "source_line": "###adslist"
+    },
+    {
+      "selector": "#adslot-below-updated",
+      "source_line": "###adslot-below-updated"
+    },
+    {
+      "selector": "#adslot-download-abovefiles",
+      "source_line": "###adslot-download-abovefiles"
+    },
+    {
+      "selector": "#adslot-half-page",
+      "source_line": "###adslot-half-page"
+    },
+    {
+      "selector": "#adslot-homepage-middle",
+      "source_line": "###adslot-homepage-middle"
+    },
+    {
+      "selector": "#adslot-infobox",
+      "source_line": "###adslot-infobox"
+    },
+    {
+      "selector": "#adslot-left-skyscraper",
+      "source_line": "###adslot-left-skyscraper"
+    },
+    {
+      "selector": "#adslot-side-mrec",
+      "source_line": "###adslot-side-mrec"
+    },
+    {
+      "selector": "#adslot-site-footer",
+      "source_line": "###adslot-site-footer"
+    },
+    {
+      "selector": "#adslot-site-header",
+      "source_line": "###adslot-site-header"
+    },
+    {
+      "selector": "#adslot-sticky-headerbar",
+      "source_line": "###adslot-sticky-headerbar"
+    },
+    {
+      "selector": "#adslot-top-rectangle",
+      "source_line": "###adslot-top-rectangle"
+    },
+    {
+      "selector": "#adslot1",
+      "source_line": "###adslot1"
+    },
+    {
+      "selector": "#adslot2",
+      "source_line": "###adslot2"
+    },
+    {
+      "selector": "#adslot3",
+      "source_line": "###adslot3"
+    },
+    {
+      "selector": "#adslot300x250ATF",
+      "source_line": "###adslot300x250ATF"
+    },
+    {
+      "selector": "#adslot300x250BTF",
+      "source_line": "###adslot300x250BTF"
+    },
+    {
+      "selector": "#adslot4",
+      "source_line": "###adslot4"
+    },
+    {
+      "selector": "#adslot5",
+      "source_line": "###adslot5"
+    },
+    {
+      "selector": "#adslot6",
+      "source_line": "###adslot6"
+    },
+    {
+      "selector": "#adslot7",
+      "source_line": "###adslot7"
+    },
+    {
+      "selector": "#adslot_1",
+      "source_line": "###adslot_1"
+    },
+    {
+      "selector": "#adslot_2",
+      "source_line": "###adslot_2"
+    },
+    {
+      "selector": "#adslot_left",
+      "source_line": "###adslot_left"
+    },
+    {
+      "selector": "#adslot_rect",
+      "source_line": "###adslot_rect"
+    },
+    {
+      "selector": "#adslot_top",
+      "source_line": "###adslot_top"
+    },
+    {
+      "selector": "#adsmgid",
+      "source_line": "###adsmgid"
+    },
+    {
+      "selector": "#adsmiddle",
+      "source_line": "###adsmiddle"
+    },
+    {
+      "selector": "#adsonar",
+      "source_line": "###adsonar"
+    },
+    {
+      "selector": "#adspace-1",
+      "source_line": "###adspace-1"
+    },
+    {
+      "selector": "#adspace-2",
+      "source_line": "###adspace-2"
+    },
+    {
+      "selector": "#adspace-300x250",
+      "source_line": "###adspace-300x250"
+    },
+    {
+      "selector": "#adspace-728",
+      "source_line": "###adspace-728"
+    },
+    {
+      "selector": "#adspace-728x90",
+      "source_line": "###adspace-728x90"
+    },
+    {
+      "selector": "#adspace-bottom",
+      "source_line": "###adspace-bottom"
+    },
+    {
+      "selector": "#adspace-leaderboard-top",
+      "source_line": "###adspace-leaderboard-top"
+    },
+    {
+      "selector": "#adspace-one",
+      "source_line": "###adspace-one"
+    },
+    {
+      "selector": "#adspace-top",
+      "source_line": "###adspace-top"
+    },
+    {
+      "selector": "#adspace300x250",
+      "source_line": "###adspace300x250"
+    },
+    {
+      "selector": "#adspaceBox",
+      "source_line": "###adspaceBox"
+    },
+    {
+      "selector": "#adspaceRow",
+      "source_line": "###adspaceRow"
+    },
+    {
+      "selector": "#adspace_header",
+      "source_line": "###adspace_header"
+    },
+    {
+      "selector": "#adspace_leaderboard",
+      "source_line": "###adspace_leaderboard"
+    },
+    {
+      "selector": "#adspace_top",
+      "source_line": "###adspace_top"
+    },
+    {
+      "selector": "#adspacer",
+      "source_line": "###adspacer"
+    },
+    {
+      "selector": "#adspan",
+      "source_line": "###adspan"
+    },
+    {
+      "selector": "#adsplace1",
+      "source_line": "###adsplace1"
+    },
+    {
+      "selector": "#adsplace2",
+      "source_line": "###adsplace2"
+    },
+    {
+      "selector": "#adsplace4",
+      "source_line": "###adsplace4"
+    },
+    {
+      "selector": "#adsplash",
+      "source_line": "###adsplash"
+    },
+    {
+      "selector": "#adspot",
+      "source_line": "###adspot"
+    },
+    {
+      "selector": "#adspot-bottom",
+      "source_line": "###adspot-bottom"
+    },
+    {
+      "selector": "#adspot-top",
+      "source_line": "###adspot-top"
+    },
+    {
+      "selector": "#adsquare",
+      "source_line": "###adsquare"
+    },
+    {
+      "selector": "#adsquare2",
+      "source_line": "###adsquare2"
+    },
+    {
+      "selector": "#adsright",
+      "source_line": "###adsright"
+    },
+    {
+      "selector": "#adsside",
+      "source_line": "###adsside"
+    },
+    {
+      "selector": "#adsspace",
+      "source_line": "###adsspace"
+    },
+    {
+      "selector": "#adstext2",
+      "source_line": "###adstext2"
+    },
+    {
+      "selector": "#adstrip",
+      "source_line": "###adstrip"
+    },
+    {
+      "selector": "#adtab",
+      "source_line": "###adtab"
+    },
+    {
+      "selector": "#adtext",
+      "source_line": "###adtext"
+    },
+    {
+      "selector": "#adtop",
+      "source_line": "###adtop"
+    },
+    {
+      "selector": "#adtxt",
+      "source_line": "###adtxt"
+    },
+    {
+      "selector": "#adunit",
+      "source_line": "###adunit"
+    },
+    {
+      "selector": "#adunit-article-bottom",
+      "source_line": "###adunit-article-bottom"
+    },
+    {
+      "selector": "#adunit_video",
+      "source_line": "###adunit_video"
+    },
+    {
+      "selector": "#adunitl",
+      "source_line": "###adunitl"
+    },
+    {
+      "selector": "#adv-01",
+      "source_line": "###adv-01"
+    },
+    {
+      "selector": "#adv-300",
+      "source_line": "###adv-300"
+    },
+    {
+      "selector": "#adv-Bottom",
+      "source_line": "###adv-Bottom"
+    },
+    {
+      "selector": "#adv-BoxP",
+      "source_line": "###adv-BoxP"
+    },
+    {
+      "selector": "#adv-Middle",
+      "source_line": "###adv-Middle"
+    },
+    {
+      "selector": "#adv-Middle1",
+      "source_line": "###adv-Middle1"
+    },
+    {
+      "selector": "#adv-Middle2",
+      "source_line": "###adv-Middle2"
+    },
+    {
+      "selector": "#adv-Scrollable",
+      "source_line": "###adv-Scrollable"
+    },
+    {
+      "selector": "#adv-Top",
+      "source_line": "###adv-Top"
+    },
+    {
+      "selector": "#adv-banner",
+      "source_line": "###adv-banner"
+    },
+    {
+      "selector": "#adv-banner-r",
+      "source_line": "###adv-banner-r"
+    },
+    {
+      "selector": "#adv-box",
+      "source_line": "###adv-box"
+    },
+    {
+      "selector": "#adv-companion-iframe",
+      "source_line": "###adv-companion-iframe"
+    },
+    {
+      "selector": "#adv-container",
+      "source_line": "###adv-container"
+    },
+    {
+      "selector": "#adv-gpt-box-container1",
+      "source_line": "###adv-gpt-box-container1"
+    },
+    {
+      "selector": "#adv-gpt-masthead-skin-container1",
+      "source_line": "###adv-gpt-masthead-skin-container1"
+    },
+    {
+      "selector": "#adv-halfpage",
+      "source_line": "###adv-halfpage"
+    },
+    {
+      "selector": "#adv-header",
+      "source_line": "###adv-header"
+    },
+    {
+      "selector": "#adv-leaderblock",
+      "source_line": "###adv-leaderblock"
+    },
+    {
+      "selector": "#adv-leaderboard",
+      "source_line": "###adv-leaderboard"
+    },
+    {
+      "selector": "#adv-left",
+      "source_line": "###adv-left"
+    },
+    {
+      "selector": "#adv-masthead",
+      "source_line": "###adv-masthead"
+    },
+    {
+      "selector": "#adv-middle",
+      "source_line": "###adv-middle"
+    },
+    {
+      "selector": "#adv-middle1",
+      "source_line": "###adv-middle1"
+    },
+    {
+      "selector": "#adv-midroll",
+      "source_line": "###adv-midroll"
+    },
+    {
+      "selector": "#adv-native",
+      "source_line": "###adv-native"
+    },
+    {
+      "selector": "#adv-preroll",
+      "source_line": "###adv-preroll"
+    },
+    {
+      "selector": "#adv-right",
+      "source_line": "###adv-right"
+    },
+    {
+      "selector": "#adv-right1",
+      "source_line": "###adv-right1"
+    },
+    {
+      "selector": "#adv-scrollable",
+      "source_line": "###adv-scrollable"
+    },
+    {
+      "selector": "#adv-sticky-1",
+      "source_line": "###adv-sticky-1"
+    },
+    {
+      "selector": "#adv-sticky-2",
+      "source_line": "###adv-sticky-2"
+    },
+    {
+      "selector": "#adv-text",
+      "source_line": "###adv-text"
+    },
+    {
+      "selector": "#adv-title",
+      "source_line": "###adv-title"
+    },
+    {
+      "selector": "#adv-top",
+      "source_line": "###adv-top"
+    },
+    {
+      "selector": "#adv-top-skin",
+      "source_line": "###adv-top-skin"
+    },
+    {
+      "selector": "#adv300x250",
+      "source_line": "###adv300x250"
+    },
+    {
+      "selector": "#adv300x250container",
+      "source_line": "###adv300x250container"
+    },
+    {
+      "selector": "#adv468x90",
+      "source_line": "###adv468x90"
+    },
+    {
+      "selector": "#adv728",
+      "source_line": "###adv728"
+    },
+    {
+      "selector": "#adv728x90",
+      "source_line": "###adv728x90"
+    },
+    {
+      "selector": "#adv768x90",
+      "source_line": "###adv768x90"
+    },
+    {
+      "selector": "#advBoxBottom",
+      "source_line": "###advBoxBottom"
+    },
+    {
+      "selector": "#advCarrousel",
+      "source_line": "###advCarrousel"
+    },
+    {
+      "selector": "#advHome",
+      "source_line": "###advHome"
+    },
+    {
+      "selector": "#advHook-Middle1",
+      "source_line": "###advHook-Middle1"
+    },
+    {
+      "selector": "#advRectangle",
+      "source_line": "###advRectangle"
+    },
+    {
+      "selector": "#advRectangle1",
+      "source_line": "###advRectangle1"
+    },
+    {
+      "selector": "#advSkin",
+      "source_line": "###advSkin"
+    },
+    {
+      "selector": "#advTop",
+      "source_line": "###advTop"
+    },
+    {
+      "selector": "#advWrapper",
+      "source_line": "###advWrapper"
+    },
+    {
+      "selector": "#adv_300",
+      "source_line": "###adv_300"
+    },
+    {
+      "selector": "#adv_728",
+      "source_line": "###adv_728"
+    },
+    {
+      "selector": "#adv_728x90",
+      "source_line": "###adv_728x90"
+    },
+    {
+      "selector": "#adv_BoxBottom",
+      "source_line": "###adv_BoxBottom"
+    },
+    {
+      "selector": "#adv_Inread",
+      "source_line": "###adv_Inread"
+    },
+    {
+      "selector": "#adv_IntropageOvl",
+      "source_line": "###adv_IntropageOvl"
+    },
+    {
+      "selector": "#adv_LdbMastheadPush",
+      "source_line": "###adv_LdbMastheadPush"
+    },
+    {
+      "selector": "#adv_Reload",
+      "source_line": "###adv_Reload"
+    },
+    {
+      "selector": "#adv_Skin",
+      "source_line": "###adv_Skin"
+    },
+    {
+      "selector": "#adv_bootom",
+      "source_line": "###adv_bootom"
+    },
+    {
+      "selector": "#adv_border",
+      "source_line": "###adv_border"
+    },
+    {
+      "selector": "#adv_center",
+      "source_line": "###adv_center"
+    },
+    {
+      "selector": "#adv_config",
+      "source_line": "###adv_config"
+    },
+    {
+      "selector": "#adv_contents",
+      "source_line": "###adv_contents"
+    },
+    {
+      "selector": "#adv_footer",
+      "source_line": "###adv_footer"
+    },
+    {
+      "selector": "#adv_holder",
+      "source_line": "###adv_holder"
+    },
+    {
+      "selector": "#adv_leaderboard",
+      "source_line": "###adv_leaderboard"
+    },
+    {
+      "selector": "#adv_mob",
+      "source_line": "###adv_mob"
+    },
+    {
+      "selector": "#adv_mpu1",
+      "source_line": "###adv_mpu1"
+    },
+    {
+      "selector": "#adv_mpu2",
+      "source_line": "###adv_mpu2"
+    },
+    {
+      "selector": "#adv_network",
+      "source_line": "###adv_network"
+    },
+    {
+      "selector": "#adv_overlay",
+      "source_line": "###adv_overlay"
+    },
+    {
+      "selector": "#adv_overlay_content",
+      "source_line": "###adv_overlay_content"
+    },
+    {
+      "selector": "#adv_r",
+      "source_line": "###adv_r"
+    },
+    {
+      "selector": "#adv_right",
+      "source_line": "###adv_right"
+    },
+    {
+      "selector": "#adv_skin",
+      "source_line": "###adv_skin"
+    },
+    {
+      "selector": "#adv_sky",
+      "source_line": "###adv_sky"
+    },
+    {
+      "selector": "#adv_textlink",
+      "source_line": "###adv_textlink"
+    },
+    {
+      "selector": "#adv_top",
+      "source_line": "###adv_top"
+    },
+    {
+      "selector": "#adv_wallpaper",
+      "source_line": "###adv_wallpaper"
+    },
+    {
+      "selector": "#adv_wallpaper2",
+      "source_line": "###adv_wallpaper2"
+    },
+    {
+      "selector": "#advads_ad_widget-18",
+      "source_line": "###advads_ad_widget-18"
+    },
+    {
+      "selector": "#advads_ad_widget-19",
+      "source_line": "###advads_ad_widget-19"
+    },
+    {
+      "selector": "#advads_ad_widget-8",
+      "source_line": "###advads_ad_widget-8"
+    },
+    {
+      "selector": "#adver",
+      "source_line": "###adver"
+    },
+    {
+      "selector": "#adver-top",
+      "source_line": "###adver-top"
+    },
+    {
+      "selector": "#adverFrame",
+      "source_line": "###adverFrame"
+    },
+    {
+      "selector": "#advert-1",
+      "source_line": "###advert-1"
+    },
+    {
+      "selector": "#advert-120",
+      "source_line": "###advert-120"
+    },
+    {
+      "selector": "#advert-2",
+      "source_line": "###advert-2"
+    },
+    {
+      "selector": "#advert-ahead",
+      "source_line": "###advert-ahead"
+    },
+    {
+      "selector": "#advert-article",
+      "source_line": "###advert-article"
+    },
+    {
+      "selector": "#advert-article-1",
+      "source_line": "###advert-article-1"
+    },
+    {
+      "selector": "#advert-article-2",
+      "source_line": "###advert-article-2"
+    },
+    {
+      "selector": "#advert-article-3",
+      "source_line": "###advert-article-3"
+    },
+    {
+      "selector": "#advert-banner",
+      "source_line": "###advert-banner"
+    },
+    {
+      "selector": "#advert-banner-container",
+      "source_line": "###advert-banner-container"
+    },
+    {
+      "selector": "#advert-banner-wrap",
+      "source_line": "###advert-banner-wrap"
+    },
+    {
+      "selector": "#advert-banner2",
+      "source_line": "###advert-banner2"
+    },
+    {
+      "selector": "#advert-block",
+      "source_line": "###advert-block"
+    },
+    {
+      "selector": "#advert-boomer",
+      "source_line": "###advert-boomer"
+    },
+    {
+      "selector": "#advert-box",
+      "source_line": "###advert-box"
+    },
+    {
+      "selector": "#advert-column",
+      "source_line": "###advert-column"
+    },
+    {
+      "selector": "#advert-container-top",
+      "source_line": "###advert-container-top"
+    },
+    {
+      "selector": "#advert-display",
+      "source_line": "###advert-display"
+    },
+    {
+      "selector": "#advert-fireplace",
+      "source_line": "###advert-fireplace"
+    },
+    {
+      "selector": "#advert-footer",
+      "source_line": "###advert-footer"
+    },
+    {
+      "selector": "#advert-footer-hidden",
+      "source_line": "###advert-footer-hidden"
+    },
+    {
+      "selector": "#advert-header",
+      "source_line": "###advert-header"
+    },
+    {
+      "selector": "#advert-island",
+      "source_line": "###advert-island"
+    },
+    {
+      "selector": "#advert-leaderboard",
+      "source_line": "###advert-leaderboard"
+    },
+    {
+      "selector": "#advert-left",
+      "source_line": "###advert-left"
+    },
+    {
+      "selector": "#advert-mpu",
+      "source_line": "###advert-mpu"
+    },
+    {
+      "selector": "#advert-posterad",
+      "source_line": "###advert-posterad"
+    },
+    {
+      "selector": "#advert-rectangle",
+      "source_line": "###advert-rectangle"
+    },
+    {
+      "selector": "#advert-right",
+      "source_line": "###advert-right"
+    },
+    {
+      "selector": "#advert-sky",
+      "source_line": "###advert-sky"
+    },
+    {
+      "selector": "#advert-skyscaper",
+      "source_line": "###advert-skyscaper"
+    },
+    {
+      "selector": "#advert-skyscraper",
+      "source_line": "###advert-skyscraper"
+    },
+    {
+      "selector": "#advert-slider-top",
+      "source_line": "###advert-slider-top"
+    },
+    {
+      "selector": "#advert-text",
+      "source_line": "###advert-text"
+    },
+    {
+      "selector": "#advert-top",
+      "source_line": "###advert-top"
+    },
+    {
+      "selector": "#advert-top-banner",
+      "source_line": "###advert-top-banner"
+    },
+    {
+      "selector": "#advert-wrapper",
+      "source_line": "###advert-wrapper"
+    },
+    {
+      "selector": "#advert1",
+      "source_line": "###advert1"
+    },
+    {
+      "selector": "#advert2",
+      "source_line": "###advert2"
+    },
+    {
+      "selector": "#advertBanner",
+      "source_line": "###advertBanner"
+    },
+    {
+      "selector": "#advertBox",
+      "source_line": "###advertBox"
+    },
+    {
+      "selector": "#advertBoxRight",
+      "source_line": "###advertBoxRight"
+    },
+    {
+      "selector": "#advertBoxSquare",
+      "source_line": "###advertBoxSquare"
+    },
+    {
+      "selector": "#advertColumn",
+      "source_line": "###advertColumn"
+    },
+    {
+      "selector": "#advertContainer",
+      "source_line": "###advertContainer"
+    },
+    {
+      "selector": "#advertDB",
+      "source_line": "###advertDB"
+    },
+    {
+      "selector": "#advertOverlay",
+      "source_line": "###advertOverlay"
+    },
+    {
+      "selector": "#advertRight",
+      "source_line": "###advertRight"
+    },
+    {
+      "selector": "#advertSection",
+      "source_line": "###advertSection"
+    },
+    {
+      "selector": "#advertTop",
+      "source_line": "###advertTop"
+    },
+    {
+      "selector": "#advertTopLarge",
+      "source_line": "###advertTopLarge"
+    },
+    {
+      "selector": "#advertTopSmall",
+      "source_line": "###advertTopSmall"
+    },
+    {
+      "selector": "#advertTower",
+      "source_line": "###advertTower"
+    },
+    {
+      "selector": "#advertWrapper",
+      "source_line": "###advertWrapper"
+    },
+    {
+      "selector": "#advert_1",
+      "source_line": "###advert_1"
+    },
+    {
+      "selector": "#advert_banner",
+      "source_line": "###advert_banner"
+    },
+    {
+      "selector": "#advert_belowmenu",
+      "source_line": "###advert_belowmenu"
+    },
+    {
+      "selector": "#advert_box",
+      "source_line": "###advert_box"
+    },
+    {
+      "selector": "#advert_container",
+      "source_line": "###advert_container"
+    },
+    {
+      "selector": "#advert_header",
+      "source_line": "###advert_header"
+    },
+    {
+      "selector": "#advert_leaderboard",
+      "source_line": "###advert_leaderboard"
+    },
+    {
+      "selector": "#advert_mid",
+      "source_line": "###advert_mid"
+    },
+    {
+      "selector": "#advert_mpu",
+      "source_line": "###advert_mpu"
+    },
+    {
+      "selector": "#advert_right1",
+      "source_line": "###advert_right1"
+    },
+    {
+      "selector": "#advert_sky",
+      "source_line": "###advert_sky"
+    },
+    {
+      "selector": "#advert_top",
+      "source_line": "###advert_top"
+    },
+    {
+      "selector": "#advertblock",
+      "source_line": "###advertblock"
+    },
+    {
+      "selector": "#advertborder",
+      "source_line": "###advertborder"
+    },
+    {
+      "selector": "#adverticum_r_above",
+      "source_line": "###adverticum_r_above"
+    },
+    {
+      "selector": "#adverticum_r_above_container",
+      "source_line": "###adverticum_r_above_container"
+    },
+    {
+      "selector": "#adverticum_r_side_container",
+      "source_line": "###adverticum_r_side_container"
+    },
+    {
+      "selector": "#advertise",
+      "source_line": "###advertise"
+    },
+    {
+      "selector": "#advertise-block",
+      "source_line": "###advertise-block"
+    },
+    {
+      "selector": "#advertise-here",
+      "source_line": "###advertise-here"
+    },
+    {
+      "selector": "#advertise-sidebar",
+      "source_line": "###advertise-sidebar"
+    },
+    {
+      "selector": "#advertise1",
+      "source_line": "###advertise1"
+    },
+    {
+      "selector": "#advertise2",
+      "source_line": "###advertise2"
+    },
+    {
+      "selector": "#advertiseBanner",
+      "source_line": "###advertiseBanner"
+    },
+    {
+      "selector": "#advertiseLink",
+      "source_line": "###advertiseLink"
+    },
+    {
+      "selector": "#advertise_top",
+      "source_line": "###advertise_top"
+    },
+    {
+      "selector": "#advertisediv",
+      "source_line": "###advertisediv"
+    },
+    {
+      "selector": "#advertisement-300x250",
+      "source_line": "###advertisement-300x250"
+    },
+    {
+      "selector": "#advertisement-bottom",
+      "source_line": "###advertisement-bottom"
+    },
+    {
+      "selector": "#advertisement-content",
+      "source_line": "###advertisement-content"
+    },
+    {
+      "selector": "#advertisement-large",
+      "source_line": "###advertisement-large"
+    },
+    {
+      "selector": "#advertisement-placement",
+      "source_line": "###advertisement-placement"
+    },
+    {
+      "selector": "#advertisement-text",
+      "source_line": "###advertisement-text"
+    },
+    {
+      "selector": "#advertisement1",
+      "source_line": "###advertisement1"
+    },
+    {
+      "selector": "#advertisement2",
+      "source_line": "###advertisement2"
+    },
+    {
+      "selector": "#advertisement3",
+      "source_line": "###advertisement3"
+    },
+    {
+      "selector": "#advertisement728x90",
+      "source_line": "###advertisement728x90"
+    },
+    {
+      "selector": "#advertisementArea",
+      "source_line": "###advertisementArea"
+    },
+    {
+      "selector": "#advertisementBox",
+      "source_line": "###advertisementBox"
+    },
+    {
+      "selector": "#advertisementHorizontal",
+      "source_line": "###advertisementHorizontal"
+    },
+    {
+      "selector": "#advertisementRight",
+      "source_line": "###advertisementRight"
+    },
+    {
+      "selector": "#advertisementTop",
+      "source_line": "###advertisementTop"
+    },
+    {
+      "selector": "#advertisement_banner",
+      "source_line": "###advertisement_banner"
+    },
+    {
+      "selector": "#advertisement_belowscreenshots",
+      "source_line": "###advertisement_belowscreenshots"
+    },
+    {
+      "selector": "#advertisement_block",
+      "source_line": "###advertisement_block"
+    },
+    {
+      "selector": "#advertisement_box",
+      "source_line": "###advertisement_box"
+    },
+    {
+      "selector": "#advertisement_container",
+      "source_line": "###advertisement_container"
+    },
+    {
+      "selector": "#advertisement_label",
+      "source_line": "###advertisement_label"
+    },
+    {
+      "selector": "#advertisement_notice",
+      "source_line": "###advertisement_notice"
+    },
+    {
+      "selector": "#advertisement_title",
+      "source_line": "###advertisement_title"
+    },
+    {
+      "selector": "#advertisements_bottom",
+      "source_line": "###advertisements_bottom"
+    },
+    {
+      "selector": "#advertisements_sidebar",
+      "source_line": "###advertisements_sidebar"
+    },
+    {
+      "selector": "#advertisements_top",
+      "source_line": "###advertisements_top"
+    },
+    {
+      "selector": "#advertisementsarticle",
+      "source_line": "###advertisementsarticle"
+    },
+    {
+      "selector": "#advertiser-container",
+      "source_line": "###advertiser-container"
+    },
+    {
+      "selector": "#advertiserLinks",
+      "source_line": "###advertiserLinks"
+    },
+    {
+      "selector": "#advertisetop",
+      "source_line": "###advertisetop"
+    },
+    {
+      "selector": "#advertising-160x600",
+      "source_line": "###advertising-160x600"
+    },
+    {
+      "selector": "#advertising-300x250",
+      "source_line": "###advertising-300x250"
+    },
+    {
+      "selector": "#advertising-728x90",
+      "source_line": "###advertising-728x90"
+    },
+    {
+      "selector": "#advertising-banner",
+      "source_line": "###advertising-banner"
+    },
+    {
+      "selector": "#advertising-caption",
+      "source_line": "###advertising-caption"
+    },
+    {
+      "selector": "#advertising-container",
+      "source_line": "###advertising-container"
+    },
+    {
+      "selector": "#advertising-right",
+      "source_line": "###advertising-right"
+    },
+    {
+      "selector": "#advertising-skyscraper",
+      "source_line": "###advertising-skyscraper"
+    },
+    {
+      "selector": "#advertising-top",
+      "source_line": "###advertising-top"
+    },
+    {
+      "selector": "#advertisingHrefTop",
+      "source_line": "###advertisingHrefTop"
+    },
+    {
+      "selector": "#advertisingLeftLeft",
+      "source_line": "###advertisingLeftLeft"
+    },
+    {
+      "selector": "#advertisingLink",
+      "source_line": "###advertisingLink"
+    },
+    {
+      "selector": "#advertisingRightColumn",
+      "source_line": "###advertisingRightColumn"
+    },
+    {
+      "selector": "#advertisingRightRight",
+      "source_line": "###advertisingRightRight"
+    },
+    {
+      "selector": "#advertisingTop",
+      "source_line": "###advertisingTop"
+    },
+    {
+      "selector": "#advertisingTopWrapper",
+      "source_line": "###advertisingTopWrapper"
+    },
+    {
+      "selector": "#advertising_300",
+      "source_line": "###advertising_300"
+    },
+    {
+      "selector": "#advertising_320",
+      "source_line": "###advertising_320"
+    },
+    {
+      "selector": "#advertising_728",
+      "source_line": "###advertising_728"
+    },
+    {
+      "selector": "#advertising__banner__content",
+      "source_line": "###advertising__banner__content"
+    },
+    {
+      "selector": "#advertising_column",
+      "source_line": "###advertising_column"
+    },
+    {
+      "selector": "#advertising_container",
+      "source_line": "###advertising_container"
+    },
+    {
+      "selector": "#advertising_contentad",
+      "source_line": "###advertising_contentad"
+    },
+    {
+      "selector": "#advertising_div",
+      "source_line": "###advertising_div"
+    },
+    {
+      "selector": "#advertising_header",
+      "source_line": "###advertising_header"
+    },
+    {
+      "selector": "#advertising_holder",
+      "source_line": "###advertising_holder"
+    },
+    {
+      "selector": "#advertising_leaderboard",
+      "source_line": "###advertising_leaderboard"
+    },
+    {
+      "selector": "#advertising_top_container",
+      "source_line": "###advertising_top_container"
+    },
+    {
+      "selector": "#advertising_wrapper",
+      "source_line": "###advertising_wrapper"
+    },
+    {
+      "selector": "#advertisment-horizontal",
+      "source_line": "###advertisment-horizontal"
+    },
+    {
+      "selector": "#advertisment-text",
+      "source_line": "###advertisment-text"
+    },
+    {
+      "selector": "#advertisment1",
+      "source_line": "###advertisment1"
+    },
+    {
+      "selector": "#advertisment_content",
+      "source_line": "###advertisment_content"
+    },
+    {
+      "selector": "#advertisment_panel",
+      "source_line": "###advertisment_panel"
+    },
+    {
+      "selector": "#advertleft",
+      "source_line": "###advertleft"
+    },
+    {
+      "selector": "#advertorial",
+      "source_line": "###advertorial"
+    },
+    {
+      "selector": "#advertorial-box",
+      "source_line": "###advertorial-box"
+    },
+    {
+      "selector": "#advertorial-wrap",
+      "source_line": "###advertorial-wrap"
+    },
+    {
+      "selector": "#advertorial1",
+      "source_line": "###advertorial1"
+    },
+    {
+      "selector": "#advertorial_links",
+      "source_line": "###advertorial_links"
+    },
+    {
+      "selector": "#adverts",
+      "source_line": "###adverts"
+    },
+    {
+      "selector": "#adverts--footer",
+      "source_line": "###adverts--footer"
+    },
+    {
+      "selector": "#adverts-top-container",
+      "source_line": "###adverts-top-container"
+    },
+    {
+      "selector": "#adverts-top-left",
+      "source_line": "###adverts-top-left"
+    },
+    {
+      "selector": "#adverts-top-middle",
+      "source_line": "###adverts-top-middle"
+    },
+    {
+      "selector": "#adverts-top-right",
+      "source_line": "###adverts-top-right"
+    },
+    {
+      "selector": "#adverts_base",
+      "source_line": "###adverts_base"
+    },
+    {
+      "selector": "#adverts_post_content",
+      "source_line": "###adverts_post_content"
+    },
+    {
+      "selector": "#adverts_right",
+      "source_line": "###adverts_right"
+    },
+    {
+      "selector": "#advertscroll",
+      "source_line": "###advertscroll"
+    },
+    {
+      "selector": "#advertsingle",
+      "source_line": "###advertsingle"
+    },
+    {
+      "selector": "#advertspace",
+      "source_line": "###advertspace"
+    },
+    {
+      "selector": "#advertssection",
+      "source_line": "###advertssection"
+    },
+    {
+      "selector": "#adverttop",
+      "source_line": "###adverttop"
+    },
+    {
+      "selector": "#advframe",
+      "source_line": "###advframe"
+    },
+    {
+      "selector": "#advr_mobile",
+      "source_line": "###advr_mobile"
+    },
+    {
+      "selector": "#advsingle",
+      "source_line": "###advsingle"
+    },
+    {
+      "selector": "#advt",
+      "source_line": "###advt"
+    },
+    {
+      "selector": "#advt_bottom",
+      "source_line": "###advt_bottom"
+    },
+    {
+      "selector": "#advtbar",
+      "source_line": "###advtbar"
+    },
+    {
+      "selector": "#advtcell",
+      "source_line": "###advtcell"
+    },
+    {
+      "selector": "#advtext",
+      "source_line": "###advtext"
+    },
+    {
+      "selector": "#advtop",
+      "source_line": "###advtop"
+    },
+    {
+      "selector": "#advtopright",
+      "source_line": "###advtopright"
+    },
+    {
+      "selector": "#adwallpaper",
+      "source_line": "###adwallpaper"
+    },
+    {
+      "selector": "#adwidget",
+      "source_line": "###adwidget"
+    },
+    {
+      "selector": "#adwidget-5",
+      "source_line": "###adwidget-5"
+    },
+    {
+      "selector": "#adwidget-6",
+      "source_line": "###adwidget-6"
+    },
+    {
+      "selector": "#adwidget1",
+      "source_line": "###adwidget1"
+    },
+    {
+      "selector": "#adwidget2",
+      "source_line": "###adwidget2"
+    },
+    {
+      "selector": "#adwrapper",
+      "source_line": "###adwrapper"
+    },
+    {
+      "selector": "#adxBigAd",
+      "source_line": "###adxBigAd"
+    },
+    {
+      "selector": "#adxBigAd2",
+      "source_line": "###adxBigAd2"
+    },
+    {
+      "selector": "#adxLeaderboard",
+      "source_line": "###adxLeaderboard"
+    },
+    {
+      "selector": "#adxMiddle",
+      "source_line": "###adxMiddle"
+    },
+    {
+      "selector": "#adxMiddleRight",
+      "source_line": "###adxMiddleRight"
+    },
+    {
+      "selector": "#adxToolSponsor",
+      "source_line": "###adxToolSponsor"
+    },
+    {
+      "selector": "#adx_ad",
+      "source_line": "###adx_ad"
+    },
+    {
+      "selector": "#adxtop2",
+      "source_line": "###adxtop2"
+    },
+    {
+      "selector": "#adzbanner",
+      "source_line": "###adzbanner"
+    },
+    {
+      "selector": "#adzone",
+      "source_line": "###adzone"
+    },
+    {
+      "selector": "#adzone-middle1",
+      "source_line": "###adzone-middle1"
+    },
+    {
+      "selector": "#adzone-middle2",
+      "source_line": "###adzone-middle2"
+    },
+    {
+      "selector": "#adzone-right",
+      "source_line": "###adzone-right"
+    },
+    {
+      "selector": "#adzone-top",
+      "source_line": "###adzone-top"
+    },
+    {
+      "selector": "#adzone_content",
+      "source_line": "###adzone_content"
+    },
+    {
+      "selector": "#adzone_wall",
+      "source_line": "###adzone_wall"
+    },
+    {
+      "selector": "#adzonebanner",
+      "source_line": "###adzonebanner"
+    },
+    {
+      "selector": "#adzoneheader",
+      "source_line": "###adzoneheader"
+    },
+    {
+      "selector": "#afc-container",
+      "source_line": "###afc-container"
+    },
+    {
+      "selector": "#affiliate_2",
+      "source_line": "###affiliate_2"
+    },
+    {
+      "selector": "#affiliate_ad",
+      "source_line": "###affiliate_ad"
+    },
+    {
+      "selector": "#after-dfp-ad-mid1",
+      "source_line": "###after-dfp-ad-mid1"
+    },
+    {
+      "selector": "#after-dfp-ad-mid2",
+      "source_line": "###after-dfp-ad-mid2"
+    },
+    {
+      "selector": "#after-dfp-ad-mid3",
+      "source_line": "###after-dfp-ad-mid3"
+    },
+    {
+      "selector": "#after-dfp-ad-mid4",
+      "source_line": "###after-dfp-ad-mid4"
+    },
+    {
+      "selector": "#after-dfp-ad-top",
+      "source_line": "###after-dfp-ad-top"
+    },
+    {
+      "selector": "#after-header-ads",
+      "source_line": "###after-header-ads"
+    },
+    {
+      "selector": "#after-top-menu-ads",
+      "source_line": "###after-top-menu-ads"
+    },
+    {
+      "selector": "#after_ad",
+      "source_line": "###after_ad"
+    },
+    {
+      "selector": "#after_bottom_ad",
+      "source_line": "###after_bottom_ad"
+    },
+    {
+      "selector": "#after_heading_ad",
+      "source_line": "###after_heading_ad"
+    },
+    {
+      "selector": "#after_title_ad",
+      "source_line": "###after_title_ad"
+    },
+    {
+      "selector": "#aigirlfriendad",
+      "source_line": "###aigirlfriendad"
+    },
+    {
+      "selector": "#amazon-ads",
+      "source_line": "###amazon-ads"
+    },
+    {
+      "selector": "#amazon_ad",
+      "source_line": "###amazon_ad"
+    },
+    {
+      "selector": "#analytics_ad",
+      "source_line": "###analytics_ad"
+    },
+    {
+      "selector": "#anchor-ad",
+      "source_line": "###anchor-ad"
+    },
+    {
+      "selector": "#anchorAd",
+      "source_line": "###anchorAd"
+    },
+    {
+      "selector": "#aniview-ads",
+      "source_line": "###aniview-ads"
+    },
+    {
+      "selector": "#aom-ad-right_side_1",
+      "source_line": "###aom-ad-right_side_1"
+    },
+    {
+      "selector": "#aom-ad-right_side_2",
+      "source_line": "###aom-ad-right_side_2"
+    },
+    {
+      "selector": "#aom-ad-top",
+      "source_line": "###aom-ad-top"
+    },
+    {
+      "selector": "#apiBackgroundAd",
+      "source_line": "###apiBackgroundAd"
+    },
+    {
+      "selector": "#article-ad",
+      "source_line": "###article-ad"
+    },
+    {
+      "selector": "#article-ad-container",
+      "source_line": "###article-ad-container"
+    },
+    {
+      "selector": "#article-ad-content",
+      "source_line": "###article-ad-content"
+    },
+    {
+      "selector": "#article-ads",
+      "source_line": "###article-ads"
+    },
+    {
+      "selector": "#article-advert",
+      "source_line": "###article-advert"
+    },
+    {
+      "selector": "#article-aside-top-ad",
+      "source_line": "###article-aside-top-ad"
+    },
+    {
+      "selector": "#article-billboard-ad-1",
+      "source_line": "###article-billboard-ad-1"
+    },
+    {
+      "selector": "#article-bottom-ad",
+      "source_line": "###article-bottom-ad"
+    },
+    {
+      "selector": "#article-box-ad",
+      "source_line": "###article-box-ad"
+    },
+    {
+      "selector": "#article-content-ad",
+      "source_line": "###article-content-ad"
+    },
+    {
+      "selector": "#article-footer-ad",
+      "source_line": "###article-footer-ad"
+    },
+    {
+      "selector": "#article-footer-sponsors",
+      "source_line": "###article-footer-sponsors"
+    },
+    {
+      "selector": "#article-island-ad",
+      "source_line": "###article-island-ad"
+    },
+    {
+      "selector": "#article-sidebar-ad",
+      "source_line": "###article-sidebar-ad"
+    },
+    {
+      "selector": "#articleAd",
+      "source_line": "###articleAd"
+    },
+    {
+      "selector": "#articleAdReplacement",
+      "source_line": "###articleAdReplacement"
+    },
+    {
+      "selector": "#articleBoard-ad",
+      "source_line": "###articleBoard-ad"
+    },
+    {
+      "selector": "#articleBottom-ads",
+      "source_line": "###articleBottom-ads"
+    },
+    {
+      "selector": "#articleLeftAdColumn",
+      "source_line": "###articleLeftAdColumn"
+    },
+    {
+      "selector": "#articleSideAd",
+      "source_line": "###articleSideAd"
+    },
+    {
+      "selector": "#articleTop-ads",
+      "source_line": "###articleTop-ads"
+    },
+    {
+      "selector": "#article_ad",
+      "source_line": "###article_ad"
+    },
+    {
+      "selector": "#article_ad_1",
+      "source_line": "###article_ad_1"
+    },
+    {
+      "selector": "#article_ad_3",
+      "source_line": "###article_ad_3"
+    },
+    {
+      "selector": "#article_ad_bottom",
+      "source_line": "###article_ad_bottom"
+    },
+    {
+      "selector": "#article_ad_container",
+      "source_line": "###article_ad_container"
+    },
+    {
+      "selector": "#article_ad_top",
+      "source_line": "###article_ad_top"
+    },
+    {
+      "selector": "#article_ad_w",
+      "source_line": "###article_ad_w"
+    },
+    {
+      "selector": "#article_adholder",
+      "source_line": "###article_adholder"
+    },
+    {
+      "selector": "#article_ads",
+      "source_line": "###article_ads"
+    },
+    {
+      "selector": "#article_advert",
+      "source_line": "###article_advert"
+    },
+    {
+      "selector": "#article_banner_ad",
+      "source_line": "###article_banner_ad"
+    },
+    {
+      "selector": "#article_body_ad1",
+      "source_line": "###article_body_ad1"
+    },
+    {
+      "selector": "#article_box_ad",
+      "source_line": "###article_box_ad"
+    },
+    {
+      "selector": "#articlead300x250r",
+      "source_line": "###articlead300x250r"
+    },
+    {
+      "selector": "#articleadblock",
+      "source_line": "###articleadblock"
+    },
+    {
+      "selector": "#articlefootad",
+      "source_line": "###articlefootad"
+    },
+    {
+      "selector": "#articletop_ad",
+      "source_line": "###articletop_ad"
+    },
+    {
+      "selector": "#aside-ad-container",
+      "source_line": "###aside-ad-container"
+    },
+    {
+      "selector": "#asideAd",
+      "source_line": "###asideAd"
+    },
+    {
+      "selector": "#aside_ad",
+      "source_line": "###aside_ad"
+    },
+    {
+      "selector": "#asideads",
+      "source_line": "###asideads"
+    },
+    {
+      "selector": "#asinglead",
+      "source_line": "###asinglead"
+    },
+    {
+      "selector": "#ax-billboard",
+      "source_line": "###ax-billboard"
+    },
+    {
+      "selector": "#ax-billboard-bottom",
+      "source_line": "###ax-billboard-bottom"
+    },
+    {
+      "selector": "#ax-billboard-sub",
+      "source_line": "###ax-billboard-sub"
+    },
+    {
+      "selector": "#ax-billboard-top",
+      "source_line": "###ax-billboard-top"
+    },
+    {
+      "selector": "#backad",
+      "source_line": "###backad"
+    },
+    {
+      "selector": "#background-ad-cover",
+      "source_line": "###background-ad-cover"
+    },
+    {
+      "selector": "#background-adv",
+      "source_line": "###background-adv"
+    },
+    {
+      "selector": "#background_ad_left",
+      "source_line": "###background_ad_left"
+    },
+    {
+      "selector": "#background_ad_right",
+      "source_line": "###background_ad_right"
+    },
+    {
+      "selector": "#background_ads",
+      "source_line": "###background_ads"
+    },
+    {
+      "selector": "#backgroundadvert",
+      "source_line": "###backgroundadvert"
+    },
+    {
+      "selector": "#banADbanner",
+      "source_line": "###banADbanner"
+    },
+    {
+      "selector": "#banner-300x250",
+      "source_line": "###banner-300x250"
+    },
+    {
+      "selector": "#banner-468x60",
+      "source_line": "###banner-468x60"
+    },
+    {
+      "selector": "#banner-728",
+      "source_line": "###banner-728"
+    },
+    {
+      "selector": "#banner-728x90",
+      "source_line": "###banner-728x90"
+    },
+    {
+      "selector": "#banner-ad",
+      "source_line": "###banner-ad"
+    },
+    {
+      "selector": "#banner-ad-container",
+      "source_line": "###banner-ad-container"
+    },
+    {
+      "selector": "#banner-ad-large",
+      "source_line": "###banner-ad-large"
+    },
+    {
+      "selector": "#banner-ads",
+      "source_line": "###banner-ads"
+    },
+    {
+      "selector": "#banner-advert",
+      "source_line": "###banner-advert"
+    },
+    {
+      "selector": "#banner-lg-ad",
+      "source_line": "###banner-lg-ad"
+    },
+    {
+      "selector": "#banner-native-ad",
+      "source_line": "###banner-native-ad"
+    },
+    {
+      "selector": "#banner-skyscraper",
+      "source_line": "###banner-skyscraper"
+    },
+    {
+      "selector": "#banner300x250",
+      "source_line": "###banner300x250"
+    },
+    {
+      "selector": "#banner468",
+      "source_line": "###banner468"
+    },
+    {
+      "selector": "#banner468x60",
+      "source_line": "###banner468x60"
+    },
+    {
+      "selector": "#banner728",
+      "source_line": "###banner728"
+    },
+    {
+      "selector": "#banner728x90",
+      "source_line": "###banner728x90"
+    },
+    {
+      "selector": "#bannerAd",
+      "source_line": "###bannerAd"
+    },
+    {
+      "selector": "#bannerAdFrame",
+      "source_line": "###bannerAdFrame"
+    },
+    {
+      "selector": "#bannerAdTop",
+      "source_line": "###bannerAdTop"
+    },
+    {
+      "selector": "#bannerAdWrap",
+      "source_line": "###bannerAdWrap"
+    },
+    {
+      "selector": "#bannerAdWrapper",
+      "source_line": "###bannerAdWrapper"
+    },
+    {
+      "selector": "#bannerAds",
+      "source_line": "###bannerAds"
+    },
+    {
+      "selector": "#bannerAdsense",
+      "source_line": "###bannerAdsense"
+    },
+    {
+      "selector": "#bannerAdvert",
+      "source_line": "###bannerAdvert"
+    },
+    {
+      "selector": "#bannerGoogle",
+      "source_line": "###bannerGoogle"
+    },
+    {
+      "selector": "#banner_ad_bottom",
+      "source_line": "###banner_ad_bottom"
+    },
+    {
+      "selector": "#banner_ad_footer",
+      "source_line": "###banner_ad_footer"
+    },
+    {
+      "selector": "#banner_ad_module",
+      "source_line": "###banner_ad_module"
+    },
+    {
+      "selector": "#banner_ad_placeholder",
+      "source_line": "###banner_ad_placeholder"
+    },
+    {
+      "selector": "#banner_ad_top",
+      "source_line": "###banner_ad_top"
+    },
+    {
+      "selector": "#banner_ads",
+      "source_line": "###banner_ads"
+    },
+    {
+      "selector": "#banner_adsense",
+      "source_line": "###banner_adsense"
+    },
+    {
+      "selector": "#banner_adv",
+      "source_line": "###banner_adv"
+    },
+    {
+      "selector": "#banner_advertisement",
+      "source_line": "###banner_advertisement"
+    },
+    {
+      "selector": "#banner_adverts",
+      "source_line": "###banner_adverts"
+    },
+    {
+      "selector": "#banner_content_ad",
+      "source_line": "###banner_content_ad"
+    },
+    {
+      "selector": "#banner_sedo",
+      "source_line": "###banner_sedo"
+    },
+    {
+      "selector": "#banner_slot",
+      "source_line": "###banner_slot"
+    },
+    {
+      "selector": "#banner_spacer",
+      "source_line": "###banner_spacer"
+    },
+    {
+      "selector": "#banner_topad",
+      "source_line": "###banner_topad"
+    },
+    {
+      "selector": "#banner_videoad",
+      "source_line": "###banner_videoad"
+    },
+    {
+      "selector": "#banner_wrapper_top",
+      "source_line": "###banner_wrapper_top"
+    },
+    {
+      "selector": "#bannerad-bottom",
+      "source_line": "###bannerad-bottom"
+    },
+    {
+      "selector": "#bannerad-top",
+      "source_line": "###bannerad-top"
+    },
+    {
+      "selector": "#bannerad2",
+      "source_line": "###bannerad2"
+    },
+    {
+      "selector": "#banneradrow",
+      "source_line": "###banneradrow"
+    },
+    {
+      "selector": "#bannerads",
+      "source_line": "###bannerads"
+    },
+    {
+      "selector": "#banneradspace",
+      "source_line": "###banneradspace"
+    },
+    {
+      "selector": "#banneradvert3",
+      "source_line": "###banneradvert3"
+    },
+    {
+      "selector": "#banneradvertise",
+      "source_line": "###banneradvertise"
+    },
+    {
+      "selector": "#bannerplayer-wrap",
+      "source_line": "###bannerplayer-wrap"
+    },
+    {
+      "selector": "#baseboard-ad",
+      "source_line": "###baseboard-ad"
+    },
+    {
+      "selector": "#baseboard-ad-wrapper",
+      "source_line": "###baseboard-ad-wrapper"
+    },
+    {
+      "selector": "#bbContentAds",
+      "source_line": "###bbContentAds"
+    },
+    {
+      "selector": "#bb_ad_container",
+      "source_line": "###bb_ad_container"
+    },
+    {
+      "selector": "#bb_top_ad",
+      "source_line": "###bb_top_ad"
+    },
+    {
+      "selector": "#bbadwrap",
+      "source_line": "###bbadwrap"
+    },
+    {
+      "selector": "#before-footer-ad",
+      "source_line": "###before-footer-ad"
+    },
+    {
+      "selector": "#below-listings-ad",
+      "source_line": "###below-listings-ad"
+    },
+    {
+      "selector": "#below-menu-ad-header",
+      "source_line": "###below-menu-ad-header"
+    },
+    {
+      "selector": "#below-post-ad",
+      "source_line": "###below-post-ad"
+    },
+    {
+      "selector": "#below-title-ad",
+      "source_line": "###below-title-ad"
+    },
+    {
+      "selector": "#belowAd",
+      "source_line": "###belowAd"
+    },
+    {
+      "selector": "#belowContactBoxAd",
+      "source_line": "###belowContactBoxAd"
+    },
+    {
+      "selector": "#belowNodeAds",
+      "source_line": "###belowNodeAds"
+    },
+    {
+      "selector": "#below_content_ad_container",
+      "source_line": "###below_content_ad_container"
+    }
+  ]
+}

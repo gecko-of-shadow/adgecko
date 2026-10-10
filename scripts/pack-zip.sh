@@ -18,6 +18,8 @@ REQUIRED=(
   src/youtube.js
   src/rules/general-network.json
   src/rules/CREDIT-EasyList.txt
+  src/rules/LICENSES.md
+  src/general-exclude-hosts.js
   icons/icon16.png
   icons/icon48.png
   icons/icon128.png
@@ -39,9 +41,14 @@ TMP="$(mktemp -d /tmp/adblock-pack.XXXXXX)"
 mkdir -p "$TMP/src/vendor" "$TMP/src/rules" "$TMP/icons"
 cp "$ROOT/manifest.json" "$TMP/"
 cp "$ROOT/src/popup.html" "$ROOT/src/popup.js" "$ROOT/src/debug.js" "$ROOT/src/debug-bridge.js" "$ROOT/src/youtube.js" "$TMP/src/"
+cp "$ROOT/src/general-exclude-hosts.js" "$TMP/src/"
 cp "$ROOT/src/vendor/video-swap-new.user.js" "$ROOT/src/vendor/LICENSE-TwitchAdSolutions" "$ROOT/src/vendor/README.md" "$TMP/src/vendor/"
-cp "$ROOT/src/rules/general-network.json" "$ROOT/src/rules/CREDIT-EasyList.txt" "$TMP/src/rules/"
+cp "$ROOT/src/rules/general-network.json" "$ROOT/src/rules/CREDIT-EasyList.txt" "$ROOT/src/rules/LICENSES.md" "$TMP/src/rules/"
+# Optional list-pack / merge metadata (not required to load).
+[[ -f "$ROOT/src/rules/meta.json" ]] && cp "$ROOT/src/rules/meta.json" "$TMP/src/rules/"
+[[ -f "$ROOT/src/rules/dnr-merge-meta.json" ]] && cp "$ROOT/src/rules/dnr-merge-meta.json" "$TMP/src/rules/"
 for opt in "${OPTIONAL[@]+"${OPTIONAL[@]}"}"; do
+  mkdir -p "$TMP/$(dirname "$opt")"
   cp "$ROOT/$opt" "$TMP/$opt"
 done
 cp "$ROOT/icons/icon16.png" "$ROOT/icons/icon48.png" "$ROOT/icons/icon128.png" "$TMP/icons/"

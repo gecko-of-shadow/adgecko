@@ -212,7 +212,8 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assertEquals(manifest.permissions, ["declarativeNetRequest", "storage"]);
   assertEquals(manifest.host_permissions, undefined);
   assertEquals(manifest.background, undefined);
-  assertEquals(manifest.declarative_net_request.rule_resources[0].id, "general_network");
+  // Popup GeneralSettings.RULESET_ID === "general"; packed file stays general-network.json.
+  assertEquals(manifest.declarative_net_request.rule_resources[0].id, "general");
   assertEquals(manifest.declarative_net_request.rule_resources[0].enabled, true);
   assertEquals(manifest.declarative_net_request.rule_resources[0].path, "src/rules/general-network.json");
   const youtube = manifest.content_scripts.find((script) => script.js.includes("src/youtube.js"));

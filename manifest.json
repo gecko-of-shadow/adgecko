@@ -10,7 +10,7 @@
   "declarative_net_request": {
     "rule_resources": [
       {
-        "id": "general_network",
+        "id": "general",
         "enabled": true,
         "path": "src/rules/general-network.json"
       }

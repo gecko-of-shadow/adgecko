@@ -88,12 +88,14 @@ REQUIRED=(
   src/youtube.js
   src/rules/general-network.json
   src/rules/CREDIT-EasyList.txt
+  src/rules/LICENSES.md
+  src/general-exclude-hosts.js
   icons/icon16.png
   icons/icon48.png
   icons/icon128.png
 )
-# Shippable paths only. Optional cosmetic.* allowed when cosmetic agent lands.
-ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/debug\.js|src/debug-bridge\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/cosmetic\.js|src/cosmetic\.css|icons/icon16\.png|icons/icon48\.png|icons/icon128\.png)$'
+# Shippable paths only. Optional cosmetic.* / meta allowed when sibling agents land.
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/debug\.js|src/debug-bridge\.js|src/general-exclude-hosts\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/cosmetic\.js|src/cosmetic\.css|icons/icon16\.png|icons/icon48\.png|icons/icon128\.png)$'
 
 PLAYBACK_FILES=(
   src/vendor/video-swap-new.user.js
@@ -262,14 +264,17 @@ if not resources:
     bad.append("declarative_net_request.rule_resources missing")
 else:
     ids = [r.get("id") for r in resources]
-    if "general_network" not in ids:
-        bad.append("rule_resources must include id general_network")
+    # Popup / GeneralSettings.RULESET_ID is "general" (path stays general-network.json).
+    if "general" not in ids:
+        bad.append("rule_resources must include id general")
     for r in resources:
         path = r.get("path") or ""
         if not path.startswith("src/rules/") or not path.endswith(".json"):
             bad.append(f"ruleset path out of src/rules/: {path!r}")
-        if r.get("id") == "general_network" and r.get("enabled") is not True:
-            bad.append("general_network ruleset must be enabled by default (Phase 0 default On)")
+        if r.get("id") == "general" and r.get("enabled") is not True:
+            bad.append("general ruleset must be enabled by default (Phase 0 default On)")
+        if r.get("id") == "general" and path != "src/rules/general-network.json":
+            bad.append(f"general ruleset path must be src/rules/general-network.json, got {path!r}")
 
 if bad:
     print("FAIL  privileged / permission fields:", "; ".join(bad))
