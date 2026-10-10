@@ -205,10 +205,16 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assert(source.includes("isInlinePlaybackNoAd"), "player requests opt out of scheduled ads");
   assert(source.includes('notice.textContent = "Blocking ads"'), "the player label says ads are being blocked");
   assertEquals(manifest.name, "twitch-adblock");
+  // Version stamp stays 0.2.3 until a coordinated beta cut (debug.js hardcodes the same string).
   assertEquals(manifest.version, "0.2.3");
   assertEquals(manifest.action.default_popup, "src/popup.html");
-  assertEquals(manifest.permissions, undefined);
+  // General-adblock beta: DNR + storage only. No host_permissions / background.
+  assertEquals(manifest.permissions, ["declarativeNetRequest", "storage"]);
   assertEquals(manifest.host_permissions, undefined);
+  assertEquals(manifest.background, undefined);
+  assertEquals(manifest.declarative_net_request.rule_resources[0].id, "general_network");
+  assertEquals(manifest.declarative_net_request.rule_resources[0].enabled, true);
+  assertEquals(manifest.declarative_net_request.rule_resources[0].path, "src/rules/general-network.json");
   const youtube = manifest.content_scripts.find((script) => script.js.includes("src/youtube.js"));
   assert(youtube, "youtube has its own content script");
   assert(youtube.matches.includes("*://www.youtube.com/*"), "www.youtube.com");

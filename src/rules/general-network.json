@@ -1,0 +1,102 @@
+[
+  {
+    "id": 1,
+    "priority": 10000,
+    "action": { "type": "allowAllRequests" },
+    "condition": {
+      "requestDomains": ["twitch.tv"],
+      "resourceTypes": ["main_frame", "sub_frame"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 10000,
+    "action": { "type": "allowAllRequests" },
+    "condition": {
+      "requestDomains": ["youtube.com", "youtu.be", "youtubekids.com"],
+      "resourceTypes": ["main_frame", "sub_frame"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 10000,
+    "action": { "type": "allowAllRequests" },
+    "condition": {
+      "requestDomains": ["kick.com"],
+      "resourceTypes": ["main_frame", "sub_frame"]
+    }
+  },
+  {
+    "id": 10,
+    "priority": 9990,
+    "action": { "type": "allow" },
+    "condition": {
+      "requestDomains": [
+        "twitch.tv",
+        "ttvnw.net",
+        "jtvnw.net",
+        "twitchcdn.net",
+        "twitchcdn.com"
+      ],
+      "resourceTypes": [
+        "media",
+        "xmlhttprequest",
+        "websocket",
+        "other",
+        "script",
+        "image",
+        "font",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 11,
+    "priority": 9990,
+    "action": { "type": "allow" },
+    "condition": {
+      "requestDomains": [
+        "youtube.com",
+        "youtu.be",
+        "youtubekids.com",
+        "googlevideo.com",
+        "ytimg.com",
+        "ggpht.com",
+        "googleapis.com",
+        "gstatic.com",
+        "google.com"
+      ],
+      "resourceTypes": [
+        "media",
+        "xmlhttprequest",
+        "websocket",
+        "other",
+        "script",
+        "image",
+        "font",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 12,
+    "priority": 9990,
+    "action": { "type": "allow" },
+    "condition": {
+      "requestDomains": [
+        "kick.com",
+        "live-video.net"
+      ],
+      "resourceTypes": [
+        "media",
+        "xmlhttprequest",
+        "websocket",
+        "other",
+        "script",
+        "image",
+        "font",
+        "stylesheet"
+      ]
+    }
+  }
+]
