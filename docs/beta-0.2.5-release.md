@@ -13,9 +13,9 @@ On ordinary websites:
 - **Allow this page** lets the open ordinary site through.
 - **Update lists** is on the popup. In this beta it only remembers that you asked. It does not download a new list yet. The lists in the zip are the ones that run. Nothing fetches on its own in the background.
 
-Twitch, YouTube (including Music, Kids, and embeds), and Kick are left out of that general list, including the video addresses those players use. Twitch and YouTube in this zip match the stable build. Their scripts were not edited.
+Twitch, YouTube (including Music, Kids, and embeds), and Kick are left out of that general list, including the video addresses those players use. Twitch and YouTube playback scripts match the stable build and were not edited for general blocking.
 
-This zip does **not** include the Kick player try from beta v0.2.4. If you want that Kick try, keep the older beta zip. kick.com is still skipped by the new list.
+This zip also includes the Kick in-player ad try from beta v0.2.4 / PR #12: when Kick’s IVS player can jump back to the live stream, short ad breaks are skipped without muting or hiding the video. The general list still does not run on kick.com.
 
 Debug still starts off. Copy debug still works on Twitch and YouTube.
 
@@ -24,7 +24,7 @@ Chrome may warn that this can block content on pages. Hiding leftover boxes also
 ## What it should be able to do later
 
 - Pressing **Update lists** should bring in a fresh list, still only when you ask.
-- The Kick player try from v0.2.4 can come back in a later beta, still without the general list touching Kick.
+- Kick skip can get better without ever letting the general list touch Kick.
 - Leftover-box hiding can get better. It still will not be a promise that every ad is gone.
 - The safety sentences on the main page can be rewritten once gecko picks the words.
 

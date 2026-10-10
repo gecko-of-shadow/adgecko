@@ -18,6 +18,7 @@ REQUIRED=(
   src/vendor/video-swap-new.user.js
   src/vendor/LICENSE-TwitchAdSolutions
   src/youtube.js
+  src/kick.js
   src/rules/general-network.json
   src/rules/CREDIT-EasyList.txt
   src/rules/LICENSES.md
@@ -46,7 +47,7 @@ fi
 TMP="$(mktemp -d /tmp/adblock-pack.XXXXXX)"
 mkdir -p "$TMP/src/vendor" "$TMP/src/rules" "$TMP/icons"
 cp "$ROOT/manifest.json" "$TMP/"
-cp "$ROOT/src/popup.html" "$ROOT/src/popup.js" "$ROOT/src/general-settings.js" "$ROOT/src/general-background.js" "$ROOT/src/debug.js" "$ROOT/src/debug-bridge.js" "$ROOT/src/youtube.js" "$ROOT/src/general-exclude-hosts.js" "$ROOT/src/cosmetic.js" "$ROOT/src/cosmetic-hide.css" "$ROOT/src/LICENSE-EasyList.txt" "$TMP/src/"
+cp "$ROOT/src/popup.html" "$ROOT/src/popup.js" "$ROOT/src/general-settings.js" "$ROOT/src/general-background.js" "$ROOT/src/debug.js" "$ROOT/src/debug-bridge.js" "$ROOT/src/youtube.js" "$ROOT/src/kick.js" "$ROOT/src/general-exclude-hosts.js" "$ROOT/src/cosmetic.js" "$ROOT/src/cosmetic-hide.css" "$ROOT/src/LICENSE-EasyList.txt" "$TMP/src/"
 cp "$ROOT/src/vendor/video-swap-new.user.js" "$ROOT/src/vendor/LICENSE-TwitchAdSolutions" "$ROOT/src/vendor/README.md" "$TMP/src/vendor/"
 cp "$ROOT/src/rules/general-network.json" "$ROOT/src/rules/CREDIT-EasyList.txt" "$ROOT/src/rules/LICENSES.md" "$TMP/src/rules/"
 [[ -f "$ROOT/src/rules/meta.json" ]] && cp "$ROOT/src/rules/meta.json" "$TMP/src/rules/"

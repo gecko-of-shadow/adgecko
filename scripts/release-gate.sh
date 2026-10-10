@@ -88,6 +88,7 @@ REQUIRED=(
   src/vendor/video-swap-new.user.js
   src/vendor/LICENSE-TwitchAdSolutions
   src/youtube.js
+  src/kick.js
   src/rules/general-network.json
   src/rules/CREDIT-EasyList.txt
   src/rules/LICENSES.md
@@ -297,6 +298,7 @@ print("PASS  permissions are storage + declarativeNetRequest; UI worker only; no
 scripts = m.get("content_scripts") or []
 twitch = next((s for s in scripts if "src/vendor/video-swap-new.user.js" in (s.get("js") or [])), None)
 youtube = next((s for s in scripts if "src/youtube.js" in (s.get("js") or [])), None)
+kick = next((s for s in scripts if "src/kick.js" in (s.get("js") or [])), None)
 if not twitch:
     print("FAIL  Twitch content_script missing"); sys.exit(1)
 need_t = {"*://twitch.tv/*", "*://*.twitch.tv/*"}
@@ -341,6 +343,22 @@ if youtube.get("js") != ["src/debug.js", "src/youtube.js"]:
     print("FAIL  YouTube js order", youtube.get("js")); sys.exit(1)
 print("PASS  YouTube host coverage", sorted(got_y))
 
+if not kick:
+    print("FAIL  Kick content_script missing"); sys.exit(1)
+need_k = {"*://kick.com/*", "*://*.kick.com/*"}
+got_k = set(kick.get("matches") or [])
+if not need_k <= got_k:
+    print("FAIL  Kick matches missing", need_k - got_k); sys.exit(1)
+if kick.get("js") != ["src/kick.js"]:
+    print("FAIL  Kick js", kick.get("js")); sys.exit(1)
+if kick.get("world") != "MAIN":
+    print("FAIL  Kick world", kick.get("world")); sys.exit(1)
+if kick.get("run_at") != "document_start":
+    print("FAIL  Kick run_at", kick.get("run_at")); sys.exit(1)
+if kick.get("all_frames") is not True:
+    print("FAIL  Kick should cover embed frames"); sys.exit(1)
+print("PASS  Kick host coverage", sorted(got_k))
+
 if m.get("action", {}).get("default_popup") != "src/popup.html":
     print("FAIL  debug popup must be action.default_popup"); sys.exit(1)
 print("PASS  action popup is src/popup.html")
@@ -358,7 +376,7 @@ if got_b != need_b:
     print("FAIL  debug bridge host scope", sorted(got_b)); sys.exit(1)
 print("PASS  debug bridge is isolated and host-scoped")
 
-joined = " ".join(sorted(got_t | got_y))
+joined = " ".join(sorted(got_t | got_y | got_k))
 for host in ("music.youtube.com", "studio.youtube.com", "youtubekids.com"):
     if host in joined:
         print("FAIL  unexpected host scope", host); sys.exit(1)
@@ -479,6 +497,7 @@ allowed_host_bits = (
     "twitch.tv", "ttvnw.net", "jtvnw.net", "twitchcdn",
     "youtube.com", "youtu.be", "googlevideo.com", "ytimg.com",
     "googleapis.com", "ggpht.com", "yt3.", "youtubei.",
+    "kick.com", "live-video.net", "amazon-ivs",
     # Manual list Update (popup fetch) may reference these; still no background worker.
     "easylist.to", "pgl.yoyo.org", "raw.githubusercontent.com",
 )
