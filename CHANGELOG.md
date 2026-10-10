@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.6 — beta
+
+- YouTube search results drop sponsored cards (`searchPyvRenderer`) the same way Home does. The video results stay.
+- Leftover ad boxes on ordinary sites can load their hide stylesheet. The file is listed as a web-accessible resource so Chrome can fetch it.
+- The YouTube black-spinner fix from stable main is in this beta. A short “Blocking ads” chip shows once per video, then stays hidden until you open another video.
+- Three more tracker hosts are blocked on ordinary sites: facebook.net, imasdk.googleapis.com, and fundingchoicesmessages.google.com. Twitch, YouTube, and Kick frames are still allowed through.
+- Kick’s own player try is still included. The general list still skips Twitch, YouTube, and Kick. Update lists still only remembers the ask. This does not block every ad. Stable Latest stays v0.2.3.
+
+## 0.2.5 — beta
+
+- On ordinary websites, many ad servers are blocked and leftover ad boxes are hidden. This does not block every ad.
+- Twitch and YouTube playback scripts match stable and were not edited for general blocking. Kick in-player ad skip from v0.2.4 is included; the general list still skips Kick.
+- General blocking starts on. The popup can turn it off, allow the open page, or update the lists by hand. Nothing updates in the background.
+- The gecko’s eyes glow while general blocking is on.
+- This is a new beta. The stable download stays v0.2.3.
+
 ## 0.2.3
 
 - On a Twitch tab, the popup answers correctly when the extension is on. Copy debug includes the log from that tab, including the on-screen blocking label when it is showing.

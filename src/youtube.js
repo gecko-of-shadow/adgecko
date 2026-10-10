@@ -25,6 +25,7 @@ function installYoutubeAdblock(target) {
     "brandVideoShelfRenderer",
     "brandVideoSingletonRenderer",
     "statementBannerRenderer",
+    "searchPyvRenderer",
   ];
   const DOM_AD_SELECTORS = [
     ".ytp-ad-overlay-container",
@@ -60,6 +61,7 @@ function installYoutubeAdblock(target) {
     "ytd-statement-banner-renderer",
     "ytm-promoted-sparkles-web-renderer",
     "ytm-ad-slot-renderer",
+    "ytd-search-pyv-renderer",
   ].join(",");
 
   function kindFor(url) {
@@ -77,7 +79,7 @@ function installYoutubeAdblock(target) {
     if (path.includes("/youtubei/v1/player") || path.includes("/youtubei/v1/get_midroll")) return "player";
     if (path.includes("/youtubei/v1/reel/")) return "reel";
     if (path.includes("/youtubei/v1/next") || path.includes("/youtubei/v1/get_watch")) return "watch";
-    if (path.includes("/youtubei/v1/browse")) return "browse";
+    if (path.includes("/youtubei/v1/browse") || path.includes("/youtubei/v1/search")) return "browse";
     return "";
   }
 
@@ -100,6 +102,7 @@ function installYoutubeAdblock(target) {
       || source.includes('"brandVideoShelfRenderer"')
       || source.includes('"brandVideoSingletonRenderer"')
       || source.includes('"statementBannerRenderer"')
+      || source.includes('"searchPyvRenderer"')
       || source.includes("REEL_VIDEO_TYPE_AD")
       || source.includes('"isAd":true')
       || source.includes('"isAd": true');
@@ -496,6 +499,8 @@ function startYoutubeAdblock() {
   const nativeParse = JSON.parse;
   let hideTimer = 0;
   let noticeGeneration = 0;
+  // One announcement per video. Later player/DOM strips must not restart the hide.
+  let noticeLatched = false;
   const retryTimers = new Set();
 
   function requestUrl(input) {
@@ -534,6 +539,7 @@ function startYoutubeAdblock() {
   }
 
   function notify(blocking, attempt, generation) {
+    if (blocking && noticeLatched) return;
     if (blocking && !attempt) trace("youtube", "blocked");
     const existing = document.getElementById("twitch-adblock-notice");
     if (!blocking) {
@@ -561,8 +567,11 @@ function startYoutubeAdblock() {
     notice.textContent = "Blocking ads";
     notice.style.cssText = "position:absolute;top:8px;left:8px;z-index:60;color:#fff;background:rgba(0,0,0,.75);padding:4px 8px;font:12px/1.2 sans-serif;pointer-events:none;";
     if (notice.parentElement !== player) player.appendChild(notice);
-    clearTimeout(hideTimer);
+    // Latch before returning so a mutation caused by this insert cannot extend the timer.
+    noticeLatched = true;
+    if (hideTimer) return;
     hideTimer = setTimeout(() => {
+      hideTimer = 0;
       if (gen === noticeGeneration) notify(false);
     }, 8000);
   }
@@ -631,7 +640,7 @@ function startYoutubeAdblock() {
     const path = location.pathname || "";
     if (path === "/watch") return "watch";
     if (path.startsWith("/shorts")) return "reel";
-    if (path === "/" || path === "") return "browse";
+    if (path === "/" || path === "" || path.startsWith("/results")) return "browse";
     return "";
   }
 
@@ -833,7 +842,7 @@ function startYoutubeAdblock() {
     const path = location.pathname || "";
     const kind = path.startsWith("/shorts")
       ? "reel"
-      : (path === "/watch" ? "watch" : ((path === "/" || path === "") ? "browse" : "player"));
+      : (path === "/watch" ? "watch" : ((path === "/" || path === "" || path.startsWith("/results")) ? "browse" : "player"));
     try {
       if (isAdOnlyPlayer(value)) return value;
       const stripped = api.stripValue(value, kind);
@@ -889,7 +898,10 @@ function startYoutubeAdblock() {
   }
 
   injectHomeFeedCss();
-  document.addEventListener("yt-navigate-start", () => notify(false), true);
+  document.addEventListener("yt-navigate-start", () => {
+    noticeLatched = false;
+    notify(false);
+  }, true);
   document.addEventListener("yt-navigate-finish", () => {
     injectHomeFeedCss();
     removeDomAds();

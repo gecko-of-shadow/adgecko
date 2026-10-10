@@ -1,0 +1,81 @@
+{
+  "packed_at_utc": "2026-10-10T08:27:09Z",
+  "format": "chrome_declarativeNetRequest_rules_array",
+  "domains_total": 99491,
+  "dnr_rules_total": 1244,
+  "domains_per_rule": 80,
+  "max_dnr_rules_budget": 28000,
+  "headroom_note": "Reserve remaining static rule quota for stream-site allow rules (DNR agent).",
+  "sources": {
+    "peter_lowe": {
+      "url": "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext",
+      "sha256": "0fea40d20ee7bd83ba818dfdb6dbe148efacc99c509e03e85b65fa876d99be61",
+      "role": "ads_trackers",
+      "priority": 100,
+      "raw": 3547,
+      "kept": 3543,
+      "skipped_never": 4
+    },
+    "urlhaus_hosts": {
+      "url": "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt",
+      "sha256": "ae2d9fffddce124fb3e12db164f22ae01903220331e181960eaabfcf8f63cdba",
+      "role": "malware_threat",
+      "priority": 90,
+      "raw": 524,
+      "kept": 524,
+      "skipped_never": 0
+    },
+    "easylist": {
+      "url": "https://easylist.to/easylist/easylist.txt",
+      "sha256": "5234769a759e6fc3b9770d0e4d27d9a1ebdc77cf53e07c843a3b814d6dc4f4ab",
+      "role": "ads",
+      "priority": 70,
+      "raw": 52001,
+      "kept": 49330,
+      "skipped_never": 3
+    },
+    "easyprivacy": {
+      "url": "https://easylist.to/easylist/easyprivacy.txt",
+      "sha256": "3980f351ed08705bc12b0ded349de68da6133bea35d57676093c79d63b33296c",
+      "role": "privacy",
+      "priority": 50,
+      "raw": 47170,
+      "kept": 46094,
+      "skipped_never": 6
+    }
+  },
+  "never_block_suffixes": [
+    "twitch.tv",
+    "ttvnw.net",
+    "jtvnw.net",
+    "twitchcdn.net",
+    "twitchcdn.com",
+    "ext-twitch.tv",
+    "youtube.com",
+    "youtu.be",
+    "googlevideo.com",
+    "ytimg.com",
+    "ggpht.com",
+    "youtubei.googleapis.com",
+    "googleapis.com",
+    "gstatic.com",
+    "kick.com",
+    "kick-streamer.com"
+  ],
+  "manifest_hint": {
+    "permissions": [
+      "declarativeNetRequest",
+      "storage"
+    ],
+    "declarative_net_request": {
+      "rule_resources": [
+        {
+          "id": "general",
+          "enabled": true,
+          "path": "src/rules/general-network.json"
+        }
+      ]
+    }
+  },
+  "dnr_agent_note": "Merged with buildDnrExclusionRules() allows (ids 1-2, priority 2e6); blocks renumbered from 100."
+}

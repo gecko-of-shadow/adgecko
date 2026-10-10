@@ -205,10 +205,21 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assert(source.includes("isInlinePlaybackNoAd"), "player requests opt out of scheduled ads");
   assert(source.includes('notice.textContent = "Blocking ads"'), "the player label says ads are being blocked");
   assertEquals(manifest.name, "twitch-adblock");
-  assertEquals(manifest.version, "0.2.3");
+  assertEquals(manifest.version, "0.2.6");
   assertEquals(manifest.action.default_popup, "src/popup.html");
-  assertEquals(manifest.permissions, undefined);
+  assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
   assertEquals(manifest.host_permissions, undefined);
+  assertEquals(manifest.optional_host_permissions, undefined);
+  assertEquals(manifest.background.service_worker, "src/general-background.js");
+  assertEquals(manifest.declarative_net_request.rule_resources[0].id, "general");
+  assertEquals(manifest.declarative_net_request.rule_resources[0].enabled, true);
+  assertEquals(manifest.declarative_net_request.rule_resources[0].path, "src/rules/general-network.json");
+  assert(
+    (manifest.web_accessible_resources || []).some((entry) =>
+      (entry.resources || []).includes("src/cosmetic-hide.css")
+    ),
+    "leftover-box stylesheet is web accessible",
+  );
   const youtube = manifest.content_scripts.find((script) => script.js.includes("src/youtube.js"));
   assert(youtube, "youtube has its own content script");
   assert(youtube.matches.includes("*://www.youtube.com/*"), "www.youtube.com");
@@ -308,6 +319,41 @@ Deno.test("browse continuations drop in-feed ads and keep the continuation token
   const items = JSON.parse(stripped.text).onResponseReceivedActions[0].appendContinuationItemsAction.continuationItems;
   assertEquals(items.map((item) => Object.keys(item)[0]), ["richItemRenderer", "continuationItemRenderer"]);
   assertEquals(items[1].continuationItemRenderer.token, "keep-scroll");
+});
+
+Deno.test("search results drop sponsored cards and keep videos", () => {
+  assertEquals(api.kindFor("https://www.youtube.com/youtubei/v1/search?prettyPrint=false"), "browse");
+  assert(api.WATCH_AD_KEYS.includes("searchPyvRenderer"), "search ad item is an ad key");
+  assert(api.HOME_FEED_AD_CSS.includes("ytd-search-pyv-renderer"), "search ad element is hidden if it still renders");
+  const search = {
+    contents: {
+      twoColumnSearchResultsRenderer: {
+        primaryContents: {
+          sectionListRenderer: {
+            contents: [{
+              itemSectionRenderer: {
+                contents: [
+                  { videoRenderer: { videoId: "keep-search" } },
+                  { searchPyvRenderer: { ads: [{ adSlotRenderer: { adSlotMetadata: { slotId: "slot" } } }] } },
+                  { continuationItemRenderer: { token: "next-search" } },
+                ],
+              },
+            }],
+          },
+        },
+      },
+    },
+  };
+  const stripped = api.stripResponseText(JSON.stringify(search), "https://www.youtube.com/youtubei/v1/search");
+  assert(stripped.blocked, "search ads were removed");
+  const items = JSON.parse(stripped.text)
+    .contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents[0]
+    .itemSectionRenderer.contents;
+  assertEquals(items.map((item) => Object.keys(item)[0]), ["videoRenderer", "continuationItemRenderer"]);
+  assertEquals(items[0].videoRenderer.videoId, "keep-search");
+  assert(!stripped.text.includes("searchPyvRenderer"), "search promoted block is gone");
+  assert(!stripped.text.includes("adSlotRenderer"), "search ad slot is gone");
+  assert(source.includes('path.startsWith("/results")'), "search pages strip initial data like browse");
 });
 
 Deno.test("browse kind is recognized and home CSS targets Sponsored cards", () => {

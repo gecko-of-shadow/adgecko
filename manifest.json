@@ -1,15 +1,37 @@
 {
   "manifest_version": 3,
   "name": "twitch-adblock",
-  "version": "0.2.3",
-  "description": "Blocks video ads on Twitch (TwitchAdSolutions video-swap-new, unmodified) and YouTube.",
+  "version": "0.2.6",
+  "description": "Blocks video ads on Twitch (TwitchAdSolutions video-swap-new, unmodified), YouTube, and Kick, plus general-site ad blocking (beta).",
+  "permissions": [
+    "storage",
+    "declarativeNetRequest"
+  ],
+  "background": {
+    "service_worker": "src/general-background.js"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["src/cosmetic-hide.css"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "general",
+        "enabled": true,
+        "path": "src/rules/general-network.json"
+      }
+    ]
+  },
   "action": {
     "default_popup": "src/popup.html",
     "default_title": "twitch-adblock",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "icons/icon16-working.png",
+      "48": "icons/icon48-working.png",
+      "128": "icons/icon128-working.png"
     }
   },
   "icons": {
@@ -66,6 +88,51 @@
       ],
       "js": [
         "src/debug-bridge.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "*://kick.com/*",
+        "*://*.kick.com/*"
+      ],
+      "js": [
+        "src/kick.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "exclude_matches": [
+        "*://twitch.tv/*",
+        "*://*.twitch.tv/*",
+        "*://youtube.com/*",
+        "*://*.youtube.com/*",
+        "*://youtu.be/*",
+        "*://*.youtu.be/*",
+        "*://youtube-nocookie.com/*",
+        "*://*.youtube-nocookie.com/*",
+        "*://youtubekids.com/*",
+        "*://*.youtubekids.com/*",
+        "*://googlevideo.com/*",
+        "*://*.googlevideo.com/*",
+        "*://ytimg.com/*",
+        "*://*.ytimg.com/*",
+        "*://ggpht.com/*",
+        "*://*.ggpht.com/*",
+        "*://kick.com/*",
+        "*://*.kick.com/*",
+        "*://kickusercontent.com/*",
+        "*://*.kickusercontent.com/*"
+      ],
+      "js": [
+        "src/cosmetic.js"
       ],
       "run_at": "document_start",
       "all_frames": true
