@@ -205,7 +205,7 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assert(source.includes("isInlinePlaybackNoAd"), "player requests opt out of scheduled ads");
   assert(source.includes('notice.textContent = "Blocking ads"'), "the player label says ads are being blocked");
   assertEquals(manifest.name, "twitch-adblock");
-  assertEquals(manifest.version, "0.2.10");
+  assertEquals(manifest.version, "0.2.11");
   assertEquals(manifest.action.default_popup, "src/popup.html");
   assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
   assertEquals(manifest.host_permissions, undefined);

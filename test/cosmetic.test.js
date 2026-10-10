@@ -106,6 +106,17 @@ Deno.test("trimmed EasyList cosmetic CSS credits authors and hides with importan
   assert(selectorBlocks >= 50, "enough trimmed generic hide rules shipped");
 });
 
+Deno.test("IMDb sponsored banners are in the ordinary-site hide sheet", () => {
+  assert(css.includes(".cornerstone_slot"), "IMDb billboard slot");
+  assert(css.includes('[aria-label="Sponsored Content"]'), "sponsored content label");
+  assert(css.includes('[aria-label="Bottom Sponsored Advertisement"]'), "bottom adhesion bar");
+  assert(css.includes("DesktopAdhesionAdSlot_shell"), "bottom adhesion shell");
+  assert(api.hostExcluded("www.twitch.tv"), "sheet still does not run on Twitch");
+  assert(api.hostExcluded("www.youtube.com"), "sheet still does not run on YouTube");
+  assert(api.hostExcluded("www.kick.com"), "sheet still does not run on Kick");
+  assert(!api.hostExcluded("www.imdb.com"), "IMDb stays eligible");
+});
+
 Deno.test("applyEnabled skips excluded hosts and respects master off", async () => {
   const local = {};
   installCosmeticHide(local);

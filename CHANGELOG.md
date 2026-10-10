@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.11 — beta
+
+- IMDb sponsored banners, including the large name-page billboard, are hidden. The slot is on IMDb itself. Amazon’s ad host was already blocked. Posters stay.
+- This hide runs with the ordinary-site sheet. Twitch, YouTube, and Kick playback are unchanged.
+- Stable Latest stays v0.2.3. This beta replaces the 0.2.10 try.
+
 ## 0.2.10 — beta
 
 - Twitch Browse directory ads (the top banner slot and in-grid Ad cards) are hidden. The player, usher, and gql are not rewritten.

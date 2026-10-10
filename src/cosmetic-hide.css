@@ -4203,3 +4203,12 @@
 #topbarads {
   display: none !important;
 }
+
+/* IMDb name/title pages: first-party sponsored billboards (EasyList imdb.com##.cornerstone_slot).
+   The creative is often painted into these slots, not a host we can block without hiding posters. */
+.cornerstone_slot,
+[aria-label="Sponsored Content"],
+[aria-label="Bottom Sponsored Advertisement"],
+[class*="DesktopAdhesionAdSlot_shell"] {
+  display: none !important;
+}
