@@ -2,6 +2,22 @@ This is a **beta**. It is not the stable download. v0.2.3 stays Latest.
 
 The gecko on the toolbar is the same. While general blocking is on, its eyes glow. That glow is only a quiet “this is on” mark. It does not mean every ad is gone.
 
+## Picture guide (beta features)
+
+<img src="https://raw.githubusercontent.com/gecko-of-shadow/twitch-adblock/cursor/general-adblock-beta-6d96/docs/cards-beta-0.2.5/01-general-list-blocking.png" width="800" alt="General list blocking. Blocks many known ad servers on ordinary sites. This does not block every ad.">
+
+<img src="https://raw.githubusercontent.com/gecko-of-shadow/twitch-adblock/cursor/general-adblock-beta-6d96/docs/cards-beta-0.2.5/02-hide-leftover-boxes.png" width="800" alt="Hide leftover boxes. Clears empty ad frames when the page can spare them. Some empty spots and some ads can still show.">
+
+<img src="https://raw.githubusercontent.com/gecko-of-shadow/twitch-adblock/cursor/general-adblock-beta-6d96/docs/cards-beta-0.2.5/03-master-switch-glowing-eyes.png" width="800" alt="Master switch and glowing eyes. Eyes glow only as a quiet this is on mark. Does not turn Twitch, YouTube, or Kick playback filters off.">
+
+<img src="https://raw.githubusercontent.com/gecko-of-shadow/twitch-adblock/cursor/general-adblock-beta-6d96/docs/cards-beta-0.2.5/04-allow-this-page.png" width="800" alt="Allow this page. Lets the open ordinary site through.">
+
+<img src="https://raw.githubusercontent.com/gecko-of-shadow/twitch-adblock/cursor/general-adblock-beta-6d96/docs/cards-beta-0.2.5/05-update-lists.png" width="800" alt="Update lists. Manual only. In this beta it only remembers that you asked and does not download a new list yet.">
+
+<img src="https://raw.githubusercontent.com/gecko-of-shadow/twitch-adblock/cursor/general-adblock-beta-6d96/docs/cards-beta-0.2.5/06-stream-sites-left-alone.png" width="800" alt="Stream sites stay out of the list. Twitch, YouTube, and Kick are skipped by general blocking.">
+
+<img src="https://raw.githubusercontent.com/gecko-of-shadow/twitch-adblock/cursor/general-adblock-beta-6d96/docs/cards-beta-0.2.5/07-kick-player.png" width="800" alt="Kick player path. Site-specific Kick ad skip, not the general list. The ad may play if a skip is not safe. The general list still does not touch Kick.">
+
 ## What this beta adds
 
 On ordinary websites:
