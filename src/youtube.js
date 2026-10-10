@@ -1,7 +1,9 @@
 // Runs on YouTube at document_start. Ads are removed from the player
 // response so the same video keeps playing. Home-feed Sponsored cards
 // are stripped from browse JSON and hidden with CSS. Nothing here
-// replaces the picture with a blank frame.
+// replaces the picture with a blank frame. A SABR next-request policy
+// can still hold that player on a black loading spinner for the ad-length
+// backoff (often 10 seconds) after a click; that delay is cleared below.
 function installYoutubeAdblock(target) {
   const nativeJSONParse = JSON.parse;
   const PLAYER_AD_FIELDS = ["adPlacements", "playerAds", "adSlots", "adBreakHeartbeatParams", "adBreakParams"];
@@ -265,6 +267,188 @@ function installYoutubeAdblock(target) {
     }
   }
 
+  // YouTube's web player reads SABR (UMP) from googlevideo /videoplayback.
+  // Part type 35 is the next-request policy. Protobuf field 4 of that part
+  // is backoffTimeMs: the player waits that long on a black spinner before
+  // it asks for picture. 10000 is the common preroll-sized hold. The part
+  // header is YouTube's hpI integer, not a protobuf varint.
+  function isSabrPlayback(url) {
+    const text = String(url || "");
+    if (!text.includes("videoplayback")) return false;
+    let parsed;
+    try {
+      parsed = new URL(text, "https://www.youtube.com");
+    } catch {
+      return false;
+    }
+    const host = parsed.hostname;
+    return host === "googlevideo.com" || host.endsWith(".googlevideo.com");
+  }
+
+  function concatBytes(parts) {
+    let length = 0;
+    for (let i = 0; i < parts.length; i++) length += parts[i].length;
+    const out = new Uint8Array(length);
+    let offset = 0;
+    for (let i = 0; i < parts.length; i++) {
+      out.set(parts[i], offset);
+      offset += parts[i].length;
+    }
+    return out;
+  }
+
+  function readHpI(bytes, offset) {
+    if (offset >= bytes.length) return null;
+    const first = bytes[offset];
+    const width = first < 128 ? 1 : first < 192 ? 2 : first < 224 ? 3 : first < 240 ? 4 : 5;
+    if (offset + width > bytes.length) return null;
+    if (width === 1) return { value: first, next: offset + 1 };
+    if (width === 2) return { value: (first & 63) + 64 * bytes[offset + 1], next: offset + 2 };
+    if (width === 3) {
+      return {
+        value: (first & 31) + 32 * (bytes[offset + 1] + 256 * bytes[offset + 2]),
+        next: offset + 3,
+      };
+    }
+    if (width === 4) {
+      return {
+        value: (first & 15) + 16 * (bytes[offset + 1] + 256 * (bytes[offset + 2] + 256 * bytes[offset + 3])),
+        next: offset + 4,
+      };
+    }
+    const view = new DataView(bytes.buffer, bytes.byteOffset + offset + 1, 4);
+    return { value: view.getUint32(0, true), next: offset + 5 };
+  }
+
+  function readProtoVarint(bytes, offset, end) {
+    let value = 0;
+    let factor = 1;
+    let index = offset;
+    while (index < end && factor <= 268435456) {
+      const bite = bytes[index++];
+      value += (bite & 127) * factor;
+      if ((bite & 128) === 0) return { value, next: index };
+      factor *= 128;
+    }
+    return null;
+  }
+
+  function readUmpHeader(bytes) {
+    const type = readHpI(bytes, 0);
+    if (!type) return bytes.length >= 10 ? { invalid: true } : { need: true };
+    const size = readHpI(bytes, type.next);
+    if (!size) return bytes.length >= type.next + 5 ? { invalid: true } : { need: true };
+    if (type.value < 1 || type.value > 80 || size.value > 16000000) return { invalid: true };
+    return { type: type.value, size: size.value, headerLen: size.next };
+  }
+
+  // Returns the [start, end) of top-level field 4, or null when the
+  // payload is not that policy message. Does not write.
+  function field4Range(bytes, start, end) {
+    let index = start;
+    let range = null;
+    while (index < end) {
+      const key = readProtoVarint(bytes, index, end);
+      if (!key || key.value < 8) return null;
+      const field = key.value >>> 3;
+      const wire = key.value & 7;
+      if (wire === 0) {
+        const val = readProtoVarint(bytes, key.next, end);
+        if (!val) return null;
+        if (field === 4) range = [key.next, val.next];
+        index = val.next;
+      } else if (wire === 2) {
+        const len = readProtoVarint(bytes, key.next, end);
+        if (!len || len.next + len.value > end) return null;
+        index = len.next + len.value;
+      } else if (wire === 5) {
+        index = key.next + 4;
+        if (index > end) return null;
+      } else if (wire === 1) {
+        index = key.next + 8;
+        if (index > end) return null;
+      } else {
+        return null;
+      }
+    }
+    if (index !== end) return null;
+    return range;
+  }
+
+  function zeroVarint(bytes, start, end) {
+    const width = end - start;
+    if (width <= 0) return;
+    if (width === 1) {
+      bytes[start] = 0;
+      return;
+    }
+    for (let index = start; index < end - 1; index++) bytes[index] = 128;
+    bytes[end - 1] = 0;
+  }
+
+  function createUmpBackoffParser() {
+    let pending = new Uint8Array(0);
+    let skip = 0;
+    let passthrough = false;
+
+    function push(chunk) {
+      const bytes = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk || 0);
+      if (passthrough) return bytes;
+      pending = pending.length ? concatBytes([pending, bytes]) : bytes;
+      const ready = [];
+      while (true) {
+        if (skip > 0) {
+          if (!pending.length) break;
+          const take = Math.min(skip, pending.length);
+          ready.push(pending.subarray(0, take));
+          pending = pending.subarray(take);
+          skip -= take;
+          continue;
+        }
+        const header = readUmpHeader(pending);
+        if (header.need) break;
+        if (header.invalid) {
+          passthrough = true;
+          ready.push(pending);
+          pending = new Uint8Array(0);
+          break;
+        }
+        if (header.type === 35 && header.size <= 65536) {
+          const total = header.headerLen + header.size;
+          if (pending.length < total) break;
+          const part = pending.slice(0, total);
+          const range = field4Range(part, header.headerLen, total);
+          if (range) zeroVarint(part, range[0], range[1]);
+          ready.push(part);
+          pending = pending.subarray(total);
+          continue;
+        }
+        ready.push(pending.subarray(0, header.headerLen));
+        pending = pending.subarray(header.headerLen);
+        skip = header.size;
+      }
+      return ready.length ? concatBytes(ready) : new Uint8Array(0);
+    }
+
+    function finish() {
+      const tail = pending;
+      pending = new Uint8Array(0);
+      skip = 0;
+      return tail;
+    }
+
+    return { push, finish };
+  }
+
+  function patchUmpBackoff(bytes) {
+    const parser = createUmpBackoffParser();
+    const head = parser.push(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0));
+    const tail = parser.finish();
+    if (!tail.length) return head;
+    if (!head.length) return tail;
+    return concatBytes([head, tail]);
+  }
+
   Object.assign(target, {
     DOM_AD_SELECTORS,
     HOME_FEED_AD_CSS,
@@ -279,6 +463,9 @@ function installYoutubeAdblock(target) {
     stripValue,
     stripResponseText,
     applyNoAdPlayback,
+    isSabrPlayback,
+    createUmpBackoffParser,
+    patchUmpBackoff,
   });
 }
 
@@ -463,10 +650,40 @@ function startYoutubeAdblock() {
     return { input, init };
   }
 
+  function wrapSabrBody(response) {
+    if (!response || !response.body || typeof TransformStream !== "function") return response;
+    const parser = api.createUmpBackoffParser();
+    const stream = new TransformStream({
+      transform(chunk, controller) {
+        const out = parser.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
+        if (out.length) controller.enqueue(out);
+      },
+      flush(controller) {
+        const tail = parser.finish();
+        if (tail.length) controller.enqueue(tail);
+      },
+    });
+    return new Response(response.body.pipeThrough(stream), {
+      status: response.status,
+      statusText: response.statusText,
+      headers: new Headers(response.headers),
+    });
+  }
+
   window.fetch = function (input, init) {
     const url = requestUrl(input);
     const kind = api.kindFor(url);
-    if (!kind) return nativeFetch(input, init);
+    if (!kind) {
+      if (!api.isSabrPlayback(url)) return nativeFetch(input, init);
+      return nativeFetch(input, init).then((response) => {
+        try {
+          return wrapSabrBody(response);
+        } catch (error) {
+          logFailOpen(error);
+          return response;
+        }
+      });
+    }
     const replay = input instanceof Request ? input.clone() : input;
     const prepare = kind === "player" ? rewritePlayerBody(input, init) : Promise.resolve({ input, init });
     return prepare.then((prepared) => nativeFetch(prepared.input, prepared.init).then((response) => {
@@ -535,10 +752,66 @@ function startYoutubeAdblock() {
     });
   }
 
+  function installSabrPatch(xhr) {
+    if (!xhr.__ytSabr) {
+      xhr.__ytSabr = true;
+      const responseDesc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, "response");
+      if (responseDesc && typeof responseDesc.get === "function") {
+        let assigned;
+        let hasAssigned = false;
+        Object.defineProperty(xhr, "response", {
+          configurable: true,
+          get() {
+            if (hasAssigned) return assigned;
+            const raw = responseDesc.get.call(xhr);
+            if (xhr.responseType !== "arraybuffer" || !(raw instanceof ArrayBuffer) || !raw.byteLength) return raw;
+            try {
+              const patched = api.patchUmpBackoff(new Uint8Array(raw));
+              return patched.byteOffset === 0 && patched.byteLength === patched.buffer.byteLength
+                ? patched.buffer
+                : patched.slice().buffer;
+            } catch (error) {
+              logFailOpen(error);
+              return raw;
+            }
+          },
+          set(value) {
+            hasAssigned = true;
+            assigned = value;
+          },
+        });
+      }
+    }
+    const fetchFn = xhr.fetch;
+    if (!xhr.__ytSabrFetch && typeof fetchFn === "function" && fetchFn.length === 3) {
+      xhr.__ytSabrFetch = true;
+      xhr.fetch = function (onChunk, onDone, body) {
+        const parser = api.createUmpBackoffParser();
+        return fetchFn.call(xhr, function (chunk) {
+          let bytes = null;
+          if (chunk instanceof Uint8Array) bytes = chunk;
+          else if (chunk instanceof ArrayBuffer) bytes = new Uint8Array(chunk);
+          else if (ArrayBuffer.isView(chunk)) bytes = new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+          if (!bytes) {
+            if (typeof onChunk === "function") onChunk(chunk);
+            return;
+          }
+          const out = parser.push(bytes);
+          if (out.length && typeof onChunk === "function") onChunk(out);
+        }, function () {
+          const tail = parser.finish();
+          if (tail.length && typeof onChunk === "function") onChunk(tail);
+          if (typeof onDone === "function") onDone();
+        }, body);
+      };
+    }
+  }
+
   XMLHttpRequest.prototype.open = function (method, url) {
     this.__ytUrl = String(url || "");
     this.__ytGen = (this.__ytGen || 0) + 1;
     if (api.kindFor(this.__ytUrl)) installXhrStrip(this);
+    if (api.isSabrPlayback(this.__ytUrl)) installSabrPatch(this);
     return nativeOpen.apply(this, arguments);
   };
 

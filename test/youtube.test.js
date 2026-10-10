@@ -321,3 +321,131 @@ Deno.test("browse kind is recognized and home CSS targets Sponsored cards", () =
   assert(source.includes('kind === "browse"'), "browse stripping is enabled");
   assert(!api.HOME_FEED_AD_CSS.includes("ytd-rich-item-renderer:has(ytd-rich-grid-media)"), "normal home videos are not hidden");
 });
+
+function encodeVarint(value) {
+  const bytes = [];
+  let rest = value;
+  while (rest > 127) {
+    bytes.push((rest & 127) | 128);
+    rest = Math.floor(rest / 128);
+  }
+  bytes.push(rest);
+  return bytes;
+}
+
+function decodeVarint(bytes, offset, end) {
+  let value = 0;
+  let factor = 1;
+  let index = offset;
+  while (index < end && factor <= 268435456) {
+    const bite = bytes[index++];
+    value += (bite & 127) * factor;
+    if ((bite & 128) === 0) return { value, next: index };
+    factor *= 128;
+  }
+  return null;
+}
+
+// Independent of the extension: how long the real player would sit on the
+// black spinner. Part 35 field 4 is backoffTimeMs.
+function spinnerHoldMs(bytes) {
+  let offset = 0;
+  while (offset < bytes.length) {
+    if (bytes[offset] >= 128) return null;
+    const type = bytes[offset];
+    let size;
+    let headerLen;
+    if (bytes[offset + 1] < 128) {
+      size = bytes[offset + 1];
+      headerLen = 2;
+    } else if (bytes[offset + 1] < 192) {
+      size = (bytes[offset + 1] & 63) + 64 * bytes[offset + 2];
+      headerLen = 3;
+    } else {
+      return null;
+    }
+    const start = offset + headerLen;
+    const end = start + size;
+    if (end > bytes.length) return null;
+    if (type === 35) {
+      let index = start;
+      while (index < end) {
+        const key = decodeVarint(bytes, index, end);
+        if (!key) return null;
+        const field = key.value >>> 3;
+        const wire = key.value & 7;
+        if (wire === 0) {
+          const val = decodeVarint(bytes, key.next, end);
+          if (!val) return null;
+          if (field === 4) return val.value;
+          index = val.next;
+        } else if (wire === 2) {
+          const len = decodeVarint(bytes, key.next, end);
+          if (!len) return null;
+          index = len.next + len.value;
+        } else {
+          return null;
+        }
+      }
+    }
+    offset = end;
+  }
+  return 0;
+}
+
+function umpPart(type, payload) {
+  if (payload.length < 128) return Uint8Array.from([type, payload.length, ...payload]);
+  const size = payload.length;
+  const second = Math.floor(size / 64);
+  const first = 128 + (size % 64);
+  return Uint8Array.from([type, first, second, ...payload]);
+}
+
+function policyPart(backoffMs) {
+  const cookie = [9, 8, 7, 6];
+  const payload = [
+    0x3a, cookie.length, ...cookie,
+    0x08, ...encodeVarint(1500),
+    0x20, ...encodeVarint(backoffMs),
+  ];
+  return { part: umpPart(35, payload), cookie };
+}
+
+Deno.test("clicking a video does not sit on a 10 second black loading spinner", () => {
+  const { part, cookie } = policyPart(10000);
+  const media = umpPart(21, Array.from({ length: 200 }, (_, index) => index & 255));
+  const raw = new Uint8Array(media.length + part.length);
+  raw.set(media, 0);
+  raw.set(part, media.length);
+  assertEquals(spinnerHoldMs(raw), 10000);
+  const patched = api.patchUmpBackoff(raw);
+  assertEquals(patched.length, raw.length, "the stream is not resized");
+  assertEquals(spinnerHoldMs(patched), 0, "the player no longer waits out the backoff");
+  assertEquals(Array.from(patched.subarray(0, media.length)), Array.from(media), "picture bytes stay");
+  assert(Array.from(patched).join(",").includes(cookie.join(",")), "the playback cookie stays");
+  assertEquals(api.isSabrPlayback("https://rr3---sn.googlevideo.com/videoplayback?id=1"), true);
+  assertEquals(api.isSabrPlayback("https://www.youtube.com/watch?v=abc"), false);
+  assert(source.includes("createUmpBackoffParser"), "playback responses go through the backoff parser");
+  assert(!source.includes(".currentTime"), "do not seek the picture");
+});
+
+Deno.test("a backoff split across stream chunks is still cleared", () => {
+  const { part } = policyPart(10000);
+  const parser = api.createUmpBackoffParser();
+  const mid = 4;
+  const head = parser.push(part.subarray(0, mid));
+  const rest = parser.push(part.subarray(mid));
+  const tail = parser.finish();
+  const joined = new Uint8Array(head.length + rest.length + tail.length);
+  joined.set(head, 0);
+  joined.set(rest, head.length);
+  joined.set(tail, head.length + rest.length);
+  assertEquals(spinnerHoldMs(joined), 0);
+  assertEquals(joined.length, part.length);
+});
+
+Deno.test("a normal media file is not rewritten as a SABR policy", () => {
+  const mp4 = Uint8Array.from([0, 0, 0, 24, 102, 116, 121, 112, 105, 115, 111, 109]);
+  const patched = api.patchUmpBackoff(mp4);
+  assertEquals(Array.from(patched), Array.from(mp4));
+});
