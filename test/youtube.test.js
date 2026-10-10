@@ -207,7 +207,9 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assertEquals(manifest.name, "twitch-adblock");
   assertEquals(manifest.version, "0.2.3");
   assertEquals(manifest.action.default_popup, "src/popup.html");
-  assertEquals(manifest.permissions, undefined);
+  // storage is for the general-block master switch (cosmetic + future DNR).
+  // No host_permissions: cosmetic uses content_scripts matches + exclude_matches.
+  assertEquals(manifest.permissions, ["storage"]);
   assertEquals(manifest.host_permissions, undefined);
   const youtube = manifest.content_scripts.find((script) => script.js.includes("src/youtube.js"));
   assert(youtube, "youtube has its own content script");

@@ -1,0 +1,11 @@
+EasyList (trimmed cosmetic element-hide selectors shipped in this extension)
+
+Credit: The EasyList authors
+Homepage: https://easylist.to/
+License: GNU GPL version 3 or later, OR Creative Commons Attribution-ShareAlike 3.0 or later
+License page: https://easylist.to/pages/licence.html
+
+This package includes a trimmed subset of EasyList cosmetic (element-hide)
+selectors only, used to hide leftover ad boxes on ordinary websites.
+Network filter lines are not shipped in this file set.
+Twitch, YouTube (family), and Kick are hard-excluded from this cosmetic path.
