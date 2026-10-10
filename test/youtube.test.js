@@ -205,7 +205,7 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assert(source.includes("isInlinePlaybackNoAd"), "player requests opt out of scheduled ads");
   assert(source.includes('notice.textContent = "Blocking ads"'), "the player label says ads are being blocked");
   assertEquals(manifest.name, "twitch-adblock");
-  assertEquals(manifest.version, "0.2.6");
+  assertEquals(manifest.version, "0.2.7");
   assertEquals(manifest.action.default_popup, "src/popup.html");
   assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
   assertEquals(manifest.host_permissions, undefined);
@@ -494,4 +494,100 @@ Deno.test("a normal media file is not rewritten as a SABR policy", () => {
   const mp4 = Uint8Array.from([0, 0, 0, 24, 102, 116, 121, 112, 105, 115, 111, 109]);
   const patched = api.patchUmpBackoff(mp4);
   assertEquals(Array.from(patched), Array.from(mp4));
+});
+
+function holdsIn(bytes) {
+  const found = [];
+  let offset = 0;
+  while (offset < bytes.length) {
+    if (bytes[offset] >= 128) break;
+    const type = bytes[offset];
+    let size;
+    let headerLen;
+    if (offset + 1 >= bytes.length) break;
+    if (bytes[offset + 1] < 128) {
+      size = bytes[offset + 1];
+      headerLen = 2;
+    } else if (bytes[offset + 1] < 192 && offset + 2 < bytes.length) {
+      size = (bytes[offset + 1] & 63) + 64 * bytes[offset + 2];
+      headerLen = 3;
+    } else {
+      break;
+    }
+    const start = offset + headerLen;
+    const end = start + size;
+    if (end > bytes.length) break;
+    if (type === 35) {
+      let index = start;
+      while (index < end) {
+        const key = decodeVarint(bytes, index, end);
+        if (!key) break;
+        const field = key.value >>> 3;
+        const wire = key.value & 7;
+        if (wire === 0) {
+          const val = decodeVarint(bytes, key.next, end);
+          if (!val) break;
+          if (field === 4) found.push(val.value);
+          index = val.next;
+        } else if (wire === 2) {
+          const len = decodeVarint(bytes, key.next, end);
+          if (!len || len.next + len.value > end) break;
+          index = len.next + len.value;
+        } else {
+          break;
+        }
+      }
+    }
+    offset = end;
+  }
+  return found;
+}
+
+Deno.test("a later part 35 and an earlier backoff are both cleared", () => {
+  const first = policyPart(10000).part;
+  const second = policyPart(22000).part;
+  const media = umpPart(21, [1, 2, 3, 4]);
+  const raw = new Uint8Array(first.length + media.length + second.length);
+  raw.set(first, 0);
+  raw.set(media, first.length);
+  raw.set(second, first.length + media.length);
+  assertEquals(holdsIn(raw), [10000, 22000]);
+  const patched = api.patchUmpBackoff(raw);
+  assertEquals(patched.length, raw.length);
+  assertEquals(holdsIn(patched), [0, 0]);
+  assertEquals(Array.from(patched.subarray(first.length, first.length + media.length)), [21, 4, 1, 2, 3, 4]);
+});
+
+Deno.test("the first backoff stays cleared when a later field does not parse", () => {
+  const payload = [0x20, ...encodeVarint(22000), 0x4f];
+  const raw = umpPart(35, payload);
+  assertEquals(spinnerHoldMs(raw), 22000);
+  const patched = api.patchUmpBackoff(raw);
+  assertEquals(patched.length, raw.length);
+  assertEquals(spinnerHoldMs(patched), 0);
+});
+
+Deno.test("an earlier field 4 is cleared, because the player reads that one", () => {
+  const payload = [0x20, ...encodeVarint(22000), 0x20, 0x00];
+  const raw = umpPart(35, payload);
+  assertEquals(holdsIn(raw), [22000, 0]);
+  const patched = api.patchUmpBackoff(raw);
+  assertEquals(patched.length, raw.length);
+  assertEquals(holdsIn(patched), [0, 0]);
+});
+
+Deno.test("a cutoff part 35 still drops a backoff that already arrived", () => {
+  const payload = [0x20, ...encodeVarint(22000), 0x3a, 4, 9, 8, 7, 6];
+  const part = umpPart(35, payload);
+  const parser = api.createUmpBackoffParser();
+  const head = parser.push(part.subarray(0, part.length - 1));
+  const tail = parser.finish();
+  assertEquals(head.length, 0, "an unfinished policy stays buffered");
+  assertEquals(tail.length, part.length - 1);
+  const width = encodeVarint(22000);
+  const zeroed = [0x20, ...width.map(() => 128)];
+  zeroed[zeroed.length - 1] = 0;
+  const flat = Array.from(tail).join(",");
+  assert(flat.includes(zeroed.join(",")), "the arrived backoff is zero and the same width");
+  assert(!flat.includes([0x20, ...width].join(",")), "the original backoff is gone");
 });

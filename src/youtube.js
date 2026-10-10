@@ -345,37 +345,35 @@ function installYoutubeAdblock(target) {
     return { type: type.value, size: size.value, headerLen: size.next };
   }
 
-  // Returns the [start, end) of top-level field 4, or null when the
-  // payload is not that policy message. Does not write.
-  function field4Range(bytes, start, end) {
+  // Zeros every top-level field 4 varint already in the slice. The player
+  // reads the first backoffTimeMs and stops, so a later unknown field must
+  // not put that wait back. A walk that stops early still keeps the zeros.
+  function zeroBackoffFields(bytes, start, end) {
     let index = start;
-    let range = null;
     while (index < end) {
       const key = readProtoVarint(bytes, index, end);
-      if (!key || key.value < 8) return null;
+      if (!key || key.value < 8) return;
       const field = key.value >>> 3;
       const wire = key.value & 7;
       if (wire === 0) {
         const val = readProtoVarint(bytes, key.next, end);
-        if (!val) return null;
-        if (field === 4) range = [key.next, val.next];
+        if (!val) return;
+        if (field === 4) zeroVarint(bytes, key.next, val.next);
         index = val.next;
       } else if (wire === 2) {
         const len = readProtoVarint(bytes, key.next, end);
-        if (!len || len.next + len.value > end) return null;
+        if (!len || len.next + len.value > end) return;
         index = len.next + len.value;
       } else if (wire === 5) {
+        if (key.next + 4 > end) return;
         index = key.next + 4;
-        if (index > end) return null;
       } else if (wire === 1) {
+        if (key.next + 8 > end) return;
         index = key.next + 8;
-        if (index > end) return null;
       } else {
-        return null;
+        return;
       }
     }
-    if (index !== end) return null;
-    return range;
   }
 
   function zeroVarint(bytes, start, end) {
@@ -420,8 +418,7 @@ function installYoutubeAdblock(target) {
           const total = header.headerLen + header.size;
           if (pending.length < total) break;
           const part = pending.slice(0, total);
-          const range = field4Range(part, header.headerLen, total);
-          if (range) zeroVarint(part, range[0], range[1]);
+          zeroBackoffFields(part, header.headerLen, total);
           ready.push(part);
           pending = pending.subarray(total);
           continue;
@@ -434,6 +431,14 @@ function installYoutubeAdblock(target) {
     }
 
     function finish() {
+      if (!passthrough && skip === 0 && pending.length) {
+        const header = readUmpHeader(pending);
+        if (header && header.type === 35 && !header.need && !header.invalid) {
+          const copy = pending.slice();
+          zeroBackoffFields(copy, header.headerLen, copy.length);
+          pending = copy;
+        }
+      }
       const tail = pending;
       pending = new Uint8Array(0);
       skip = 0;

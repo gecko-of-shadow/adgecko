@@ -5,7 +5,18 @@ function installTwitchAdblockDebug(target, worker, storage) {
   const ring = [];
   const isWorker = worker === true;
   target.on = false;
-  target.version = "0.2.3";
+  target.version = "";
+
+  target.noteVersion = function (value) {
+    try {
+      const text = target.redact(value);
+      if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(text)) return target.version;
+      target.version = text;
+    } catch {
+      // A bad stamp is ignored. Playback continues.
+    }
+    return target.version;
+  };
 
   function slot() {
     if (isWorker) return null;
@@ -79,7 +90,7 @@ function installTwitchAdblockDebug(target, worker, storage) {
   target.dump = function () {
     try {
       const lines = [
-        "twitch-adblock " + target.version + " debug",
+        "twitch-adblock" + (target.version ? " " + target.version : "") + " debug",
         "on=" + (target.on === true ? "true" : "false"),
       ];
       try {
@@ -208,6 +219,9 @@ function installDebugPopupReply(host) {
       if (data.type !== "set" && data.type !== "get") return;
       const debug = host.TwitchAdblockDebug;
       if (!debug) return;
+      if (typeof data.version === "string" && typeof debug.noteVersion === "function") {
+        debug.noteVersion(data.version);
+      }
       if (data.type === "set" && debug.on !== (data.on === true)) {
         const next = data.on === true;
         if (!next) debug.note("debug", "off");

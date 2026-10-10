@@ -25,6 +25,15 @@
     }
   });
 
+  function packagedVersion() {
+    try {
+      const version = chrome.runtime.getManifest().version;
+      return typeof version === "string" ? version : "";
+    } catch {
+      return "";
+    }
+  }
+
   chrome.runtime.onMessage.addListener((message) => {
     try {
       if (!message || message.source !== SOURCE) return;
@@ -34,6 +43,7 @@
         type: message.type,
         on: message.on === true,
         gen: message.gen,
+        version: packagedVersion(),
       }, "*");
     } catch {
       // Ignore a popup message the page cannot see yet.

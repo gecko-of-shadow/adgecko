@@ -56,7 +56,12 @@ Deno.test("a saved off switch beats the default, and an off recorder does no wor
   const debug = fresh(false);
   debug.setEnabled(false);
   assertEquals(debug.on, false);
-  assertEquals(debug.version, "0.2.3");
+  assertEquals(debug.version, "", "the page does not invent a version before the bridge speaks");
+  assertEquals(debug.noteVersion("0.2.7"), "0.2.7");
+  assertEquals(debug.noteVersion("0.2.3\nspoof"), "0.2.7", "a stamp that is not a version is ignored");
+  assert(debug.dump().startsWith("twitch-adblock 0.2.7 debug"), "copy debug prints the stamped version");
+  assert(!debugSource.includes('target.version = "0.2.3"'), "debug.js does not hardcode 0.2.3");
+  assert(bridgeSource.includes("getManifest().version"), "the isolated bridge reads the manifest version");
   let called = false;
   debug.note("playback", () => {
     called = true;
@@ -270,6 +275,9 @@ function runBridge(host) {
         sent.push(message);
         if (callback) callback();
       },
+      getManifest() {
+        return { version: manifest.version };
+      },
       onMessage: {
         addListener(fn) {
           chrome.runtime._listener = fn;
@@ -336,6 +344,7 @@ Deno.test("a Twitch ON press is answered with real events and does not turn itse
   assertEquals(popup.sent[0].gen, 4);
   assertEquals(popup.sent[0].on, true);
   const copied = popup.sent[0].text;
+  assert(copied.startsWith("twitch-adblock " + manifest.version + " debug"), "Copy debug prints the manifest version");
   assert(copied.includes("on=true"), "Copy debug reports the switch");
   assert(!copied.includes("(no events)"), "Copy debug is not the empty fallback");
   assert(copied.includes("debug on"), "turning the switch on is recorded");

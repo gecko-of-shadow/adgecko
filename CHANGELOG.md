@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.7 — beta
+
+- Copy debug prints the loaded extension version. It no longer always says 0.2.3.
+- A later YouTube playback policy, and a backoff that arrives before the rest of that part, is still cleared. Picture bytes stay the same length.
+- Stable Latest stays v0.2.3. This beta replaces the 0.2.6 try.
+
 ## 0.2.6 — beta
 
 - YouTube search results drop sponsored cards (`searchPyvRenderer`) the same way Home does. The video results stay.

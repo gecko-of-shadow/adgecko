@@ -109,10 +109,10 @@ REQUIRED=(
 # Shippable paths. Cosmetic hide, popup worker, list rules, and stream exclusion module.
 ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/debug\.js|src/debug-bridge\.js|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|exclusions|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
 
-# YouTube is the 0.2.6 script (spinner + search cards). Twitch vendor and debug stay at main.
+# YouTube is the beta script (spinner + search cards). The Twitch vendor stays at main.
+# debug.js may differ so Copy debug prints the manifest version instead of a hardcoded stamp.
 PLAYBACK_FILES=(
   src/vendor/video-swap-new.user.js
-  src/debug.js
   src/kick.js
 )
 
@@ -203,7 +203,7 @@ if git -C "$PKG" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     if [[ "$PLAYBACK_OK" -eq 1 ]]; then
       pass "playback files match $BASE_REF (no content diff)"
     else
-      fail "playback files must not change (Twitch vendor / youtube.js / debug.js)"
+      fail "playback files must not change (Twitch vendor / kick.js)"
     fi
   else
     echo "SKIP  no main ref for playback diff"
@@ -216,6 +216,16 @@ for rel in "${PLAYBACK_FILES[@]}"; do
     fail "missing playback file $rel"
   fi
 done
+if [[ -f "$PKG/src/debug.js" ]] && rg -n 'target\.version = "0\.2\.3"' "$PKG/src/debug.js" >/dev/null 2>&1; then
+  fail "debug.js still hardcodes 0.2.3"
+else
+  pass "debug.js does not hardcode 0.2.3"
+fi
+if [[ -f "$PKG/src/debug-bridge.js" ]] && rg -n 'getManifest\(\)\.version' "$PKG/src/debug-bridge.js" >/dev/null 2>&1; then
+  pass "debug bridge sends the manifest version"
+else
+  fail "debug bridge does not send the manifest version"
+fi
 
 section "2. Permissions + host coverage + DNR"
 python3 - "$PKG/manifest.json" "$PKG/src/rules/general-network.json" <<'PY' || FAILS=$((FAILS + 1))
