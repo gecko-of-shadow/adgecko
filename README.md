@@ -18,7 +18,7 @@ A free Chrome extension for Twitch live streams and YouTube. It runs only in you
 
 ## Is this safe?
 
-Not a virus or spyware. It only runs inside Chrome on Twitch and YouTube.
+It only runs inside Chrome on Twitch and YouTube.
 
 <img src="docs/safe/02-only-sites.png" width="800" alt="Only Twitch and YouTube. Does not run other webpages or programs on your PC.">
 
