@@ -92,6 +92,9 @@ REQUIRED=(
   src/rules/CREDIT-EasyList.txt
   src/rules/LICENSES.md
   src/general-exclude-hosts.js
+  src/cosmetic.js
+  src/cosmetic-hide.css
+  src/LICENSE-EasyList.txt
   icons/icon16.png
   icons/icon48.png
   icons/icon128.png

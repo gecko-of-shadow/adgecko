@@ -22,6 +22,9 @@ REQUIRED=(
   src/rules/CREDIT-EasyList.txt
   src/rules/LICENSES.md
   src/general-exclude-hosts.js
+  src/cosmetic.js
+  src/cosmetic-hide.css
+  src/LICENSE-EasyList.txt
   icons/icon16.png
   icons/icon48.png
   icons/icon128.png
@@ -40,26 +43,16 @@ if [[ -f "$ROOT/popup.html" || -f "$ROOT/popup.js" ]]; then
   exit 1
 fi
 
-# Optional cosmetic files (Phase 0 depth: hide leftover boxes). Packed when present.
-OPTIONAL=()
-[[ -f "$ROOT/src/cosmetic.js" ]] && OPTIONAL+=("src/cosmetic.js")
-[[ -f "$ROOT/src/cosmetic-hide.css" ]] && OPTIONAL+=("src/cosmetic-hide.css")
-[[ -f "$ROOT/src/LICENSE-EasyList.txt" ]] && OPTIONAL+=("src/LICENSE-EasyList.txt")
-
 TMP="$(mktemp -d /tmp/adblock-pack.XXXXXX)"
 mkdir -p "$TMP/src/vendor" "$TMP/src/rules" "$TMP/icons"
 cp "$ROOT/manifest.json" "$TMP/"
-cp "$ROOT/src/popup.html" "$ROOT/src/popup.js" "$ROOT/src/general-settings.js" "$ROOT/src/general-background.js" "$ROOT/src/debug.js" "$ROOT/src/debug-bridge.js" "$ROOT/src/youtube.js" "$ROOT/src/general-exclude-hosts.js" "$TMP/src/"
+cp "$ROOT/src/popup.html" "$ROOT/src/popup.js" "$ROOT/src/general-settings.js" "$ROOT/src/general-background.js" "$ROOT/src/debug.js" "$ROOT/src/debug-bridge.js" "$ROOT/src/youtube.js" "$ROOT/src/general-exclude-hosts.js" "$ROOT/src/cosmetic.js" "$ROOT/src/cosmetic-hide.css" "$ROOT/src/LICENSE-EasyList.txt" "$TMP/src/"
 cp "$ROOT/src/vendor/video-swap-new.user.js" "$ROOT/src/vendor/LICENSE-TwitchAdSolutions" "$ROOT/src/vendor/README.md" "$TMP/src/vendor/"
 cp "$ROOT/src/rules/general-network.json" "$ROOT/src/rules/CREDIT-EasyList.txt" "$ROOT/src/rules/LICENSES.md" "$TMP/src/rules/"
 [[ -f "$ROOT/src/rules/meta.json" ]] && cp "$ROOT/src/rules/meta.json" "$TMP/src/rules/"
 [[ -f "$ROOT/src/rules/dnr-merge-meta.json" ]] && cp "$ROOT/src/rules/dnr-merge-meta.json" "$TMP/src/rules/"
 [[ -f "$ROOT/src/rules/README.md" ]] && cp "$ROOT/src/rules/README.md" "$TMP/src/rules/"
 [[ -f "$ROOT/src/rules/cosmetic-sample.json" ]] && cp "$ROOT/src/rules/cosmetic-sample.json" "$TMP/src/rules/"
-for opt in "${OPTIONAL[@]+"${OPTIONAL[@]}"}"; do
-  mkdir -p "$TMP/$(dirname "$opt")"
-  cp "$ROOT/$opt" "$TMP/$opt"
-done
 cp "$ROOT/icons/icon16.png" "$ROOT/icons/icon48.png" "$ROOT/icons/icon128.png" \
   "$ROOT/icons/icon16-working.png" "$ROOT/icons/icon48-working.png" "$ROOT/icons/icon128-working.png" \
   "$ROOT/icons/icon16-off.png" "$ROOT/icons/icon48-off.png" "$ROOT/icons/icon128-off.png" \
