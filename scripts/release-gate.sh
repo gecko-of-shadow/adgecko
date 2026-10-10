@@ -94,8 +94,8 @@ REQUIRED=(
   icons/icon48.png
   icons/icon128.png
 )
-# Shippable paths only. Optional cosmetic.* / meta allowed when sibling agents land.
-ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/debug\.js|src/debug-bridge\.js|src/general-exclude-hosts\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/cosmetic\.js|src/cosmetic\.css|icons/icon16\.png|icons/icon48\.png|icons/icon128\.png)$'
+# Shippable paths. Cosmetic hide, popup worker, list rules, and stream exclusion module.
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/debug\.js|src/debug-bridge\.js|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|exclusions|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
 
 PLAYBACK_FILES=(
   src/vendor/video-swap-new.user.js
@@ -355,9 +355,10 @@ print("PASS  no out-of-scope hosts in matches")
 cosmetic = next((s for s in scripts if "src/cosmetic.js" in (s.get("js") or [])), None)
 if cosmetic:
     excl = set(cosmetic.get("exclude_matches") or [])
+    # Minimum hard-excludes (cosmetic branch may list a broader YouTube/Kick family).
     need_excl = {
         "*://twitch.tv/*", "*://*.twitch.tv/*",
-        "*://www.youtube.com/*", "*://m.youtube.com/*", "*://youtube.com/*",
+        "*://youtube.com/*", "*://*.youtube.com/*",
         "*://youtu.be/*", "*://*.youtu.be/*",
         "*://kick.com/*", "*://*.kick.com/*",
     }
@@ -365,6 +366,10 @@ if cosmetic:
         print("FAIL  cosmetic exclude_matches missing", sorted(need_excl - excl)); sys.exit(1)
     if cosmetic.get("world") == "MAIN":
         print("FAIL  cosmetic must not run in MAIN world on general pages"); sys.exit(1)
+    css = cosmetic.get("css") or []
+    if "src/cosmetic-hide.css" in css:
+        print("PASS  cosmetic content script lists cosmetic-hide.css")
+    # CSS may also be fetched via chrome.runtime.getURL from cosmetic.js.
     print("PASS  cosmetic content script excludes Twitch/YouTube/Kick")
 else:
     print("SKIP  cosmetic content script not present yet")
@@ -501,6 +506,7 @@ for rel in playback:
         bad.append(rel + " uses chrome/browser")
 
 # Popup / bridge / optional cosmetic may use a narrow chrome surface for general adblock.
+# cosmetic.js: chrome.storage.local / onChanged + chrome.runtime.getURL / lastError.
 allowed_by_file = {
     "src/popup.js": {"runtime", "tabs", "storage", "declarativeNetRequest", "action"},
     "src/debug-bridge.js": {"runtime", "tabs"},

@@ -35,7 +35,8 @@ fi
 # Optional cosmetic files (Phase 0 depth: hide leftover boxes). Packed when present.
 OPTIONAL=()
 [[ -f "$ROOT/src/cosmetic.js" ]] && OPTIONAL+=("src/cosmetic.js")
-[[ -f "$ROOT/src/cosmetic.css" ]] && OPTIONAL+=("src/cosmetic.css")
+[[ -f "$ROOT/src/cosmetic-hide.css" ]] && OPTIONAL+=("src/cosmetic-hide.css")
+[[ -f "$ROOT/src/LICENSE-EasyList.txt" ]] && OPTIONAL+=("src/LICENSE-EasyList.txt")
 
 TMP="$(mktemp -d /tmp/adblock-pack.XXXXXX)"
 mkdir -p "$TMP/src/vendor" "$TMP/src/rules" "$TMP/icons"
