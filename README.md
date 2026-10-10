@@ -49,7 +49,9 @@ Or skip ahead and use the download button in step 2.
 
 ### 2. Download the zip
 
-<img src="docs/install/02-download-zip.png" width="800" alt="Step 2: Download the zip under Assets.">
+<img src="docs/install/02-download-zip.png" width="800" alt="Step 2: Download the zip. A second gecko points down toward the download link below.">
+
+↓ The download is right under this picture:
 
 **[Download twitch-adblock-0.2.3.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.2.3/twitch-adblock-0.2.3.zip)**
 
