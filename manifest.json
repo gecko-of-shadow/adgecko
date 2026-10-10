@@ -2,14 +2,21 @@
   "manifest_version": 3,
   "name": "twitch-adblock",
   "version": "0.2.3",
-  "description": "Blocks video ads on Twitch (TwitchAdSolutions video-swap-new, unmodified) and YouTube.",
+  "description": "Blocks video ads on Twitch (TwitchAdSolutions video-swap-new, unmodified) and YouTube. Optional general list blocking for ordinary sites.",
+  "permissions": [
+    "storage",
+    "declarativeNetRequest"
+  ],
+  "background": {
+    "service_worker": "src/general-background.js"
+  },
   "action": {
     "default_popup": "src/popup.html",
     "default_title": "twitch-adblock",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "icons/icon16-working.png",
+      "48": "icons/icon48-working.png",
+      "128": "icons/icon128-working.png"
     }
   },
   "icons": {

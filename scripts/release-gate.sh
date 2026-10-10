@@ -73,8 +73,8 @@ pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; FAILS=$((FAILS + 1)); }
 section() { echo; echo "=== $* ==="; }
 
-REQUIRED=(manifest.json src/popup.html src/popup.js src/debug.js src/debug-bridge.js src/vendor/video-swap-new.user.js src/vendor/LICENSE-TwitchAdSolutions src/youtube.js icons/icon16.png icons/icon48.png icons/icon128.png)
-ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/debug\.js|src/debug-bridge\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|icons/icon16\.png|icons/icon48\.png|icons/icon128\.png)$'
+REQUIRED=(manifest.json src/popup.html src/popup.js src/general-settings.js src/general-background.js src/debug.js src/debug-bridge.js src/vendor/video-swap-new.user.js src/vendor/LICENSE-TwitchAdSolutions src/youtube.js icons/icon16.png icons/icon48.png icons/icon128.png icons/icon16-working.png icons/icon48-working.png icons/icon128-working.png icons/icon16-off.png icons/icon48-off.png icons/icon128-off.png)
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/general-settings\.js|src/general-background\.js|src/debug\.js|src/debug-bridge\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|icons/icon16\.png|icons/icon48\.png|icons/icon128\.png|icons/icon16-working\.png|icons/icon48-working\.png|icons/icon128-working\.png|icons/icon16-off\.png|icons/icon48-off\.png|icons/icon128-off\.png)$'
 
 section "1. Package allowlist + version"
 VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$PKG/manifest.json")"
@@ -145,13 +145,29 @@ python3 - "$PKG/manifest.json" <<'PY' || FAILS=$((FAILS + 1))
 import json, sys
 m = json.load(open(sys.argv[1]))
 bad = []
-for key in ("permissions", "host_permissions", "optional_permissions", "background", "externally_connectable", "oauth2", "key"):
+# General-list beta: storage + declarativeNetRequest + a tiny UI worker only.
+# Still refuse host_permissions / optional_permissions / identity / stronger page access.
+allowed_permissions = {"storage", "declarativeNetRequest"}
+perms = m.get("permissions") or []
+if not isinstance(perms, list):
+    bad.append(f"permissions={perms!r}")
+else:
+    extra = [p for p in perms if p not in allowed_permissions]
+    missing = [p for p in sorted(allowed_permissions) if p not in perms]
+    if extra:
+        bad.append(f"unexpected permissions={extra!r}")
+    if missing:
+        bad.append(f"missing permissions={missing!r}")
+for key in ("host_permissions", "optional_permissions", "externally_connectable", "oauth2", "key"):
     if m.get(key):
         bad.append(f"{key}={m.get(key)!r}")
+bg = m.get("background") or {}
+if bg.get("service_worker") != "src/general-background.js":
+    bad.append(f"background={bg!r} (want service_worker src/general-background.js)")
 if bad:
     print("FAIL  privileged manifest fields:", "; ".join(bad))
     sys.exit(1)
-print("PASS  no privileged manifest fields")
+print("PASS  general-list permissions + UI worker only (no host_permissions)")
 
 scripts = m.get("content_scripts") or []
 twitch = next((s for s in scripts if "src/vendor/video-swap-new.user.js" in (s.get("js") or [])), None)
@@ -308,20 +324,31 @@ for rel in playback:
     text = (root / rel).read_text(errors="replace")
     if re.search(r"\bchrome\.|\bbrowser\.", text):
         bad.append(rel + " uses chrome/browser")
-for rel in ["src/popup.js", "src/debug-bridge.js"]:
+# Popup: runtime/tabs/storage only (general UI). Bridge: runtime/tabs only.
+allowed = {
+    "src/popup.js": {"runtime", "tabs", "storage"},
+    "src/debug-bridge.js": {"runtime", "tabs"},
+    "src/general-settings.js": set(),
+    "src/general-background.js": {"runtime", "storage", "action", "declarativeNetRequest"},
+}
+for rel, ok_ns in allowed.items():
     path = root / rel
     if not path.is_file():
         bad.append("missing " + rel)
         continue
     text = path.read_text(errors="replace")
     for match in re.finditer(r"\b(chrome|browser)\.([A-Za-z0-9_]+)", text):
-        if match.group(1) != "chrome" or match.group(2) not in {"runtime", "tabs"}:
+        if match.group(1) != "chrome" or match.group(2) not in ok_ns:
             bad.append(f"{rel}: {match.group(0)}")
+# No auto-fetch timers in the UI worker.
+bg = (root / "src/general-background.js").read_text(errors="replace")
+if re.search(r"\bchrome\.alarms\b|\bsetInterval\b", bg):
+    bad.append("src/general-background.js must not schedule list fetches")
 if bad:
     print("FAIL  extension API scope:")
     print("\n".join(bad))
     sys.exit(1)
-print("PASS  playback scripts have no chrome APIs; debug UI is runtime/tabs only")
+print("PASS  playback scripts have no chrome APIs; general UI APIs are scoped")
 PY
 
 section "5. Deno bug / logic / memory / race / youtube"

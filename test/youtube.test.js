@@ -207,8 +207,9 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assertEquals(manifest.name, "twitch-adblock");
   assertEquals(manifest.version, "0.2.3");
   assertEquals(manifest.action.default_popup, "src/popup.html");
-  assertEquals(manifest.permissions, undefined);
+  assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
   assertEquals(manifest.host_permissions, undefined);
+  assertEquals(manifest.background?.service_worker, "src/general-background.js");
   const youtube = manifest.content_scripts.find((script) => script.js.includes("src/youtube.js"));
   assert(youtube, "youtube has its own content script");
   assert(youtube.matches.includes("*://www.youtube.com/*"), "www.youtube.com");
