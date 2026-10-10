@@ -16,6 +16,22 @@ A free Chrome extension for Twitch live streams and YouTube. It runs only in you
 - **YouTube:** removes player ads and Sponsored cards on the Home page.
 - VODs and clips are left alone.
 
+## Is this safe?
+
+**Not a virus. Not spyware.** It only runs inside Chrome on Twitch and YouTube.
+
+<img src="docs/safe/overview.png" width="800" alt="Not a virus. Not spyware. Only runs inside Chrome on Twitch and YouTube. No malware, no other webpages, no data collection.">
+
+<img src="docs/safe/01-not-virus.png" width="800" alt="Not a virus. No malware. No hidden installer. Just a Chrome addon zip.">
+
+<img src="docs/safe/02-only-sites.png" width="800" alt="Only Twitch and YouTube. Does not run other webpages or programs on your PC.">
+
+<img src="docs/safe/03-no-data.png" width="800" alt="No data collection. No account. Nothing is collected or sent off your computer.">
+
+- **Not a virus** — no malware, no hidden installer. You download a zip and load it in Chrome yourself.
+- **Only Twitch and YouTube** — it does not open or run other webpages, and it does not install programs on your PC.
+- **No data collection** — no account, nothing collected, nothing sent off your computer.
+
 ## Current build
 
 <img src="docs/whats-new.png" width="800" alt="Current stable build v0.2.3. Gecko toolbar icon. Twitch live swaps to a clean stream during ads. YouTube clears player ads and home Sponsored cards.">
