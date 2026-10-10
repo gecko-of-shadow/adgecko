@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.8 — beta
+
+- YouTube’s “Experiencing interruptions?” toast is removed when it appears, including when YouTube puts it back. Other toasts stay. This does not start the picture by itself.
+- Some starts still sat on a black loading screen for about 11 seconds after the backoff clear, with the length already known and the player already trying to play. The start-buffer wait in that playback response, and the same wait in the player response, is cleared. A newer playback part no longer hides a later backoff. A paused start that already has picture data is asked to play once. Nothing seeks or pauses.
+- Stable Latest stays v0.2.3. This beta replaces the 0.2.7 try.
+
 ## 0.2.7 — beta
 
 - Copy debug prints the loaded extension version. It no longer always says 0.2.3.

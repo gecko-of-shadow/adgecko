@@ -16,7 +16,7 @@ A free Chrome extension for Twitch live streams and YouTube. It runs only in you
 - **YouTube:** removes player ads and Sponsored cards on the Home page.
 - VODs and clips are left alone.
 
-The pictures on this page describe the stable download, v0.2.3. Beta 0.2.7 is a separate try. Its notes are on the beta release page, not in these cards.
+The pictures on this page describe the stable download, v0.2.3. Beta 0.2.8 is a separate try. Its notes are on the beta release page, not in these cards.
 
 ## Is this safe?
 

@@ -98,5 +98,5 @@ Deno.test("playback files are not edited by the general-adblock exclusions work"
   assert(debugSource.includes("installTwitchAdblockDebug"), "debug install stays");
   assert(!source.includes("installYoutubeAdblock"), "exclusions do not rewrite youtube");
   assert(!source.includes("video-swap-new"), "exclusions do not touch vendor");
-  assertEquals(manifest.version, "0.2.7");
+  assertEquals(manifest.version, "0.2.8");
 });

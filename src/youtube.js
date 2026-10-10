@@ -187,6 +187,34 @@ function installYoutubeAdblock(target) {
     return false;
   }
 
+  // The player will not show the first picture until minReadaheadMs of media
+  // is buffered. That wait lives on the start and resume policies. Zeroing it
+  // leaves the bandwidth floor and the video urls alone.
+  function zeroPolicyList(list) {
+    const items = Array.isArray(list) ? list : list && typeof list === "object" ? [list] : null;
+    if (!items) return false;
+    let changed = false;
+    for (const item of items) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      if (typeof item.minReadaheadMs === "number" && item.minReadaheadMs !== 0) {
+        item.minReadaheadMs = 0;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  function zeroStartPolicies(node) {
+    if (!node || typeof node !== "object" || Array.isArray(node)) return false;
+    const policy = node.playbackStartPolicy && typeof node.playbackStartPolicy === "object"
+      ? node.playbackStartPolicy
+      : node;
+    let changed = false;
+    if (zeroPolicyList(policy.startMinReadaheadPolicy)) changed = true;
+    if (zeroPolicyList(policy.resumeMinReadaheadPolicy)) changed = true;
+    return changed;
+  }
+
   function stripValue(value, kind) {
     let copy;
     try {
@@ -230,6 +258,7 @@ function installYoutubeAdblock(target) {
           blocked = true;
         }
       }
+      if (zeroStartPolicies(node)) blocked = true;
       for (const key of Object.keys(node)) visit(node[key]);
     }
 
@@ -239,7 +268,9 @@ function installYoutubeAdblock(target) {
 
   function stripResponseText(text, url) {
     const kind = kindFor(url);
-    if (!kind || typeof text !== "string" || !textLooksLikeAds(text)) return { text, blocked: false };
+    if (!kind || typeof text !== "string") return { text, blocked: false };
+    const startHold = text.includes("startMinReadaheadPolicy") || text.includes("resumeMinReadaheadPolicy");
+    if (!textLooksLikeAds(text) && !startHold) return { text, blocked: false };
     try {
       const parsed = nativeJSONParse(text);
       const stripped = stripValue(parsed, kind);
@@ -270,14 +301,16 @@ function installYoutubeAdblock(target) {
     }
   }
 
-  // YouTube's web player reads SABR (UMP) from googlevideo /videoplayback.
-  // Part type 35 is the next-request policy. Protobuf field 4 of that part
-  // is backoffTimeMs: the player waits that long on a black spinner before
-  // it asks for picture. 10000 is the common preroll-sized hold. The part
-  // header is YouTube's hpI integer, not a protobuf varint.
+  // YouTube's web player reads SABR (UMP) from googlevideo /videoplayback
+  // and from /initplayback, which can carry the same policy before picture
+  // bytes. Part type 35 is the next-request policy. Protobuf field 4 of that
+  // part is backoffTimeMs: the player waits that long on a black spinner
+  // before it asks for picture. 10000 is the common preroll-sized hold.
+  // Part type 47 is the start-buffer policy. The part header is YouTube's
+  // hpI integer, not a protobuf varint. A part type above 127 is not UMP.
   function isSabrPlayback(url) {
     const text = String(url || "");
-    if (!text.includes("videoplayback")) return false;
+    if (!text.includes("videoplayback") && !text.includes("initplayback")) return false;
     let parsed;
     try {
       parsed = new URL(text, "https://www.youtube.com");
@@ -341,7 +374,7 @@ function installYoutubeAdblock(target) {
     if (!type) return bytes.length >= 10 ? { invalid: true } : { need: true };
     const size = readHpI(bytes, type.next);
     if (!size) return bytes.length >= type.next + 5 ? { invalid: true } : { need: true };
-    if (type.value < 1 || type.value > 80 || size.value > 16000000) return { invalid: true };
+    if (type.value < 1 || type.value > 127 || size.value > 16000000) return { invalid: true };
     return { type: type.value, size: size.value, headerLen: size.next };
   }
 
@@ -363,6 +396,65 @@ function installYoutubeAdblock(target) {
       } else if (wire === 2) {
         const len = readProtoVarint(bytes, key.next, end);
         if (!len || len.next + len.value > end) return;
+        index = len.next + len.value;
+      } else if (wire === 5) {
+        if (key.next + 4 > end) return;
+        index = key.next + 4;
+      } else if (wire === 1) {
+        if (key.next + 8 > end) return;
+        index = key.next + 8;
+      } else {
+        return;
+      }
+    }
+  }
+
+  // Part 47 is the playback-start policy. Nested field 2 is minReadaheadMs.
+  // A large value holds the first picture until that much media is buffered,
+  // which is the black "loading" screen after backoffTimeMs is already 0.
+  function zeroReadaheadMs(bytes, start, end) {
+    let index = start;
+    while (index < end) {
+      const key = readProtoVarint(bytes, index, end);
+      if (!key || key.value < 8) return;
+      const field = key.value >>> 3;
+      const wire = key.value & 7;
+      if (wire === 0) {
+        const val = readProtoVarint(bytes, key.next, end);
+        if (!val) return;
+        if (field === 2) zeroVarint(bytes, key.next, val.next);
+        index = val.next;
+      } else if (wire === 2) {
+        const len = readProtoVarint(bytes, key.next, end);
+        if (!len || len.next + len.value > end) return;
+        index = len.next + len.value;
+      } else if (wire === 5) {
+        if (key.next + 4 > end) return;
+        index = key.next + 4;
+      } else if (wire === 1) {
+        if (key.next + 8 > end) return;
+        index = key.next + 8;
+      } else {
+        return;
+      }
+    }
+  }
+
+  function zeroStartReadahead(bytes, start, end) {
+    let index = start;
+    while (index < end) {
+      const key = readProtoVarint(bytes, index, end);
+      if (!key || key.value < 8) return;
+      const field = key.value >>> 3;
+      const wire = key.value & 7;
+      if (wire === 0) {
+        const val = readProtoVarint(bytes, key.next, end);
+        if (!val) return;
+        index = val.next;
+      } else if (wire === 2) {
+        const len = readProtoVarint(bytes, key.next, end);
+        if (!len || len.next + len.value > end) return;
+        if (field === 1 || field === 2) zeroReadaheadMs(bytes, len.next, len.next + len.value);
         index = len.next + len.value;
       } else if (wire === 5) {
         if (key.next + 4 > end) return;
@@ -414,11 +506,12 @@ function installYoutubeAdblock(target) {
           pending = new Uint8Array(0);
           break;
         }
-        if (header.type === 35 && header.size <= 65536) {
+        if ((header.type === 35 || header.type === 47) && header.size <= 65536) {
           const total = header.headerLen + header.size;
           if (pending.length < total) break;
           const part = pending.slice(0, total);
-          zeroBackoffFields(part, header.headerLen, total);
+          if (header.type === 35) zeroBackoffFields(part, header.headerLen, total);
+          else zeroStartReadahead(part, header.headerLen, total);
           ready.push(part);
           pending = pending.subarray(total);
           continue;
@@ -433,9 +526,10 @@ function installYoutubeAdblock(target) {
     function finish() {
       if (!passthrough && skip === 0 && pending.length) {
         const header = readUmpHeader(pending);
-        if (header && header.type === 35 && !header.need && !header.invalid) {
+        if (header && !header.need && !header.invalid && (header.type === 35 || header.type === 47)) {
           const copy = pending.slice();
-          zeroBackoffFields(copy, header.headerLen, copy.length);
+          if (header.type === 35) zeroBackoffFields(copy, header.headerLen, copy.length);
+          else zeroStartReadahead(copy, header.headerLen, copy.length);
           pending = copy;
         }
       }
@@ -446,6 +540,56 @@ function installYoutubeAdblock(target) {
     }
 
     return { push, finish };
+  }
+
+  function isInterruptionsToast(node) {
+    if (!node || node.nodeType !== 1) return false;
+    const text = String(node.textContent || "").replace(/\s+/g, " ").trim();
+    if (!/Experiencing interruptions\?/i.test(text)) {
+      const link = typeof node.querySelector === "function"
+        ? node.querySelector('a[href*="check_ad_blockers"], a[href*="blocker"]')
+        : null;
+      if (!link) return false;
+    }
+    if (typeof node.matches === "function") {
+      if (node.matches("yt-notification-action-renderer, tp-yt-paper-toast")) return true;
+    }
+    return !!(node.closest && node.closest("yt-notification-action-renderer, tp-yt-paper-toast"));
+  }
+
+  function removeInterruptionsToast(root) {
+    const scope = root || (typeof document !== "undefined" ? document : null);
+    if (!scope || typeof scope.querySelectorAll !== "function") return;
+    let candidates;
+    try {
+      candidates = scope.querySelectorAll(
+        "yt-notification-action-renderer, tp-yt-paper-toast#toast, tp-yt-paper-toast.toast-button"
+      );
+    } catch {
+      return;
+    }
+    for (const node of candidates) {
+      if (!isInterruptionsToast(node)) continue;
+      const outer = (node.closest && node.closest("yt-notification-action-renderer")) || node;
+      try {
+        outer.remove();
+      } catch {
+        // A toast the page already removed is left alone. Playback continues.
+      }
+    }
+  }
+
+  // True only for the black start stall: metadata and a little media are in,
+  // the picture has not moved, and the player is still spinning. A later
+  // user pause is not this state.
+  function shouldNudgeStart(state) {
+    if (!state || state.used === true) return false;
+    if (!(state.duration > 0) || state.readyState < 2 || state.paused !== true) return false;
+    if (!(state.currentTime < 0.25)) return false;
+    const classes = String(state.classes || "");
+    if (classes.includes("ad-showing") || classes.includes("ad-interrupting")) return false;
+    if (classes.includes("paused-mode") && state.currentTime > 0) return false;
+    return state.spinner === true || classes.includes("unstarted-mode") || classes.includes("buffering-mode");
   }
 
   function patchUmpBackoff(bytes) {
@@ -474,6 +618,9 @@ function installYoutubeAdblock(target) {
     isSabrPlayback,
     createUmpBackoffParser,
     patchUmpBackoff,
+    isInterruptionsToast,
+    removeInterruptionsToast,
+    shouldNudgeStart,
   });
 }
 
@@ -506,6 +653,7 @@ function startYoutubeAdblock() {
   let noticeGeneration = 0;
   // One announcement per video. Later player/DOM strips must not restart the hide.
   let noticeLatched = false;
+  let startNudged = false;
   const retryTimers = new Set();
 
   function requestUrl(input) {
@@ -593,6 +741,47 @@ function startYoutubeAdblock() {
       removed = true;
     }
     if (removed) notify(true);
+  }
+
+  function nudgeStart() {
+    if (!onWatchSurface()) return;
+    let video;
+    let player;
+    try {
+      player = playerRoot();
+      video = player && typeof player.querySelector === "function" ? player.querySelector("video") : null;
+    } catch {
+      return;
+    }
+    if (!video) return;
+    const classes = player && player.className ? String(player.className) : "";
+    let spinner = false;
+    try {
+      spinner = !!(player.querySelector(".ytp-spinner, .ytp-spinner-container"));
+    } catch {
+      spinner = false;
+    }
+    if (!api.shouldNudgeStart({
+      used: startNudged,
+      duration: video.duration,
+      readyState: video.readyState,
+      paused: video.paused,
+      currentTime: video.currentTime,
+      classes,
+      spinner,
+    })) return;
+    startNudged = true;
+    try {
+      const pending = video.play();
+      if (pending && typeof pending.catch === "function") pending.catch(function () {});
+    } catch (error) {
+      logFailOpen(error);
+    }
+    try {
+      if (typeof player.playVideo === "function") player.playVideo();
+    } catch (error) {
+      logFailOpen(error);
+    }
   }
 
   function hookInitial(name, kind) {
@@ -896,20 +1085,26 @@ function startYoutubeAdblock() {
       requestAnimationFrame(() => {
         scheduled = false;
         removeDomAds();
+        api.removeInterruptionsToast();
       });
     });
     observer.observe(root, { childList: true, subtree: true });
     removeDomAds();
+    api.removeInterruptionsToast();
   }
 
   injectHomeFeedCss();
   document.addEventListener("yt-navigate-start", () => {
     noticeLatched = false;
+    startNudged = false;
     notify(false);
   }, true);
   document.addEventListener("yt-navigate-finish", () => {
     injectHomeFeedCss();
     removeDomAds();
+    api.removeInterruptionsToast();
+    setTimeout(nudgeStart, 1000);
+    setTimeout(nudgeStart, 3000);
   }, true);
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", watchDom, { once: true });

@@ -196,7 +196,7 @@ Deno.test("dom selectors remove banners and overlays and leave the video element
 });
 
 Deno.test("the youtube script does not swap media or phone home", () => {
-  assert(!source.includes(".currentTime"), "do not seek the picture");
+  assert(!/\.currentTime\s*=/.test(source), "do not seek the picture");
   assert(!source.includes("playbackRate"), "do not fast-forward an ad");
   assert(!source.includes(".pause("), "do not freeze playback");
   assert(!source.includes("blankSegment"), "do not swap a blank frame");
@@ -205,7 +205,7 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assert(source.includes("isInlinePlaybackNoAd"), "player requests opt out of scheduled ads");
   assert(source.includes('notice.textContent = "Blocking ads"'), "the player label says ads are being blocked");
   assertEquals(manifest.name, "twitch-adblock");
-  assertEquals(manifest.version, "0.2.7");
+  assertEquals(manifest.version, "0.2.8");
   assertEquals(manifest.action.default_popup, "src/popup.html");
   assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
   assertEquals(manifest.host_permissions, undefined);
@@ -472,7 +472,7 @@ Deno.test("clicking a video does not sit on a 10 second black loading spinner", 
   assertEquals(api.isSabrPlayback("https://rr3---sn.googlevideo.com/videoplayback?id=1"), true);
   assertEquals(api.isSabrPlayback("https://www.youtube.com/watch?v=abc"), false);
   assert(source.includes("createUmpBackoffParser"), "playback responses go through the backoff parser");
-  assert(!source.includes(".currentTime"), "do not seek the picture");
+  assert(!/\.currentTime\s*=/.test(source), "do not seek the picture");
 });
 
 Deno.test("a backoff split across stream chunks is still cleared", () => {
@@ -590,4 +590,248 @@ Deno.test("a cutoff part 35 still drops a backoff that already arrived", () => {
   const flat = Array.from(tail).join(",");
   assert(flat.includes(zeroed.join(",")), "the arrived backoff is zero and the same width");
   assert(!flat.includes([0x20, ...width].join(",")), "the original backoff is gone");
+});
+
+function varintsInPart(bytes, partType, fieldNo) {
+  const found = [];
+  let offset = 0;
+  while (offset < bytes.length) {
+    if (bytes[offset] >= 128) break;
+    const type = bytes[offset];
+    let size;
+    let headerLen;
+    if (offset + 1 >= bytes.length) break;
+    if (bytes[offset + 1] < 128) {
+      size = bytes[offset + 1];
+      headerLen = 2;
+    } else if (bytes[offset + 1] < 192 && offset + 2 < bytes.length) {
+      size = (bytes[offset + 1] & 63) + 64 * bytes[offset + 2];
+      headerLen = 3;
+    } else {
+      break;
+    }
+    const start = offset + headerLen;
+    const end = start + size;
+    if (end > bytes.length) break;
+    if (type === partType) {
+      let index = start;
+      while (index < end) {
+        const key = decodeVarint(bytes, index, end);
+        if (!key) break;
+        const field = key.value >>> 3;
+        const wire = key.value & 7;
+        if (wire === 0) {
+          const val = decodeVarint(bytes, key.next, end);
+          if (!val) break;
+          if (field === fieldNo) found.push(val.value);
+          index = val.next;
+        } else if (wire === 2) {
+          const len = decodeVarint(bytes, key.next, end);
+          if (!len || len.next + len.value > end) break;
+          if (partType === 47 && (field === 1 || field === 2)) {
+            let inner = len.next;
+            const innerEnd = len.next + len.value;
+            while (inner < innerEnd) {
+              const innerKey = decodeVarint(bytes, inner, innerEnd);
+              if (!innerKey) break;
+              const innerField = innerKey.value >>> 3;
+              const innerWire = innerKey.value & 7;
+              if (innerWire !== 0) break;
+              const innerVal = decodeVarint(bytes, innerKey.next, innerEnd);
+              if (!innerVal) break;
+              if (innerField === fieldNo) found.push(innerVal.value);
+              inner = innerVal.next;
+            }
+          }
+          index = len.next + len.value;
+        } else {
+          break;
+        }
+      }
+    }
+    offset = end;
+  }
+  return found;
+}
+
+function ajq(bandwidth, readahead) {
+  return [0x08, ...encodeVarint(bandwidth), 0x10, ...encodeVarint(readahead)];
+}
+
+Deno.test("a newer playback part does not hide a later backoff", () => {
+  const newer = umpPart(90, [1, 2, 3, 4, 5]);
+  const policy = policyPart(22000).part;
+  const raw = new Uint8Array(newer.length + policy.length);
+  raw.set(newer, 0);
+  raw.set(policy, newer.length);
+  assertEquals(spinnerHoldMs(raw), 22000);
+  const patched = api.patchUmpBackoff(raw);
+  assertEquals(patched.length, raw.length);
+  assertEquals(spinnerHoldMs(patched), 0);
+  assertEquals(Array.from(patched.subarray(0, newer.length)), Array.from(newer));
+});
+
+Deno.test("the start-buffer wait is cleared and the video readahead target stays", () => {
+  const start = ajq(1500, 12000);
+  const resume = ajq(800, 11000);
+  const payload = [0x0a, start.length, ...start, 0x12, resume.length, ...resume];
+  const part = umpPart(47, payload);
+  const backoff = policyPart(10000).part;
+  const videoTarget = umpPart(35, [0x10, ...encodeVarint(9000), 0x20, ...encodeVarint(10000)]);
+  const raw = new Uint8Array(part.length + backoff.length + videoTarget.length);
+  raw.set(part, 0);
+  raw.set(backoff, part.length);
+  raw.set(videoTarget, part.length + backoff.length);
+  assertEquals(varintsInPart(raw, 47, 2), [12000, 11000]);
+  assertEquals(varintsInPart(raw, 47, 1), [1500, 800]);
+  assertEquals(varintsInPart(raw, 35, 2), [9000]);
+  const patched = api.patchUmpBackoff(raw);
+  assertEquals(patched.length, raw.length);
+  assertEquals(varintsInPart(patched, 47, 2), [0, 0]);
+  assertEquals(varintsInPart(patched, 47, 1), [1500, 800]);
+  assertEquals(holdsIn(patched), [0, 0]);
+  assertEquals(varintsInPart(patched, 35, 2), [9000]);
+  assertEquals(api.isSabrPlayback("https://rr3---sn.googlevideo.com/initplayback?source=youtube"), true);
+  assertEquals(api.isSabrPlayback("https://www.youtube.com/initplayback?source=youtube"), false);
+});
+
+Deno.test("a player response loses its start-buffer wait and keeps the video", () => {
+  const body = {
+    videoDetails: { videoId: "dQw4w9WgXcQ", title: "Same video" },
+    streamingData: { formats: [{ url: playback, itag: 18 }] },
+    playabilityStatus: { status: "OK" },
+    playerConfig: {
+      mediaCommonConfig: {
+        serverPlaybackStartConfig: {
+          enable: true,
+          playbackStartPolicy: {
+            startMinReadaheadPolicy: [{ minReadaheadMs: 12000, minBandwidthBytesPerSec: 1500 }],
+            resumeMinReadaheadPolicy: { minReadaheadMs: 11000, minBandwidthBytesPerSec: 800 },
+          },
+        },
+      },
+    },
+  };
+  const stripped = api.stripResponseText(JSON.stringify(body), "https://www.youtube.com/youtubei/v1/player");
+  assert(stripped.blocked, "the start wait is rewritten");
+  const parsed = JSON.parse(stripped.text);
+  const policy = parsed.playerConfig.mediaCommonConfig.serverPlaybackStartConfig.playbackStartPolicy;
+  assertEquals(policy.startMinReadaheadPolicy[0].minReadaheadMs, 0);
+  assertEquals(policy.startMinReadaheadPolicy[0].minBandwidthBytesPerSec, 1500);
+  assertEquals(policy.resumeMinReadaheadPolicy.minReadaheadMs, 0);
+  assertEquals(policy.resumeMinReadaheadPolicy.minBandwidthBytesPerSec, 800);
+  assertEquals(parsed.streamingData.formats[0].url, playback);
+  assertEquals(parsed.videoDetails.videoId, "dQw4w9WgXcQ");
+});
+
+function matchesOne(node, selector) {
+  if (selector === "yt-notification-action-renderer") return node.tag === "yt-notification-action-renderer";
+  if (selector === "tp-yt-paper-toast") return node.tag === "tp-yt-paper-toast";
+  if (selector === "tp-yt-paper-toast#toast") return node.tag === "tp-yt-paper-toast" && node.id === "toast";
+  if (selector === "tp-yt-paper-toast.toast-button") {
+    return node.tag === "tp-yt-paper-toast" && String(node.className).split(/\s+/).includes("toast-button");
+  }
+  const href = selector.match(/^a\[href\*="([^"]+)"\]$/);
+  return Boolean(href && node.tag === "a" && String(node.href || "").includes(href[1]));
+}
+
+function matchesList(node, selector) {
+  return String(selector).split(",").some((part) => matchesOne(node, part.trim()));
+}
+
+function walkNodes(node, out) {
+  for (const child of node.children || []) {
+    out.push(child);
+    walkNodes(child, out);
+  }
+}
+
+function toastNode(tag, props) {
+  const node = {
+    nodeType: 1,
+    tag,
+    id: props.id || "",
+    className: props.className || "",
+    textContent: props.text || "",
+    href: props.href || "",
+    children: props.children || [],
+    parent: null,
+    removed: false,
+  };
+  for (const child of node.children) child.parent = node;
+  node.matches = (selector) => matchesList(node, selector);
+  node.closest = (selector) => {
+    let current = node;
+    while (current) {
+      if (current.matches && current.matches(selector)) return current;
+      current = current.parent;
+    }
+    return null;
+  };
+  node.querySelector = (selector) => {
+    const all = [];
+    walkNodes(node, all);
+    return all.find((item) => matchesList(item, selector)) || null;
+  };
+  node.querySelectorAll = (selector) => {
+    const all = [];
+    walkNodes(node, all);
+    return all.filter((item) => matchesList(item, selector));
+  };
+  node.remove = () => {
+    node.removed = true;
+  };
+  return node;
+}
+
+Deno.test("the interruptions toast is removed and other toasts stay", () => {
+  const link = toastNode("a", { href: "https://www.youtube.com/#check_ad_blockers" });
+  const interruptions = toastNode("yt-notification-action-renderer", {
+    text: "Experiencing interruptions?",
+    children: [toastNode("tp-yt-paper-toast", { id: "toast", className: "toast-button", text: "Experiencing interruptions?" })],
+  });
+  const hrefOnly = toastNode("yt-notification-action-renderer", {
+    text: "Playback problem",
+    children: [link],
+  });
+  const copied = toastNode("tp-yt-paper-toast", { id: "toast", text: "Copied to clipboard" });
+  const root = toastNode("div", { children: [interruptions, hrefOnly, copied] });
+  assert(api.isInterruptionsToast(interruptions), "the interruptions renderer matches");
+  assert(api.isInterruptionsToast(hrefOnly), "a blocker link matches without the sentence");
+  assert(!api.isInterruptionsToast(copied), "a clipboard toast is not the interruptions toast");
+  api.removeInterruptionsToast(root);
+  assert(interruptions.removed, "the interruptions renderer is removed");
+  assert(hrefOnly.removed, "the blocker-link renderer is removed");
+  assert(!copied.removed, "the clipboard toast stays");
+  const remover = source.slice(
+    source.indexOf("function removeInterruptionsToast"),
+    source.indexOf("function shouldNudgeStart"),
+  );
+  assert(!remover.includes("notify"), "removing the toast does not start the Blocking ads chip");
+  assert(!remover.includes("display:"), "the toast is removed, not hidden");
+  assert(source.includes("api.removeInterruptionsToast()"), "the page watcher removes the toast");
+  assert(source.includes("video.play()"), "a paused start can be asked to play");
+  assert(source.includes("playVideo"), "the player play method is used when it exists");
+  assert(!/\.currentTime\s*=/.test(source), "do not seek the picture");
+  assert(!source.includes(".pause("), "do not freeze playback");
+});
+
+Deno.test("only a paused black start is asked to play", () => {
+  const paused = {
+    used: false,
+    duration: 213,
+    readyState: 2,
+    paused: true,
+    currentTime: 0,
+    classes: "unstarted-mode",
+    spinner: true,
+  };
+  assert(api.shouldNudgeStart(paused), "a paused start with the spinner up can play");
+  assert(!api.shouldNudgeStart({ ...paused, paused: false }), "an unpaused hold is left to the buffer clear");
+  assert(!api.shouldNudgeStart({ ...paused, currentTime: 4 }), "playback that has moved is left alone");
+  assert(!api.shouldNudgeStart({ ...paused, classes: "ad-showing html5-video-player", spinner: true }), "an ad is not nudged");
+  assert(!api.shouldNudgeStart({ ...paused, used: true }), "one nudge per video");
+  assert(!api.shouldNudgeStart({ ...paused, readyState: 1, spinner: true }), "nothing plays before picture data exists");
+  assert(!api.shouldNudgeStart({ ...paused, spinner: false, classes: "playing-mode" }), "a playing picture is left alone");
+  assert(api.shouldNudgeStart({ ...paused, spinner: false, classes: "buffering-mode" }), "a paused buffer at the start can play");
 });
