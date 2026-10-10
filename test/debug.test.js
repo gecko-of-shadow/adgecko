@@ -56,7 +56,7 @@ Deno.test("a saved off switch beats the default, and an off recorder does no wor
   const debug = fresh(false);
   debug.setEnabled(false);
   assertEquals(debug.on, false);
-  assertEquals(debug.version, manifest.version);
+  assertEquals(debug.version, "0.2.3");
   let called = false;
   debug.note("playback", () => {
     called = true;

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "twitch-adblock",
-  "version": "0.2.3",
+  "version": "0.2.5",
   "description": "Blocks video ads on Twitch (TwitchAdSolutions video-swap-new, unmodified) and YouTube, plus general-site ad blocking (beta).",
   "permissions": [
     "storage",

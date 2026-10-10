@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.5 — beta
+
+- On ordinary websites, many ad servers are blocked and leftover ad boxes are hidden. This does not block every ad.
+- Twitch and YouTube are left alone. Their scripts were not edited.
+- General blocking starts on. The popup can turn it off, allow the open page, or update the lists by hand. Nothing updates in the background.
+- The gecko’s eyes glow while general blocking is on.
+- This is a new beta. The stable download stays v0.2.3.
+
 ## 0.2.3
 
 - On a Twitch tab, the popup answers correctly when the extension is on. Copy debug includes the log from that tab, including the on-screen blocking label when it is showing.

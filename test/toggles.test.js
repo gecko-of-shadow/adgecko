@@ -49,13 +49,13 @@ Deno.test("stored JSON round-trips and refuses junk", () => {
   assertEquals(api.parseStored(null).enabled, true);
 });
 
-Deno.test("master toggle does not live in the debug-only popup API surface yet", () => {
-  // Debug on/off stays; general master is a separate control (phase0 8b).
+Deno.test("master toggle stays separate from the debug switch", () => {
   assert(popupHtml.includes("debug-on"), "debug on stays");
   assert(popupHtml.includes("debug-off"), "debug off stays");
-  assert(popupSource.includes('send("set", true)'), "debug set stays");
-  assert(!popupSource.includes("general-adblock"), "general storage key not wired into debug-only popup yet");
-  assert(!popupSource.includes("declarativeNetRequest"), "DNR toggle wiring is not the debug popup's job alone");
+  assert(popupSource.includes('sendDebug("set", true)'), "debug set stays");
+  assert(popupHtml.includes("general-enabled"), "general master is its own control");
+  assert(!popupSource.includes("kick.js"), "popup does not load Kick playback");
+  assert(!popupSource.includes("youtube.js"), "popup does not load YouTube playback");
 });
 
 Deno.test("toggle helpers never gate stream playback scripts", () => {

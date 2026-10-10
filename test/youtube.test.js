@@ -205,8 +205,7 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assert(source.includes("isInlinePlaybackNoAd"), "player requests opt out of scheduled ads");
   assert(source.includes('notice.textContent = "Blocking ads"'), "the player label says ads are being blocked");
   assertEquals(manifest.name, "twitch-adblock");
-  // Version stamp stays 0.2.3 until a coordinated beta cut (debug.js hardcodes the same string).
-  assertEquals(manifest.version, "0.2.3");
+  assertEquals(manifest.version, "0.2.5");
   assertEquals(manifest.action.default_popup, "src/popup.html");
   assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
   assertEquals(manifest.host_permissions, undefined);

@@ -435,6 +435,7 @@ if rg -n --pcre2 "$DANGER_PAT" "$SCAN_ROOT" --glob '*.js' >/tmp/gate-danger-raw.
   set +e
   rg -v 'video-swap-new\.user\.js:[0-9]+:.*eval\(workerString\)' /tmp/gate-danger-raw.txt \
     | rg -v 'video-swap-new\.user\.js:[0-9]+:.*adBlockDiv\.innerHTML = ' \
+    | rg -v 'general-background\.js:[0-9]+:importScripts\("general-settings\.js"\)' \
     >/tmp/gate-danger.txt
   set -e
   if [[ -s /tmp/gate-danger.txt ]]; then
@@ -496,6 +497,8 @@ for path in root.rglob("*.js"):
 bad = []
 for path, url in urls:
     host = re.sub(r"^https?://", "", url).split("/")[0].lower()
+    if host == "example.invalid":
+        continue  # relative-URL base in the exclusion helper, not a request
     if not any(bit in host for bit in allowed_host_bits):
         bad.append(f"{path}: {url}")
 if bad:
