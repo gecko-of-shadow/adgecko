@@ -210,10 +210,13 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assertEquals(manifest.action.default_popup, "src/popup.html");
   assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
   assertEquals(manifest.host_permissions, undefined);
+  assertEquals(manifest.optional_host_permissions, undefined);
   assertEquals(manifest.background.service_worker, "src/general-background.js");
   assertEquals(manifest.declarative_net_request.rule_resources[0].id, "general");
   assertEquals(manifest.declarative_net_request.rule_resources[0].enabled, true);
   assertEquals(manifest.declarative_net_request.rule_resources[0].path, "src/rules/general-network.json");
+  assert(!(manifest.permissions || []).includes("declarativeNetRequestWithHostAccess"), "refuse host-access DNR");
+  assert(!(manifest.permissions || []).includes("declarativeNetRequestFeedback"), "refuse history-reading DNR feedback");
   const youtube = manifest.content_scripts.find((script) => script.js.includes("src/youtube.js"));
   assert(youtube, "youtube has its own content script");
   assert(youtube.matches.includes("*://www.youtube.com/*"), "www.youtube.com");
