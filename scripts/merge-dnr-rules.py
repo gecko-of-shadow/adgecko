@@ -47,18 +47,28 @@ BLOCK_PRIORITY = 1
 
 
 def build_exclusion_rules() -> list[dict]:
+    frame_allow_all = [domain for domain in SITE_DOMAINS if domain != "twitch.tv"]
     return [
         {
             "id": EXCLUSION_ID_START,
             "priority": EXCLUSION_PRIORITY,
             "action": {"type": "allowAllRequests"},
             "condition": {
-                "requestDomains": list(SITE_DOMAINS),
+                "requestDomains": frame_allow_all,
                 "resourceTypes": ["main_frame", "sub_frame"],
             },
         },
         {
             "id": EXCLUSION_ID_START + 1,
+            "priority": EXCLUSION_PRIORITY,
+            "action": {"type": "allow"},
+            "condition": {
+                "requestDomains": ["twitch.tv"],
+                "excludedRequestDomains": ["ads.twitch.tv"],
+            },
+        },
+        {
+            "id": EXCLUSION_ID_START + 2,
             "priority": EXCLUSION_PRIORITY,
             "action": {"type": "allow"},
             "condition": {"requestDomains": list(VIDEO_CDN_DOMAINS)},

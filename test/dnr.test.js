@@ -29,22 +29,45 @@ Deno.test("merged DNR rules stay under Chrome's 30k floor", () => {
   assert(rules.length <= 30000, `count ${rules.length}`);
   assertEquals(mergeMeta.rule_count, rules.length);
   assert(mergeMeta.block_rules >= 1000, "list-pack blocks present");
-  assertEquals(mergeMeta.allow_rules, 2);
+  assertEquals(mergeMeta.allow_rules, 3);
 });
+
+function allowsHost(rule, host) {
+  const domains = rule.condition?.requestDomains || [];
+  const excluded = rule.condition?.excludedRequestDomains || [];
+  const covered = domains.some((domain) => host === domain || host.endsWith("." + domain));
+  const skipped = excluded.some((domain) => host === domain || host.endsWith("." + domain));
+  return covered && !skipped;
+}
 
 Deno.test("buildDnrExclusionRules matches packed high-priority allows", () => {
   const built = api.buildDnrExclusionRules({ idStart: 1, priority: 2_000_000 });
-  assertEquals(built.length, 2);
+  assertEquals(built.length, 3);
+  assertEquals(mergeMeta.allow_rules, 3);
   assertEquals(rules[0].action.type, "allowAllRequests");
   assertEquals(rules[1].action.type, "allow");
-  assertEquals(rules[0].priority, 2_000_000);
-  assertEquals(rules[1].priority, 2_000_000);
-  for (const host of api.SITE_DOMAINS) {
-    assert(rules[0].condition.requestDomains.includes(host), `site ${host}`);
+  assertEquals(rules[2].action.type, "allow");
+  assert(!rules[0].condition.requestDomains.includes("twitch.tv"), "twitch is not allowAllRequests");
+  for (const host of ["youtube.com", "youtu.be", "kick.com"]) {
+    assert(rules[0].condition.requestDomains.includes(host), `frame allow ${host}`);
   }
+  assert(allowsHost(rules[1], "gql.twitch.tv"), "gql stays allowed");
+  assert(allowsHost(rules[1], "www.twitch.tv"), "twitch pages stay allowed");
+  assert(!allowsHost(rules[1], "edge.ads.twitch.tv"), "directory ad host is not force-allowed");
   for (const host of api.VIDEO_CDN_DOMAINS) {
-    assert(rules[1].condition.requestDomains.includes(host), `cdn ${host}`);
+    assert(rules[2].condition.requestDomains.includes(host), `cdn ${host}`);
   }
+  assert(allowsHost(rules[2], "usher.ttvnw.net"), "usher stays allowed");
+  const high = rules.filter((rule) => (rule.priority || 0) >= 9000);
+  for (const rule of high) {
+    assert(!allowsHost(rule, "s.amazon-adsystem.com"), "amazon ads are not allowed");
+    assert(!allowsHost(rule, "amazon-adsystem.com"), "amazon ads apex is not allowed");
+  }
+  const blocked = new Set(
+    rules.filter((rule) => rule.action?.type === "block")
+      .flatMap((rule) => rule.condition?.requestDomains || []),
+  );
+  assert(blocked.has("amazon-adsystem.com"), "amazon-adsystem stays on the block list");
 });
 
 Deno.test("extra tracker hosts are blocked and are not stream allows", () => {

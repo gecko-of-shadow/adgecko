@@ -95,6 +95,7 @@ REQUIRED=(
   src/general-exclude-hosts.js
   src/cosmetic.js
   src/cosmetic-hide.css
+  src/twitch-directory-ads.js
   src/LICENSE-EasyList.txt
   icons/icon16.png
   icons/icon48.png
@@ -107,7 +108,7 @@ REQUIRED=(
   icons/icon128-off.png
 )
 # Shippable paths. Cosmetic hide, popup worker, list rules, and stream exclusion module.
-ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/debug\.js|src/debug-bridge\.js|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|exclusions|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/debug\.js|src/debug-bridge\.js|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|exclusions|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
 
 # YouTube is the beta script (spinner + search cards). The Twitch vendor stays at main.
 # debug.js may differ so Copy debug prints the manifest version instead of a hardcoded stamp.

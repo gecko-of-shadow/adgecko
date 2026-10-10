@@ -18,9 +18,11 @@ function installGeneralExcludeHosts(target) {
   ]);
 
   // Video / player CDNs used by those sites (from release-gate + v0.2.4 Kick/IVS).
-  // Do not list broad shared clouds (e.g. googleapis.com) ΓÇö that would weaken
-  // general blocking on ordinary sites. Frame allowAllRequests covers in-page
-  // API hosts when the top-level site is excluded.
+  // Do not list broad shared clouds (e.g. googleapis.com). YouTube and Kick
+  // frames still use allowAllRequests. Twitch pages use a plain allow for
+  // twitch.tv itself so gql stays up, while third-party ad hosts such as
+  // amazon-adsystem stay on the block list. ads.twitch.tv is left out of that
+  // allow so the directory banner host is not force-allowed. usher is ttvnw.net.
   const VIDEO_CDN_DOMAINS = Object.freeze([
     "ttvnw.net",
     "jtvnw.net",
@@ -67,18 +69,28 @@ function installGeneralExcludeHosts(target) {
     const opts = options || {};
     const idStart = opts.idStart == null ? 1 : opts.idStart;
     const priority = opts.priority == null ? 2_000_000 : opts.priority;
+    const frameAllowAll = SITE_DOMAINS.filter((domain) => domain !== "twitch.tv");
     return [
       {
         id: idStart,
         priority,
         action: { type: "allowAllRequests" },
         condition: {
-          requestDomains: SITE_DOMAINS.slice(),
+          requestDomains: frameAllowAll,
           resourceTypes: ["main_frame", "sub_frame"],
         },
       },
       {
         id: idStart + 1,
+        priority,
+        action: { type: "allow" },
+        condition: {
+          requestDomains: ["twitch.tv"],
+          excludedRequestDomains: ["ads.twitch.tv"],
+        },
+      },
+      {
+        id: idStart + 2,
         priority,
         action: { type: "allow" },
         condition: {

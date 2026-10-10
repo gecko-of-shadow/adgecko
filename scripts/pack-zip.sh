@@ -25,6 +25,7 @@ REQUIRED=(
   src/general-exclude-hosts.js
   src/cosmetic.js
   src/cosmetic-hide.css
+  src/twitch-directory-ads.js
   src/LICENSE-EasyList.txt
   icons/icon16.png
   icons/icon48.png
@@ -47,7 +48,7 @@ fi
 TMP="$(mktemp -d /tmp/adblock-pack.XXXXXX)"
 mkdir -p "$TMP/src/vendor" "$TMP/src/rules" "$TMP/icons"
 cp "$ROOT/manifest.json" "$TMP/"
-cp "$ROOT/src/popup.html" "$ROOT/src/popup.js" "$ROOT/src/general-settings.js" "$ROOT/src/general-background.js" "$ROOT/src/debug.js" "$ROOT/src/debug-bridge.js" "$ROOT/src/youtube.js" "$ROOT/src/kick.js" "$ROOT/src/general-exclude-hosts.js" "$ROOT/src/cosmetic.js" "$ROOT/src/cosmetic-hide.css" "$ROOT/src/LICENSE-EasyList.txt" "$TMP/src/"
+cp "$ROOT/src/popup.html" "$ROOT/src/popup.js" "$ROOT/src/general-settings.js" "$ROOT/src/general-background.js" "$ROOT/src/debug.js" "$ROOT/src/debug-bridge.js" "$ROOT/src/youtube.js" "$ROOT/src/kick.js" "$ROOT/src/general-exclude-hosts.js" "$ROOT/src/cosmetic.js" "$ROOT/src/cosmetic-hide.css" "$ROOT/src/twitch-directory-ads.js" "$ROOT/src/LICENSE-EasyList.txt" "$TMP/src/"
 cp "$ROOT/src/vendor/video-swap-new.user.js" "$ROOT/src/vendor/LICENSE-TwitchAdSolutions" "$ROOT/src/vendor/README.md" "$TMP/src/vendor/"
 cp "$ROOT/src/rules/general-network.json" "$ROOT/src/rules/CREDIT-EasyList.txt" "$ROOT/src/rules/LICENSES.md" "$TMP/src/rules/"
 [[ -f "$ROOT/src/rules/meta.json" ]] && cp "$ROOT/src/rules/meta.json" "$TMP/src/rules/"

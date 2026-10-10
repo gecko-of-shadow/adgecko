@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "twitch-adblock",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "description": "Blocks video ads on Twitch (TwitchAdSolutions video-swap-new, unmodified), YouTube, and Kick, plus general-site ad blocking (beta).",
   "permissions": [
     "storage",
@@ -103,6 +103,17 @@
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "*://twitch.tv/*",
+        "*://*.twitch.tv/*"
+      ],
+      "js": [
+        "src/twitch-directory-ads.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
     },
     {
       "matches": [
