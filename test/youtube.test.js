@@ -207,8 +207,23 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assertEquals(manifest.name, "twitch-adblock");
   assertEquals(manifest.version, "0.2.3");
   assertEquals(manifest.action.default_popup, "src/popup.html");
-  assertEquals(manifest.permissions, undefined);
+  // General adblock may add declarativeNetRequest (+ storage for toggles).
+  // Stronger page-reading / history permissions stay forbidden (phase0).
+  const allowedPermissions = new Set(["declarativeNetRequest", "storage"]);
+  for (const permission of manifest.permissions || []) {
+    assert(allowedPermissions.has(permission), "unexpected permission: " + permission);
+  }
   assertEquals(manifest.host_permissions, undefined);
+  assertEquals(manifest.optional_host_permissions, undefined);
+  assertEquals(manifest.background, undefined);
+  assert(
+    !(manifest.permissions || []).includes("declarativeNetRequestWithHostAccess"),
+    "refuse host-access DNR",
+  );
+  assert(
+    !(manifest.permissions || []).includes("declarativeNetRequestFeedback"),
+    "refuse history-reading DNR feedback",
+  );
   const youtube = manifest.content_scripts.find((script) => script.js.includes("src/youtube.js"));
   assert(youtube, "youtube has its own content script");
   assert(youtube.matches.includes("*://www.youtube.com/*"), "www.youtube.com");
