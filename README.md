@@ -14,10 +14,9 @@ A free Chrome extension for Twitch live streams and YouTube. It runs only in you
 
 - **Twitch live:** during a commercial break, it switches to a clean copy of the same stream, then switches back when the break ends. If a clean copy is not available, the ad may play so your video does not freeze.
 - **YouTube:** removes player ads and Sponsored cards on the Home page.
-- **Other sites:** many ad servers are blocked, and leftover ad boxes are hidden. This does not block every ad. Twitch and YouTube are left alone.
 - VODs and clips are left alone.
 
-Placeholder: gecko will rewrite the safety lines. The stable download stays v0.2.3. This branch is beta 0.2.5.
+The pictures on this page describe the stable download, v0.2.3. Beta 0.2.5 is a separate try. Its notes are on the beta release page, not in these cards.
 
 ## Is this safe?
 
