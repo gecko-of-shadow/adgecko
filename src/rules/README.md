@@ -1,15 +1,12 @@
-# General adblock list / DNR artifacts (MV3)
+# General adblock list artifacts (MV3)
+
+Built by `scripts/pack-filter-lists.py`.
 
 | File | Purpose |
 |------|---------|
-| `general-network.json` | Merged static DNR rules: stream exclusions + list-pack blocks |
-| `LICENSES.md` | EasyList / Peter Lowe / urlhaus-filter credits |
-| `CREDIT-EasyList.txt` | Short EasyList credit for the zip |
-| `meta.json` | List-pack hashes + manifest hint (`ruleset id: general`) |
-| `dnr-merge-meta.json` | Exclusion merge stamp from `scripts/merge-dnr-rules.py` |
-| `cosmetic-sample.json` | Sample cosmetics for the cosmetic agent (not shipped in zip by default) |
+| `general-network.json` | Static DNR block rules (`requestDomains` batches) |
+| `meta.json` | Counts, source hashes, manifest hint for DNR agent |
+| `cosmetic-sample.json` | Sample generic cosmetics for cosmetic agent |
+| `LICENSES.md` | Attribution / license text |
 
-Rebuild blocks: `python scripts/pack-filter-lists.py` then merge:
-`python scripts/merge-dnr-rules.py scripts/.dnr-cache/general-network.blocks.json`
-
-Do not edit Twitch / YouTube / Kick playback files when wiring these.
+Do not edit Twitch/YouTube/Kick playback files when wiring these in.

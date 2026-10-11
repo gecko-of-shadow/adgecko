@@ -3,7 +3,7 @@
 This directory ships **trimmed / converted** copies of public filter lists
 for Chrome MV3 `declarativeNetRequest`. Full upstream lists are not reproduced.
 
-Packed at: `2026-10-10T08:27:09Z` (UTC).
+Packed at: `2026-10-11T04:18:30Z` (UTC).
 
 ## Required credit
 
@@ -18,28 +18,28 @@ Additional credits: **Peter Lowe** (ad/tracking server list);
 
 - URL: `https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext`
 - Role: `ads_trackers`
-- SHA-256 of downloaded bytes: `0fea40d20ee7bd83ba818dfdb6dbe148efacc99c509e03e85b65fa876d99be61`
+- SHA-256 of downloaded bytes: `637f284766fac3871396cbef076ae7f03b4de2c0bce4936fec31e5996e600c0c`
 - License / terms: Peter LoweΓÇÖs list ΓÇö free for personal/non-commercial use; credit required. See https://pgl.yoyo.org/as/ (check page for current terms).
 
 ### urlhaus_hosts
 
 - URL: `https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt`
 - Role: `malware_threat`
-- SHA-256 of downloaded bytes: `ae2d9fffddce124fb3e12db164f22ae01903220331e181960eaabfcf8f63cdba`
+- SHA-256 of downloaded bytes: `ea6e529bf50a40297766b7f4ad7dacc3ea8389b6646d5bf260d86d63e3f03cd6`
 - License / terms: urlhaus-filter (curbengh / malware-filter) ΓÇö CC BY-NC-SA 4.0 for the filter packaging; URLhaus data from abuse.ch. Attribution required. https://gitlab.com/malware-filter/urlhaus-filter
 
 ### easylist
 
 - URL: `https://easylist.to/easylist/easylist.txt`
 - Role: `ads`
-- SHA-256 of downloaded bytes: `5234769a759e6fc3b9770d0e4d27d9a1ebdc77cf53e07c843a3b814d6dc4f4ab`
+- SHA-256 of downloaded bytes: `9b73b708c424d98e155236015c3eb28d585fe9f64be1da329ecb20e8373f840f`
 - License / terms: EasyList ΓÇö dual-licensed GNU GPL-3.0-or-later OR CC BY-SA 3.0-or-later. Credit: ΓÇ£The EasyList authorsΓÇ¥. https://easylist.to/pages/licence.html
 
 ### easyprivacy
 
 - URL: `https://easylist.to/easylist/easyprivacy.txt`
 - Role: `privacy`
-- SHA-256 of downloaded bytes: `3980f351ed08705bc12b0ded349de68da6133bea35d57676093c79d63b33296c`
+- SHA-256 of downloaded bytes: `2502b80f3f6de48956f76fc7b8e4eac27e12cc08acb7dd828cc69c688edd6633`
 - License / terms: EasyPrivacy ΓÇö same EasyList dual license (GPL-3.0-or-later OR CC BY-SA 3.0-or-later). Credit: ΓÇ£The EasyList authorsΓÇ¥.
 
 ## How we use them

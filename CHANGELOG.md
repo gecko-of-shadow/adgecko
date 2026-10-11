@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.12 — beta
+
+- EasyList, EasyPrivacy, Peter Lowe, and the urlhaus malware list were packed again. The full uBO stack was not added.
+- Stream allows are unchanged: YouTube and Kick stay allow-all frames, Twitch stays a plain allow, video CDNs stay allowed.
+- The Update lists button still only remembers the ask. It does not download a new list.
+- Stable Latest stays v0.2.3. This beta replaces the 0.2.11 try.
+
 ## 0.2.11 — beta
 
 - IMDb sponsored banners, including the large name-page billboard, are hidden. The slot is on IMDb itself. Amazon’s ad host was already blocked. Posters stay.
