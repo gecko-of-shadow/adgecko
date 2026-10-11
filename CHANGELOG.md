@@ -1,5 +1,11 @@
 # Changelog
 
+## Next beta — locked list refresh
+
+- EasyList, EasyPrivacy, Peter Lowe, and the urlhaus malware list were packed again. The full uBO stack was not added.
+- Stream allows are unchanged: YouTube and Kick stay allow-all frames, Twitch stays a plain allow, video CDNs stay allowed.
+- Stable Latest stays v0.2.3.
+
 ## 0.2.10 — beta
 
 - Twitch Browse directory ads (the top banner slot and in-grid Ad cards) are hidden. The player, usher, and gql are not rewritten.
