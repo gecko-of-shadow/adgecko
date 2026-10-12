@@ -10,6 +10,8 @@
 
 A free Chrome extension for Twitch live streams and YouTube. It runs only in your browser and does not send data anywhere.
 
+The install steps on this page download the **stable** build. A separate beta exists and is not the Latest download.
+
 ## What it does
 
 - **Twitch live:** during a commercial break, it switches to a clean copy of the same stream, then switches back when the break ends. If a clean copy is not available, the ad may play so your video does not freeze.
@@ -18,24 +20,36 @@ A free Chrome extension for Twitch live streams and YouTube. It runs only in you
 
 ## Is this safe?
 
-It only runs inside Chrome on Twitch and YouTube.
+The stable build only runs inside Chrome on Twitch and YouTube.
 
 <img src="docs/cards-main/safe/02-only-sites.png" width="800" alt="Only Twitch and YouTube. Does not run other webpages or programs on your PC.">
 
 <img src="docs/cards-main/safe/03-no-data.png" width="800" alt="No data collection. No account. Nothing is collected or sent off your computer.">
 
-- **Only Twitch and YouTube** — does not open or run other webpages, and does not install programs on your PC.
+- **Only Twitch and YouTube** — the stable build does not open or run other webpages, and does not install programs on your PC.
 - **No data collection** — no account, nothing collected, nothing sent off your computer.
 
 ## Current build
 
 <img src="docs/cards-main/whats-new.png" width="800" alt="Current stable build v0.2.3. Gecko toolbar icon. Twitch live swaps to a clean stream during ads. YouTube clears player ads and home Sponsored cards.">
 
-The toolbar icon is a gecko head. Twitch and YouTube work as described above.
+Refreshed 2026-10-12. The toolbar icon is a gecko head. Twitch and YouTube work as described above.
+
+**Stable, and the Latest download:** [v0.2.3](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.2.3). Use the install steps below.
+
+**Beta, not Latest:** [v0.2.12](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.2.12). It adds general-site blocking and a Kick player path. Load it as its own folder if you want that. Do not replace a working v0.2.3 folder with it.
 
 Debug starts **off**. You only need it if something goes wrong (see step 6 below).
 
-Full notes: [v0.2.3 release](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.2.3).
+## Checked on the beta zip
+
+A load and memory pass on unpacked v0.2.12 (Chrome 154, local test pages, not a live Twitch or YouTube watch):
+
+- Ordinary pages still finished loading in about the same time (12 ms to 14 ms). The hide stylesheet was on the page in about 20 ms.
+- Chrome used about 125 MB more, plus one extra process. Reloading the page did not make that grow.
+- A 1.2 MB YouTube response that contained ads peaked at 29 ms on the main thread. No hang showed up.
+
+Full tables: [efficiency check](docs/efficiency-check-2026-10-11.md). How that session went: [chat notes](docs/chat-2026-10-11.md).
 
 ## Install (for first-time Chrome installs)
 
@@ -54,6 +68,8 @@ Or skip ahead and use the download button in step 2.
 Open **[Releases](https://github.com/gecko-of-shadow/twitch-adblock/releases/latest)** and download the zip under **Assets** — or use this direct link:
 
 **[Download twitch-adblock-0.2.3.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.2.3/twitch-adblock-0.2.3.zip)**
+
+That Latest button is v0.2.3. The beta zip is only on the [v0.2.12 prerelease](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.2.12).
 
 ### 3. Unzip the folder
 
