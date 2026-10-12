@@ -1,0 +1,31 @@
+name: refresh release notes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/refresh-release-notes.yml
+      - docs/release-notes/v0.2.3.md
+      - docs/release-notes/v0.2.12.md
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refresh the two live releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          jq -n --rawfile body docs/release-notes/v0.2.3.md \
+            '{name:"v0.2.3 — stable", prerelease:false, make_latest:"true", body:$body}' \
+            | gh api --method PATCH /repos/gecko-of-shadow/twitch-adblock/releases/409589015 --input -
+          jq -n --rawfile body docs/release-notes/v0.2.12.md \
+            '{name:"v0.2.12 — beta", prerelease:true, make_latest:"false", body:$body}' \
+            | gh api --method PATCH /repos/gecko-of-shadow/twitch-adblock/releases/409589027 --input -
+          latest="$(gh api /repos/gecko-of-shadow/twitch-adblock/releases/latest --jq .tag_name)"
+          test "$latest" = "v0.2.3"
