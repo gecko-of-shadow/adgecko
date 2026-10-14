@@ -1,0 +1,12 @@
+name: refresh release notes
+
+# Retired. v0.2.13 is the only current release. This used to rewrite the
+# v0.2.3 and v0.2.12 release pages and force Latest back to v0.2.3.
+on:
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Release notes ship with the GitHub release. Nothing to refresh."
