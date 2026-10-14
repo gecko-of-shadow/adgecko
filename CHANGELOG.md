@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.13
+
+This is the only current build. Twitch, YouTube, Kick, and ordinary-site blocking are in this zip. There is no separate beta download.
+
+- Includes the 0.2.12 work: packed EasyList, EasyPrivacy, Peter Lowe, and urlhaus lists, leftover-box hiding, IMDb sponsored billboards, Twitch directory ads, and Kick in-player skip.
+- YouTube's server start switch stays on. Turning it off left the black spinner up. Server ABR stays on, so a video that only has a SABR address still has a stream.
+- The "Experiencing interruptions?" toast is hidden in place. Deleting it made YouTube open it again and again. Saved and clipboard toasts stay.
+- A paused start that already has picture data is still asked to play once. Nothing seeks or pauses.
+- Update lists still only remembers the ask. It does not download a new list. Nothing fetches on its own.
+
 ## 0.2.12 — beta
 
 - EasyList, EasyPrivacy, Peter Lowe, and the urlhaus malware list were packed again. The full uBO stack was not added.

@@ -3,7 +3,9 @@
 // are stripped from browse JSON and hidden with CSS. Nothing here
 // replaces the picture with a blank frame. A SABR next-request policy
 // can still hold that player on a black loading spinner for the ad-length
-// backoff (often 10 seconds) after a click; that delay is cleared below.
+// backoff (often 10 seconds) after a click. The same wait is in the first
+// /initplayback response and in the start-buffer policy. Both are cleared
+// below, and player requests ask YouTube not to schedule the slot.
 function installYoutubeAdblock(target) {
   const nativeJSONParse = JSON.parse;
   const PLAYER_AD_FIELDS = ["adPlacements", "playerAds", "adSlots", "adBreakHeartbeatParams", "adBreakParams"];
@@ -62,6 +64,24 @@ function installYoutubeAdblock(target) {
     "ytm-promoted-sparkles-web-renderer",
     "ytm-ad-slot-renderer",
     "ytd-search-pyv-renderer",
+  ].join(",");
+  // The bottom-left interruptions toast. :has() keeps "Saved" and clipboard
+  // toasts on screen. Deleting the node makes YouTube open a new one.
+  const INTERRUPTIONS_TOAST_CSS = [
+    "yt-notification-action-renderer:has(yt-formatted-string[split-lines*=\"Experiencing interruptions\"])",
+    "yt-notification-action-renderer:has(a[href*=\"3037019\"])",
+    "yt-notification-action-renderer:has(a[href*=\"ad_block\"])",
+    "yt-notification-action-renderer:has(a[href*=\"blocker\"])",
+    "yt-notification-action-renderer:has(a[href*=\"check_ad_blockers\"])",
+    "tp-yt-paper-toast#toast:has(yt-formatted-string[split-lines*=\"Experiencing interruptions\"])",
+    "tp-yt-paper-toast#toast:has(a[href*=\"3037019\"])",
+    "tp-yt-paper-toast#toast:has(a[href*=\"ad_block\"])",
+    "tp-yt-paper-toast#toast:has(a[href*=\"blocker\"])",
+    "tp-yt-paper-toast#toast:has(a[href*=\"check_ad_blockers\"])",
+    "ytd-popup-container:has(yt-formatted-string[split-lines*=\"Experiencing interruptions\"])",
+    "ytd-popup-container:has(a[href*=\"3037019\"])",
+    "ytd-popup-container:has(a[href*=\"ad_block\"])",
+    "ytd-popup-container:has(a[href*=\"check_ad_blockers\"])",
   ].join(",");
 
   function kindFor(url) {
@@ -190,8 +210,9 @@ function installYoutubeAdblock(target) {
   // The player will not show the first picture until minReadaheadMs of media
   // is buffered. That wait lives on the start and resume policies, including
   // when those policies are arrays. Zeroing it leaves the bandwidth floor and
-  // the video urls alone. The server start switch is turned off so a leftover
-  // policy cannot put the wait back.
+  // the video urls alone. The server start switch stays on. Turning it off
+  // leaves the player on the black spinner with the interruptions toast.
+  // Server ABR stays on: a video that has only a SABR url still has a stream.
   function zeroPolicyList(list) {
     const items = Array.isArray(list) ? list : list && typeof list === "object" ? [list] : null;
     if (!items) return false;
@@ -229,24 +250,18 @@ function installYoutubeAdblock(target) {
     const policy = node.playbackStartPolicy;
     if (policy && typeof policy === "object" && policy !== node && zeroStartPolicies(policy)) changed = true;
     const start = node.serverPlaybackStartConfig;
-    if (start && typeof start === "object" && !Array.isArray(start)) {
-      if (Object.prototype.hasOwnProperty.call(start, "enable") && start.enable !== false) {
-        start.enable = false;
-        changed = true;
-      }
-      if (start !== node && zeroStartPolicies(start)) changed = true;
-    }
-    if (Object.prototype.hasOwnProperty.call(node, "enable") && node.playbackStartPolicy && node.enable !== false) {
-      node.enable = false;
-      changed = true;
-    }
-    // Only when this object also carries the server start switch. A normal
-    // server-picked quality setting, and the video address, stay.
-    if (node.useServerDrivenAbr === true && start && typeof start === "object") {
-      node.useServerDrivenAbr = false;
+    if (start && typeof start === "object" && !Array.isArray(start) && start !== node && zeroStartPolicies(start)) {
       changed = true;
     }
     return changed;
+  }
+
+  function textHasStartHold(text) {
+    const source = String(text || "");
+    return source.includes("startMinReadaheadPolicy")
+      || source.includes("resumeMinReadaheadPolicy")
+      || source.includes("serverPlaybackStartConfig")
+      || source.includes('"minReadaheadMs"');
   }
 
   function stripValue(value, kind) {
@@ -303,10 +318,7 @@ function installYoutubeAdblock(target) {
   function stripResponseText(text, url) {
     const kind = kindFor(url);
     if (!kind || typeof text !== "string") return { text, blocked: false };
-    const startHold = text.includes("startMinReadaheadPolicy")
-      || text.includes("resumeMinReadaheadPolicy")
-      || text.includes("serverPlaybackStartConfig");
-    if (!textLooksLikeAds(text) && !startHold) return { text, blocked: false };
+    if (!textLooksLikeAds(text) && !textHasStartHold(text)) return { text, blocked: false };
     try {
       const parsed = nativeJSONParse(text);
       const stripped = stripValue(parsed, kind);
@@ -318,23 +330,49 @@ function installYoutubeAdblock(target) {
     }
   }
 
+  function bodyText(body) {
+    if (typeof body === "string") return body;
+    try {
+      if (body instanceof ArrayBuffer) return new TextDecoder().decode(body);
+      if (ArrayBuffer.isView(body)) return new TextDecoder().decode(body);
+    } catch {
+      return "";
+    }
+    return "";
+  }
+
   function applyNoAdPlayback(body) {
-    if (typeof body !== "string" || !body.includes("contentPlaybackContext")) return { body, changed: false };
+    const text = bodyText(body);
+    if (!text || !text.includes("contentPlaybackContext")) return { body, changed: false };
     let parsed;
     try {
-      parsed = nativeJSONParse(body);
+      parsed = nativeJSONParse(text);
     } catch {
       return { body, changed: false };
     }
     const playback = parsed && parsed.playbackContext && parsed.playbackContext.contentPlaybackContext;
     if (!playback || typeof playback !== "object" || Array.isArray(playback)) return { body, changed: false };
     if (playback.isInlinePlaybackNoAd === true) return { body, changed: false };
-    playback.isInlinePlaybackNoAd = true;
+    // Rebuild this object. A locker can freeze the property on YouTube's own
+    // object so a direct assignment never reaches the request. A fresh parse
+    // has no locker, and stringify writes the flag the server actually reads.
+    const fresh = nativeJSONParse(text);
+    fresh.playbackContext = nativeJSONParse(JSON.stringify(fresh.playbackContext));
+    fresh.playbackContext.contentPlaybackContext.isInlinePlaybackNoAd = true;
     try {
-      return { body: JSON.stringify(parsed), changed: true };
+      return { body: JSON.stringify(fresh), changed: true };
     } catch {
       return { body, changed: false };
     }
+  }
+
+  // Object.assign builds the fetch init before fetch runs. YouTube locks
+  // window.fetch in some sessions, so this is the path that still runs.
+  function markPlaybackRequest(value) {
+    if (!value || typeof value !== "object" || typeof value.body !== "string") return value;
+    const marked = applyNoAdPlayback(value.body);
+    if (marked.changed) value.body = marked.body;
+    return value;
   }
 
   // YouTube's web player reads SABR (UMP) from googlevideo /videoplayback
@@ -586,7 +624,7 @@ function installYoutubeAdblock(target) {
     const text = String(node.textContent || "").replace(/\s+/g, " ").trim();
     if (!/Experiencing interruptions\?/i.test(text)) {
       const link = typeof node.querySelector === "function"
-        ? node.querySelector('a[href*="check_ad_blockers"], a[href*="blocker"]')
+        ? node.querySelector('a[href*="3037019"], a[href*="ad_block"], a[href*="blocker"], a[href*="check_ad_blockers"]')
         : null;
       if (!link) return false;
     }
@@ -610,10 +648,12 @@ function installYoutubeAdblock(target) {
     for (const node of candidates) {
       if (!isInterruptionsToast(node)) continue;
       const outer = (node.closest && node.closest("yt-notification-action-renderer")) || node;
-      try {
-        outer.remove();
-      } catch {
-        // A toast the page already removed is left alone. Playback continues.
+      // Keep the node. Removing it makes the popup open again on the next frame.
+      outer.hidden = true;
+      const style = outer.style;
+      if (style && typeof style.setProperty === "function") {
+        style.setProperty("display", "none", "important");
+        style.setProperty("pointer-events", "none", "important");
       }
     }
   }
@@ -643,6 +683,7 @@ function installYoutubeAdblock(target) {
   Object.assign(target, {
     DOM_AD_SELECTORS,
     HOME_FEED_AD_CSS,
+    INTERRUPTIONS_TOAST_CSS,
     PLAYER_AD_FIELDS,
     WATCH_AD_KEYS,
     kindFor,
@@ -654,6 +695,8 @@ function installYoutubeAdblock(target) {
     stripValue,
     stripResponseText,
     applyNoAdPlayback,
+    markPlaybackRequest,
+    textHasStartHold,
     isSabrPlayback,
     createUmpBackoffParser,
     patchUmpBackoff,
@@ -688,6 +731,20 @@ function startYoutubeAdblock() {
   const nativeOpen = XMLHttpRequest.prototype.open;
   const nativeSend = XMLHttpRequest.prototype.send;
   const nativeParse = JSON.parse;
+  const nativeAssign = Object.assign;
+  try {
+    Object.assign = function (target) {
+      const result = nativeAssign.apply(Object, arguments);
+      try {
+        api.markPlaybackRequest(result);
+      } catch (error) {
+        logFailOpen(error);
+      }
+      return result;
+    };
+  } catch (error) {
+    logFailOpen(error);
+  }
   let hideTimer = 0;
   let noticeGeneration = 0;
   // One announcement per video. Later player/DOM strips must not restart the hide.
@@ -878,7 +935,8 @@ function startYoutubeAdblock() {
   }
 
   async function rewritePlayerBody(input, init) {
-    if (init && typeof init.body === "string") {
+    const stream = typeof ReadableStream !== "undefined" && init && init.body instanceof ReadableStream;
+    if (init && init.body != null && !stream) {
       const marked = api.applyNoAdPlayback(init.body);
       if (!marked.changed) return { input, init };
       return { input, init: Object.assign({}, init, { body: marked.body }) };
@@ -1058,7 +1116,7 @@ function startYoutubeAdblock() {
   };
 
   XMLHttpRequest.prototype.send = function (body) {
-    if (api.kindFor(this.__ytUrl || "") === "player" && typeof body === "string") {
+    if (api.kindFor(this.__ytUrl || "") === "player" && body != null) {
       try {
         const marked = api.applyNoAdPlayback(body);
         if (marked.changed) body = marked.body;
@@ -1066,12 +1124,13 @@ function startYoutubeAdblock() {
         logFailOpen(error);
       }
     }
+    if (api.isSabrPlayback(this.__ytUrl || "")) installSabrPatch(this);
     return nativeSend.call(this, body);
   };
 
   JSON.parse = function (text, reviver) {
     const value = nativeParse.call(this, text, reviver);
-    if (typeof text !== "string" || !api.textLooksLikeAds(text)) return value;
+    if (typeof text !== "string" || (!api.textLooksLikeAds(text) && !api.textHasStartHold(text))) return value;
     const path = location.pathname || "";
     const kind = path.startsWith("/shorts")
       ? "reel"
@@ -1104,7 +1163,8 @@ function startYoutubeAdblock() {
       if (document.getElementById && document.getElementById("twitch-adblock-yt-home-css")) return;
       const style = document.createElement("style");
       style.id = "twitch-adblock-yt-home-css";
-      style.textContent = api.HOME_FEED_AD_CSS + "{display:none!important;}";
+      style.textContent = api.HOME_FEED_AD_CSS + "{display:none!important;}"
+        + api.INTERRUPTIONS_TOAST_CSS + "{display:none!important;pointer-events:none!important;}";
       const parent = document.head || document.documentElement;
       if (!parent || typeof parent.appendChild !== "function") return;
       parent.appendChild(style);
@@ -1125,6 +1185,7 @@ function startYoutubeAdblock() {
         scheduled = false;
         removeDomAds();
         api.removeInterruptionsToast();
+        nudgeStart();
       });
     });
     observer.observe(root, { childList: true, subtree: true });
