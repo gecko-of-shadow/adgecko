@@ -223,10 +223,7 @@ function installYoutubeAdblock(target) {
         continue;
       }
       if (!item || typeof item !== "object") continue;
-      if (typeof item.minReadaheadMs === "number" && item.minReadaheadMs !== 0) {
-        item.minReadaheadMs = 0;
-        changed = true;
-      }
+      if (zeroReadaheadNumbers(item)) changed = true;
       if (item.startMinReadaheadPolicy && item.startMinReadaheadPolicy !== list && zeroPolicyList(item.startMinReadaheadPolicy)) {
         changed = true;
       }
@@ -243,10 +240,7 @@ function installYoutubeAdblock(target) {
     let changed = false;
     if (zeroPolicyList(node.startMinReadaheadPolicy)) changed = true;
     if (zeroPolicyList(node.resumeMinReadaheadPolicy)) changed = true;
-    if (typeof node.minReadaheadMs === "number" && node.minReadaheadMs !== 0) {
-      node.minReadaheadMs = 0;
-      changed = true;
-    }
+    if (zeroReadaheadNumbers(node)) changed = true;
     const policy = node.playbackStartPolicy;
     if (policy && typeof policy === "object" && policy !== node && zeroStartPolicies(policy)) changed = true;
     const start = node.serverPlaybackStartConfig;
@@ -256,12 +250,29 @@ function installYoutubeAdblock(target) {
     return changed;
   }
 
+  // minReadaheadMs is the JSON start wait. minVideoReadaheadMs and
+  // minAudioReadaheadMs are the same wait when the player response uses the
+  // SABR names. The audio target and the request keepalive are not waits.
+  function zeroReadaheadNumbers(item) {
+    if (!item || typeof item !== "object") return false;
+    let changed = false;
+    for (const key of ["minReadaheadMs", "minVideoReadaheadMs", "minAudioReadaheadMs"]) {
+      if (typeof item[key] === "number" && item[key] !== 0) {
+        item[key] = 0;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
   function textHasStartHold(text) {
     const source = String(text || "");
     return source.includes("startMinReadaheadPolicy")
       || source.includes("resumeMinReadaheadPolicy")
       || source.includes("serverPlaybackStartConfig")
-      || source.includes('"minReadaheadMs"');
+      || source.includes('"minReadaheadMs"')
+      || source.includes('"minVideoReadaheadMs"')
+      || source.includes('"minAudioReadaheadMs"');
   }
 
   function stripValue(value, kind) {
@@ -452,12 +463,17 @@ function installYoutubeAdblock(target) {
     return { type: type.value, size: size.value, headerLen: size.next };
   }
 
-  // Zeros every top-level field 4 (backoffTimeMs) and field 2
-  // (targetVideoReadaheadMs) already in the slice. The player reads the first
-  // backoff and stops, so a later unknown field must not put that wait back.
-  // Field 2 is the video buffer target that can still hold a black start
-  // after the backoff is 0. Field 1, the audio target, stays. A walk that
-  // stops early still keeps the zeros.
+  // NextRequestPolicy varints, from the SABR proto:
+  //   1 targetAudioReadaheadMs stays (audio target, not the black-screen wait)
+  //   2 targetVideoReadaheadMs is zeroed
+  //   3 maxTimeSinceLastRequestMs stays (request keepalive)
+  //   4 backoffTimeMs is zeroed
+  //   5 minAudioReadaheadMs is zeroed
+  //   6 minVideoReadaheadMs is zeroed (picture stays black until this much
+  //     video is buffered; 10000 is the common preroll-sized hold)
+  // The playback cookie and video id are length-delimited and stay. The
+  // player reads the first backoff and stops, so a later unknown field must
+  // not put that wait back. A walk that stops early still keeps the zeros.
   function zeroBackoffFields(bytes, start, end) {
     let index = start;
     while (index < end) {
@@ -468,7 +484,7 @@ function installYoutubeAdblock(target) {
       if (wire === 0) {
         const val = readProtoVarint(bytes, key.next, end);
         if (!val) return;
-        if (field === 4 || field === 2) zeroVarint(bytes, key.next, val.next);
+        if (field === 2 || field === 4 || field === 5 || field === 6) zeroVarint(bytes, key.next, val.next);
         index = val.next;
       } else if (wire === 2) {
         const len = readProtoVarint(bytes, key.next, end);

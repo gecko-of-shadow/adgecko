@@ -45,7 +45,7 @@ It runs inside Chrome. It does not install a program on your PC.
 
 The toolbar icon is a gecko head. Its eyes glow while general blocking is on.
 
-This repository folder is **v0.2.14**. The debug switch is gone. The Releases zip is still v0.2.13.
+This repository folder is **v0.2.15**. The debug switch is gone. The Releases zip is still v0.2.13.
 
 ## Install (for first-time Chrome installs)
 

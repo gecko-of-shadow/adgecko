@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.15
+
+- The YouTube start wait on the playback policy is cleared. That wait is how long the picture stays black after the length is already known. The audio target and the request keepalive stay. The server start switch stays on. Nothing seeks or pauses.
+
 ## 0.2.14
 
 - The debug switch, Copy debug, and the in-page debug log are removed. Twitch, YouTube, and Kick playback are unchanged.
