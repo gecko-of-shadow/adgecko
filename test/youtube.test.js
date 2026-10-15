@@ -211,7 +211,7 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assert(source.includes("isInlinePlaybackNoAd"), "player requests opt out of scheduled ads");
   assert(source.includes('notice.textContent = "Blocking ads"'), "the player label says ads are being blocked");
   assertEquals(manifest.name, "twitch-adblock");
-  assertEquals(manifest.version, "0.2.14");
+  assertEquals(manifest.version, "0.2.15");
   assertEquals(manifest.action.default_popup, "src/popup.html");
   assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
   assertEquals(manifest.host_permissions, undefined);
@@ -676,6 +676,64 @@ Deno.test("a newer playback part does not hide a later backoff", () => {
   assertEquals(patched.length, raw.length);
   assertEquals(spinnerHoldMs(patched), 0);
   assertEquals(Array.from(patched.subarray(0, newer.length)), Array.from(newer));
+});
+
+Deno.test("the video start buffer on the playback policy is cleared and the keepalive stays", () => {
+  const payload = [
+    0x08, ...encodeVarint(1500),
+    0x10, ...encodeVarint(9000),
+    0x18, ...encodeVarint(5000),
+    0x20, ...encodeVarint(10000),
+    0x28, ...encodeVarint(8000),
+    0x30, ...encodeVarint(10000),
+    0x3a, 4, 9, 8, 7, 6,
+  ];
+  const raw = umpPart(35, payload);
+  assertEquals(varintsInPart(raw, 35, 1), [1500]);
+  assertEquals(varintsInPart(raw, 35, 3), [5000]);
+  assertEquals(varintsInPart(raw, 35, 5), [8000]);
+  assertEquals(varintsInPart(raw, 35, 6), [10000]);
+  const patched = api.patchUmpBackoff(raw);
+  assertEquals(patched.length, raw.length, "the stream is not resized");
+  assertEquals(varintsInPart(patched, 35, 2), [0]);
+  assertEquals(varintsInPart(patched, 35, 4), [0]);
+  assertEquals(varintsInPart(patched, 35, 5), [0]);
+  assertEquals(varintsInPart(patched, 35, 6), [0]);
+  assertEquals(varintsInPart(patched, 35, 1), [1500], "the audio target stays");
+  assertEquals(varintsInPart(patched, 35, 3), [5000], "the request keepalive stays");
+  assert(Array.from(patched).join(",").includes("9,8,7,6"), "the playback cookie stays");
+});
+
+Deno.test("a player response clears the named video start buffer and keeps the stream", () => {
+  const body = {
+    videoDetails: { videoId: "dQw4w9WgXcQ", title: "Same video" },
+    streamingData: {
+      formats: [{ url: playback, itag: 18 }],
+      serverAbrStreamingUrl: playback,
+    },
+    playabilityStatus: { status: "OK" },
+    playerConfig: {
+      mediaCommonConfig: {
+        useServerDrivenAbr: true,
+        serverPlaybackStartConfig: {
+          enable: true,
+          minVideoReadaheadMs: 10000,
+          minAudioReadaheadMs: 8000,
+          targetAudioReadaheadMs: 1500,
+        },
+      },
+    },
+  };
+  const stripped = api.stripResponseText(JSON.stringify(body), "https://www.youtube.com/youtubei/v1/player");
+  assert(stripped.blocked, "the named start wait is rewritten");
+  const parsed = JSON.parse(stripped.text);
+  const config = parsed.playerConfig.mediaCommonConfig.serverPlaybackStartConfig;
+  assertEquals(config.enable, true);
+  assertEquals(parsed.playerConfig.mediaCommonConfig.useServerDrivenAbr, true);
+  assertEquals(config.minVideoReadaheadMs, 0);
+  assertEquals(config.minAudioReadaheadMs, 0);
+  assertEquals(config.targetAudioReadaheadMs, 1500);
+  assertEquals(parsed.streamingData.serverAbrStreamingUrl, playback);
 });
 
 Deno.test("the start-buffer wait and the video readahead target are cleared", () => {
