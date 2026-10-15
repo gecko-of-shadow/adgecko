@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "twitch-adblock",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "description": "Blocks video ads on Twitch (TwitchAdSolutions video-swap-new, unmodified), YouTube, and Kick, plus general-site ad blocking.",
   "permissions": [
     "storage",
@@ -46,18 +46,6 @@
         "*://*.twitch.tv/*"
       ],
       "js": [
-        "src/debug.js"
-      ],
-      "run_at": "document_start",
-      "world": "MAIN",
-      "all_frames": false
-    },
-    {
-      "matches": [
-        "*://twitch.tv/*",
-        "*://*.twitch.tv/*"
-      ],
-      "js": [
         "src/vendor/video-swap-new.user.js"
       ],
       "run_at": "document_start",
@@ -71,26 +59,11 @@
         "*://youtube.com/*"
       ],
       "js": [
-        "src/debug.js",
         "src/youtube.js"
       ],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": false
-    },
-    {
-      "matches": [
-        "*://twitch.tv/*",
-        "*://*.twitch.tv/*",
-        "*://www.youtube.com/*",
-        "*://m.youtube.com/*",
-        "*://youtube.com/*"
-      ],
-      "js": [
-        "src/debug-bridge.js"
-      ],
-      "run_at": "document_start",
-      "all_frames": true
     },
     {
       "matches": [

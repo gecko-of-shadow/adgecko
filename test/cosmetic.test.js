@@ -2,7 +2,6 @@ import source from "../src/cosmetic.js" with { type: "text" };
 import css from "../src/cosmetic-hide.css" with { type: "text" };
 import license from "../src/LICENSE-EasyList.txt" with { type: "text" };
 import youtubeSource from "../src/youtube.js" with { type: "text" };
-import debugSource from "../src/debug.js" with { type: "text" };
 import vendorSource from "../src/vendor/video-swap-new.user.js" with { type: "text" };
 import manifest from "../manifest.json" with { type: "json" };
 
@@ -156,7 +155,6 @@ Deno.test("applyEnabled skips excluded hosts and respects master off", async () 
 
 Deno.test("playback files are untouched by cosmetic branch", () => {
   assert(!youtubeSource.includes("generalEnabled"), "youtube.js has no general-block switch");
-  assert(!debugSource.includes("cosmetic-hide"), "debug.js has no cosmetic hide");
   assert(!vendorSource.includes("cosmetic-hide"), "vendor userscript has no cosmetic hide");
   assert(!source.includes("chrome.declarativeNetRequest"), "cosmetic path is not DNR");
 });

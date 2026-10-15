@@ -49,10 +49,11 @@ Deno.test("stored JSON round-trips and refuses junk", () => {
   assertEquals(api.parseStored(null).enabled, true);
 });
 
-Deno.test("master toggle stays separate from the debug switch", () => {
-  assert(popupHtml.includes("debug-on"), "debug on stays");
-  assert(popupHtml.includes("debug-off"), "debug off stays");
-  assert(popupSource.includes('sendDebug("set", true)'), "debug set stays");
+Deno.test("master toggle is the only popup switch", () => {
+  assert(!popupHtml.includes("debug-on"), "debug on is gone");
+  assert(!popupHtml.includes("debug-off"), "debug off is gone");
+  assert(!popupHtml.includes("Copy debug"), "copy debug is gone");
+  assert(!popupSource.includes("sendDebug"), "popup does not message a debug log");
   assert(popupHtml.includes("general-enabled"), "general master is its own control");
   assert(!popupSource.includes("kick.js"), "popup does not load Kick playback");
   assert(!popupSource.includes("youtube.js"), "popup does not load YouTube playback");

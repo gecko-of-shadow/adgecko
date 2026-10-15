@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.14
+
+- The debug switch, Copy debug, and the in-page debug log are removed. Twitch, YouTube, and Kick playback are unchanged.
+
 ## 0.2.13
 
 This is the only current build. Twitch, YouTube, Kick, and ordinary-site blocking are in this zip. There is no separate beta download.

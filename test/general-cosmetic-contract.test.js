@@ -3,7 +3,6 @@ import togglesSource from "../src/general/toggles.js" with { type: "text" };
 import cosmeticSource from "../src/general/cosmetic.js" with { type: "text" };
 import youtubeSource from "../src/youtube.js" with { type: "text" };
 import vendorSource from "../src/vendor/video-swap-new.user.js" with { type: "text" };
-import debugSource from "../src/debug.js" with { type: "text" };
 
 function assert(condition, label) {
   if (!condition) throw new Error(label);
@@ -69,5 +68,4 @@ Deno.test("cosmetic module does not edit playback scripts", () => {
   assert(!cosmeticSource.includes("reloadTwitchPlayer"));
   assert(youtubeSource.includes("installYoutubeAdblock"), "youtube stays");
   assert(vendorSource.includes("ourTwitchAdSolutionsVersion = 23"), "vendor stays");
-  assert(debugSource.includes("installTwitchAdblockDebug"), "debug stays");
 });

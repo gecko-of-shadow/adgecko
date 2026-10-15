@@ -83,8 +83,6 @@ REQUIRED=(
   src/popup.js
   src/general-settings.js
   src/general-background.js
-  src/debug.js
-  src/debug-bridge.js
   src/vendor/video-swap-new.user.js
   src/vendor/LICENSE-TwitchAdSolutions
   src/youtube.js
@@ -108,10 +106,9 @@ REQUIRED=(
   icons/icon128-off.png
 )
 # Shippable paths. Cosmetic hide, popup worker, list rules, and stream exclusion module.
-ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/debug\.js|src/debug-bridge\.js|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|exclusions|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|exclusions|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
 
 # YouTube is the beta script (spinner + search cards). The Twitch vendor stays at main.
-# debug.js may differ so Copy debug prints the manifest version instead of a hardcoded stamp.
 PLAYBACK_FILES=(
   src/vendor/video-swap-new.user.js
   src/kick.js
@@ -167,9 +164,9 @@ else
 fi
 if [[ "$ALLOW_OK" -eq 1 ]]; then pass "shippable file allowlist"; else fail "shippable file allowlist"; fi
 if [[ -f "$PKG/src/popup.html" && -f "$PKG/src/popup.js" ]]; then
-  pass "temporary debug popup is packaged"
+  pass "popup is packaged"
 else
-  fail "temporary debug popup files missing"
+  fail "popup files missing"
 fi
 if [[ -f "$PKG/popup.html" || -f "$PKG/popup.js" ]]; then fail "popup must live in src/ (zip holds manifest.json, src/, icons/ only)"; else pass "popup lives in src/"; fi
 if rg -n --pcre2 '<script(?![^>]*\bsrc="popup\.js")|onclick=|javascript:' "$PKG/src/popup.html" >/tmp/gate-popup.txt 2>/dev/null; then
@@ -217,15 +214,15 @@ for rel in "${PLAYBACK_FILES[@]}"; do
     fail "missing playback file $rel"
   fi
 done
-if [[ -f "$PKG/src/debug.js" ]] && rg -n 'target\.version = "0\.2\.3"' "$PKG/src/debug.js" >/dev/null 2>&1; then
-  fail "debug.js still hardcodes 0.2.3"
+if [[ -f "$PKG/src/debug.js" || -f "$PKG/src/debug-bridge.js" ]]; then
+  fail "debug log files must stay out of the package"
 else
-  pass "debug.js does not hardcode 0.2.3"
+  pass "debug log is not packaged"
 fi
-if [[ -f "$PKG/src/debug-bridge.js" ]] && rg -n 'getManifest\(\)\.version' "$PKG/src/debug-bridge.js" >/dev/null 2>&1; then
-  pass "debug bridge sends the manifest version"
+if rg -n 'Copy debug|id="debug-on"|id="debug-status"' "$PKG/src/popup.html" >/dev/null 2>&1; then
+  fail "popup still has the debug section"
 else
-  fail "debug bridge does not send the manifest version"
+  pass "popup has no debug section"
 fi
 
 section "2. Permissions + host coverage + DNR"
@@ -327,20 +324,6 @@ if twitch.get("all_frames") is not True:
     print("FAIL  Twitch all_frames", twitch.get("all_frames")); sys.exit(1)
 print("PASS  Twitch host coverage", sorted(got_t))
 
-reply = next((s for s in scripts if s.get("world") == "MAIN" and s.get("js") == ["src/debug.js"]), None)
-if not reply:
-    print("FAIL  Twitch debug reply script missing"); sys.exit(1)
-got_r = set(reply.get("matches") or [])
-if got_r != need_t:
-    print("FAIL  Twitch debug reply matches", sorted(got_r)); sys.exit(1)
-if reply.get("run_at") != "document_start":
-    print("FAIL  Twitch debug reply run_at", reply.get("run_at")); sys.exit(1)
-if reply.get("all_frames") is True:
-    print("FAIL  Twitch debug reply must stay on the top frame"); sys.exit(1)
-if scripts.index(reply) > scripts.index(twitch):
-    print("FAIL  Twitch debug reply must load before the vendor script"); sys.exit(1)
-print("PASS  Twitch debug reply loads in the top frame before the vendor script")
-
 if not youtube:
     print("FAIL  YouTube content_script missing"); sys.exit(1)
 need_y = {"*://www.youtube.com/*", "*://m.youtube.com/*", "*://youtube.com/*"}
@@ -351,7 +334,7 @@ if youtube.get("world") != "MAIN":
     print("FAIL  YouTube world", youtube.get("world")); sys.exit(1)
 if youtube.get("all_frames") is True:
     print("FAIL  YouTube should not use all_frames"); sys.exit(1)
-if youtube.get("js") != ["src/debug.js", "src/youtube.js"]:
+if youtube.get("js") != ["src/youtube.js"]:
     print("FAIL  YouTube js order", youtube.get("js")); sys.exit(1)
 print("PASS  YouTube host coverage", sorted(got_y))
 
@@ -372,21 +355,14 @@ if kick.get("all_frames") is not True:
 print("PASS  Kick host coverage", sorted(got_k))
 
 if m.get("action", {}).get("default_popup") != "src/popup.html":
-    print("FAIL  debug popup must be action.default_popup"); sys.exit(1)
+    print("FAIL  action popup must be src/popup.html"); sys.exit(1)
 print("PASS  action popup is src/popup.html")
 
-bridge = next((s for s in scripts if "src/debug-bridge.js" in (s.get("js") or [])), None)
-if not bridge:
-    print("FAIL  debug bridge content script missing"); sys.exit(1)
-if bridge.get("world") == "MAIN":
-    print("FAIL  debug bridge must stay out of the page world"); sys.exit(1)
-if bridge.get("js") != ["src/debug-bridge.js"]:
-    print("FAIL  debug bridge js", bridge.get("js")); sys.exit(1)
-need_b = need_t | need_y
-got_b = set(bridge.get("matches") or [])
-if got_b != need_b:
-    print("FAIL  debug bridge host scope", sorted(got_b)); sys.exit(1)
-print("PASS  debug bridge is isolated and host-scoped")
+for script in scripts:
+    loaded = script.get("js") or []
+    if "src/debug.js" in loaded or "src/debug-bridge.js" in loaded:
+        print("FAIL  debug script still loaded", loaded); sys.exit(1)
+print("PASS  debug scripts are not loaded")
 
 joined = " ".join(sorted(got_t | got_y | got_k))
 for host in ("music.youtube.com", "studio.youtube.com", "youtubekids.com"):
@@ -546,14 +522,13 @@ python3 - "$PKG" <<'PY' || FAILS=$((FAILS + 1))
 import pathlib, re, sys
 root = pathlib.Path(sys.argv[1])
 bad = []
-playback = ["src/vendor/video-swap-new.user.js", "src/youtube.js", "src/debug.js"]
+playback = ["src/vendor/video-swap-new.user.js", "src/youtube.js"]
 for rel in playback:
     text = (root / rel).read_text(errors="replace")
     if re.search(r"\bchrome\.|\bbrowser\.", text):
         bad.append(rel + " uses chrome/browser")
 allowed = {
     "src/popup.js": {"runtime", "tabs", "storage"},
-    "src/debug-bridge.js": {"runtime", "tabs"},
     "src/general-settings.js": set(),
     "src/general-background.js": {"runtime", "storage", "action", "declarativeNetRequest"},
     "src/cosmetic.js": {"runtime", "storage"},
@@ -561,7 +536,7 @@ allowed = {
 for rel, ok_ns in allowed.items():
     path = root / rel
     if not path.is_file():
-        if rel in ("src/popup.js", "src/debug-bridge.js"):
+        if rel == "src/popup.js":
             bad.append("missing " + rel)
         continue
     text = path.read_text(errors="replace")
