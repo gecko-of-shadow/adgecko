@@ -1,0 +1,34 @@
+{
+  "merged_at_utc": "2026-10-11T04:18:47Z",
+  "ruleset_id": "general",
+  "path": "src/rules/general-network.json",
+  "allow_rules": 3,
+  "block_rules": 1248,
+  "rule_count": 1251,
+  "exclusion_priority": 2000000,
+  "site_domains": [
+    "twitch.tv",
+    "youtube.com",
+    "youtu.be",
+    "youtube-nocookie.com",
+    "youtubekids.com",
+    "kick.com"
+  ],
+  "video_cdn_domains": [
+    "ttvnw.net",
+    "jtvnw.net",
+    "twitchcdn.net",
+    "googlevideo.com",
+    "ytimg.com",
+    "ggpht.com",
+    "live-video.net"
+  ],
+  "block_id_start": 100,
+  "source_blocks": "scripts/pack-filter-lists.py",
+  "extra_tracker_rule_id": 1347,
+  "extra_tracker_domains": [
+    "facebook.net",
+    "fundingchoicesmessages.google.com",
+    "imasdk.googleapis.com"
+  ]
+}

@@ -2,44 +2,200 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>twitch-adblock debug</title>
+  <title>twitch-adblock</title>
   <style>
+    :root {
+      --bg: #0e0e10;
+      --panel: #18181b;
+      --text: #efeff1;
+      --muted: #adadb8;
+      --line: #2d2d35;
+      --glow: #f0a33a;
+      --glow-soft: rgba(240, 163, 58, 0.35);
+      --accent: #9147ff;
+      --ok: #00c474;
+    }
     body {
       margin: 0;
-      width: 280px;
-      color: #efeff1;
-      background: #0e0e10;
+      width: 300px;
+      color: var(--text);
+      background: var(--bg);
       font: 13px/1.4 sans-serif;
     }
     main { padding: 12px; }
-    h1 { margin: 0 0 4px; font-size: 14px; font-weight: 650; }
-    p { margin: 0 0 10px; color: #adadb8; }
-    #status { min-height: 2.8em; color: #efeff1; }
-    .row { display: flex; gap: 8px; }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    #brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      box-shadow: 0 0 0 0 transparent;
+      transition: box-shadow 160ms ease;
+    }
+    #brand-icon[data-glow="on"] {
+      box-shadow: 0 0 10px 1px var(--glow-soft);
+    }
+    h1 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 650;
+    }
+    .sub {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+    section h2 {
+      margin: 0 0 6px;
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .label { flex: 1; }
+    .hint {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    #general-status, #page-status, #lists-status, #debug-status {
+      min-height: 1.2em;
+      margin: 6px 0 0;
+      color: var(--text);
+      font-size: 12px;
+    }
+    .switch {
+      position: relative;
+      width: 40px;
+      height: 22px;
+      flex: 0 0 auto;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: #2d2d35;
+      cursor: pointer;
+      transition: background 120ms ease;
+    }
+    .slider::before {
+      content: "";
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 3px;
+      top: 3px;
+      border-radius: 50%;
+      background: #efeff1;
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .switch input:checked + .slider {
+      background: #5c3d14;
+    }
+    .switch input:checked + .slider::before {
+      transform: translateX(18px);
+      background: var(--glow);
+      box-shadow: 0 0 8px var(--glow-soft);
+    }
+    .btns { display: flex; gap: 8px; margin-top: 8px; }
     button {
       flex: 1;
       border: 0;
       border-radius: 4px;
       padding: 8px 10px;
       background: #2d2d35;
-      color: #efeff1;
+      color: var(--text);
       font: inherit;
       cursor: pointer;
     }
-    button[aria-pressed="true"] { background: #9147ff; }
-    #copy-debug { margin-top: 8px; width: 100%; }
+    button:hover { filter: brightness(1.08); }
+    button:disabled {
+      opacity: 0.45;
+      cursor: default;
+      filter: none;
+    }
+    button[aria-pressed="true"] { background: var(--accent); }
+    button.primary[aria-pressed="true"] {
+      background: #5c3d14;
+      color: #ffe6bd;
+      box-shadow: inset 0 0 0 1px rgba(240, 163, 58, 0.35);
+    }
+    #copy-debug { width: 100%; margin-top: 8px; }
+    .credit {
+      margin: 0;
+      color: #6f6f78;
+      font-size: 10px;
+    }
   </style>
 </head>
 <body>
   <main>
-    <h1>twitch-adblock</h1>
-    <p>Debug stays off until you turn it on. Copy keeps the log on this device.</p>
-    <p id="status">Checking this tab…</p>
-    <div class="row">
-      <button id="debug-on" type="button" aria-pressed="false">ON</button>
-      <button id="debug-off" type="button" aria-pressed="true">OFF</button>
-    </div>
-    <button id="copy-debug" type="button">Copy debug</button>
+    <header>
+      <img id="brand-icon" src="../icons/icon48-working.png" alt="" width="36" height="36" data-glow="on">
+      <div>
+        <h1>twitch-adblock</h1>
+        <p class="sub" id="version-line">General lists · streams unchanged</p>
+      </div>
+    </header>
+
+    <section aria-labelledby="general-heading">
+      <h2 id="general-heading">General sites</h2>
+      <div class="row">
+        <div class="label">Block ads on ordinary sites</div>
+        <label class="switch" title="Master on/off for list blocking only">
+          <input id="general-enabled" type="checkbox" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <p class="hint">Default on. Does not turn off Twitch, YouTube, or Kick playback filters.</p>
+      <p id="general-status"></p>
+      <div class="btns">
+        <button id="allow-page" type="button" class="primary" aria-pressed="false">Allow this page</button>
+      </div>
+      <p id="page-status"></p>
+    </section>
+
+    <section aria-labelledby="lists-heading">
+      <h2 id="lists-heading">Filter lists</h2>
+      <button id="update-lists" type="button">Update lists</button>
+      <p class="hint">Manual only — nothing fetches until you click.</p>
+      <p id="lists-status"></p>
+      <p class="credit">List credit: The EasyList authors (when EasyList is packed).</p>
+    </section>
+
+    <section aria-labelledby="debug-heading">
+      <h2 id="debug-heading">Debug</h2>
+      <p class="hint">Debug stays off until you turn it on. Copy keeps the log on this device.</p>
+      <p id="debug-status">Checking this tab…</p>
+      <div class="btns">
+        <button id="debug-on" type="button" aria-pressed="false">ON</button>
+        <button id="debug-off" type="button" aria-pressed="true">OFF</button>
+      </div>
+      <button id="copy-debug" type="button">Copy debug</button>
+    </section>
   </main>
   <script src="popup.js"></script>
 </body>

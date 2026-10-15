@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.2.13
+
+This is the only current build. Twitch, YouTube, Kick, and ordinary-site blocking are in this zip. There is no separate beta download.
+
+- Includes the 0.2.12 work: packed EasyList, EasyPrivacy, Peter Lowe, and urlhaus lists, leftover-box hiding, IMDb sponsored billboards, Twitch directory ads, and Kick in-player skip.
+- YouTube's server start switch stays on. Turning it off left the black spinner up. Server ABR stays on, so a video that only has a SABR address still has a stream.
+- The "Experiencing interruptions?" toast is hidden in place. Deleting it made YouTube open it again and again. Saved and clipboard toasts stay.
+- A paused start that already has picture data is still asked to play once. Nothing seeks or pauses.
+- Update lists still only remembers the ask. It does not download a new list. Nothing fetches on its own.
+
+## 0.2.12 — beta
+
+- EasyList, EasyPrivacy, Peter Lowe, and the urlhaus malware list were packed again. The full uBO stack was not added.
+- Stream allows are unchanged: YouTube and Kick stay allow-all frames, Twitch stays a plain allow, video CDNs stay allowed.
+- The Update lists button still only remembers the ask. It does not download a new list.
+- Stable Latest stays v0.2.3. This beta replaces the 0.2.11 try.
+
+## 0.2.11 — beta
+
+- IMDb sponsored banners, including the large name-page billboard, are hidden. The slot is on IMDb itself. Amazon’s ad host was already blocked. Posters stay.
+- This hide runs with the ordinary-site sheet. Twitch, YouTube, and Kick playback are unchanged.
+- Stable Latest stays v0.2.3. This beta replaces the 0.2.10 try.
+
+## 0.2.10 — beta
+
+- Twitch Browse directory ads (the top banner slot and in-grid Ad cards) are hidden. The player, usher, and gql are not rewritten.
+- Amazon’s ad host is no longer let through on Twitch pages. gql.twitch.tv and the video CDNs, including usher on ttvnw.net, stay allowed.
+- Stable Latest stays v0.2.3. This beta replaces the 0.2.9 try.
+
+## 0.2.9 — beta
+
+- Some other videos still sat on a black loading screen after 0.2.8, with the length already known and the player already trying to play. One well-known video was often ready in a couple of seconds on 0.2.8. This beta also clears the video start-buffer target in the playback response, and turns off the server start-buffer switch, including when that switch’s policies arrive as a list. When that switch is present, the player is told not to wait on the server’s bandwidth pick. The video address stays. Nothing seeks or pauses.
+- Stable Latest stays v0.2.3. This beta replaces the 0.2.8 try.
+
+## 0.2.8 — beta
+
+- YouTube’s “Experiencing interruptions?” toast is removed when it appears, including when YouTube puts it back. Other toasts stay. This does not start the picture by itself.
+- Some starts still sat on a black loading screen for about 11 seconds after the backoff clear, with the length already known and the player already trying to play. The start-buffer wait in that playback response, and the same wait in the player response, is cleared. A newer playback part no longer hides a later backoff. A paused start that already has picture data is asked to play once. Nothing seeks or pauses.
+- Stable Latest stays v0.2.3. This beta replaces the 0.2.7 try.
+
+## 0.2.7 — beta
+
+- Copy debug prints the loaded extension version. It no longer always says 0.2.3.
+- A later YouTube playback policy, and a backoff that arrives before the rest of that part, is still cleared. Picture bytes stay the same length.
+- Stable Latest stays v0.2.3. This beta replaces the 0.2.6 try.
+
+## 0.2.6 — beta
+
+- YouTube search results drop sponsored cards (`searchPyvRenderer`) the same way Home does. The video results stay.
+- Leftover ad boxes on ordinary sites can load their hide stylesheet. The file is listed as a web-accessible resource so Chrome can fetch it.
+- The YouTube black-spinner fix from stable main is in this beta. A short “Blocking ads” chip shows once per video, then stays hidden until you open another video.
+- Three more tracker hosts are blocked on ordinary sites: facebook.net, imasdk.googleapis.com, and fundingchoicesmessages.google.com. Twitch, YouTube, and Kick frames are still allowed through.
+- Kick’s own player try is still included. The general list still skips Twitch, YouTube, and Kick. Update lists still only remembers the ask. This does not block every ad. Stable Latest stays v0.2.3.
+
+## 0.2.5 — beta
+
+- On ordinary websites, many ad servers are blocked and leftover ad boxes are hidden. This does not block every ad.
+- Twitch and YouTube playback scripts match stable and were not edited for general blocking. Kick in-player ad skip from v0.2.4 is included; the general list still skips Kick.
+- General blocking starts on. The popup can turn it off, allow the open page, or update the lists by hand. Nothing updates in the background.
+- The gecko’s eyes glow while general blocking is on.
+- This is a new beta. The stable download stays v0.2.3.
+
 ## 0.2.3
 
 - On a Twitch tab, the popup answers correctly when the extension is on. Copy debug includes the log from that tab, including the on-screen blocking label when it is showing.

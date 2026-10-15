@@ -105,6 +105,12 @@ Deno.test("a player request asks YouTube not to schedule ads", () => {
   assertEquals(api.applyNoAdPlayback(marked.body).changed, false);
   assertEquals(api.applyNoAdPlayback("not-json").changed, false);
   assertEquals(api.applyNoAdPlayback(JSON.stringify({ videoId: "abc" })).body, JSON.stringify({ videoId: "abc" }));
+  const bytes = new TextEncoder().encode(body);
+  const fromBytes = api.applyNoAdPlayback(bytes);
+  assert(fromBytes.changed, "a byte player request is marked");
+  assertEquals(JSON.parse(fromBytes.body).playbackContext.contentPlaybackContext.isInlinePlaybackNoAd, true);
+  const assigned = api.markPlaybackRequest({ body });
+  assertEquals(JSON.parse(assigned.body).playbackContext.contentPlaybackContext.isInlinePlaybackNoAd, true);
 });
 
 Deno.test("shorts ads are removed and real shorts stay", () => {
@@ -196,7 +202,7 @@ Deno.test("dom selectors remove banners and overlays and leave the video element
 });
 
 Deno.test("the youtube script does not swap media or phone home", () => {
-  assert(!source.includes(".currentTime"), "do not seek the picture");
+  assert(!/\.currentTime\s*=/.test(source), "do not seek the picture");
   assert(!source.includes("playbackRate"), "do not fast-forward an ad");
   assert(!source.includes(".pause("), "do not freeze playback");
   assert(!source.includes("blankSegment"), "do not swap a blank frame");
@@ -205,10 +211,21 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assert(source.includes("isInlinePlaybackNoAd"), "player requests opt out of scheduled ads");
   assert(source.includes('notice.textContent = "Blocking ads"'), "the player label says ads are being blocked");
   assertEquals(manifest.name, "twitch-adblock");
-  assertEquals(manifest.version, "0.2.3");
+  assertEquals(manifest.version, "0.2.13");
   assertEquals(manifest.action.default_popup, "src/popup.html");
-  assertEquals(manifest.permissions, undefined);
+  assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
   assertEquals(manifest.host_permissions, undefined);
+  assertEquals(manifest.optional_host_permissions, undefined);
+  assertEquals(manifest.background.service_worker, "src/general-background.js");
+  assertEquals(manifest.declarative_net_request.rule_resources[0].id, "general");
+  assertEquals(manifest.declarative_net_request.rule_resources[0].enabled, true);
+  assertEquals(manifest.declarative_net_request.rule_resources[0].path, "src/rules/general-network.json");
+  assert(
+    (manifest.web_accessible_resources || []).some((entry) =>
+      (entry.resources || []).includes("src/cosmetic-hide.css")
+    ),
+    "leftover-box stylesheet is web accessible",
+  );
   const youtube = manifest.content_scripts.find((script) => script.js.includes("src/youtube.js"));
   assert(youtube, "youtube has its own content script");
   assert(youtube.matches.includes("*://www.youtube.com/*"), "www.youtube.com");
@@ -308,6 +325,41 @@ Deno.test("browse continuations drop in-feed ads and keep the continuation token
   const items = JSON.parse(stripped.text).onResponseReceivedActions[0].appendContinuationItemsAction.continuationItems;
   assertEquals(items.map((item) => Object.keys(item)[0]), ["richItemRenderer", "continuationItemRenderer"]);
   assertEquals(items[1].continuationItemRenderer.token, "keep-scroll");
+});
+
+Deno.test("search results drop sponsored cards and keep videos", () => {
+  assertEquals(api.kindFor("https://www.youtube.com/youtubei/v1/search?prettyPrint=false"), "browse");
+  assert(api.WATCH_AD_KEYS.includes("searchPyvRenderer"), "search ad item is an ad key");
+  assert(api.HOME_FEED_AD_CSS.includes("ytd-search-pyv-renderer"), "search ad element is hidden if it still renders");
+  const search = {
+    contents: {
+      twoColumnSearchResultsRenderer: {
+        primaryContents: {
+          sectionListRenderer: {
+            contents: [{
+              itemSectionRenderer: {
+                contents: [
+                  { videoRenderer: { videoId: "keep-search" } },
+                  { searchPyvRenderer: { ads: [{ adSlotRenderer: { adSlotMetadata: { slotId: "slot" } } }] } },
+                  { continuationItemRenderer: { token: "next-search" } },
+                ],
+              },
+            }],
+          },
+        },
+      },
+    },
+  };
+  const stripped = api.stripResponseText(JSON.stringify(search), "https://www.youtube.com/youtubei/v1/search");
+  assert(stripped.blocked, "search ads were removed");
+  const items = JSON.parse(stripped.text)
+    .contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents[0]
+    .itemSectionRenderer.contents;
+  assertEquals(items.map((item) => Object.keys(item)[0]), ["videoRenderer", "continuationItemRenderer"]);
+  assertEquals(items[0].videoRenderer.videoId, "keep-search");
+  assert(!stripped.text.includes("searchPyvRenderer"), "search promoted block is gone");
+  assert(!stripped.text.includes("adSlotRenderer"), "search ad slot is gone");
+  assert(source.includes('path.startsWith("/results")'), "search pages strip initial data like browse");
 });
 
 Deno.test("browse kind is recognized and home CSS targets Sponsored cards", () => {
@@ -426,7 +478,7 @@ Deno.test("clicking a video does not sit on a 10 second black loading spinner", 
   assertEquals(api.isSabrPlayback("https://rr3---sn.googlevideo.com/videoplayback?id=1"), true);
   assertEquals(api.isSabrPlayback("https://www.youtube.com/watch?v=abc"), false);
   assert(source.includes("createUmpBackoffParser"), "playback responses go through the backoff parser");
-  assert(!source.includes(".currentTime"), "do not seek the picture");
+  assert(!/\.currentTime\s*=/.test(source), "do not seek the picture");
 });
 
 Deno.test("a backoff split across stream chunks is still cleared", () => {
@@ -448,4 +500,414 @@ Deno.test("a normal media file is not rewritten as a SABR policy", () => {
   const mp4 = Uint8Array.from([0, 0, 0, 24, 102, 116, 121, 112, 105, 115, 111, 109]);
   const patched = api.patchUmpBackoff(mp4);
   assertEquals(Array.from(patched), Array.from(mp4));
+});
+
+function holdsIn(bytes) {
+  const found = [];
+  let offset = 0;
+  while (offset < bytes.length) {
+    if (bytes[offset] >= 128) break;
+    const type = bytes[offset];
+    let size;
+    let headerLen;
+    if (offset + 1 >= bytes.length) break;
+    if (bytes[offset + 1] < 128) {
+      size = bytes[offset + 1];
+      headerLen = 2;
+    } else if (bytes[offset + 1] < 192 && offset + 2 < bytes.length) {
+      size = (bytes[offset + 1] & 63) + 64 * bytes[offset + 2];
+      headerLen = 3;
+    } else {
+      break;
+    }
+    const start = offset + headerLen;
+    const end = start + size;
+    if (end > bytes.length) break;
+    if (type === 35) {
+      let index = start;
+      while (index < end) {
+        const key = decodeVarint(bytes, index, end);
+        if (!key) break;
+        const field = key.value >>> 3;
+        const wire = key.value & 7;
+        if (wire === 0) {
+          const val = decodeVarint(bytes, key.next, end);
+          if (!val) break;
+          if (field === 4) found.push(val.value);
+          index = val.next;
+        } else if (wire === 2) {
+          const len = decodeVarint(bytes, key.next, end);
+          if (!len || len.next + len.value > end) break;
+          index = len.next + len.value;
+        } else {
+          break;
+        }
+      }
+    }
+    offset = end;
+  }
+  return found;
+}
+
+Deno.test("a later part 35 and an earlier backoff are both cleared", () => {
+  const first = policyPart(10000).part;
+  const second = policyPart(22000).part;
+  const media = umpPart(21, [1, 2, 3, 4]);
+  const raw = new Uint8Array(first.length + media.length + second.length);
+  raw.set(first, 0);
+  raw.set(media, first.length);
+  raw.set(second, first.length + media.length);
+  assertEquals(holdsIn(raw), [10000, 22000]);
+  const patched = api.patchUmpBackoff(raw);
+  assertEquals(patched.length, raw.length);
+  assertEquals(holdsIn(patched), [0, 0]);
+  assertEquals(Array.from(patched.subarray(first.length, first.length + media.length)), [21, 4, 1, 2, 3, 4]);
+});
+
+Deno.test("the first backoff stays cleared when a later field does not parse", () => {
+  const payload = [0x20, ...encodeVarint(22000), 0x4f];
+  const raw = umpPart(35, payload);
+  assertEquals(spinnerHoldMs(raw), 22000);
+  const patched = api.patchUmpBackoff(raw);
+  assertEquals(patched.length, raw.length);
+  assertEquals(spinnerHoldMs(patched), 0);
+});
+
+Deno.test("an earlier field 4 is cleared, because the player reads that one", () => {
+  const payload = [0x20, ...encodeVarint(22000), 0x20, 0x00];
+  const raw = umpPart(35, payload);
+  assertEquals(holdsIn(raw), [22000, 0]);
+  const patched = api.patchUmpBackoff(raw);
+  assertEquals(patched.length, raw.length);
+  assertEquals(holdsIn(patched), [0, 0]);
+});
+
+Deno.test("a cutoff part 35 still drops a backoff that already arrived", () => {
+  const payload = [0x20, ...encodeVarint(22000), 0x3a, 4, 9, 8, 7, 6];
+  const part = umpPart(35, payload);
+  const parser = api.createUmpBackoffParser();
+  const head = parser.push(part.subarray(0, part.length - 1));
+  const tail = parser.finish();
+  assertEquals(head.length, 0, "an unfinished policy stays buffered");
+  assertEquals(tail.length, part.length - 1);
+  const width = encodeVarint(22000);
+  const zeroed = [0x20, ...width.map(() => 128)];
+  zeroed[zeroed.length - 1] = 0;
+  const flat = Array.from(tail).join(",");
+  assert(flat.includes(zeroed.join(",")), "the arrived backoff is zero and the same width");
+  assert(!flat.includes([0x20, ...width].join(",")), "the original backoff is gone");
+});
+
+function varintsInPart(bytes, partType, fieldNo) {
+  const found = [];
+  let offset = 0;
+  while (offset < bytes.length) {
+    if (bytes[offset] >= 128) break;
+    const type = bytes[offset];
+    let size;
+    let headerLen;
+    if (offset + 1 >= bytes.length) break;
+    if (bytes[offset + 1] < 128) {
+      size = bytes[offset + 1];
+      headerLen = 2;
+    } else if (bytes[offset + 1] < 192 && offset + 2 < bytes.length) {
+      size = (bytes[offset + 1] & 63) + 64 * bytes[offset + 2];
+      headerLen = 3;
+    } else {
+      break;
+    }
+    const start = offset + headerLen;
+    const end = start + size;
+    if (end > bytes.length) break;
+    if (type === partType) {
+      let index = start;
+      while (index < end) {
+        const key = decodeVarint(bytes, index, end);
+        if (!key) break;
+        const field = key.value >>> 3;
+        const wire = key.value & 7;
+        if (wire === 0) {
+          const val = decodeVarint(bytes, key.next, end);
+          if (!val) break;
+          if (field === fieldNo) found.push(val.value);
+          index = val.next;
+        } else if (wire === 2) {
+          const len = decodeVarint(bytes, key.next, end);
+          if (!len || len.next + len.value > end) break;
+          if (partType === 47 && (field === 1 || field === 2)) {
+            let inner = len.next;
+            const innerEnd = len.next + len.value;
+            while (inner < innerEnd) {
+              const innerKey = decodeVarint(bytes, inner, innerEnd);
+              if (!innerKey) break;
+              const innerField = innerKey.value >>> 3;
+              const innerWire = innerKey.value & 7;
+              if (innerWire !== 0) break;
+              const innerVal = decodeVarint(bytes, innerKey.next, innerEnd);
+              if (!innerVal) break;
+              if (innerField === fieldNo) found.push(innerVal.value);
+              inner = innerVal.next;
+            }
+          }
+          index = len.next + len.value;
+        } else {
+          break;
+        }
+      }
+    }
+    offset = end;
+  }
+  return found;
+}
+
+function ajq(bandwidth, readahead) {
+  return [0x08, ...encodeVarint(bandwidth), 0x10, ...encodeVarint(readahead)];
+}
+
+Deno.test("a newer playback part does not hide a later backoff", () => {
+  const newer = umpPart(90, [1, 2, 3, 4, 5]);
+  const policy = policyPart(22000).part;
+  const raw = new Uint8Array(newer.length + policy.length);
+  raw.set(newer, 0);
+  raw.set(policy, newer.length);
+  assertEquals(spinnerHoldMs(raw), 22000);
+  const patched = api.patchUmpBackoff(raw);
+  assertEquals(patched.length, raw.length);
+  assertEquals(spinnerHoldMs(patched), 0);
+  assertEquals(Array.from(patched.subarray(0, newer.length)), Array.from(newer));
+});
+
+Deno.test("the start-buffer wait and the video readahead target are cleared", () => {
+  const start = ajq(1500, 12000);
+  const resume = ajq(800, 11000);
+  const payload = [0x0a, start.length, ...start, 0x12, resume.length, ...resume];
+  const part = umpPart(47, payload);
+  const backoff = policyPart(10000).part;
+  const videoTarget = umpPart(35, [0x08, ...encodeVarint(1500), 0x10, ...encodeVarint(9000), 0x20, ...encodeVarint(10000)]);
+  const raw = new Uint8Array(part.length + backoff.length + videoTarget.length);
+  raw.set(part, 0);
+  raw.set(backoff, part.length);
+  raw.set(videoTarget, part.length + backoff.length);
+  assertEquals(varintsInPart(raw, 47, 2), [12000, 11000]);
+  assertEquals(varintsInPart(raw, 47, 1), [1500, 800]);
+  assertEquals(varintsInPart(raw, 35, 2), [9000]);
+  const patched = api.patchUmpBackoff(raw);
+  assertEquals(patched.length, raw.length);
+  assertEquals(varintsInPart(patched, 47, 2), [0, 0]);
+  assertEquals(varintsInPart(patched, 47, 1), [1500, 800]);
+  assertEquals(holdsIn(patched), [0, 0]);
+  assertEquals(varintsInPart(patched, 35, 2), [0]);
+  assertEquals(varintsInPart(patched, 35, 1), [1500, 1500]);
+  assertEquals(api.isSabrPlayback("https://rr3---sn.googlevideo.com/initplayback?source=youtube"), true);
+  assertEquals(api.isSabrPlayback("https://www.youtube.com/initplayback?source=youtube"), false);
+});
+
+Deno.test("a player response loses its start-buffer wait and keeps the video", () => {
+  const body = {
+    videoDetails: { videoId: "dQw4w9WgXcQ", title: "Same video" },
+    streamingData: {
+      formats: [{ url: playback, itag: 18 }],
+      serverAbrStreamingUrl: playback,
+    },
+    playabilityStatus: { status: "OK" },
+    playerConfig: {
+      mediaCommonConfig: {
+        useServerDrivenAbr: true,
+        serverPlaybackStartConfig: {
+          enable: true,
+          playbackStartPolicy: {
+            startMinReadaheadPolicy: [{ minReadaheadMs: 12000, minBandwidthBytesPerSec: 1500 }],
+            resumeMinReadaheadPolicy: [
+              { minReadaheadMs: 11000, minBandwidthBytesPerSec: 800 },
+              { minReadaheadMs: 13000, minBandwidthBytesPerSec: 400 },
+            ],
+          },
+        },
+      },
+    },
+  };
+  const stripped = api.stripResponseText(JSON.stringify(body), "https://www.youtube.com/youtubei/v1/player");
+  assert(stripped.blocked, "the start wait is rewritten");
+  const parsed = JSON.parse(stripped.text);
+  const common = parsed.playerConfig.mediaCommonConfig;
+  const config = common.serverPlaybackStartConfig;
+  const policy = config.playbackStartPolicy;
+  assertEquals(config.enable, true, "the start switch stays on so the picture can leave the spinner");
+  assertEquals(common.useServerDrivenAbr, true, "server ABR stays on so a SABR-only url still plays");
+  assertEquals(policy.startMinReadaheadPolicy[0].minReadaheadMs, 0);
+  assertEquals(policy.startMinReadaheadPolicy[0].minBandwidthBytesPerSec, 1500);
+  assertEquals(policy.resumeMinReadaheadPolicy[0].minReadaheadMs, 0);
+  assertEquals(policy.resumeMinReadaheadPolicy[1].minReadaheadMs, 0);
+  assertEquals(policy.resumeMinReadaheadPolicy[0].minBandwidthBytesPerSec, 800);
+  assertEquals(parsed.streamingData.formats[0].url, playback);
+  assertEquals(parsed.streamingData.serverAbrStreamingUrl, playback);
+  assertEquals(parsed.videoDetails.videoId, "dQw4w9WgXcQ");
+});
+
+Deno.test("a listed start policy is cleared and a normal quality pick stays", () => {
+  const listed = {
+    videoDetails: { videoId: "dQw4w9WgXcQ" },
+    streamingData: { formats: [{ url: playback }], serverAbrStreamingUrl: playback },
+    playabilityStatus: { status: "OK" },
+    playerConfig: {
+      mediaCommonConfig: {
+        serverPlaybackStartConfig: {
+          enable: true,
+          playbackStartPolicy: [
+            { minReadaheadMs: 12000, minBandwidthBytesPerSec: 1500 },
+          ],
+        },
+      },
+    },
+  };
+  const stripped = api.stripResponseText(JSON.stringify(listed), "https://www.youtube.com/youtubei/v1/player");
+  const parsed = JSON.parse(stripped.text);
+  const config = parsed.playerConfig.mediaCommonConfig.serverPlaybackStartConfig;
+  assertEquals(config.enable, true, "the start switch stays on when the policy is a list");
+  assertEquals(config.playbackStartPolicy[0].minReadaheadMs, 0);
+  assertEquals(config.playbackStartPolicy[0].minBandwidthBytesPerSec, 1500);
+  assertEquals(parsed.streamingData.serverAbrStreamingUrl, playback);
+  const ordinary = {
+    videoDetails: { videoId: "dQw4w9WgXcQ" },
+    streamingData: { formats: [{ url: playback }], serverAbrStreamingUrl: playback },
+    playabilityStatus: { status: "OK" },
+    playerConfig: { mediaCommonConfig: { useServerDrivenAbr: true } },
+  };
+  const text = JSON.stringify(ordinary);
+  const left = api.stripResponseText(text, "https://www.youtube.com/youtubei/v1/player");
+  assertEquals(left.blocked, false);
+  assertEquals(left.text, text);
+});
+
+function matchesOne(node, selector) {
+  if (selector === "yt-notification-action-renderer") return node.tag === "yt-notification-action-renderer";
+  if (selector === "tp-yt-paper-toast") return node.tag === "tp-yt-paper-toast";
+  if (selector === "tp-yt-paper-toast#toast") return node.tag === "tp-yt-paper-toast" && node.id === "toast";
+  if (selector === "tp-yt-paper-toast.toast-button") {
+    return node.tag === "tp-yt-paper-toast" && String(node.className).split(/\s+/).includes("toast-button");
+  }
+  const href = selector.match(/^a\[href\*="([^"]+)"\]$/);
+  return Boolean(href && node.tag === "a" && String(node.href || "").includes(href[1]));
+}
+
+function matchesList(node, selector) {
+  return String(selector).split(",").some((part) => matchesOne(node, part.trim()));
+}
+
+function walkNodes(node, out) {
+  for (const child of node.children || []) {
+    out.push(child);
+    walkNodes(child, out);
+  }
+}
+
+function toastNode(tag, props) {
+  const node = {
+    nodeType: 1,
+    tag,
+    id: props.id || "",
+    className: props.className || "",
+    textContent: props.text || "",
+    href: props.href || "",
+    children: props.children || [],
+    parent: null,
+    removed: false,
+  };
+  for (const child of node.children) child.parent = node;
+  node.matches = (selector) => matchesList(node, selector);
+  node.closest = (selector) => {
+    let current = node;
+    while (current) {
+      if (current.matches && current.matches(selector)) return current;
+      current = current.parent;
+    }
+    return null;
+  };
+  node.querySelector = (selector) => {
+    const all = [];
+    walkNodes(node, all);
+    return all.find((item) => matchesList(item, selector)) || null;
+  };
+  node.querySelectorAll = (selector) => {
+    const all = [];
+    walkNodes(node, all);
+    return all.filter((item) => matchesList(item, selector));
+  };
+  node.remove = () => {
+    node.removed = true;
+  };
+  node.hidden = false;
+  node.style = {
+    setProperty(name, value, priority) {
+      this[name] = value;
+      this.priority = priority;
+    },
+  };
+  return node;
+}
+
+Deno.test("the interruptions toast is hidden in place and other toasts stay", () => {
+  const link = toastNode("a", { href: "https://www.youtube.com/#check_ad_blockers" });
+  const support = toastNode("a", { href: "https://support.google.com/youtube/answer/3037019" });
+  const interruptions = toastNode("yt-notification-action-renderer", {
+    text: "Experiencing interruptions?",
+    children: [toastNode("tp-yt-paper-toast", { id: "toast", className: "toast-button", text: "Experiencing interruptions?" })],
+  });
+  const hrefOnly = toastNode("yt-notification-action-renderer", {
+    text: "Playback problem",
+    children: [link],
+  });
+  const supportOnly = toastNode("yt-notification-action-renderer", {
+    text: "Video paused",
+    children: [support],
+  });
+  const copied = toastNode("tp-yt-paper-toast", { id: "toast", text: "Copied to clipboard" });
+  const root = toastNode("div", { children: [interruptions, hrefOnly, supportOnly, copied] });
+  assert(api.isInterruptionsToast(interruptions), "the interruptions renderer matches");
+  assert(api.isInterruptionsToast(hrefOnly), "a blocker link matches without the sentence");
+  assert(api.isInterruptionsToast(supportOnly), "the support article matches without the sentence");
+  assert(!api.isInterruptionsToast(copied), "a clipboard toast is not the interruptions toast");
+  api.removeInterruptionsToast(root);
+  assert(!interruptions.removed, "the interruptions renderer stays in the page");
+  assert(interruptions.hidden, "the interruptions renderer is hidden");
+  assertEquals(interruptions.style.display, "none");
+  assertEquals(interruptions.style.priority, "important");
+  assert(!hrefOnly.removed, "the blocker-link renderer stays in the page");
+  assert(hrefOnly.hidden, "the blocker-link renderer is hidden");
+  assert(supportOnly.hidden, "the support-article renderer is hidden");
+  assert(!copied.removed, "the clipboard toast stays");
+  assert(!copied.hidden, "the clipboard toast stays visible");
+  const remover = source.slice(
+    source.indexOf("function removeInterruptionsToast"),
+    source.indexOf("function shouldNudgeStart"),
+  );
+  assert(!remover.includes("notify"), "hiding the toast does not start the Blocking ads chip");
+  assert(!remover.includes(".remove("), "the toast is not deleted");
+  assert(remover.includes('setProperty("display", "none", "important")'), "the same node is hidden");
+  assert(source.includes("api.removeInterruptionsToast()"), "the page watcher hides the toast");
+  assert(api.INTERRUPTIONS_TOAST_CSS.split(",").every((sel) => sel.includes(":has(")), "playlist toasts are not covered");
+  assert(source.includes("video.play()"), "a paused start can be asked to play");
+  assert(source.includes("playVideo"), "the player play method is used when it exists");
+  assert(!/\.currentTime\s*=/.test(source), "do not seek the picture");
+  assert(!source.includes(".pause("), "do not freeze playback");
+});
+
+Deno.test("only a paused black start is asked to play", () => {
+  const paused = {
+    used: false,
+    duration: 213,
+    readyState: 2,
+    paused: true,
+    currentTime: 0,
+    classes: "unstarted-mode",
+    spinner: true,
+  };
+  assert(api.shouldNudgeStart(paused), "a paused start with the spinner up can play");
+  assert(!api.shouldNudgeStart({ ...paused, paused: false }), "an unpaused hold is left to the buffer clear");
+  assert(!api.shouldNudgeStart({ ...paused, currentTime: 4 }), "playback that has moved is left alone");
+  assert(!api.shouldNudgeStart({ ...paused, classes: "ad-showing html5-video-player", spinner: true }), "an ad is not nudged");
+  assert(!api.shouldNudgeStart({ ...paused, used: true }), "one nudge per video");
+  assert(!api.shouldNudgeStart({ ...paused, readyState: 1, spinner: true }), "nothing plays before picture data exists");
+  assert(!api.shouldNudgeStart({ ...paused, spinner: false, classes: "playing-mode" }), "a playing picture is left alone");
+  assert(api.shouldNudgeStart({ ...paused, spinner: false, classes: "buffering-mode" }), "a paused buffer at the start can play");
 });

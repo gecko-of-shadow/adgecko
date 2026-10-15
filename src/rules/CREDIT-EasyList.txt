@@ -1,0 +1,16 @@
+Filter lists shipped with this extension include trimmed material derived from:
+
+  EasyList and EasyPrivacy
+  Copyright The EasyList authors
+  Dual-licensed: GNU GPL-3.0-or-later OR Creative Commons Attribution-ShareAlike 3.0-or-later
+  https://easylist.to/pages/licence.html
+
+Required credit line: The EasyList authors
+
+Additional list sources (bundled / converted for Chrome declarativeNetRequest; see general-network.json):
+
+  Peter Lowe’s Ad and tracking server list — https://pgl.yoyo.org/adservers/
+  Troublesome / malware / threat host lists (trimmed; not whole-country blocks)
+
+Lists are packed in the zip. Updates are manual (user hits Update in the popup).
+No background auto-fetch.
