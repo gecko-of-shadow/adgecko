@@ -1,6 +1,5 @@
 import source from "../src/general/exclusions.js" with { type: "text" };
 import youtubeSource from "../src/youtube.js" with { type: "text" };
-import debugSource from "../src/debug.js" with { type: "text" };
 import vendorSource from "../src/vendor/video-swap-new.user.js" with { type: "text" };
 import manifest from "../manifest.json" with { type: "json" };
 
@@ -95,8 +94,7 @@ Deno.test("playback files are not edited by the general-adblock exclusions work"
   assert(vendorSource.includes("AD_SIGNIFIER = 'stitched-ad'"), "vendor ad marker stays");
   assert(youtubeSource.includes("installYoutubeAdblock"), "youtube install stays");
   assert(youtubeSource.includes("isInlinePlaybackNoAd"), "youtube no-ad mark stays");
-  assert(debugSource.includes("installTwitchAdblockDebug"), "debug install stays");
   assert(!source.includes("installYoutubeAdblock"), "exclusions do not rewrite youtube");
   assert(!source.includes("video-swap-new"), "exclusions do not touch vendor");
-  assertEquals(manifest.version, "0.2.13");
+  assertEquals(manifest.version, "0.2.14");
 });

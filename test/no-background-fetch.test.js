@@ -4,8 +4,6 @@ import togglesSource from "../src/general/toggles.js" with { type: "text" };
 import cosmeticSource from "../src/general/cosmetic.js" with { type: "text" };
 import popupSource from "../src/popup.js" with { type: "text" };
 import popupHtml from "../src/popup.html" with { type: "text" };
-import debugSource from "../src/debug.js" with { type: "text" };
-import bridgeSource from "../src/debug-bridge.js" with { type: "text" };
 import youtubeSource from "../src/youtube.js" with { type: "text" };
 import manifest from "../manifest.json" with { type: "json" };
 
@@ -27,8 +25,6 @@ install(api);
 // for those substrings — scan the code that must never phone them.
 const packagedJs = [
   popupSource,
-  debugSource,
-  bridgeSource,
   youtubeSource,
   exclusionsSource,
   togglesSource,

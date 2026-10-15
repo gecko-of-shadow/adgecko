@@ -41,11 +41,11 @@ It runs inside Chrome. It does not install a program on your PC.
 
 ## Current build
 
-**v0.2.13** is the only current download. It is Twitch, YouTube, Kick, and ordinary-site blocking in one folder. If you still have the older v0.2.3 zip or the v0.2.12 beta folder loaded, remove the extra one and load this folder.
+**v0.2.13** is the zip on Releases: Twitch, YouTube, Kick, and ordinary-site blocking in one download. If you still have the older v0.2.3 zip or the v0.2.12 beta folder loaded, remove the extra one.
 
 The toolbar icon is a gecko head. Its eyes glow while general blocking is on.
 
-Debug starts **off**. You only need it if something goes wrong (see step 6 below).
+This repository folder is **v0.2.14**. The debug switch is gone. The Releases zip is still v0.2.13.
 
 ## Install (for first-time Chrome installs)
 
@@ -91,22 +91,7 @@ Keep the folder that appears. Do not delete it after install — Chrome reads th
 
 Turn off other Twitch or YouTube ad blockers while this is loaded. Two ad blockers on the same page can freeze the video.
 
-### 6. Debug (optional)
-
-<img src="docs/cards-main/install/06-debug.png" width="800" alt="Step 6: Debug starts off. Turn it on only if you need a log.">
-
 **[Open Releases to download →](https://github.com/gecko-of-shadow/twitch-adblock/releases/latest)**
-
-Debug starts **OFF**. Leave it off for normal watching.
-
-If something looks wrong:
-
-1. Click the gecko icon in Chrome to open the popup
-2. Turn **Debug** ON
-3. Click **Copy debug**
-4. Paste that text into a [GitHub issue](https://github.com/gecko-of-shadow/twitch-adblock/issues)
-
-The log stays on your computer until you copy it. Nothing is sent automatically. Turn Debug **OFF** again when you are done.
 
 ## Notes
 

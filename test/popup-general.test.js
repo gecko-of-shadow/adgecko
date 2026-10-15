@@ -5,7 +5,6 @@ import backgroundSource from "../src/general-background.js" with { type: "text" 
 import manifest from "../manifest.json" with { type: "json" };
 import vendorSource from "../src/vendor/video-swap-new.user.js" with { type: "text" };
 import youtubeSource from "../src/youtube.js" with { type: "text" };
-import debugSource from "../src/debug.js" with { type: "text" };
 
 function assert(condition, label) {
   if (!condition) throw new Error(label || "assert failed");
@@ -48,7 +47,6 @@ Deno.test("playback files stay untouched by general UI APIs", () => {
   for (const [name, source] of [
     ["vendor", vendorSource],
     ["youtube", youtubeSource],
-    ["debug", debugSource],
   ]) {
     assert(!source.includes("chrome."), `${name} has no chrome.*`);
     assert(!source.includes("generalEnabled"), `${name} does not read general master`);

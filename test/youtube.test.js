@@ -211,7 +211,7 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assert(source.includes("isInlinePlaybackNoAd"), "player requests opt out of scheduled ads");
   assert(source.includes('notice.textContent = "Blocking ads"'), "the player label says ads are being blocked");
   assertEquals(manifest.name, "twitch-adblock");
-  assertEquals(manifest.version, "0.2.13");
+  assertEquals(manifest.version, "0.2.14");
   assertEquals(manifest.action.default_popup, "src/popup.html");
   assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
   assertEquals(manifest.host_permissions, undefined);
@@ -235,10 +235,11 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   );
   assertEquals(twitch.js, ["src/vendor/video-swap-new.user.js"]);
   assertEquals(twitch.world, "MAIN");
-  assertEquals(youtube.js, ["src/debug.js", "src/youtube.js"]);
-  const bridge = manifest.content_scripts.find((script) => (script.js || []).includes("src/debug-bridge.js"));
-  assert(bridge, "debug popup bridge is a content script");
-  assert(bridge.world !== "MAIN", "debug bridge stays out of the page world");
+  assertEquals(youtube.js, ["src/youtube.js"]);
+  const debugScript = manifest.content_scripts.find((script) =>
+    (script.js || []).some((file) => file.includes("debug"))
+  );
+  assertEquals(debugScript, undefined);
   assert(twitch.matches.includes("*://*.twitch.tv/*"), "twitch live script stays");
 });
 

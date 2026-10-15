@@ -710,19 +710,8 @@ function startYoutubeAdblock() {
   if (globalThis.__twitchAdblockYoutube) return;
   globalThis.__twitchAdblockYoutube = true;
 
-  function trace(kind, detail) {
-    try {
-      const debug = globalThis.TwitchAdblockDebug;
-      if (!debug || debug.on !== true) return;
-      debug.trace(kind, detail);
-    } catch {
-      // Debug never changes playback.
-    }
-  }
-
   function logFailOpen(error) {
     console.log("twitch-adblock youtube failed open", error);
-    trace("fail-open", "youtube");
   }
 
   const api = {};
@@ -789,7 +778,6 @@ function startYoutubeAdblock() {
 
   function notify(blocking, attempt, generation) {
     if (blocking && noticeLatched) return;
-    if (blocking && !attempt) trace("youtube", "blocked");
     const existing = document.getElementById("twitch-adblock-notice");
     if (!blocking) {
       noticeGeneration += 1;
