@@ -10,6 +10,10 @@ function installTwitchDirectoryAds(target) {
     FEEDBACK_SELECTOR,
   ].join(",") + "{display:none!important;}";
 
+  // Climb from the feedback button to the ad card: stop at the first ancestor
+  // whose parent holds a video or several preview cards. If no such boundary
+  // is found (e.g. the ad video was blocked and the page uses category tiles,
+  // as on /directory), return null instead of a page-wide container.
   function cardFor(node) {
     let current = node;
     for (let i = 0; i < 10 && current && current.parentElement; i++) {
@@ -21,11 +25,17 @@ function installTwitchDirectoryAds(target) {
       if (previews.length > 1) return current;
       current = parent;
     }
-    return current || node;
+    return null;
+  }
+
+  function isPageRoot(el) {
+    const tag = String(el.tagName || "").toLowerCase();
+    if (tag === "html" || tag === "body" || tag === "main") return true;
+    return el.id === "root" || (el.matches && el.matches('[data-a-target="root-scroller"],.root-scrollable'));
   }
 
   function hide(element) {
-    if (!element || !element.style || typeof element.style.setProperty !== "function") return;
+    if (!element || isPageRoot(element) || !element.style || typeof element.style.setProperty !== "function") return;
     if (element.querySelector && element.querySelector("video")) return;
     element.style.setProperty("display", "none", "important");
   }

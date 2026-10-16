@@ -68,3 +68,30 @@ Deno.test("manifest runs directory cosmetic on Twitch pages only", () => {
   const general = manifest.content_scripts.find((entry) => (entry.js || []).includes("src/cosmetic.js"));
   assert((general.exclude_matches || []).includes("*://twitch.tv/*"), "full EasyList sheet stays off Twitch");
 });
+
+Deno.test("directory page: a feedback button with no card boundary never hides the page", () => {
+  function node(tagName, children, id) {
+    const el = { tagName, id: id || "", children, parentElement: null, hidden: false,
+      style: { setProperty(k, v) { if (k === "display" && v === "none") el.hidden = true; } },
+      matches() { return false; },
+      querySelector(s) { return this.querySelectorAll(s)[0] || null; },
+      querySelectorAll(s) {
+        const out = [];
+        for (const c of this.children) {
+          if (s === 'button[aria-label="Leave feedback for this Ad"]' && c.tagName === "BUTTON") out.push(c);
+          out.push(...c.querySelectorAll(s));
+        }
+        return out;
+      } };
+    for (const c of children) c.parentElement = el;
+    return el;
+  }
+  const button = node("BUTTON", []);
+  const tiles = node("DIV", [node("DIV", [button]), node("DIV", [])]);
+  const root = node("DIV", [tiles], "root");
+  const body = node("BODY", [root]);
+  const html = node("HTML", [body]);
+  assert(api.cardFor(button) === null, "no boundary -> no card");
+  api.hideDirectoryAds(html);
+  for (const el of [html, body, root, tiles]) assert(!el.hidden, `${el.tagName} must stay visible`);
+});
