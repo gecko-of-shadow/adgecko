@@ -41,11 +41,11 @@ It runs inside Chrome. It does not install a program on your PC.
 
 ## Current build
 
-**v0.2.16** is the zip on Releases: Twitch, YouTube, Kick, and ordinary-site blocking in one download. If you still have the older v0.2.3 zip or the v0.2.12 beta folder loaded, remove the extra one.
+**v0.2.18** is the zip on Releases: Twitch, YouTube, Kick, and ordinary-site blocking in one download. If you still have the older v0.2.3 zip or the v0.2.12 beta folder loaded, remove the extra one.
 
 The toolbar icon is a gecko head. Its eyes glow while general blocking is on.
 
-This repository folder is **v0.2.16**, the same as the Releases zip.
+This repository folder is **v0.2.18**, the same as the Releases zip.
 
 ## Install (for first-time Chrome installs)
 
@@ -63,7 +63,7 @@ Or skip ahead and use the download button in step 2.
 
 Open **[Releases](https://github.com/gecko-of-shadow/twitch-adblock/releases/latest)** and download the zip under **Assets** — or use this direct link:
 
-**[Download twitch-adblock-0.2.16.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.2.16/twitch-adblock-0.2.16.zip)**
+**[Download twitch-adblock-0.2.18.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.2.18/twitch-adblock-0.2.18.zip)**
 
 ### 3. Unzip the folder
 
