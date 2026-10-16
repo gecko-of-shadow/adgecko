@@ -138,7 +138,10 @@ const TOGGLES = {
   "set-constant.js": "setConstant",
   "json-edit-fetch-response.js": "jsonEditFetch",
 };
-const OFF_BY_DEFAULT = ["rpnt", "rmnt", "domBypass", "inboundEdit", "nanoStb"];
+// rpnt (105-byte wait-reply reload + UA hint), inboundEdit (/player request markers)
+// and nanoStb are on as in uBO Lite's default ruleset (the owner's PC 2026-10-16: uBOL
+// got the same 105-byte waits but started in ~1s). rmnt/domBypass stay off.
+const OFF_BY_DEFAULT = ["rmnt", "domBypass"];
 const TOGGLE_PRELUDE = `const uboOn = (() => {
   const defaults = ${JSON.stringify(Object.fromEntries(OFF_BY_DEFAULT.map((k) => [k, false])))};
   let saved = {};

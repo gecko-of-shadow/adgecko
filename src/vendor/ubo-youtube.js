@@ -9,7 +9,7 @@ if (globalThis[Symbol.for("twitch-adblock.ubo")]) { return; }
 if ("MAIN" !== "MAIN") { try { Object.defineProperty(globalThis, Symbol.for("twitch-adblock.ubo"), { value: true }); } catch (e) {} }
 const scriptletGlobals = {};
 const uboOn = (() => {
-  const defaults = {"rpnt":false,"rmnt":false,"domBypass":false,"inboundEdit":false,"nanoStb":false};
+  const defaults = {"rmnt":false,"domBypass":false};
   let saved = {};
   try { saved = JSON.parse(self.localStorage.getItem("twitch-adblock-ubo-opts") || "{}") || {}; } catch (e) { saved = {}; }
   return (key) => (typeof saved[key] === "boolean" ? saved[key] : defaults[key] !== false);

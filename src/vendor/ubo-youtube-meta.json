@@ -29,11 +29,8 @@
     "json-edit-fetch-response.js": "jsonEditFetch"
   },
   "off_by_default": [
-    "rpnt",
     "rmnt",
-    "domBypass",
-    "inboundEdit",
-    "nanoStb"
+    "domBypass"
   ],
   "hosts": [
     "www.youtube.com",
@@ -96,9 +93,9 @@
       "youtube.com#@##player-ads",
       "www.youtube.com###toast:has(> #text-container > yt-formatted-string#text.yt-notification-action-renderer)",
       "www.youtube.com##.ytSnackbarContainerOpened:has(> .snackbarViewModelSwipeable > .snackbarViewModelEngagementBarWrapper .ytAttributedStringWhiteSpacePreWrap[style])",
-      "(exception) www.youtube.com#@##player-ads — no matching hide in these lists; nothing to undo",
-      "(exception) m.youtube.com#@##player-ads — no matching hide in these lists; nothing to undo",
-      "(exception) youtube.com#@##player-ads — no matching hide in these lists; nothing to undo"
+      "(exception) www.youtube.com#@##player-ads \u2014 no matching hide in these lists; nothing to undo",
+      "(exception) m.youtube.com#@##player-ads \u2014 no matching hide in these lists; nothing to undo",
+      "(exception) youtube.com#@##player-ads \u2014 no matching hide in these lists; nothing to undo"
     ],
     "network": [
       "*_ad_$media,domain=youtube.com,3p",

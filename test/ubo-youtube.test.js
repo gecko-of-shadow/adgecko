@@ -26,20 +26,22 @@ Deno.test("uBO bundle: player fetch loses adPlacements/adSlots exactly as uBO's 
   assert(r.reel.entries.length === 1 && r.reel.entries[0].command.reelWatchEndpoint.videoId === "v1", "reel_watch_sequence isAd entry pruned");
   assert(r.parsedEntries === 1, "JSON.parse prune of entries.[-]...isAd");
   assert(r.initial.videoId === "x" && r.initial.adPlacements === undefined && r.initial.adSlots === undefined && r.initial.playerAds === undefined, "set-constant on ytInitialPlayerResponse");
-  assert(r.boostedTimerMs === 0, "nano-stb is off by default");
+  assert(r.boostedTimerMs > 0 && r.boostedTimerMs < 200, "nano-stb on by default like uBO Lite");
 });
 
-Deno.test("uBO bundle defaults: no page-wide globals patched, mock YouTube bootstrap runs (9b82bf8 blank-page fix)", async () => {
+Deno.test("uBO bundle defaults: only uBO Lite's default globals (setTimeout, JSON.stringify), mock YouTube bootstrap runs (9b82bf8 blank-page fix)", async () => {
   const r = await runBundle();
-  assert(r.globalsTouched.length === 0, "globals touched by default: " + r.globalsTouched);
+  assert(r.globalsTouched.join() === "setTimeout,stringify", "globals touched by default: " + r.globalsTouched);
   assert(r.boot.every((x) => x === true), "bootstrap " + JSON.stringify(r.boot));
 });
 
 Deno.test("uBO risky groups are individually switchable via localStorage", async () => {
-  const stb = await runBundle({ nanoStb: true });
+  const stb = await runBundle({ inboundEdit: false });
   assert(stb.boostedTimerMs > 0 && stb.boostedTimerMs < 200 && stb.globalsTouched.join() === "setTimeout", "nanoStb alone: " + JSON.stringify(stb.globalsTouched));
-  const edit = await runBundle({ inboundEdit: true });
+  const edit = await runBundle({ nanoStb: false });
   assert(edit.globalsTouched.join() === "stringify" && edit.boot[2] === true, "inboundEdit alone");
+  const none = await runBundle({ nanoStb: false, inboundEdit: false });
+  assert(none.globalsTouched.length === 0 && none.boostedTimerMs === 0, "both switch off");
   const off = await runBundle({ pruneFetch: false, replaceFetch: false });
   assert(Array.isArray(off.player.adPlacements), "default-on groups can be switched off");
 });
@@ -59,7 +61,8 @@ Deno.test("uBO bundle carries the exact uAssets prune paths and is pinned", asyn
   assert(js.includes(meta.ublock_commit), "uBO commit recorded");
   assert(!/\bchrome\./.test(js), "no extension APIs in MAIN world");
   assert(js.includes("if (globalThis[Symbol.for(\"twitch-adblock.ubo\")]) { return; }"), "install-once guard");
-  for (const k of ["rpnt", "rmnt", "domBypass", "inboundEdit", "nanoStb"]) assert(meta.off_by_default.includes(k), "off by default: " + k);
+  for (const k of ["rmnt", "domBypass"]) assert(meta.off_by_default.includes(k), "off by default: " + k);
+  for (const k of ["rpnt", "inboundEdit", "nanoStb"]) assert(!meta.off_by_default.includes(k), "on by default like uBO Lite: " + k);
   const iso = await Deno.readTextFile(new URL("../src/vendor/ubo-youtube-isolated.js", import.meta.url));
   assert(iso.includes('if (uboOn("rpnt"))') && iso.includes('if (uboOn("rmnt"))'), "rpnt/rmnt in isolated world like uBO");
 });
