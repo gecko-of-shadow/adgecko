@@ -110,6 +110,34 @@ for (const name of LISTS) {
 
 // ---- scriptlets, assembled like uBO's scriptlet-filtering-core.js ----
 const WORLDS = ["MAIN", "ISOLATED"];
+// Every ported scriptlet is switchable per group from the page console:
+//   localStorage["twitch-adblock-ubo-opts"] = '{"rpnt":true}'  then reload.
+// Groups in OFF_BY_DEFAULT patch page-wide globals or rewrite YouTube's own
+// bootstrap/request code; they are off until proven safe in Chrome (0.2.17:
+// 9b82bf8 with them on left youtube.com blank).
+const TOGGLES = {
+  "replace-node-text.js": "rpnt",
+  "trusted-replace-node-text.js": "rpnt",
+  "remove-node-text.js": "rmnt",
+  "trusted-prevent-dom-bypass.js": "domBypass",
+  "trusted-edit-inbound-object.js": "inboundEdit",
+  "adjust-setTimeout.js": "nanoStb",
+  "json-prune.js": "jsonPrune",
+  "json-prune-fetch-response.js": "pruneFetch",
+  "json-prune-xhr-response.js": "pruneXhr",
+  "trusted-replace-fetch-response.js": "replaceFetch",
+  "trusted-replace-xhr-response.js": "replaceXhr",
+  "set-constant.js": "setConstant",
+  "json-edit-fetch-response.js": "jsonEditFetch",
+};
+const OFF_BY_DEFAULT = ["rpnt", "rmnt", "domBypass", "inboundEdit", "nanoStb"];
+const TOGGLE_PRELUDE = `const uboOn = (() => {
+  const defaults = ${JSON.stringify(Object.fromEntries(OFF_BY_DEFAULT.map((k) => [k, false])))};
+  let saved = {};
+  try { saved = JSON.parse(self.localStorage.getItem("twitch-adblock-ubo-opts") || "{}") || {}; } catch (e) { saved = {}; }
+  return (key) => (typeof saved[key] === "boolean" ? saved[key] : defaults[key] !== false);
+})();
+`;
 const fnCodeBy = { MAIN: new Map(), ISOLATED: new Map() };
 let fnCode;
 const addDeps = (names) => {
@@ -136,7 +164,8 @@ for (const h of HOSTS) {
     if ((d.world === "ISOLATED" ? "ISOLATED" : "MAIN") !== world) continue;
     addDeps([d.name]);
     const fname = /^function\s+([^(\s]+)\s*\(/.exec(d.fn.toString())[1];
-    calls.push({ code: `try {\n\t${fname}(${JSON.stringify(args.slice(1)).slice(1, -1)});\n} catch (e) {\n}`, priority: d.priority ?? 0 });
+    const toggle = TOGGLES[d.name] || d.name.replace(/\.js$/, "");
+    calls.push({ code: `if (uboOn(${JSON.stringify(toggle)})) try {\n\t${fname}(${JSON.stringify(args.slice(1)).slice(1, -1)});\n} catch (e) {\n}`, priority: d.priority ?? 0, toggle });
   }
   calls.sort((a, b) => a.priority === b.priority ? a.code.localeCompare(b.code) : b.priority - a.priority);
   hostCalls[h] = calls.map((c) => c.code);
@@ -157,7 +186,7 @@ for (const h of HOSTS) {
   if (!groups.has(body)) groups.set(body, []);
   groups.get(body).push(h);
 }
-let js = banner + "(function() {\n// >>>> start of private namespace\n;\nconst scriptletGlobals = {};\n\n" + fnDefs.join("\n\n") + "\n\nconst hostname = location.hostname;\n";
+let js = banner + "(function() {\n// >>>> start of private namespace\n;\nconst scriptletGlobals = {};\n" + TOGGLE_PRELUDE + "\n" + fnDefs.join("\n\n") + "\n\nconst hostname = location.hostname;\n";
 for (const [body, hosts] of groups) {
   if (!body) continue;
   js += `\nif (${JSON.stringify(hosts)}.includes(hostname)) {\n${body}\n}\n`;
@@ -201,6 +230,8 @@ const meta = {
   ublock_tag: uboTag,
   ublock_commit: uboCommit,
   env: ENV,
+  toggles: TOGGLES,
+  off_by_default: OFF_BY_DEFAULT,
   hosts: HOSTS,
   scriptlet_calls: Object.fromEntries(WORLDS.map((w) => [w, Object.fromEntries(HOSTS.map((h) => [h, hostCallsBy[w][h].length]))])),
   css_rules: cssRules.size,

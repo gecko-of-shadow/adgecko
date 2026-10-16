@@ -6,6 +6,12 @@
 // >>>> start of private namespace
 ;
 const scriptletGlobals = {};
+const uboOn = (() => {
+  const defaults = {"rpnt":false,"rmnt":false,"domBypass":false,"inboundEdit":false,"nanoStb":false};
+  let saved = {};
+  try { saved = JSON.parse(self.localStorage.getItem("twitch-adblock-ubo-opts") || "{}") || {}; } catch (e) { saved = {}; }
+  return (key) => (typeof saved[key] === "boolean" ? saved[key] : defaults[key] !== false);
+})();
 
 class JSONPath {
     static create(query) {
@@ -1815,176 +1821,176 @@ function validateConstantFn(trusted, raw, extraArgs = {}) {
 const hostname = location.hostname;
 
 if (["www.youtube.com"].includes(hostname)) {
-try {
-	adjustSetTimeout("[native code]","17000","0.001");
-} catch (e) {
-}
-
-try {
-	jsonPrune("entries.[-].command.reelWatchEndpoint.adClientParams.isAd");
-} catch (e) {
-}
-
-try {
-	jsonPruneFetchResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\/player(\\?|$)/");
-} catch (e) {
-}
-
-try {
-	jsonPruneFetchResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots","","propsToMatch","/playlist?");
-} catch (e) {
-}
-
-try {
-	jsonPruneFetchResponse("reelWatchSequenceResponse.entries.[-].command.reelWatchEndpoint.adClientParams.isAd entries.[-].command.reelWatchEndpoint.adClientParams.isAd","","propsToMatch","url:/reel_watch_sequence?");
-} catch (e) {
-}
-
-try {
-	jsonPruneXhrResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\/player(?:\\?.+)?$/");
-} catch (e) {
-}
-
-try {
-	setConstant("playerResponse.adPlacements","undefined");
-} catch (e) {
-}
-
-try {
-	setConstant("ytInitialPlayerResponse.adPlacements","undefined");
-} catch (e) {
-}
-
-try {
-	setConstant("ytInitialPlayerResponse.adSlots","undefined");
-} catch (e) {
-}
-
-try {
-	setConstant("ytInitialPlayerResponse.playerAds","undefined");
-} catch (e) {
-}
-
-try {
-	trustedEditInboundObject("JSON.stringify","0","[?.attestationRequest][?.context.client.userAgent*=\"channel\"].context.client[?.clientName==\"WEB\"]+={\"clientScreen\":\"CHANNEL\"}");
-} catch (e) {
-}
-
-try {
-	trustedEditInboundObject("JSON.stringify","0","[?.attestationRequest][?.context.client.userAgent*=\"instream\"].playbackContext[?.contentPlaybackContext]+={\"adPlaybackContext\":{\"adType\":\"AD_TYPE_INSTREAM\"}}");
-} catch (e) {
-}
-
-try {
-	trustedEditInboundObject("JSON.stringify","0","[?.attestationRequest][?.context.client.userAgent*=\"lactmilli\"]+={\"params\":\"8AUB\"}");
-} catch (e) {
-}
-
-try {
-	trustedEditInboundObject("JSON.stringify","0","[?.attestationRequest][?.context.client.userAgent*=\"yahi\"]+={\"params\":\"YAHI\"}");
-} catch (e) {
-}
-
-try {
-	trustedEditInboundObject("JSON.stringify","0","[?.attestationRequest][?.context.client.userAgent=/adunit|channel|lactmilli|instream|inline|yahi|eafg/].playbackContext.contentPlaybackContext.referer=repl({\"regex\":\"(?:#reloadxhr)?$\",\"replacement\":\"#reloadxhr\"})");
-} catch (e) {
-}
-
-try {
-	trustedEditInboundObject("JSON.stringify","0","[?.attestationRequest][?.context.client.userAgent=/channel|lactmilli|instream/].playbackContext.contentPlaybackContext.lactMilliseconds=\"${now}\"");
-} catch (e) {
-}
-
-try {
+if (uboOn("domBypass")) try {
 	trustedPreventDomBypass("Node.prototype.appendChild","fetch");
 } catch (e) {
 }
 
-try {
+if (uboOn("domBypass")) try {
 	trustedPreventDomBypass("Node.prototype.appendChild","JSON.parse");
 } catch (e) {
 }
 
-try {
+if (uboOn("domBypass")) try {
 	trustedPreventDomBypass("Node.prototype.appendChild","Request");
 } catch (e) {
 }
 
-try {
+if (uboOn("inboundEdit")) try {
+	trustedEditInboundObject("JSON.stringify","0","[?.attestationRequest][?.context.client.userAgent*=\"channel\"].context.client[?.clientName==\"WEB\"]+={\"clientScreen\":\"CHANNEL\"}");
+} catch (e) {
+}
+
+if (uboOn("inboundEdit")) try {
+	trustedEditInboundObject("JSON.stringify","0","[?.attestationRequest][?.context.client.userAgent*=\"instream\"].playbackContext[?.contentPlaybackContext]+={\"adPlaybackContext\":{\"adType\":\"AD_TYPE_INSTREAM\"}}");
+} catch (e) {
+}
+
+if (uboOn("inboundEdit")) try {
+	trustedEditInboundObject("JSON.stringify","0","[?.attestationRequest][?.context.client.userAgent*=\"lactmilli\"]+={\"params\":\"8AUB\"}");
+} catch (e) {
+}
+
+if (uboOn("inboundEdit")) try {
+	trustedEditInboundObject("JSON.stringify","0","[?.attestationRequest][?.context.client.userAgent*=\"yahi\"]+={\"params\":\"YAHI\"}");
+} catch (e) {
+}
+
+if (uboOn("inboundEdit")) try {
+	trustedEditInboundObject("JSON.stringify","0","[?.attestationRequest][?.context.client.userAgent=/adunit|channel|lactmilli|instream|inline|yahi|eafg/].playbackContext.contentPlaybackContext.referer=repl({\"regex\":\"(?:#reloadxhr)?$\",\"replacement\":\"#reloadxhr\"})");
+} catch (e) {
+}
+
+if (uboOn("inboundEdit")) try {
+	trustedEditInboundObject("JSON.stringify","0","[?.attestationRequest][?.context.client.userAgent=/channel|lactmilli|instream/].playbackContext.contentPlaybackContext.lactMilliseconds=\"${now}\"");
+} catch (e) {
+}
+
+if (uboOn("jsonPrune")) try {
+	jsonPrune("entries.[-].command.reelWatchEndpoint.adClientParams.isAd");
+} catch (e) {
+}
+
+if (uboOn("nanoStb")) try {
+	adjustSetTimeout("[native code]","17000","0.001");
+} catch (e) {
+}
+
+if (uboOn("pruneFetch")) try {
+	jsonPruneFetchResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\/player(\\?|$)/");
+} catch (e) {
+}
+
+if (uboOn("pruneFetch")) try {
+	jsonPruneFetchResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots","","propsToMatch","/playlist?");
+} catch (e) {
+}
+
+if (uboOn("pruneFetch")) try {
+	jsonPruneFetchResponse("reelWatchSequenceResponse.entries.[-].command.reelWatchEndpoint.adClientParams.isAd entries.[-].command.reelWatchEndpoint.adClientParams.isAd","","propsToMatch","url:/reel_watch_sequence?");
+} catch (e) {
+}
+
+if (uboOn("pruneXhr")) try {
+	jsonPruneXhrResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\/player(?:\\?.+)?$/");
+} catch (e) {
+}
+
+if (uboOn("replaceFetch")) try {
 	trustedReplaceFetchResponse("\"adPlacements\"","\"no_ads\"","player?");
 } catch (e) {
 }
 
-try {
+if (uboOn("replaceFetch")) try {
 	trustedReplaceFetchResponse("\"adSlots\"","\"no_ads\"","/^\\W+$/");
 } catch (e) {
 }
 
-try {
+if (uboOn("replaceFetch")) try {
 	trustedReplaceFetchResponse("\"adSlots\"","\"no_ads\"","/get_watch?");
 } catch (e) {
 }
 
-try {
+if (uboOn("replaceFetch")) try {
 	trustedReplaceFetchResponse("\"adSlots\"","\"no_ads\"","player?");
 } catch (e) {
 }
 
-try {
+if (uboOn("replaceXhr")) try {
 	trustedReplaceXhrResponse("/\"adPlacements.*?([A-Z]\"\\}|\"\\}{2,4})\\}\\],/","","/playlist\\?list=|\\/player(?:\\?.+)?$|watch\\?[tv]=/");
 } catch (e) {
 }
 
-try {
+if (uboOn("replaceXhr")) try {
 	trustedReplaceXhrResponse("/\"adPlacements.*?(\"adSlots\"|\"adBreakHeartbeatParams\")/gms","$1","/\\/player(?:\\?.+)?$/");
+} catch (e) {
+}
+
+if (uboOn("setConstant")) try {
+	setConstant("playerResponse.adPlacements","undefined");
+} catch (e) {
+}
+
+if (uboOn("setConstant")) try {
+	setConstant("ytInitialPlayerResponse.adPlacements","undefined");
+} catch (e) {
+}
+
+if (uboOn("setConstant")) try {
+	setConstant("ytInitialPlayerResponse.adSlots","undefined");
+} catch (e) {
+}
+
+if (uboOn("setConstant")) try {
+	setConstant("ytInitialPlayerResponse.playerAds","undefined");
 } catch (e) {
 }
 }
 
 if (["m.youtube.com"].includes(hostname)) {
-try {
+if (uboOn("jsonEditFetch")) try {
 	jsonEditFetchResponse("..itemSectionRenderer.contents.*[?.adSlotRenderer]","propsToMatch","/get_watch");
 } catch (e) {
 }
 
-try {
+if (uboOn("jsonPrune")) try {
 	jsonPrune("entries.[-].command.reelWatchEndpoint.adClientParams.isAd");
 } catch (e) {
 }
 
-try {
+if (uboOn("jsonPrune")) try {
 	jsonPrune("playerResponse.adPlacements playerResponse.playerAds playerResponse.adSlots adPlacements playerAds adSlots important");
 } catch (e) {
 }
 
-try {
+if (uboOn("pruneFetch")) try {
 	jsonPruneFetchResponse("reelWatchSequenceResponse.entries.[-].command.reelWatchEndpoint.adClientParams.isAd entries.[-].command.reelWatchEndpoint.adClientParams.isAd","","propsToMatch","url:/reel_watch_sequence?");
 } catch (e) {
 }
 
-try {
+if (uboOn("setConstant")) try {
 	setConstant("playerResponse.adPlacements","undefined");
 } catch (e) {
 }
 
-try {
+if (uboOn("setConstant")) try {
 	setConstant("ytInitialPlayerResponse.adPlacements","undefined");
 } catch (e) {
 }
 
-try {
+if (uboOn("setConstant")) try {
 	setConstant("ytInitialPlayerResponse.adSlots","undefined");
 } catch (e) {
 }
 
-try {
+if (uboOn("setConstant")) try {
 	setConstant("ytInitialPlayerResponse.playerAds","undefined");
 } catch (e) {
 }
 }
 
 if (["youtube.com"].includes(hostname)) {
-try {
+if (uboOn("jsonPrune")) try {
 	jsonPrune("entries.[-].command.reelWatchEndpoint.adClientParams.isAd");
 } catch (e) {
 }

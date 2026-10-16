@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-10-16T06:51:17Z",
+  "generated_at_utc": "2026-10-16T06:59:47Z",
   "uassets_commit": "69831a84cc5cdd5c63feb1961fff0071875162c9",
   "ublock_tag": "1.75.0",
   "ublock_commit": "21f0e686506bb21b514b451c8c6cb9bf8c82d232",
@@ -8,6 +8,28 @@
     "ublock",
     "native_css_has",
     "user_stylesheet"
+  ],
+  "toggles": {
+    "replace-node-text.js": "rpnt",
+    "trusted-replace-node-text.js": "rpnt",
+    "remove-node-text.js": "rmnt",
+    "trusted-prevent-dom-bypass.js": "domBypass",
+    "trusted-edit-inbound-object.js": "inboundEdit",
+    "adjust-setTimeout.js": "nanoStb",
+    "json-prune.js": "jsonPrune",
+    "json-prune-fetch-response.js": "pruneFetch",
+    "json-prune-xhr-response.js": "pruneXhr",
+    "trusted-replace-fetch-response.js": "replaceFetch",
+    "trusted-replace-xhr-response.js": "replaceXhr",
+    "set-constant.js": "setConstant",
+    "json-edit-fetch-response.js": "jsonEditFetch"
+  },
+  "off_by_default": [
+    "rpnt",
+    "rmnt",
+    "domBypass",
+    "inboundEdit",
+    "nanoStb"
   ],
   "hosts": [
     "www.youtube.com",

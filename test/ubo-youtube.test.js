@@ -5,8 +5,10 @@ import meta from "../src/vendor/ubo-youtube-meta.json" with { type: "json" };
 import youtubeSource from "../src/youtube.js" with { type: "text" };
 function assert(c, l) { if (!c) throw new Error(l); }
 
-async function runBundle() {
+async function runBundle(opts) {
+  const env = opts ? { UBO_OPTS: JSON.stringify(opts) } : {};
   const out = await new Deno.Command(Deno.execPath(), {
+    env,
     args: ["run", "-A", "--location", "https://www.youtube.com/watch?v=x", new URL("./fixtures/ubo-youtube-run.mjs", import.meta.url).pathname],
     stdout: "piped", stderr: "piped",
   }).output();
@@ -24,7 +26,22 @@ Deno.test("uBO bundle: player fetch loses adPlacements/adSlots exactly as uBO's 
   assert(r.reel.entries.length === 1 && r.reel.entries[0].command.reelWatchEndpoint.videoId === "v1", "reel_watch_sequence isAd entry pruned");
   assert(r.parsedEntries === 1, "JSON.parse prune of entries.[-]...isAd");
   assert(r.initial.videoId === "x" && r.initial.adPlacements === undefined && r.initial.adSlots === undefined && r.initial.playerAds === undefined, "set-constant on ytInitialPlayerResponse");
-  assert(r.boostedTimerMs > 0 && r.boostedTimerMs < 200, "nano-stb boosted 17s native timer: " + r.boostedTimerMs);
+  assert(r.boostedTimerMs === 0, "nano-stb is off by default");
+});
+
+Deno.test("uBO bundle defaults: no page-wide globals patched, mock YouTube bootstrap runs (9b82bf8 blank-page fix)", async () => {
+  const r = await runBundle();
+  assert(r.globalsTouched.length === 0, "globals touched by default: " + r.globalsTouched);
+  assert(r.boot.every((x) => x === true), "bootstrap " + JSON.stringify(r.boot));
+});
+
+Deno.test("uBO risky groups are individually switchable via localStorage", async () => {
+  const stb = await runBundle({ nanoStb: true });
+  assert(stb.boostedTimerMs > 0 && stb.boostedTimerMs < 200 && stb.globalsTouched.join() === "setTimeout", "nanoStb alone: " + JSON.stringify(stb.globalsTouched));
+  const edit = await runBundle({ inboundEdit: true });
+  assert(edit.globalsTouched.join() === "stringify" && edit.boot[2] === true, "inboundEdit alone");
+  const off = await runBundle({ pruneFetch: false, replaceFetch: false });
+  assert(Array.isArray(off.player.adPlacements), "default-on groups can be switched off");
 });
 
 Deno.test("uBO bundle carries the exact uAssets prune paths and is pinned", async () => {
@@ -40,8 +57,9 @@ Deno.test("uBO bundle carries the exact uAssets prune paths and is pinned", asyn
   assert(/^[0-9a-f]{40}$/.test(meta.uassets_commit) && js.includes(meta.uassets_commit), "uAssets commit recorded");
   assert(js.includes(meta.ublock_commit), "uBO commit recorded");
   assert(!/\bchrome\./.test(js), "no extension APIs in MAIN world");
+  for (const k of ["rpnt", "rmnt", "domBypass", "inboundEdit", "nanoStb"]) assert(meta.off_by_default.includes(k), "off by default: " + k);
   const iso = await Deno.readTextFile(new URL("../src/vendor/ubo-youtube-isolated.js", import.meta.url));
-  assert(iso.includes("replaceNodeText(\"script\"") && iso.includes("removeNodeText(\"script\",\"window,\\\"fetch\\\"\")"), "rpnt/rmnt in isolated world like uBO");
+  assert(iso.includes('if (uboOn("rpnt"))') && iso.includes('if (uboOn("rmnt"))'), "rpnt/rmnt in isolated world like uBO");
 });
 
 Deno.test("uBO DNR: decoy videoplayback expire filter blocks absurd expiries only", () => {
