@@ -163,6 +163,8 @@ async function newPage(browser) {
   await page.__cdp.send("Performance.enable");
   page.__log = [];
   page.on("console", (m) => { if (m.text().startsWith("twitch-adblock")) page.__log.push(m.text()); });
+  page.__errors = [];
+  page.on("pageerror", (e) => page.__errors.push(String(e.message).slice(0, 160)));
   return page;
 }
 
@@ -181,7 +183,7 @@ async function loadScenario(browser, url, ready, arg) {
   page.__docUrl = url;
   const res = { readyMs, ...trace, ...(await metrics(page)), ...(await longTasks(page)), wallMs: Date.now() - t0,
     sawAd: await page.evaluate(() => !!window.__benchAd), log: page.__log.splice(0),
-    waitReplies: await page.evaluate(() => window.__bench.wait.length) };
+    waitReplies: await page.evaluate(() => window.__bench.wait.length), pageErrors: page.__errors.splice(0) };
   return { page, res };
 }
 
@@ -221,6 +223,7 @@ async function spaScenario(page) {
     readyMs,
     sawAd: await page.evaluate(() => !!window.__benchAd),
     log: page.__log.splice(0),
+    pageErrors: page.__errors.splice(0),
     waitReplies: (await page.evaluate(() => window.__bench.wait.length)) - waitBefore,
     extSelfMs, extCallbackMs, inlineSelfMs, traceStyleMs, topFns,
     scriptMs: after.scriptMs - before.scriptMs,
@@ -310,6 +313,7 @@ for (const [label, runs] of Object.entries(results)) {
       if (m !== null) summary[label][sc][k] = Math.round(m * 10) / 10;
     }
     summary[label][sc].n = runs.filter((r) => typeof r[sc]?.readyMs === "number").length;
+    summary[label][sc].pageErrors = runs.reduce((a, r) => a + (r[sc]?.pageErrors?.length ?? 0), 0);
   }
 }
 for (const sc of ["home", "watch", "spa"]) {
