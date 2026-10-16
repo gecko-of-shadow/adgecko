@@ -12,7 +12,7 @@
 //   src/rules/ubo-youtube-network.json   DNR rules (uBO's own DNR converter)
 //   src/vendor/ubo-youtube-meta.json     commits used, ported and skipped filters
 // uBlock Origin and uAssets are GPLv3; see src/vendor/LICENSE-uBlock.md.
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = decodeURIComponent(new URL("..", import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, "$1");
 const arg = (k, d) => { const i = Deno.args.indexOf(k); return i >= 0 ? Deno.args[i + 1] : d; };
 const run = async (cmd, cwd) => {
   const out = await new Deno.Command(cmd[0], { args: cmd.slice(1), cwd, stdout: "piped", stderr: "piped" }).output();
@@ -155,6 +155,7 @@ const PATCHES = [[
     "        let clone;",
   ].join("\n"),
 ]];
+const patchHits = new Set();
 const OFF_BY_DEFAULT = ["rmnt", "domBypass"];
 const TOGGLE_PRELUDE = `const uboOn = (() => {
   const defaults = ${JSON.stringify(Object.fromEntries(OFF_BY_DEFAULT.map((k) => [k, false])))};
@@ -173,7 +174,12 @@ const addDeps = (names) => {
     const d = byName.get(n);
     if (!d) throw new Error("missing dependency " + n);
     // Local patch (see PATCHES): cheap root-key guard in editInboundObjectFn.
-    fnCode.set(n, PATCHES.reduce((code, [from, to]) => code.replace(from, to), d.fn.toString()));
+    // A Windows checkout (core.autocrlf) gives CRLF sources; PATCHES are LF.
+    fnCode.set(n, PATCHES.reduce((code, [from, to], i) => {
+      if (!code.includes(from)) return code;
+      patchHits.add(i);
+      return code.replace(from, to);
+    }, d.fn.toString().replaceAll("\r\n", "\n")));
     queue.push(...(d.dependencies || []));
   }
 };
@@ -196,6 +202,9 @@ for (const h of HOSTS) {
   calls.sort((a, b) => a.priority === b.priority ? a.code.localeCompare(b.code) : b.priority - a.priority);
   hostCalls[h] = calls.map((c) => c.code);
 }
+}
+for (let i = 0; i < PATCHES.length; i++) {
+  if (!patchHits.has(i)) console.warn("PATCHES[" + i + "] matched nothing; upstream scriptlet changed, review it");
 }
 for (const world of WORLDS) {
 const fnCode = fnCodeBy[world];
