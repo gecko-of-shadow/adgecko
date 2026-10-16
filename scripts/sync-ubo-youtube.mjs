@@ -141,6 +141,10 @@ const TOGGLES = {
 // rpnt (105-byte wait-reply reload + UA hint), inboundEdit (/player request markers)
 // and nanoStb are on as in uBO Lite's default ruleset (the owner's PC 2026-10-16: uBOL
 // got the same 105-byte waits but started in ~1s). rmnt/domBypass stay off.
+const PATCHES = [[
+  "    const editObj = obj => {\n        let clone;",
+  "    // twitch-adblock: a root filter \"[?.key]\" can only match objects that\n    // carry that key, so skip the full stringify/parse clone otherwise. On\n    // JSON.stringify this ran on every call (top CPU item on the homepage).\n    const rootKey = /^\\[\\?\\.([A-Za-z_$][\\w$]*)\\]/.exec(jsonq);\n    const editObj = obj => {\n        if ( rootKey !== null && (typeof obj !== 'object' || obj === null || obj[rootKey[1]] === undefined) ) { return; }\n        let clone;",
+]];
 const OFF_BY_DEFAULT = ["rmnt", "domBypass"];
 const TOGGLE_PRELUDE = `const uboOn = (() => {
   const defaults = ${JSON.stringify(Object.fromEntries(OFF_BY_DEFAULT.map((k) => [k, false])))};
@@ -158,7 +162,8 @@ const addDeps = (names) => {
     if (fnCode.has(n)) continue;
     const d = byName.get(n);
     if (!d) throw new Error("missing dependency " + n);
-    fnCode.set(n, d.fn.toString());
+    // Local patch (see PATCHES): cheap root-key guard in editInboundObjectFn.
+    fnCode.set(n, PATCHES.reduce((code, [from, to]) => code.replace(from, to), d.fn.toString()));
     queue.push(...(d.dependencies || []));
   }
 };

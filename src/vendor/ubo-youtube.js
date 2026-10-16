@@ -655,7 +655,12 @@ function editInboundObjectFn(
         if ( args.length < -argPos ) { return; }
         return args.length + argPos;
     };
+    // twitch-adblock: a root filter "[?.key]" can only match objects that
+    // carry that key, so skip the full stringify/parse clone otherwise. On
+    // JSON.stringify this ran on every call (top CPU item on the homepage).
+    const rootKey = /^\[\?\.([A-Za-z_$][\w$]*)\]/.exec(jsonq);
     const editObj = obj => {
+        if ( rootKey !== null && (typeof obj !== 'object' || obj === null || obj[rootKey[1]] === undefined) ) { return; }
         let clone;
         try {
             clone = safe.JSON_parse(safe.JSON_stringify(obj));
