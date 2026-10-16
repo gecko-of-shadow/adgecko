@@ -98,14 +98,23 @@ Deno.test("uBO layer, slow but loading SPA start is never reloaded", () => {
   assert(loads.length === 0, "no reload " + loads);
 });
 
-Deno.test("uBO layer: floor holds even when media failed earlier; only a decoy this nav bypasses it", () => {
+Deno.test("uBO layer: floor holds even when media failed earlier; decoys too (eb034fd)", () => {
   const plain = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, ms: 12000 });
   assert(plain.length === 1 && plain[0] >= SRC_OPTS.stallUboMs, "floor " + plain);
   const decoy = sim({ opts: { ...SRC_OPTS, ubo: true, decoy: true }, steps: () => {}, ms: 9000 });
-  assert(decoy.length >= 1 && decoy[0] < 3000, "decoy fast path " + decoy);
+  assert(decoy.length === 1 && decoy[0] >= SRC_OPTS.stallUboMs, "decoy under uBO still waits the floor " + decoy);
+  const noUbo = sim({ opts: { ...SRC_OPTS, decoy: true }, steps: () => {}, ms: 9000 });
+  assert(noUbo.length >= 1 && noUbo[0] < 3000, "no uBO: fast path kept " + noUbo);
 });
 
 Deno.test("uBO layer: no 2nd reload once /player answered after reload 1", () => {
   const src = source.slice(source.indexOf("  let stallArmedAt = 0;"), source.indexOf("  // Every fallback host failed:"));
   assert(/stalledReloaded >= 1 && lastPlayerAt > lastReloadAt\) \{[^}]*return stopStall\(\);/.test(src), "guard present in checkStall");
+});
+
+Deno.test("uBO layer: decoy does not trigger the fast reload, with a diag line", () => {
+  const i = source.indexOf("function onDecoyUrl(");
+  const head = source.slice(i, i + 600);
+  assert(/if \(api\.UBO_LAYER\) \{[^}]*decoy seen, uBO present: not reloading[^}]*return;/.test(head), "uBO early return");
+  assert(head.indexOf("return;") < head.indexOf("decoyThisNav = true"), "flag only set without uBO");
 });

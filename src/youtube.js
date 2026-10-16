@@ -1253,8 +1253,8 @@ function startYoutubeAdblock() {
     }
     // uBO layer and no media failure seen: the player may be legitimately
     // retrying internally (SABR); give it OPTS.stallUboMs before we reload.
-    // Floor for every reason except a decoy seen on this navigation.
-    if (api.UBO_LAYER && !decoyThisNav && now - navAt < OPTS.stallUboMs) return again();
+    // uBO layer: floor for every reason, decoys included.
+    if (api.UBO_LAYER && now - navAt < OPTS.stallUboMs) return again();
     // uBO: once a reload got a fresh /player answer, never reload again.
     if (api.UBO_LAYER && stalledReloaded >= 1 && lastPlayerAt > lastReloadAt) {
       diag("no 2nd reload: /player answered " + (lastPlayerAt - lastReloadAt) + "ms after reload 1");
@@ -1336,6 +1336,12 @@ function startYoutubeAdblock() {
   }
 
   function onDecoyUrl(url, why, wantId) {
+    // uBO layer: its DNR rule already fails decoys and the player recovers on
+    // its own (eb034fd log: a fast reload here cost ~10s). Only the 10s floor applies.
+    if (api.UBO_LAYER) {
+      diag("decoy seen, uBO present: not reloading" + (url ? " (expire=" + (/[?&]expire=(\d+)/.exec(url) || [])[1] + ")" : ""));
+      return;
+    }
     decoyThisNav = true;
     diag("decoy seen: " + (why || "decoy stream url") + (url ? " expire=" + (/[?&]expire=(\d+)/.exec(url) || [])[1] : ""));
     if (!OPTS.stallReload || decoyTimer || stalledReloaded >= 2 || startLogged || playbackSeen.any || !onWatchSurface()) return;
