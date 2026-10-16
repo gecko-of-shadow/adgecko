@@ -44,7 +44,7 @@ Deno.test("decoy: a 403 stops failover and is flagged (dead DNS names still reme
 });
 Deno.test("stealth defaults: ad lists emptied not deleted, start policies and stream untouched", () => {
   const api = fresh();
-  assert(api.STEALTH.emptyAdFields && !api.STEALTH.zeroStartPolicies && !api.STEALTH.patchUmpBackoff && !api.STEALTH.failoverOn403, "defaults");
+  assert(api.STEALTH.emptyAdFields && !api.STEALTH.zeroStartPolicies && !api.STEALTH.failoverOn403, "defaults");
   const body = { videoDetails: { videoId: "v" }, streamingData: { formats: [{ url: "https://rr1---sn-a.googlevideo.com/videoplayback" }] },
     playabilityStatus: { status: "OK" }, playerConfig: { mediaCommonConfig: { startMinReadaheadPolicy: [{ minReadaheadMs: 1500 }] } },
     adPlacements: [{ adPlacementRenderer: { config: { adPlacementConfig: { kind: "AD_PLACEMENT_KIND_START" } } } }], playerAds: [{ playerLegacyDesktopWatchAdsRenderer: {} }] };
@@ -85,4 +85,8 @@ Deno.test("player response inspection is wired into fetch, XHR, JSON.parse and t
 Deno.test("video element src (progressive itag=18) is checked for decoys and errors", () => {
   assert(/\["loadstart", "error"\]/.test(source) && source.includes("video element got a decoy stream url"), "element hook");
   assert(source.includes('if (!api.isSabrPlayback(src)) return;'), "blob/MSE ignored");
+});
+
+Deno.test("SABR backoff patch is on at start (umpBackoff option, default true)", () => {
+  assert(/umpBackoff: true/.test(source) && source.includes("api.STEALTH.patchUmpBackoff = OPTS.umpBackoff;"), "wired");
 });
