@@ -968,7 +968,7 @@ function startYoutubeAdblock() {
   //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
   //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
   //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
-  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, umpBackoff: false, diag: true, decoyReloadMs: 150, decoyGapMs: 1500 };
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, stallUnderUbo: false, umpBackoff: false, diag: true, decoyReloadMs: 150, decoyGapMs: 1500 };
   try {
     const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
     for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
@@ -1334,6 +1334,9 @@ function startYoutubeAdblock() {
   }
 
   function armStall(minMs, why) {
+    // uBO layer: rpnt's own reload handles the wait; our 10s reload made full
+    // loads ~10-11s vs uBO-only 5.3s (the owner's PC, 8b4ba14). {"stallUnderUbo":true} re-enables.
+    if (api.UBO_LAYER && OPTS.stallUnderUbo !== true) return;
     if (!OPTS.stallReload || stalledReloaded >= 2 || startLogged || playbackSeen.any) return;
     diag("stall watchdog armed" + (why ? " (" + why + ")" : "") + (api.UBO_LAYER && !decoyThisNav ? ", uBO floor " + OPTS.stallUboMs + "ms" : ""));
     clearTimeout(stallTimer);

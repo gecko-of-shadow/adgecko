@@ -90,18 +90,18 @@ Deno.test("shipped timing: ad showing holds the clock", () => {
 });
 
 Deno.test("uBO layer, no media failure: watchdog waits stallUboMs (SPA buffering is not reloaded at 2s)", () => {
-  const loads = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, ms: 20000 });
+  const loads = sim({ opts: { ...SRC_OPTS, stallUnderUbo: true, ubo: true }, steps: () => {}, ms: 20000 });
   assert(loads.length >= 1 && loads[0] >= SRC_OPTS.stallUboMs && loads[0] <= SRC_OPTS.stallUboMs + 700 && SRC_OPTS.stallUboMs >= 10000, "first at " + loads);
 });
 Deno.test("uBO layer, slow but loading SPA start is never reloaded", () => {
-  const loads = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: (t, v) => { v.buffered = { length: 1, end: () => t / 4000 }; }, ms: 14000 });
+  const loads = sim({ opts: { ...SRC_OPTS, stallUnderUbo: true, ubo: true }, steps: (t, v) => { v.buffered = { length: 1, end: () => t / 4000 }; }, ms: 14000 });
   assert(loads.length === 0, "no reload " + loads);
 });
 
 Deno.test("uBO layer: floor holds even when media failed earlier; decoys too (eb034fd)", () => {
-  const plain = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, ms: 12000 });
+  const plain = sim({ opts: { ...SRC_OPTS, stallUnderUbo: true, ubo: true }, steps: () => {}, ms: 12000 });
   assert(plain.length === 1 && plain[0] >= SRC_OPTS.stallUboMs, "floor " + plain);
-  const decoy = sim({ opts: { ...SRC_OPTS, ubo: true, decoy: true }, steps: () => {}, ms: 12000 });
+  const decoy = sim({ opts: { ...SRC_OPTS, stallUnderUbo: true, ubo: true, decoy: true }, steps: () => {}, ms: 12000 });
   assert(decoy.length === 1 && decoy[0] >= SRC_OPTS.stallUboMs, "decoy under uBO still waits the floor " + decoy);
   const noUbo = sim({ opts: { ...SRC_OPTS, decoy: true }, steps: () => {}, ms: 9000 });
   assert(noUbo.length >= 1 && noUbo[0] < 3000, "no uBO: fast path kept " + noUbo);
@@ -117,4 +117,9 @@ Deno.test("uBO layer: decoy does not trigger the fast reload, with a diag line",
   const head = source.slice(i, i + 600);
   assert(/if \(api\.UBO_LAYER\) \{[^}]*decoy seen, uBO present: not reloading[^}]*return;/.test(head), "uBO early return");
   assert(head.indexOf("return;") < head.indexOf("decoyThisNav = true"), "flag only set without uBO");
+});
+
+Deno.test("uBO layer, shipped default: our watchdog never reloads (rpnt handles the wait; 8b4ba14 full loads)", () => {
+  const loads = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, ms: 20000 });
+  assert(SRC_OPTS.stallUnderUbo === false && loads.length === 0, "reloads " + loads);
 });
