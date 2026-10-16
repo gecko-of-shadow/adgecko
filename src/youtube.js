@@ -411,7 +411,7 @@ function installYoutubeAdblock(target) {
   // A media URL looks like rr2---sn-h9jk2mn5.googlevideo.com/videoplayback?...&mn=sn-h9jk2mn5,sn-n5pqrstu&fvip=2
   // "mn" lists the edge servers YouTube itself falls back across. redirector.googlevideo.com
   // takes the same path and query and redirects to a server that is up.
-  const GV_HOST = /^rr(\d+)---(sn-[a-z0-9-]+)\.googlevideo\.com$/i;
+  const GV_HOST = /^rr?(\d+)---(sn-[a-z0-9-]+)\.googlevideo\.com$/i;
   const badGvHosts = new Map(); // failed host -> replacement host
   const BAD_HOST_TTL_MS = 10 * 60 * 1000;
 
@@ -445,9 +445,20 @@ function installYoutubeAdblock(target) {
       out.push(next.href);
     };
     let count = Number(parsed.searchParams.get("fallback_count") || 0) || 0;
+    // 1. The other edge servers YouTube lists in mn (only real "sn-" ids).
     if (rr) for (const server of servers) push("rr" + rr + "---" + server + ".googlevideo.com", ++count);
+    if (match) {
+      const curRr = match[1];
+      const sn = match[2];
+      // 2. Same server under its other DNS names: a DNS failure on
+      //    rr5---sn-x is often just that one name (r5---sn-x, or the fvip rr).
+      push("r" + curRr + "---" + sn + ".googlevideo.com", ++count);
+      if (fvip && /^\d+$/.test(fvip) && fvip !== curRr) push("rr" + fvip + "---" + sn + ".googlevideo.com", ++count);
+      push("rr" + curRr + "---" + sn + ".googlevideo.com", ++count);
+    }
+    // 3. Last: the redirector (it often answers 403 for flagged IPs).
     if (parsed.hostname.toLowerCase() !== "redirector.googlevideo.com") push("redirector.googlevideo.com", ++count);
-    return out.slice(0, 3);
+    return out.slice(0, 5);
   }
 
   function rememberBadHost(failedUrl, workingUrl) {
@@ -494,11 +505,20 @@ function installYoutubeAdblock(target) {
   // doFetch(url, attemptIndex) must return a Promise<Response>.
   async function fetchWithFallback(url, doFetch, options) {
     const opts = options || {};
-    const budgetMs = opts.budgetMs == null ? 8000 : opts.budgetMs;
+    const budgetMs = opts.budgetMs == null ? 4500 : opts.budgetMs;
     const now = opts.now || (() => Date.now());
     const started = now();
     const first = mapBadHost(url);
-    const candidates = [first].concat(googlevideoFallbacks(first));
+    let candidates = [first].concat(googlevideoFallbacks(first));
+    // The first host already failed DNS/connect this session: try the others first.
+    try {
+      const dead = badGvHosts.get(new URL(first).hostname.toLowerCase());
+      if (dead && !dead.to && Date.now() - dead.at <= BAD_HOST_TTL_MS && candidates.length > 1) {
+        candidates = candidates.slice(1).concat([first]);
+      }
+    } catch {
+      // keep order
+    }
     const failures = [];
     let lastResponse = null;
     let lastError = null;
@@ -520,7 +540,12 @@ function installYoutubeAdblock(target) {
         lastError = error;
       }
     }
-    // No working host found: do not blacklist anything, the reload brings new urls.
+    // No working host found: hosts that did not resolve / connect are skipped
+    // next time (no replacement mapping); HTTP failures are left alone, the
+    // reload brings new urls.
+    for (const failure of failures) {
+      if (failure.reason === "dns" || failure.reason === "network") rememberBadHost(failure.url, "");
+    }
     if (lastResponse) return { response: lastResponse, url: candidates[candidates.length - 1], failures, exhausted: true, ms: now() - started };
     const error = lastError || new TypeError("Failed to fetch");
     error.ytFailures = failures;
