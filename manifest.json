@@ -20,8 +20,13 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["src/cosmetic-hide.css"],
-      "matches": ["http://*/*", "https://*/*"]
+      "resources": [
+        "src/cosmetic-hide.css"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
     }
   ],
   "declarative_net_request": {
@@ -30,6 +35,11 @@
         "id": "general",
         "enabled": true,
         "path": "src/rules/general-network.json"
+      },
+      {
+        "id": "ubo-youtube",
+        "enabled": true,
+        "path": "src/rules/ubo-youtube-network.json"
       }
     ]
   },
@@ -59,6 +69,34 @@
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": [
+        "src/vendor/ubo-youtube.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": [
+        "src/vendor/ubo-youtube-isolated.js"
+      ],
+      "css": [
+        "src/vendor/ubo-youtube.css"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
     },
     {
       "matches": [

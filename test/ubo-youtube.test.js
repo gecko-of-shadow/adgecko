@@ -1,0 +1,78 @@
+// The uBO YouTube port: generated bundle behaviour, DNR rules, manifest wiring, provenance.
+import manifest from "../manifest.json" with { type: "json" };
+import rules from "../src/rules/ubo-youtube-network.json" with { type: "json" };
+import meta from "../src/vendor/ubo-youtube-meta.json" with { type: "json" };
+import youtubeSource from "../src/youtube.js" with { type: "text" };
+function assert(c, l) { if (!c) throw new Error(l); }
+
+async function runBundle() {
+  const out = await new Deno.Command(Deno.execPath(), {
+    args: ["run", "-A", "--location", "https://www.youtube.com/watch?v=x", new URL("./fixtures/ubo-youtube-run.mjs", import.meta.url).pathname],
+    stdout: "piped", stderr: "piped",
+  }).output();
+  const text = new TextDecoder().decode(out.stdout).trim().split("\n").pop();
+  return JSON.parse(text);
+}
+
+Deno.test("uBO bundle: player fetch loses adPlacements/adSlots exactly as uBO's json-prune-fetch-response/rpfr", async () => {
+  const r = await runBundle();
+  assert(r.marker, "layer marker set for youtube.js");
+  assert(!("adPlacements" in r.player) && !("adSlots" in r.player), "player ads pruned " + JSON.stringify(r.player));
+  assert(r.player.playabilityStatus.status === "OK" && r.player.streamingData, "playback fields kept");
+  assert(Array.isArray(r.player.playerAds), "playerAds untouched on www (uBO's www rules don't prune it)");
+  assert(r.next.adPlacements, "non-matching url (/next) untouched");
+  assert(r.reel.entries.length === 1 && r.reel.entries[0].command.reelWatchEndpoint.videoId === "v1", "reel_watch_sequence isAd entry pruned");
+  assert(r.parsedEntries === 1, "JSON.parse prune of entries.[-]...isAd");
+  assert(r.initial.videoId === "x" && r.initial.adPlacements === undefined && r.initial.adSlots === undefined && r.initial.playerAds === undefined, "set-constant on ytInitialPlayerResponse");
+  assert(r.boostedTimerMs > 0 && r.boostedTimerMs < 200, "nano-stb boosted 17s native timer: " + r.boostedTimerMs);
+});
+
+Deno.test("uBO bundle carries the exact uAssets prune paths and is pinned", async () => {
+  const js = await Deno.readTextFile(new URL("../src/vendor/ubo-youtube.js", import.meta.url));
+  for (const call of [
+    'jsonPruneFetchResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\\\/player(\\\\?|$)/")',
+    'jsonPruneXhrResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\\\/player(?:\\\\?.+)?$/")',
+    'jsonPrune("entries.[-].command.reelWatchEndpoint.adClientParams.isAd")',
+    'trustedReplaceFetchResponse("\\"adPlacements\\"","\\"no_ads\\"","player?")',
+    'setConstant("ytInitialPlayerResponse.adPlacements","undefined")',
+    'adjustSetTimeout("[native code]","17000","0.001")',
+  ]) assert(js.includes(call), "missing " + call);
+  assert(/^[0-9a-f]{40}$/.test(meta.uassets_commit) && js.includes(meta.uassets_commit), "uAssets commit recorded");
+  assert(js.includes(meta.ublock_commit), "uBO commit recorded");
+  assert(!/\bchrome\./.test(js), "no extension APIs in MAIN world");
+  const iso = await Deno.readTextFile(new URL("../src/vendor/ubo-youtube-isolated.js", import.meta.url));
+  assert(iso.includes("replaceNodeText(\"script\"") && iso.includes("removeNodeText(\"script\",\"window,\\\"fetch\\\"\")"), "rpnt/rmnt in isolated world like uBO");
+});
+
+Deno.test("uBO DNR: decoy videoplayback expire filter blocks absurd expiries only", () => {
+  const r = rules.find((x) => x.condition.regexFilter && x.condition.regexFilter.includes("videoplayback"));
+  assert(r && r.action.type === "block" && r.condition.initiatorDomains.includes("www.youtube.com"), "rule present, scoped");
+  assert(r.priority > 2000000, "outranks general ruleset YouTube/googlevideo allows");
+  const re = new RegExp(r.condition.regexFilter);
+  for (const e of ["7694650297", "7965383766", "6301177760", "9571572721", "1508648445"]) assert(re.test(`https://rr2---sn-x.googlevideo.com/videoplayback?expire=${e}&ei=a`), "decoy " + e);
+  assert(!re.test("https://rr2---sn-x.googlevideo.com/videoplayback?expire=1792300000&ei=a"), "real 2026 expiry passes");
+});
+
+Deno.test("manifest: uBO layers load before youtube.js; ruleset enabled", () => {
+  const js = manifest.content_scripts.map((s) => (s.js || [])[0]);
+  const m = js.indexOf("src/vendor/ubo-youtube.js"), i = js.indexOf("src/vendor/ubo-youtube-isolated.js"), y = js.indexOf("src/youtube.js");
+  assert(m >= 0 && i >= 0 && m < y, "order " + js);
+  assert(manifest.content_scripts[m].world === "MAIN" && !manifest.content_scripts[i].world, "worlds");
+  assert(manifest.declarative_net_request.rule_resources.some((r) => r.id === "ubo-youtube" && r.enabled), "ruleset");
+  assert(new Set(rules.map((r) => r.id)).size === rules.length, "unique ids");
+});
+
+Deno.test("youtube.js stands down on player ad fields when the uBO layer is present", () => {
+  assert(youtubeSource.includes('Symbol.for("twitch-adblock.ubo")'), "marker read");
+  const api = {};
+  globalThis[Symbol.for("twitch-adblock.ubo")] = true;
+  try {
+    new Function(`${youtubeSource.slice(0, youtubeSource.indexOf("function startYoutubeAdblock"))}\nreturn installYoutubeAdblock;`)()(api);
+  } finally {
+    delete globalThis[Symbol.for("twitch-adblock.ubo")];
+  }
+  assert(api.UBO_LAYER === true, "flag");
+  const v = { playabilityStatus: { status: "OK" }, streamingData: { formats: [] }, videoDetails: { videoId: "x" }, adPlacements: [{ x: 1 }] };
+  const s = api.stripValue(v, "player");
+  assert(!s.blocked && s.value.adPlacements, "homemade player strip disabled (uBO owns it)");
+});

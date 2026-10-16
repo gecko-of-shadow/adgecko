@@ -6,6 +6,14 @@
 // backoff (often 10 seconds) after a click. The same wait is in the first
 // /initplayback response and in the start-buffer policy. Both are cleared
 // below, and player requests ask YouTube not to schedule the slot.
+function uboLayerPresent() {
+  try {
+    return globalThis[Symbol.for("twitch-adblock.ubo")] === true;
+  } catch {
+    return false;
+  }
+}
+
 function installYoutubeAdblock(target) {
   const nativeJSONParse = JSON.parse;
   // A/B toggles for how visible our edits are to YouTube's ad-block checks.
@@ -14,6 +22,10 @@ function installYoutubeAdblock(target) {
   // patchUmpBackoff: rewrite backoff fields inside the SABR media stream.
   // failoverOn403: try other hosts on a 403 (useless: 403 = flagged url).
   const STEALTH = { emptyAdFields: true, zeroStartPolicies: false, patchUmpBackoff: false, failoverOn403: false };
+  // uBO layer (src/vendor/ubo-youtube.js, uBlock Origin's own YouTube filters)
+  // loads first. When present it owns player-response ad pruning, so our
+  // homemade player ad-field strip and ytInitialPlayerResponse trap stand down.
+  const UBO_LAYER = uboLayerPresent();
   const PLAYER_AD_FIELDS = ["adPlacements", "playerAds", "adSlots", "adBreakHeartbeatParams", "adBreakParams"];
   const WATCH_AD_KEYS = [
     "adSlotRenderer",
@@ -314,13 +326,13 @@ function installYoutubeAdblock(target) {
         }
         return;
       }
-      if (isPlayerCarrier(node)) {
+      if (isPlayerCarrier(node) && !UBO_LAYER) {
         for (const field of PLAYER_AD_FIELDS) {
           if (!hasRealAdField(node, field)) continue;
           clearAdField(node, field);
           blocked = true;
         }
-      } else if (kind === "reel" && hasRealAdField(node, "adSlots")) {
+      } else if (kind === "reel" && !UBO_LAYER && hasRealAdField(node, "adSlots")) {
         clearAdField(node, "adSlots");
         blocked = true;
       }
@@ -910,6 +922,7 @@ function installYoutubeAdblock(target) {
 
   Object.assign(target, {
     STEALTH,
+    UBO_LAYER,
     DOM_AD_SELECTORS,
     HOME_FEED_AD_CSS,
     INTERRUPTIONS_TOAST_CSS,
@@ -1188,7 +1201,7 @@ function startYoutubeAdblock() {
 
   function checkStall() {
     stallTimer = 0;
-    if (!OPTS.stallReload || stalledReloaded >= 2 || startLogged || playbackSeen.any || (!strippedThisVideo && !mediaFailed) || !onWatchSurface()) return stopStall();
+    if (!OPTS.stallReload || stalledReloaded >= 2 || startLogged || playbackSeen.any || (!strippedThisVideo && !mediaFailed && !uboLayerPresent()) || !onWatchSurface()) return stopStall();
     const now = Date.now();
     if (now - navAt > OPTS.stallGiveUpMs) return stopStall();
     const again = () => { stallTimer = setTimeout(checkStall, OPTS.stallPollMs); };
@@ -1738,7 +1751,8 @@ function startYoutubeAdblock() {
     }
   };
 
-  hookInitial("ytInitialPlayerResponse", "player");
+  // uBO's set-constant owns ytInitialPlayerResponse when its layer is present.
+  if (!api.UBO_LAYER) hookInitial("ytInitialPlayerResponse", "player");
   hookInitial("ytInitialData", initialDataKind());
 
   function injectHomeFeedCss() {
