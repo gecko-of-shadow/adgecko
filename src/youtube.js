@@ -1891,6 +1891,9 @@ function startYoutubeAdblock() {
 
   let homeCssEl = null;
   function injectHomeFeedCss() {
+    // With the uBO layer, src/youtube-ads.css (manifest CSS) already applies these
+    // rules; a second copy only doubles the :has() invalidation work.
+    if (uboLayerPresent()) return;
     try {
       if (typeof document === "undefined" || !document.createElement) return;
       if (homeCssEl && homeCssEl.isConnected) return;

@@ -13,11 +13,13 @@ XMLHttpRequest.prototype.send = function send() {};
 for (const p of ["responseText", "response"]) Object.defineProperty(XMLHttpRequest.prototype, p, { configurable: true, enumerable: true, get() { return ""; } });
 globalThis.XMLHttpRequest = XMLHttpRequest;
 const listeners = {};
+let stylesAppended = 0;
+const appendChild = (el) => { if (el && el.tag === "style") stylesAppended++; if (el) el.isConnected = true; return el; };
 globalThis.document = {
   readyState: "complete", currentScript: null, hidden: false,
   addEventListener: (t, f) => (listeners[t] = listeners[t] || []).push(f), removeEventListener() {},
   querySelectorAll: () => [], querySelector: () => null, getElementById: () => null,
-  createElement: () => ({ style: {}, set textContent(v) {} }), documentElement: { appendChild() {} }, head: { appendChild() {} },
+  createElement: (tag) => ({ tag, style: {}, set textContent(v) {} }), documentElement: { appendChild }, head: { appendChild },
 };
 let mutationObservers = 0;
 globalThis.MutationObserver = class { constructor() { mutationObservers++; } observe() {} disconnect() {} };
@@ -64,5 +66,6 @@ out.waitReplies = logs.filter((l) => l.includes("SABR wait reply seen")).map((l)
 out.navListeners = Object.keys(listeners).filter((k) => k.startsWith("yt-navigate")).sort();
 for (const f of listeners["yt-navigate-finish"] || []) f({});
 out.armedOnWatch = logs.some((l) => l.includes("stall watchdog armed (watch navigation)"));
+out.stylesAppended = stylesAppended;
 log(JSON.stringify(out));
 Deno.exit(0);

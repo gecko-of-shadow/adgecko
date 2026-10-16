@@ -20,6 +20,7 @@ Deno.test("uBO detection: bundle first (manifest order) -> youtube.js adds no ho
   assert(manifestOrder.mutationObservers === 0, "MutationObservers: " + manifestOrder.mutationObservers);
   assert(manifestOrder.perfObservers.join() === "resource", "one read-only resource-timing observer: " + manifestOrder.perfObservers);
   assert(manifestOrder.armedOnWatch, "gentle watchdog arms on a watch navigation");
+  assert(manifestOrder.stylesAppended === 0, "manifest CSS covers the feed/toast rules: " + manifestOrder.stylesAppended);
 });
 
 Deno.test("uBO detection: a page script cannot flip the marker back", () => {
@@ -31,6 +32,7 @@ Deno.test("uBO detection fails open: no bundle -> youtube.js hooks fetch/XHR/JSO
   for (const k of ["fetch", "parse", "toString", "open", "send", "rt"]) assert(ytOnly.hookedByYoutube.includes(k), "missing hook " + k + ": " + ytOnly.hookedByYoutube);
   assert(ytOnly.mutationObservers === 1, "one DOM observer: " + ytOnly.mutationObservers);
   assert(ytOnly.perfObservers.length === 0, "no resource-timing observer without uBO");
+  assert(ytOnly.stylesAppended === 1, "feed/toast CSS injected once: " + ytOnly.stylesAppended);
 });
 
 Deno.test("uBO detection: youtube.js loaded before the bundle keeps its hooks (manifest order matters)", () => {
