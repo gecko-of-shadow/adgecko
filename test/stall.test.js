@@ -17,10 +17,11 @@ function sim({ opts = null, onTick = () => {},  steps, hidden = () => false, cla
     const OPTS = env.OPTS;
     let navAt = 0, stalledReloaded = 0, stallTimer = 0, startLogged = false, strippedThisVideo = true, mediaFailed = false;
     const onWatchSurface = () => true, playerRoot = env.playerRoot, logFailOpen = () => {}, diag = () => {}, api = { UBO_LAYER: !!env.ubo };
+    let decoyThisNav = !!env.decoy, lastPlayerAt = 0;
     const console = { log() {} };
     ${block}
     return { armStall, setFailover: (t) => { lastFailoverAt = t; }, played: (id) => { playbackSeen.any = true; startedVideoId = id; stopStall(); }, renav: () => { playbackSeen.any = false; startLogged = false; stalledReloaded = 0; } };`);
-  const api = f({ now: () => now }, (fn, d) => { const t = { at: now + d, fn }; timers.push(t); return t; }, (t) => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); }, doc, { playerRoot: () => player, OPTS, ubo: !!(opts && opts.ubo) });
+  const api = f({ now: () => now }, (fn, d) => { const t = { at: now + d, fn }; timers.push(t); return t; }, (t) => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); }, doc, { playerRoot: () => player, OPTS, ubo: !!(opts && opts.ubo), decoy: !!(opts && opts.decoy) });
   api.armStall();
   while (now < ms) {
     now += 100;
@@ -72,12 +73,12 @@ Deno.test("playing video, ads, hidden tab, user pause, failover retry hold off",
 });
 
 const SRC_OPTS = JSON.parse(source.match(/const OPTS = (\{ noAdFlag[^}]*\})/)[1].replace(/(\w+):/g, '"$1":'));
-Deno.test("shipped timing: dead start reloads within ~2.5s, second within ~3.5s more, max 2", () => {
+Deno.test("shipped timing: dead start reloads within ~2.5s, second >=5s later, max 2", () => {
   const loads = sim({ opts: SRC_OPTS, steps: () => {}, ms: 20000 });
   assert(loads.length === 2, "two reloads " + loads);
   assert(loads[0] >= 2000 && loads[0] <= 2600, "first at " + loads[0]);
   const gap = loads[1] - loads[0];
-  assert(gap >= 3500 && gap <= 4100, "second gap " + gap);
+  assert(gap >= 5000 && gap <= 5600, "second gap " + gap);
 });
 Deno.test("shipped timing: slow-but-loading start is not reloaded", () => {
   const loads = sim({ opts: SRC_OPTS, steps: (t, v) => { v.buffered = { length: 1, end: () => t / 4000 }; }, ms: 8000 });
@@ -95,4 +96,11 @@ Deno.test("uBO layer, no media failure: watchdog waits stallUboMs (SPA buffering
 Deno.test("uBO layer, slow but loading SPA start is never reloaded", () => {
   const loads = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: (t, v) => { v.buffered = { length: 1, end: () => t / 4000 }; }, ms: 12000 });
   assert(loads.length === 0, "no reload " + loads);
+});
+
+Deno.test("uBO layer: floor holds even when media failed earlier; only a decoy this nav bypasses it", () => {
+  const plain = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, ms: 9000 });
+  assert(plain.length === 1 && plain[0] >= SRC_OPTS.stallUboMs, "floor " + plain);
+  const decoy = sim({ opts: { ...SRC_OPTS, ubo: true, decoy: true }, steps: () => {}, ms: 9000 });
+  assert(decoy.length >= 1 && decoy[0] < 3000, "decoy fast path " + decoy);
 });

@@ -84,14 +84,16 @@ Deno.test("manifest: uBO layers load before youtube.js; ruleset enabled", () => 
 Deno.test("youtube.js stands down on player ad fields when the uBO layer is present", () => {
   assert(youtubeSource.includes('Symbol.for("twitch-adblock.ubo")'), "marker read");
   const api = {};
+  // Installed BEFORE the uBO marker exists (late MAIN-world injection): must still see it live.
+  new Function(`${youtubeSource.slice(0, youtubeSource.indexOf("function startYoutubeAdblock"))}\nreturn installYoutubeAdblock;`)()(api);
+  assert(api.UBO_LAYER === false, "no layer yet");
   globalThis[Symbol.for("twitch-adblock.ubo")] = true;
   try {
-    new Function(`${youtubeSource.slice(0, youtubeSource.indexOf("function startYoutubeAdblock"))}\nreturn installYoutubeAdblock;`)()(api);
+    assert(api.UBO_LAYER === true, "flag read live");
+    const v = { playabilityStatus: { status: "OK" }, streamingData: { formats: [] }, videoDetails: { videoId: "x" }, adPlacements: [{ x: 1 }] };
+    const s = api.stripValue(v, "player");
+    assert(!s.blocked && s.value.adPlacements, "homemade player strip disabled (uBO owns it)");
   } finally {
     delete globalThis[Symbol.for("twitch-adblock.ubo")];
   }
-  assert(api.UBO_LAYER === true, "flag");
-  const v = { playabilityStatus: { status: "OK" }, streamingData: { formats: [] }, videoDetails: { videoId: "x" }, adPlacements: [{ x: 1 }] };
-  const s = api.stripValue(v, "player");
-  assert(!s.blocked && s.value.adPlacements, "homemade player strip disabled (uBO owns it)");
 });

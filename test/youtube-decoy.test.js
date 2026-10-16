@@ -76,7 +76,7 @@ Deno.test("player response: a real url means not a decoy; no urls means nothing"
 });
 Deno.test("player response inspection is wired into fetch, XHR, JSON.parse and the initial response", () => {
   assert(/if \(kind === "player"\) \{[^}]*inspectPlayerText\(text\);/.test(source), "fetch");
-  assert(source.includes('=== "player") inspectPlayerText(raw);'), "xhr");
+  assert(/=== "player"\) \{[^}]*inspectPlayerText\(raw\);/.test(source), "xhr");
   assert(source.includes('includes("serverAbrStreamingUrl")) inspectPlayerText(text);'), "JSON.parse");
   assert(source.includes('if (kind === "player") inspectPlayerValue(current);'), "initial");
   assert(/tries\+\+ < 12/.test(source), "bounded wait for the player to switch video");
