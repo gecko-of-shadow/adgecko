@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.18
+
+- YouTube starts faster. Clicking to a new video starts in about 0.7-1.0s instead of 1.3-1.6s. Remaining cold-start delay is YouTube's own server-side wait.
+- Lighter uBO layer payload: its page observer no longer polls the player on every DOM change, and skips non-watch pages. The duplicate feed/toast style is no longer injected next to youtube-ads.css.
+- Twitch: the Browse (/directory) page no longer goes blank when an Ad feedback button has no card around it.
+- `scripts/sync-ubo-youtube.mjs` runs on Windows and keeps its local patches on CRLF checkouts. New `scripts/bench-youtube.mjs` load benchmark.
+
+## 0.2.17 (beta)
+
+- YouTube: uBlock Origin's own YouTube filters (uAssets@69831a8, scriptlets from uBO 1.75.0, GPLv3) ported via `scripts/sync-ubo-youtube.mjs`: MAIN-world scriptlets (json-prune*, rpfr/replace-xhr, set-constant, nano-stb, trusted-edit-inbound-object, prevent-dom-bypass), isolated rpnt/rmnt, 2 CSS hides, 4 DNR rules (incl. the decoy `videoplayback?expire=` block). Homemade player ad-field strip and ytInitialPlayerResponse trap stand down when this layer is present; stall reload and doubleclick block kept. Attribution: src/vendor/LICENSE-uBlock.md.
+- YouTube: stall reload sooner (~2s, quiet 1.5s, 2nd after 3.5s); doubleclick.net blocked for YouTube initiators.
+- YouTube: progress-aware start-stall watchdog (500ms polls; reload only after >=4s from navigation and 3s with no progress; stops permanently once playback starts; 2nd reload >=6s after the 1st; max 2).
+- Filter lists: quiet refresh ~5s after browser start (once per session, at most every 12h, per-list `! Expires` respected, ETag/If-Modified-Since), swapped into dynamic DNR rules; bundled ruleset restored on any error. "Update lists" runs the same refresh. New host permissions: easylist.to, pgl.yoyo.org, malware-filter.gitlab.io (list downloads only).
+- Cosmetic filtering: EasyList `##`/`#@#` generic + site-specific (incl. `name.*`) element hiding via one `<style>`; procedural/scriptlet rules skipped; selectors sanitized; bundled snapshot refreshed with the lists.
+
 ## 0.2.16
 
 - YouTube starts faster. Player requests are no longer marked "no ad". uBlock Origin keeps that switch off too. Ads are still removed from the player response, so the same video plays.

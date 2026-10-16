@@ -93,6 +93,7 @@ REQUIRED=(
   src/general-exclude-hosts.js
   src/cosmetic.js
   src/cosmetic-hide.css
+  src/youtube-ads.css
   src/twitch-directory-ads.js
   src/LICENSE-EasyList.txt
   icons/icon16.png
@@ -106,7 +107,7 @@ REQUIRED=(
   icons/icon128-off.png
 )
 # Shippable paths. Cosmetic hide, popup worker, list rules, and stream exclusion module.
-ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|exclusions|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|cosmetic-parse|exclusions|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/vendor/ubo-youtube(-isolated)?\.js|src/vendor/ubo-youtube\.css|src/vendor/ubo-youtube-meta\.json|src/vendor/LICENSE-uBlock\.md|src/vendor/LICENSE-uBlock-GPLv3\.txt|src/rules/ubo-youtube-network\.json|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/rules/cosmetic-rules\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/youtube-ads\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
 
 # YouTube is the beta script (spinner + search cards). The Twitch vendor stays at main.
 PLAYBACK_FILES=(
@@ -232,7 +233,10 @@ m = json.load(open(sys.argv[1]))
 rules_path = sys.argv[2]
 bad = []
 # DNR + storage, plus the popup UI worker. No host access and no auto-update.
-forbidden_keys = ("host_permissions", "externally_connectable", "oauth2", "key")
+forbidden_keys = ("externally_connectable", "oauth2", "key")
+LIST_HOSTS = ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*", "https://ublockorigin.github.io/*", "https://easylist-downloads.adblockplus.org/*", "https://secure.fanboy.co.nz/*"]
+if (m.get("host_permissions") or []) not in ([], LIST_HOSTS):
+    bad.append(f"host_permissions must be only the filter-list hosts, got {m.get('host_permissions')!r}")
 for key in forbidden_keys:
     if m.get(key):
         bad.append(f"{key}={m.get(key)!r}")
@@ -441,7 +445,7 @@ if rg -n --pcre2 "$DANGER_PAT" "$SCAN_ROOT" --glob '*.js' >/tmp/gate-danger-raw.
   set +e
   rg -v 'video-swap-new\.user\.js:[0-9]+:.*eval\(workerString\)' /tmp/gate-danger-raw.txt \
     | rg -v 'video-swap-new\.user\.js:[0-9]+:.*adBlockDiv\.innerHTML = ' \
-    | rg -v 'general-background\.js:[0-9]+:importScripts\("general-settings\.js"\)' \
+    | rg -v 'general-background\.js:[0-9]+:importScripts\("general-settings\.js", "general/update\.js", "general/cosmetic-parse\.js"\);$' \
     >/tmp/gate-danger.txt
   set -e
   if [[ -s /tmp/gate-danger.txt ]]; then
@@ -482,10 +486,13 @@ python3 - "$SCAN_ROOT" <<'PY' || FAILS=$((FAILS + 1))
 import pathlib, re, sys
 root = pathlib.Path(sys.argv[1])
 allowed_host_bits = (
+    "easylist.to", "pgl.yoyo.org", "malware-filter.gitlab.io", "ublockorigin.github.io", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz",  # filter-list refresh (host_permissions)
     "twitch.tv", "ttvnw.net", "jtvnw.net", "twitchcdn",
     "youtube.com", "youtu.be", "googlevideo.com", "ytimg.com",
     "googleapis.com", "ggpht.com", "yt3.", "youtubei.",
     "kick.com", "live-video.net", "amazon-ivs",
+    # uBO's YouTube rpnt filter compares error-screen text against this help link (no request).
+    "support.google.com",
     # Manual list Update (popup fetch) may reference these; still no background worker.
     "easylist.to", "pgl.yoyo.org", "raw.githubusercontent.com",
 )
@@ -522,7 +529,7 @@ python3 - "$PKG" <<'PY' || FAILS=$((FAILS + 1))
 import pathlib, re, sys
 root = pathlib.Path(sys.argv[1])
 bad = []
-playback = ["src/vendor/video-swap-new.user.js", "src/youtube.js"]
+playback = ["src/vendor/video-swap-new.user.js", "src/youtube.js", "src/vendor/ubo-youtube.js", "src/vendor/ubo-youtube-isolated.js"]
 for rel in playback:
     text = (root / rel).read_text(errors="replace")
     if re.search(r"\bchrome\.|\bbrowser\.", text):
@@ -557,7 +564,7 @@ PY
 section "5. Deno bug / logic / memory / race / youtube"
 if [[ -n "${TEST_ROOT}" && -d "${TEST_ROOT}/test" ]]; then
   set +e
-  (cd "$TEST_ROOT" && deno test --no-lock test/) 2>&1 | tee /tmp/gate-deno.txt
+  (cd "$TEST_ROOT" && deno test --no-lock --allow-read --allow-run --allow-env test/) 2>&1 | tee /tmp/gate-deno.txt
   DENO_RC=${PIPESTATUS[0]}
   set -e
   if [[ "$DENO_RC" -eq 0 ]]; then

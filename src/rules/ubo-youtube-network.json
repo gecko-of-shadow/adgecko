@@ -1,0 +1,70 @@
+[
+ {
+  "condition": {
+   "requestDomains": [
+    "ads.youtube.com"
+   ],
+   "excludedInitiatorDomains": [
+    "ads.youtube.com"
+   ]
+  },
+  "action": {
+   "type": "block"
+  },
+  "priority": 2000011,
+  "id": 1
+ },
+ {
+  "condition": {
+   "initiatorDomains": [
+    "youtube.com"
+   ],
+   "urlFilter": "||googlevideo.com/initplayback?source=youtube&*c=tvhtml5&*oad=",
+   "resourceTypes": [
+    "xmlhttprequest"
+   ]
+  },
+  "action": {
+   "type": "block"
+  },
+  "priority": 2000011,
+  "id": 2
+ },
+ {
+  "condition": {
+   "initiatorDomains": [
+    "www.youtube.com"
+   ],
+   "regexFilter": "\\.googlevideo\\.com\\/videoplayback\\?expire=(?:[02-9]\\d+|1[1-68-9]\\d+|17[1-7]\\d+)&",
+   "requestMethods": [
+    "get"
+   ],
+   "domainType": "thirdParty",
+   "resourceTypes": [
+    "xmlhttprequest"
+   ]
+  },
+  "action": {
+   "type": "block"
+  },
+  "priority": 2000011,
+  "id": 3
+ },
+ {
+  "condition": {
+   "urlFilter": "_ad_",
+   "initiatorDomains": [
+    "youtube.com"
+   ],
+   "domainType": "thirdParty",
+   "resourceTypes": [
+    "media"
+   ]
+  },
+  "action": {
+   "type": "block"
+  },
+  "priority": 2000011,
+  "id": 4
+ }
+]

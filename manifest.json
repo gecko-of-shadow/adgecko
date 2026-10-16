@@ -1,19 +1,32 @@
 {
   "manifest_version": 3,
   "name": "twitch-adblock",
-  "version": "0.2.16",
+  "version": "0.2.18",
   "description": "Blocks video ads on Twitch (TwitchAdSolutions video-swap-new, unmodified), YouTube, and Kick, plus general-site ad blocking.",
   "permissions": [
     "storage",
     "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "https://easylist.to/*",
+    "https://pgl.yoyo.org/*",
+    "https://malware-filter.gitlab.io/*",
+    "https://ublockorigin.github.io/*",
+    "https://easylist-downloads.adblockplus.org/*",
+    "https://secure.fanboy.co.nz/*"
   ],
   "background": {
     "service_worker": "src/general-background.js"
   },
   "web_accessible_resources": [
     {
-      "resources": ["src/cosmetic-hide.css"],
-      "matches": ["http://*/*", "https://*/*"]
+      "resources": [
+        "src/cosmetic-hide.css"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
     }
   ],
   "declarative_net_request": {
@@ -22,6 +35,11 @@
         "id": "general",
         "enabled": true,
         "path": "src/rules/general-network.json"
+      },
+      {
+        "id": "ubo-youtube",
+        "enabled": true,
+        "path": "src/rules/ubo-youtube-network.json"
       }
     ]
   },
@@ -51,6 +69,35 @@
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": [
+        "src/vendor/ubo-youtube.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": [
+        "src/vendor/ubo-youtube-isolated.js"
+      ],
+      "css": [
+        "src/vendor/ubo-youtube.css",
+        "src/youtube-ads.css"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
     },
     {
       "matches": [
@@ -116,6 +163,7 @@
         "*://*.kickusercontent.com/*"
       ],
       "js": [
+        "src/general/cosmetic-parse.js",
         "src/cosmetic.js"
       ],
       "run_at": "document_start",

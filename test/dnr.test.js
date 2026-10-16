@@ -99,6 +99,24 @@ Deno.test("block rules never target protected stream hosts", () => {
 
 Deno.test("permissions stay DNR + storage; no host_permissions / background", () => {
   assertEquals(manifest.permissions?.slice().sort(), ["declarativeNetRequest", "storage"].sort());
-  assertEquals(manifest.host_permissions, undefined);
+  assertEquals(manifest.host_permissions, ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*", "https://ublockorigin.github.io/*", "https://easylist-downloads.adblockplus.org/*", "https://secure.fanboy.co.nz/*"], "only the filter-list hosts");
   assertEquals(manifest.background?.service_worker, "src/general-background.js");
+});
+
+Deno.test("YouTube-only doubleclick block: outranks the YouTube frame allow, scoped to YouTube initiators", () => {
+  const yt = rules.filter((r) => r.action.type === "block" && (r.condition.requestDomains || []).includes("doubleclick.net") && r.condition.initiatorDomains);
+  assertEquals(yt.length, 1, "exactly one YouTube-scoped doubleclick rule (no duplicates)");
+  assertEquals(yt[0].condition.requestDomains, ["doubleclick.net"]);
+  const r = yt[0];
+  const frameAllow = rules.find((x) => x.action.type === "allowAllRequests");
+  assert(r.priority > frameAllow.priority, "must outrank allowAllRequests on youtube frames");
+  assertEquals(r.condition.initiatorDomains, ["youtube.com", "youtube-nocookie.com", "youtubekids.com"]);
+  assert(!r.condition.resourceTypes, "default types (not main_frame) so youtube itself still loads");
+  for (const h of ["googleads.g.doubleclick.net", "static.doubleclick.net", "ad.doubleclick.net"]) assert(h.endsWith("." + r.condition.requestDomains[0]), h);
+  // Nothing YouTube needs is covered.
+  for (const h of ["youtube.com", "www.google.com", "rr2---sn-x.googlevideo.com", "i.ytimg.com", "www.gstatic.com", "pagead2.googlesyndication.com"]) {
+    assert(!r.condition.requestDomains.some((d) => h === d || h.endsWith("." + d)), h);
+  }
+  assertEquals(mergeMeta.youtube_ad_block_rules, 1);
+  assertEquals(new Set(rules.map((x) => x.id)).size, rules.length, "unique ids");
 });

@@ -76,6 +76,29 @@ def build_exclusion_rules() -> list[dict]:
     ]
 
 
+# YouTube-only ad host block (uMatrix-style: doubleclick off, google/googlevideo on).
+# Must outrank the YouTube allowAllRequests frame rule, and is scoped by
+# initiatorDomains so doubleclick on other sites is left to the lists.
+YT_AD_BLOCK_ID = 4
+YT_AD_BLOCK_PRIORITY = EXCLUSION_PRIORITY + 1
+YT_INITIATORS = ["youtube.com", "youtube-nocookie.com", "youtubekids.com"]
+YT_AD_HOSTS = ["doubleclick.net"]
+
+
+def build_youtube_ad_block_rules() -> list[dict]:
+    return [
+        {
+            "id": YT_AD_BLOCK_ID,
+            "priority": YT_AD_BLOCK_PRIORITY,
+            "action": {"type": "block"},
+            "condition": {
+                "requestDomains": list(YT_AD_HOSTS),
+                "initiatorDomains": list(YT_INITIATORS),
+            },
+        },
+    ]
+
+
 def main() -> int:
     if not LIST_BLOCKS.is_file():
         print(f"missing block rules: {LIST_BLOCKS}", file=sys.stderr)
@@ -101,7 +124,8 @@ def main() -> int:
         rid += 1
 
     allows = build_exclusion_rules()
-    merged = allows + renumbered
+    yt_blocks = build_youtube_ad_block_rules()
+    merged = allows + yt_blocks + renumbered
     ids = [r["id"] for r in merged]
     if len(ids) != len(set(ids)):
         print("duplicate rule ids after merge", file=sys.stderr)
@@ -117,6 +141,7 @@ def main() -> int:
         "path": "src/rules/general-network.json",
         "allow_rules": len(allows),
         "block_rules": len(renumbered),
+        "youtube_ad_block_rules": len(yt_blocks),
         "rule_count": len(merged),
         "exclusion_priority": EXCLUSION_PRIORITY,
         "site_domains": SITE_DOMAINS,

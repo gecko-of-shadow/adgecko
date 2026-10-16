@@ -4,7 +4,8 @@
   "path": "src/rules/general-network.json",
   "allow_rules": 3,
   "block_rules": 1248,
-  "rule_count": 1251,
+  "youtube_ad_block_rules": 1,
+  "rule_count": 1252,
   "exclusion_priority": 2000000,
   "site_domains": [
     "twitch.tv",
