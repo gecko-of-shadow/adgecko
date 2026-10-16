@@ -16,12 +16,12 @@ function sim({ opts = null, onTick = () => {},  steps, hidden = () => false, cla
   const f = new Function("Date", "setTimeout", "clearTimeout", "document", "env", `
     const OPTS = env.OPTS;
     let navAt = 0, stalledReloaded = 0, stallTimer = 0, startLogged = false, strippedThisVideo = true, mediaFailed = false;
-    const onWatchSurface = () => true, playerRoot = env.playerRoot, logFailOpen = () => {}, diag = () => {}, api = { UBO_LAYER: !!env.ubo };
+    const onWatchSurface = () => true, playerRoot = env.playerRoot, logFailOpen = () => {}, diag = () => {}, api = { UBO_LAYER: !!env.ubo, lastWaitReplyAt: env.waitAt || 0 };
     let decoyThisNav = !!env.decoy, lastPlayerAt = 0;
     const console = { log() {} };
     ${block}
     return { armStall, setFailover: (t) => { lastFailoverAt = t; }, played: (id) => { playbackSeen.any = true; startedVideoId = id; stopStall(); }, renav: () => { playbackSeen.any = false; startLogged = false; stalledReloaded = 0; } };`);
-  const api = f({ now: () => now }, (fn, d) => { const t = { at: now + d, fn }; timers.push(t); return t; }, (t) => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); }, doc, { playerRoot: () => player, OPTS, ubo: !!(opts && opts.ubo), decoy: !!(opts && opts.decoy) });
+  const api = f({ now: () => now }, (fn, d) => { const t = { at: now + d, fn }; timers.push(t); return t; }, (t) => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); }, doc, { playerRoot: () => player, OPTS, ubo: !!(opts && opts.ubo), decoy: !!(opts && opts.decoy), waitAt: opts && opts.waitAt });
   api.armStall();
   while (now < ms) {
     now += 100;
@@ -119,7 +119,19 @@ Deno.test("uBO layer: decoy does not trigger the fast reload, with a diag line",
   assert(head.indexOf("return;") < head.indexOf("decoyThisNav = true"), "flag only set without uBO");
 });
 
-Deno.test("uBO layer, shipped default: our watchdog never reloads (rpnt handles the wait; 8b4ba14 full loads)", () => {
-  const loads = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, ms: 20000 });
-  assert(SRC_OPTS.stallUnderUbo === false && loads.length === 0, "reloads " + loads);
+Deno.test("uBO layer, shipped gentle watchdog: one reload only after 15s of zero progress", () => {
+  assert(SRC_OPTS.stallUnderUbo === "gentle" && SRC_OPTS.stallGentleMs === 15000, "defaults");
+  const dead = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, ms: 29000 });
+  assert(dead.length === 1 && dead[0] >= 15000 && dead[0] <= 16500, "single reload at ~15s: " + dead);
+  const slow = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: (t, v) => { v.buffered = { length: 1, end: () => t / 4000 }; }, ms: 25000 });
+  assert(slow.length === 0, "progress means no reload: " + slow);
+  const off = sim({ opts: { ...SRC_OPTS, stallUnderUbo: false, ubo: true }, steps: () => {}, ms: 25000 });
+  assert(off.length === 0, "stallUnderUbo:false never reloads");
+});
+
+Deno.test("uBO gentle watchdog holds while a SABR wait reply is recent", () => {
+  const held = sim({ opts: { ...SRC_OPTS, ubo: true, waitAt: 1000 }, steps: () => {}, ms: 20500 });
+  assert(held.length === 0, "no reload within 20s of the wait reply: " + held);
+  const later = sim({ opts: { ...SRC_OPTS, ubo: true, waitAt: 1000 }, steps: () => {}, ms: 29000 });
+  assert(later.length === 1 && later[0] >= 21000, "fires after the hold if still dead: " + later);
 });

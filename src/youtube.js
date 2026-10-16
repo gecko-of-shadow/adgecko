@@ -968,7 +968,7 @@ function startYoutubeAdblock() {
   //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
   //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
   //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
-  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, stallUnderUbo: false, umpBackoff: false, diag: true, decoyReloadMs: 150, decoyGapMs: 1500 };
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, stallUnderUbo: "gentle", stallGentleMs: 15000, waitReplyHoldMs: 20000, umpBackoff: false, diag: true, decoyReloadMs: 150, decoyGapMs: 1500 };
   try {
     const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
     for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
@@ -1021,6 +1021,23 @@ function startYoutubeAdblock() {
   const HOOKS = !uboLayerPresent() || OPTS.hooksUnderUbo === true;
   const NUDGE = !uboLayerPresent() || OPTS.nudgeUnderUbo === true;
   if (HOOKS) try { Function.prototype.toString = toStringProxy; } catch {}
+  // Read-only: resource timing shows the tiny (104/105-byte) SABR wait reply
+  // without touching fetch, so the gentle watchdog can hold off during it.
+  api.lastWaitReplyAt = 0;
+  if (uboLayerPresent() && OPTS.stallUnderUbo === "gentle" && typeof PerformanceObserver === "function") {
+    try {
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          if (e.name.includes("/videoplayback") && e.encodedBodySize >= 100 && e.encodedBodySize <= 110) {
+            api.lastWaitReplyAt = Date.now();
+            diag("SABR wait reply seen (" + e.encodedBodySize + "B)");
+          }
+        }
+      }).observe({ type: "resource" });
+    } catch (error) {
+      logFailOpen(error);
+    }
+  }
   function cloak(fn, impl) {
     const proxy = new Proxy(fn, {
       apply(target, self, args) {
@@ -1296,6 +1313,14 @@ function startYoutubeAdblock() {
     // retrying internally (SABR); give it OPTS.stallUboMs before we reload.
     // uBO layer: floor for every reason, decoys included.
     if (api.UBO_LAYER && now - navAt < OPTS.stallUboMs) return again();
+    if (api.UBO_LAYER && OPTS.stallUnderUbo === "gentle") {
+      if (stalledReloaded >= 1) return stopStall();
+      if (now - navAt < OPTS.stallGentleMs || now - stallLastProgressAt < OPTS.stallGentleMs) return again();
+      if (api.lastWaitReplyAt && now - api.lastWaitReplyAt < OPTS.waitReplyHoldMs) {
+        diag("gentle watchdog: SABR wait reply " + (now - api.lastWaitReplyAt) + "ms ago, holding");
+        return again();
+      }
+    }
     // uBO: once a reload got a fresh /player answer, never reload again.
     if (api.UBO_LAYER && stalledReloaded >= 1 && lastPlayerAt > lastReloadAt) {
       diag("no 2nd reload: /player answered " + (lastPlayerAt - lastReloadAt) + "ms after reload 1");
@@ -1336,7 +1361,9 @@ function startYoutubeAdblock() {
   function armStall(minMs, why) {
     // uBO layer: rpnt's own reload handles the wait; our 10s reload made full
     // loads ~10-11s vs uBO-only 5.3s (the owner's PC, 8b4ba14). {"stallUnderUbo":true} re-enables.
-    if (api.UBO_LAYER && OPTS.stallUnderUbo !== true) return;
+    // "gentle" (default): one reload, only after OPTS.stallGentleMs with zero
+    // progress, never while a SABR wait reply (104/105-byte UMP) is recent.
+    if (api.UBO_LAYER && OPTS.stallUnderUbo !== true && (OPTS.stallUnderUbo !== "gentle" || stalledReloaded >= 1)) return;
     if (!OPTS.stallReload || stalledReloaded >= 2 || startLogged || playbackSeen.any) return;
     diag("stall watchdog armed" + (why ? " (" + why + ")" : "") + (api.UBO_LAYER && !decoyThisNav ? ", uBO floor " + OPTS.stallUboMs + "ms" : ""));
     clearTimeout(stallTimer);
