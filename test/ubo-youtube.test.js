@@ -101,3 +101,18 @@ Deno.test("youtube.js stands down on player ad fields when the uBO layer is pres
     delete globalThis[Symbol.for("twitch-adblock.ubo")];
   }
 });
+
+Deno.test("youtube-ads.css: manifest CSS covers every home-feed/toast selector, one rule each", async () => {
+  const css = await Deno.readTextFile(new URL("../src/youtube-ads.css", import.meta.url));
+  const entry = manifest.content_scripts.find((c) => (c.js || [])[0] === "src/vendor/ubo-youtube-isolated.js");
+  assert(entry && entry.css.includes("src/youtube-ads.css") && entry.run_at === "document_start", "wired at document_start");
+  for (const sel of ["ytd-rich-item-renderer:has(ytd-ad-slot-renderer)", "ytd-in-feed-ad-layout-renderer", "#masthead-ad", "ytd-rich-item-renderer:has(> #content > ytd-ad-slot-renderer)"]) assert(css.includes(sel + " {"), "missing " + sel);
+  const m = youtubeSource.match(/const HOME_FEED_AD_CSS = \[([\s\S]*?)\]\.join/);
+  for (const sel of JSON.parse("[" + m[1].trim().replace(/,\s*$/, "") + "]")) assert(css.includes(sel + " {"), "not mirrored: " + sel);
+  for (const line of css.split("\n").filter((l) => l.includes("{"))) assert(!/,\s*\S.*\{/.test(line.split("{")[0]) || line.includes(":has("), "one selector per rule: " + line);
+});
+
+Deno.test("youtube.js: no DOM MutationObserver under uBO; throttled otherwise", () => {
+  assert(/if \(uboLayerPresent\(\) && !NUDGE\) return;/.test(youtubeSource), "observer skipped under uBO");
+  assert(/domSweepMs: 400/.test(youtubeSource) && /requestIdleCallback\(sweep/.test(youtubeSource), "throttled idle sweep");
+});

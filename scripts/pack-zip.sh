@@ -29,6 +29,7 @@ REQUIRED=(
   src/general/cosmetic-parse.js
   src/rules/cosmetic-rules.json
   src/cosmetic-hide.css
+  src/youtube-ads.css
   src/twitch-directory-ads.js
   src/LICENSE-EasyList.txt
   icons/icon16.png
@@ -53,7 +54,7 @@ TMP="$(mktemp -d /tmp/adblock-pack.XXXXXX)"
 mkdir -p "$TMP/src/vendor" "$TMP/src/rules" "$TMP/src/general" "$TMP/icons"
 cp "$ROOT"/src/general/*.js "$TMP/src/general/"
 cp "$ROOT/manifest.json" "$TMP/"
-cp "$ROOT/src/popup.html" "$ROOT/src/popup.js" "$ROOT/src/general-settings.js" "$ROOT/src/general-background.js" "$ROOT/src/youtube.js" "$ROOT/src/kick.js" "$ROOT/src/general-exclude-hosts.js" "$ROOT/src/cosmetic.js" "$ROOT/src/cosmetic-hide.css" "$ROOT/src/twitch-directory-ads.js" "$ROOT/src/LICENSE-EasyList.txt" "$TMP/src/"
+cp "$ROOT/src/popup.html" "$ROOT/src/popup.js" "$ROOT/src/general-settings.js" "$ROOT/src/general-background.js" "$ROOT/src/youtube.js" "$ROOT/src/kick.js" "$ROOT/src/general-exclude-hosts.js" "$ROOT/src/cosmetic.js" "$ROOT/src/cosmetic-hide.css" "$ROOT/src/youtube-ads.css" "$ROOT/src/twitch-directory-ads.js" "$ROOT/src/LICENSE-EasyList.txt" "$TMP/src/"
 cp "$ROOT/src/vendor/video-swap-new.user.js" "$ROOT/src/vendor/LICENSE-TwitchAdSolutions" "$ROOT/src/vendor/README.md" "$ROOT/src/vendor/ubo-youtube.js" "$ROOT/src/vendor/ubo-youtube-isolated.js" "$ROOT/src/vendor/ubo-youtube.css" "$ROOT/src/vendor/ubo-youtube-meta.json" "$ROOT/src/vendor/LICENSE-uBlock.md" "$ROOT/src/vendor/LICENSE-uBlock-GPLv3.txt" "$TMP/src/vendor/"
 cp "$ROOT/src/rules/general-network.json" "$ROOT/src/rules/ubo-youtube-network.json" "$ROOT/src/rules/CREDIT-EasyList.txt" "$ROOT/src/rules/LICENSES.md" "$TMP/src/rules/"
 [[ -f "$ROOT/src/rules/meta.json" ]] && cp "$ROOT/src/rules/meta.json" "$TMP/src/rules/"

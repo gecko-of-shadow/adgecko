@@ -968,7 +968,7 @@ function startYoutubeAdblock() {
   //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
   //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
   //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
-  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, stallUnderUbo: "gentle", stallGentleMs: 15000, waitReplyHoldMs: 20000, umpBackoff: false, diag: true, decoyReloadMs: 150, decoyGapMs: 1500 };
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, stallUnderUbo: "gentle", stallGentleMs: 15000, waitReplyHoldMs: 20000, umpBackoff: false, diag: true, domSweepMs: 400, decoyReloadMs: 150, decoyGapMs: 1500 };
   try {
     const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
     for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
@@ -1911,15 +1911,23 @@ function startYoutubeAdblock() {
     const root = document.documentElement;
     if (!root || typeof MutationObserver !== "function") return;
     let scheduled = false;
+    // Throttled: at most one pass per OPTS.domSweepMs, run when the frame is idle.
+    // With the uBO layer, src/youtube-ads.css (manifest CSS) hides feed tiles and
+    // the toast, and nudge is off, so no observer at all (homepage freeze guard).
+    if (uboLayerPresent() && !NUDGE) return;
+    let lastSweep = 0;
+    const sweep = () => {
+      scheduled = false;
+      lastSweep = Date.now();
+      removeDomAds();
+      api.removeInterruptionsToast();
+      nudgeStart();
+    };
     const observer = new MutationObserver(() => {
       if (scheduled) return;
       scheduled = true;
-      requestAnimationFrame(() => {
-        scheduled = false;
-        removeDomAds();
-        api.removeInterruptionsToast();
-        nudgeStart();
-      });
+      const wait = Math.max(0, OPTS.domSweepMs - (Date.now() - lastSweep));
+      setTimeout(() => (typeof requestIdleCallback === "function" ? requestIdleCallback(sweep, { timeout: 500 }) : requestAnimationFrame(sweep)), wait);
     });
     observer.observe(root, { childList: true, subtree: true });
     removeDomAds();

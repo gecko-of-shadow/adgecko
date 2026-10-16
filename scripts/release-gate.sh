@@ -93,6 +93,7 @@ REQUIRED=(
   src/general-exclude-hosts.js
   src/cosmetic.js
   src/cosmetic-hide.css
+  src/youtube-ads.css
   src/twitch-directory-ads.js
   src/LICENSE-EasyList.txt
   icons/icon16.png
@@ -106,7 +107,7 @@ REQUIRED=(
   icons/icon128-off.png
 )
 # Shippable paths. Cosmetic hide, popup worker, list rules, and stream exclusion module.
-ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|cosmetic-parse|exclusions|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/vendor/ubo-youtube(-isolated)?\.js|src/vendor/ubo-youtube\.css|src/vendor/ubo-youtube-meta\.json|src/vendor/LICENSE-uBlock\.md|src/vendor/LICENSE-uBlock-GPLv3\.txt|src/rules/ubo-youtube-network\.json|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/rules/cosmetic-rules\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|cosmetic-parse|exclusions|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/vendor/ubo-youtube(-isolated)?\.js|src/vendor/ubo-youtube\.css|src/vendor/ubo-youtube-meta\.json|src/vendor/LICENSE-uBlock\.md|src/vendor/LICENSE-uBlock-GPLv3\.txt|src/rules/ubo-youtube-network\.json|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/rules/cosmetic-rules\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/youtube-ads\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
 
 # YouTube is the beta script (spinner + search cards). The Twitch vendor stays at main.
 PLAYBACK_FILES=(

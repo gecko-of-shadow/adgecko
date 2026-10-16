@@ -93,7 +93,8 @@
         "src/vendor/ubo-youtube-isolated.js"
       ],
       "css": [
-        "src/vendor/ubo-youtube.css"
+        "src/vendor/ubo-youtube.css",
+        "src/youtube-ads.css"
       ],
       "run_at": "document_start",
       "all_frames": false

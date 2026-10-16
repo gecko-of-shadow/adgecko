@@ -1,0 +1,47 @@
+/* YouTube feed/masthead ad tiles and the interruptions toast, applied by the browser at
+ * document_start (no JS loops). One rule per selector so an unsupported selector
+ * cannot void the others. Mirrors HOME_FEED_AD_CSS/INTERRUPTIONS_TOAST_CSS in
+ * src/youtube.js plus EasyList youtube.com cosmetics (#masthead-ad etc.). */
+ytd-rich-item-renderer:has(ytd-ad-slot-renderer) { display: none !important; }
+ytd-rich-item-renderer:has(ytd-display-ad-renderer) { display: none !important; }
+ytd-rich-item-renderer:has(ytd-promoted-sparkles-web-renderer) { display: none !important; }
+ytd-rich-item-renderer:has(ytd-promoted-video-renderer) { display: none !important; }
+ytd-rich-item-renderer:has(ytd-compact-promoted-video-renderer) { display: none !important; }
+ytd-rich-item-renderer:has(ytd-in-feed-ad-layout-renderer) { display: none !important; }
+ytd-rich-item-renderer:has(ytd-carousel-ad-renderer) { display: none !important; }
+ytd-rich-section-renderer:has(ytd-statement-banner-renderer) { display: none !important; }
+ytd-rich-section-renderer:has(ytd-brand-video-shelf-renderer) { display: none !important; }
+ytd-rich-section-renderer:has(ytd-brand-video-singleton-renderer) { display: none !important; }
+ytd-ad-slot-renderer { display: none !important; }
+ytd-promoted-sparkles-web-renderer { display: none !important; }
+ytd-promoted-video-renderer { display: none !important; }
+ytd-compact-promoted-video-renderer { display: none !important; }
+ytd-in-feed-ad-layout-renderer { display: none !important; }
+ytd-carousel-ad-renderer { display: none !important; }
+ytd-statement-banner-renderer { display: none !important; }
+ytm-promoted-sparkles-web-renderer { display: none !important; }
+ytm-ad-slot-renderer { display: none !important; }
+ytd-search-pyv-renderer { display: none !important; }
+#masthead-ad { display: none !important; }
+ytd-rich-item-renderer:has(> #content > ytd-ad-slot-renderer) { display: none !important; }
+ytd-rich-item-renderer:has(ytd-ad-inline-playback-meta-block) { display: none !important; }
+ytd-rich-item-renderer:has(feed-ad-metadata-view-model) { display: none !important; }
+ytd-rich-item-renderer:has(ad-badge-view-model) { display: none !important; }
+ytd-rich-item-renderer:has(.ytwFeedAdMetadataViewModelHost) { display: none !important; }
+ytd-watch-next-secondary-results-renderer ytd-ad-slot-renderer { display: none !important; }
+ytm-rich-item-renderer > ad-slot-renderer { display: none !important; }
+lazy-list > ad-slot-renderer { display: none !important; }
+yt-notification-action-renderer:has(yt-formatted-string[split-lines*="Experiencing interruptions"]) { display: none !important; pointer-events: none !important; }
+yt-notification-action-renderer:has(a[href*="3037019"]) { display: none !important; pointer-events: none !important; }
+yt-notification-action-renderer:has(a[href*="ad_block"]) { display: none !important; pointer-events: none !important; }
+yt-notification-action-renderer:has(a[href*="blocker"]) { display: none !important; pointer-events: none !important; }
+yt-notification-action-renderer:has(a[href*="check_ad_blockers"]) { display: none !important; pointer-events: none !important; }
+tp-yt-paper-toast#toast:has(yt-formatted-string[split-lines*="Experiencing interruptions"]) { display: none !important; pointer-events: none !important; }
+tp-yt-paper-toast#toast:has(a[href*="3037019"]) { display: none !important; pointer-events: none !important; }
+tp-yt-paper-toast#toast:has(a[href*="ad_block"]) { display: none !important; pointer-events: none !important; }
+tp-yt-paper-toast#toast:has(a[href*="blocker"]) { display: none !important; pointer-events: none !important; }
+tp-yt-paper-toast#toast:has(a[href*="check_ad_blockers"]) { display: none !important; pointer-events: none !important; }
+ytd-popup-container:has(yt-formatted-string[split-lines*="Experiencing interruptions"]) { display: none !important; pointer-events: none !important; }
+ytd-popup-container:has(a[href*="3037019"]) { display: none !important; pointer-events: none !important; }
+ytd-popup-container:has(a[href*="ad_block"]) { display: none !important; pointer-events: none !important; }
+ytd-popup-container:has(a[href*="check_ad_blockers"]) { display: none !important; pointer-events: none !important; }
