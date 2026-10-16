@@ -363,8 +363,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.source !== "twitch-adblock-general") return;
+  // Popup only. A content-script sender carries a tab; it must never trigger a manual refresh.
+  if (!sender || sender.id !== chrome.runtime.id || sender.tab) return;
   if (message.type === "applyGeneralState") {
     applyGeneralState().then(sendResponse);
     return true;
