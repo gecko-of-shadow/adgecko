@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.19
+
+- YouTube: the brief grey player error that flashed on some watch starts (a blocked decoy stream, before the real one plays) is held back. Only an error that appears before playback, within 5s of the start, is hidden, until playback starts or 5s pass. Errors after playback show at once. Turn it off with `{"errorFlash":"off"}` in `localStorage["twitch-adblock-yt-opts"]`.
+
 ## 0.2.18
 
 - YouTube starts faster. Clicking to a new video starts in about 0.7-1.0s instead of 1.3-1.6s. Remaining cold-start delay is YouTube's own server-side wait.
