@@ -87,6 +87,6 @@ Deno.test("video element src (progressive itag=18) is checked for decoys and err
   assert(source.includes('if (!api.isSabrPlayback(src)) return;'), "blob/MSE ignored");
 });
 
-Deno.test("SABR backoff patch is on at start (umpBackoff option, default true)", () => {
-  assert(/umpBackoff: true/.test(source) && source.includes("api.STEALTH.patchUmpBackoff = OPTS.umpBackoff;"), "wired");
+Deno.test("SABR backoff patch wired to umpBackoff option, default off", () => {
+  assert(/umpBackoff: false/.test(source) && source.includes("api.STEALTH.patchUmpBackoff = OPTS.umpBackoff;"), "wired");
 });

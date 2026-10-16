@@ -1,6 +1,10 @@
 {
-  "generated_at_utc": "2026-10-16T07:06:17Z",
+  "generated_at_utc": "2026-10-16T07:41:31Z",
   "uassets_commit": "69831a84cc5cdd5c63feb1961fff0071875162c9",
+  "local_additions": [
+    "! from: ||youtube.com/youtubei/v1/get_watch?$xhr,1p,replace=/\"adPlacements\"/\"no_ads\"/ (filters.txt, Firefox-only)",
+    "www.youtube.com##+js(trusted-rpfr, '\"adPlacements\"', '\"no_ads\"', /get_watch?)"
+  ],
   "ublock_tag": "1.75.0",
   "ublock_commit": "21f0e686506bb21b514b451c8c6cb9bf8c82d232",
   "env": [
@@ -38,7 +42,7 @@
   ],
   "scriptlet_calls": {
     "MAIN": {
-      "www.youtube.com": 25,
+      "www.youtube.com": 26,
       "m.youtube.com": 8,
       "youtube.com": 1
     },
@@ -85,7 +89,8 @@
       "www.youtube.com##+js(trusted-prevent-dom-bypass, Node.prototype.appendChild, Request)",
       "www.youtube.com##+js(trusted-prevent-dom-bypass, Node.prototype.appendChild, JSON.parse)",
       "youtube.com##+js(json-prune, entries.[-].command.reelWatchEndpoint.adClientParams.isAd)",
-      "www.youtube.com##+js(trusted-rpfr, '\"adSlots\"', '\"no_ads\"', /get_watch?)"
+      "www.youtube.com##+js(trusted-rpfr, '\"adSlots\"', '\"no_ads\"', /get_watch?)",
+      "www.youtube.com##+js(trusted-rpfr, '\"adPlacements\"', '\"no_ads\"', /get_watch?)"
     ],
     "cosmetic": [
       "youtube.com#@##player-ads",

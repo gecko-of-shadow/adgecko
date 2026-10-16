@@ -67,7 +67,15 @@ const ported = { scriptlets: [], cosmetic: [], network: [] };
 const skipped = [];
 const perHost = Object.fromEntries(HOSTS.map((h) => [h, { js: new Map(), jsEx: new Set(), css: new Set(), cssEx: new Set() }]));
 const networkLines = [];
-for (const name of LISTS) {
+// Local additions, each the Chrome-scriptlet form of a uAssets filter that uBO
+// only applies on Firefox (cap_html_filtering $replace branch). The owner's PC
+// trace (2026-10-16): SPA starts sat ~4s on a SABR wait when get_watch kept
+// "adPlacements" (the Chromium branch only rewrites "adSlots" there).
+texts.local = [
+  "! from: ||youtube.com/youtubei/v1/get_watch?$xhr,1p,replace=/\"adPlacements\"/\"no_ads\"/ (filters.txt, Firefox-only)",
+  "www.youtube.com##+js(trusted-rpfr, '\"adPlacements\"', '\"no_ads\"', /get_watch?)",
+].join("\n");
+for (const name of [...LISTS, "local"]) {
   const pruned = sfp.utils.preparser.prune(texts[name], ENV);
   for (const raw of pruned.split(/\r?\n/)) {
     const line = raw.trim();
@@ -230,6 +238,7 @@ for (const x of networkLines) ported.network.push(x.line);
 const meta = {
   generated_at_utc: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
   uassets_commit: uassets,
+  local_additions: texts.local.split("\n"),
   ublock_tag: uboTag,
   ublock_commit: uboCommit,
   env: ENV,

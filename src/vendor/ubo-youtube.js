@@ -1899,6 +1899,11 @@ if (uboOn("pruneXhr")) try {
 }
 
 if (uboOn("replaceFetch")) try {
+	trustedReplaceFetchResponse("\"adPlacements\"","\"no_ads\"","/get_watch?");
+} catch (e) {
+}
+
+if (uboOn("replaceFetch")) try {
 	trustedReplaceFetchResponse("\"adPlacements\"","\"no_ads\"","player?");
 } catch (e) {
 }

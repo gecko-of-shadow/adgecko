@@ -52,6 +52,7 @@ Deno.test("uBO bundle carries the exact uAssets prune paths and is pinned", asyn
     'jsonPrune("entries.[-].command.reelWatchEndpoint.adClientParams.isAd")',
     'trustedReplaceFetchResponse("\\"adPlacements\\"","\\"no_ads\\"","player?")',
     'setConstant("ytInitialPlayerResponse.adPlacements","undefined")',
+    'trustedReplaceFetchResponse("\\"adPlacements\\"","\\"no_ads\\"","/get_watch?")',
     'adjustSetTimeout("[native code]","17000","0.001")',
   ]) assert(js.includes(call), "missing " + call);
   assert(/^[0-9a-f]{40}$/.test(meta.uassets_commit) && js.includes(meta.uassets_commit), "uAssets commit recorded");
