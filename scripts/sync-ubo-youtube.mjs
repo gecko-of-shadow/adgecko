@@ -155,7 +155,32 @@ const PATCHES = [[
     "        let clone;",
   ].join("\n"),
 ]];
+// Local edits to filter arguments (the rpnt payload uBO splices into YouTube's
+// inline script). Same checks, less page-wide work: its document observer ran
+// player API calls (getStatsForNerds etc.) on every mutation batch, on every
+// page. Now: watch/embed URL test first, at most one check per 250ms, and the
+// Array.prototype.push trap tests length before constructor.name.
+const ARG_PATCHES = [
+  [
+    "const e=()=>{let e,s,{player:i,",
+    "const e=()=>{if(!window.location.href.includes(\"/watch?\")&&!window.location.href.includes(\"/embed/\"))return void(o=t);let e,s,{player:i,",
+  ],
+  [
+    "e(),new MutationObserver((()=>{e()})).observe(document,",
+    "e();let q=0;new MutationObserver((()=>{q||(q=setTimeout((()=>{q=0,e()}),250))})).observe(document,",
+  ],
+  [
+    "\"Uint8Array\"!==o.constructor.name||o.buffer?.byteLength!==o.length||105!==o.length&&104!==o.length||",
+    "105!==o.length&&104!==o.length||\"Uint8Array\"!==o.constructor.name||o.buffer?.byteLength!==o.length||",
+  ],
+];
 const patchHits = new Set();
+const argPatchHits = new Set();
+const patchArg = (a) => ARG_PATCHES.reduce((s, [from, to], i) => {
+  if (!s.includes(from)) return s;
+  argPatchHits.add(i);
+  return s.replace(from, to);
+}, a);
 const OFF_BY_DEFAULT = ["rmnt", "domBypass"];
 const TOGGLE_PRELUDE = `const uboOn = (() => {
   const defaults = ${JSON.stringify(Object.fromEntries(OFF_BY_DEFAULT.map((k) => [k, false])))};
@@ -197,7 +222,7 @@ for (const h of HOSTS) {
     addDeps([d.name]);
     const fname = /^function\s+([^(\s]+)\s*\(/.exec(d.fn.toString())[1];
     const toggle = TOGGLES[d.name] || d.name.replace(/\.js$/, "");
-    calls.push({ code: `if (uboOn(${JSON.stringify(toggle)})) try {\n\t${fname}(${JSON.stringify(args.slice(1)).slice(1, -1)});\n} catch (e) {\n}`, priority: d.priority ?? 0, toggle });
+    calls.push({ code: `if (uboOn(${JSON.stringify(toggle)})) try {\n\t${fname}(${JSON.stringify(args.slice(1).map(patchArg)).slice(1, -1)});\n} catch (e) {\n}`, priority: d.priority ?? 0, toggle });
   }
   calls.sort((a, b) => a.priority === b.priority ? a.code.localeCompare(b.code) : b.priority - a.priority);
   hostCalls[h] = calls.map((c) => c.code);
@@ -205,6 +230,9 @@ for (const h of HOSTS) {
 }
 for (let i = 0; i < PATCHES.length; i++) {
   if (!patchHits.has(i)) console.warn("PATCHES[" + i + "] matched nothing; upstream scriptlet changed, review it");
+}
+for (let i = 0; i < ARG_PATCHES.length; i++) {
+  if (!argPatchHits.has(i)) console.warn("ARG_PATCHES[" + i + "] matched nothing; upstream payload changed, review it");
 }
 for (const world of WORLDS) {
 const fnCode = fnCodeBy[world];
