@@ -99,6 +99,6 @@ Deno.test("block rules never target protected stream hosts", () => {
 
 Deno.test("permissions stay DNR + storage; no host_permissions / background", () => {
   assertEquals(manifest.permissions?.slice().sort(), ["declarativeNetRequest", "storage"].sort());
-  assertEquals(manifest.host_permissions, undefined);
+  assertEquals(manifest.host_permissions, ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*"], "only the filter-list hosts");
   assertEquals(manifest.background?.service_worker, "src/general-background.js");
 });

@@ -22,6 +22,8 @@ REQUIRED=(
   src/rules/LICENSES.md
   src/general-exclude-hosts.js
   src/cosmetic.js
+  src/general/cosmetic-parse.js
+  src/rules/cosmetic-rules.json
   src/cosmetic-hide.css
   src/twitch-directory-ads.js
   src/LICENSE-EasyList.txt

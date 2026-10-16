@@ -859,7 +859,7 @@ function startYoutubeAdblock() {
   //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
   //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
   //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
-  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2500 };
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 4000, stallQuietMs: 3000, stallPollMs: 500, stallFailoverGraceMs: 2000, stallGiveUpMs: 30000, stallSecondGapMs: 6000 };
   try {
     const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
     for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
@@ -1036,46 +1036,136 @@ function startYoutubeAdblock() {
   let startLogged = false;
   let strippedThisVideo = false;
 
-  // Only after this script stripped ads for this video: a start that is still at
-  // 0:00 with no media data after stallMs gets one loadVideoById (uBO-style
-  // reload of the same video). It does not seek, pause, or touch an ad.
+  // Only after this script stripped ads (or media servers failed) for this
+  // video: a start that sits at 0:00 with no progress gets a loadVideoById
+  // (uBO-style reload of the same video), at most twice. It does not seek,
+  // pause, or touch an ad. The check polls every stallPollMs and fires only
+  // when at least stallMs passed since arming AND currentTime, buffered end
+  // and readyState have not moved for stallQuietMs, so a slow-but-loading
+  // start is never reloaded.
+  let stallArmedAt = 0;
+  let stallLastSig = "";
+  let stallLastProgressAt = 0;
+  let lastFailoverAt = 0;
+  let mediaExhaustedNow = false;
+  let lastReloadAt = 0;
+  let lastMediaEventAt = 0;
+  // Set once any watch video reports playback; survives same-video
+  // yt-navigate events so a started video is never reloaded.
+  let startedVideoId = "";
+  const playbackSeen = { any: false };
+
+  function currentVideoId(player) {
+    try {
+      return (player && typeof player.getVideoData === "function" && (player.getVideoData() || {}).video_id) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  // Signs the player is (or was) actually moving, from the player API too,
+  // not only from the first <video> element found.
+  function playerMoving(player, video) {
+    if (video && (video.currentTime > 0.1 || video.readyState >= 2)) return true;
+    try {
+      if (typeof player.getCurrentTime === "function" && player.getCurrentTime() > 0.1) return true;
+      if (typeof player.getPlayerState === "function" && player.getPlayerState() === 1) return true;
+    } catch {
+      // optional
+    }
+    return false;
+  }
+
+  function stallSignature(video) {
+    let end = 0;
+    try {
+      const b = video.buffered;
+      if (b && b.length) end = b.end(b.length - 1);
+    } catch {
+      end = 0;
+    }
+    return (Math.round((video.currentTime || 0) * 10)) + "|" + Math.round(end * 10) + "|" + (video.readyState || 0);
+  }
+
+  function stopStall() {
+    clearTimeout(stallTimer);
+    stallTimer = 0;
+    stallArmedAt = 0;
+  }
+
   function checkStall() {
     stallTimer = 0;
-    if (!OPTS.stallReload || stalledReloaded >= 2 || (!strippedThisVideo && !mediaFailed) || !onWatchSurface()) return;
+    if (!OPTS.stallReload || stalledReloaded >= 2 || startLogged || playbackSeen.any || (!strippedThisVideo && !mediaFailed) || !onWatchSurface()) return stopStall();
+    const now = Date.now();
+    if (now - navAt > OPTS.stallGiveUpMs) return stopStall();
+    const again = () => { stallTimer = setTimeout(checkStall, OPTS.stallPollMs); };
     let player;
     let video;
     try {
       player = playerRoot();
       video = player && player.querySelector ? player.querySelector("video") : null;
     } catch {
-      return;
+      return again();
     }
-    if (!player || !video) return;
+    if (!player || !video) return again();
+    if (startedVideoId && currentVideoId(player) === startedVideoId) return stopStall();
+    // Healthy or already moving: stop watching this video.
+    if (playerMoving(player, video)) return stopStall();
+    const sig = stallSignature(video);
+    if (sig !== stallLastSig || lastMediaEventAt > stallLastProgressAt) {
+      stallLastSig = sig;
+      stallLastProgressAt = Math.max(now, lastMediaEventAt);
+    }
     const classes = String(player.className || "");
-    if (classes.includes("ad-showing") || classes.includes("ad-interrupting")) return;
-    if (video.currentTime > 0.1 || video.readyState >= 3) return;
-    if (typeof player.loadVideoById !== "function" || typeof player.getVideoData !== "function") return;
+    // Conditions that pause the clock instead of firing.
+    let hold = classes.includes("ad-showing") || classes.includes("ad-interrupting") || document.hidden === true;
+    if (!hold && classes.includes("paused-mode") && !classes.includes("buffering-mode") && !classes.includes("unstarted-mode")) {
+      try {
+        if (typeof player.getPlayerState === "function" && player.getPlayerState() === 2) hold = true;
+      } catch {
+        // State is optional.
+      }
+    }
+    // A host fallback is still being tried: let it finish unless all hosts failed.
+    if (!hold && !mediaExhaustedNow && now - lastFailoverAt < OPTS.stallFailoverGraceMs) hold = true;
+    if (hold) {
+      stallLastProgressAt = now;
+      return again();
+    }
+    if (now - navAt < OPTS.stallMs || now - stallArmedAt < OPTS.stallMs || now - stallLastProgressAt < OPTS.stallQuietMs) return again();
+    if (lastReloadAt && now - lastReloadAt < OPTS.stallSecondGapMs) return again();
+    if (typeof player.loadVideoById !== "function" || typeof player.getVideoData !== "function") return stopStall();
     let id = "";
     try {
       id = (player.getVideoData() || {}).video_id || "";
     } catch {
       id = "";
     }
-    if (!id) return;
+    if (!id) return again();
     stalledReloaded += 1;
+    lastReloadAt = now;
     console.log("twitch-adblock: YouTube start stalled at 0:00" + (mediaFailed ? " after media server failures" : "") + ", reloading the video (" + stalledReloaded + "/2)");
     mediaFailed = false;
+    mediaExhaustedNow = false;
     try {
       player.loadVideoById(id, 0);
     } catch (error) {
       logFailOpen(error);
     }
+    // Watch the reloaded start too, giving it a little longer.
+    if (stalledReloaded < 2) armStall(OPTS.stallSecondGapMs);
+    else stopStall();
   }
 
-  function armStall(delay) {
-    if (!OPTS.stallReload || stalledReloaded >= 2) return;
+  function armStall(minMs) {
+    if (!OPTS.stallReload || stalledReloaded >= 2 || startLogged || playbackSeen.any) return;
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(checkStall, delay == null ? OPTS.stallMs : delay);
+    const now = Date.now();
+    // minMs shortens/lengthens the earliest fire time relative to stallMs.
+    stallArmedAt = now - (OPTS.stallMs - (minMs == null ? OPTS.stallMs : minMs));
+    stallLastSig = "";
+    stallLastProgressAt = now;
+    stallTimer = setTimeout(checkStall, OPTS.stallPollMs);
   }
 
   // Every fallback host failed: get a fresh player response soon instead of
@@ -1084,6 +1174,7 @@ function startYoutubeAdblock() {
   let lastExhaustedAt = 0;
   function onMediaExhausted() {
     mediaFailed = true;
+    mediaExhaustedNow = true;
     const now = Date.now();
     if (now - lastExhaustedAt < 3000) return;
     lastExhaustedAt = now;
@@ -1093,6 +1184,7 @@ function startYoutubeAdblock() {
   const loggedHosts = new Set();
   function logFallback(result) {
     try {
+      if (result.failures && result.failures.length) lastFailoverAt = Date.now();
       for (const failure of result.failures) {
         const host = new URL(failure.url).hostname;
         if (loggedHosts.has(host + failure.reason)) continue;
@@ -1109,15 +1201,25 @@ function startYoutubeAdblock() {
 
   document.addEventListener("playing", (event) => {
     try {
-      if (startLogged || !event.target || event.target.tagName !== "VIDEO") return;
+      if (!event.target || event.target.tagName !== "VIDEO") return;
+      playbackSeen.any = true;
+      stopStall();
+      if (!startedVideoId) startedVideoId = currentVideoId(playerRoot());
+      if (startLogged) return;
       startLogged = true;
-      clearTimeout(stallTimer);
       const ms = Date.now() - navAt;
       console.log("twitch-adblock: YouTube playback started " + ms + "ms after navigation" + (strippedThisVideo ? " (ads stripped)" : ""));
     } catch {
       // Timing is optional.
     }
   }, true);
+
+  // Any media activity counts as progress for the stall watchdog.
+  for (const type of ["timeupdate", "progress", "loadeddata", "canplay", "waiting", "seeking"]) {
+    document.addEventListener(type, (event) => {
+      if (event.target && event.target.tagName === "VIDEO") lastMediaEventAt = Date.now();
+    }, true);
+  }
 
   function hookInitial(name, kind) {
     if (!kind) return;
@@ -1502,8 +1604,13 @@ function startYoutubeAdblock() {
     mediaFailed = false;
     strippedThisVideo = false;
     startLogged = false;
+    playbackSeen.any = false;
+    lastReloadAt = 0;
+    lastMediaEventAt = 0;
     navAt = Date.now();
-    clearTimeout(stallTimer);
+    mediaExhaustedNow = false;
+    lastFailoverAt = 0;
+    stopStall();
     notify(false);
   }, true);
   document.addEventListener("yt-navigate-finish", () => {

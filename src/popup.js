@@ -11,7 +11,7 @@
     generalEnabled: true,
     generalAllowedOrigins: [],
     generalListUpdatedAt: null,
-    generalListStatus: "Packed lists (manual Update only).",
+    generalListStatus: "Packed lists (auto refresh after startup).",
     generalListUpdateRequestAt: null,
   };
   const HARD_EXCLUDE_HOST_RE = /(?:^|\.)((?:twitch\.tv)|(youtube\.com)|(youtu\.be)|(youtube-nocookie\.com)|(youtubekids\.com)|(googlevideo\.com)|(kick\.com)|(kickusercontent\.com))$/i;
@@ -213,20 +213,18 @@
 
   updateLists.addEventListener("click", async () => {
     updateLists.disabled = true;
-    listsStatus.textContent = "Update requested (manual only — no background fetch).";
+    listsStatus.textContent = "Checking filter lists…";
     const now = Date.now();
     await savePartial({
       [KEYS.listUpdateRequestAt]: now,
-      [KEYS.listStatus]: "Update requested. Waiting for the list engine.",
+      [KEYS.listStatus]: "Checking filter lists…",
     });
     const res = await notifyBackground("updateLists", { requestedAt: now });
     await loadSettings();
     if (res && res.ok) {
       listsStatus.textContent = formatListStatus(settings);
-    } else if (res && res.pending) {
-      listsStatus.textContent = "Update queued. List packer will fetch only on this click path.";
     } else {
-      listsStatus.textContent = "Update flagged in storage. List engine not loaded yet — no auto-fetch.";
+      listsStatus.textContent = (settings[KEYS.listStatus] || "Update failed.") + " Packed lists still active.";
     }
     updateLists.disabled = false;
     renderGeneral();

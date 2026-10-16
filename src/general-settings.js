@@ -16,7 +16,7 @@
     generalEnabled: true,
     generalAllowedOrigins: [],
     generalListUpdatedAt: null,
-    generalListStatus: "Packed lists (manual Update only).",
+    generalListStatus: "Packed lists (auto refresh after startup).",
     generalListUpdateRequestAt: null,
   };
 

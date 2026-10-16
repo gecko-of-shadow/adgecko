@@ -5,6 +5,7 @@ import cosmeticSource from "../src/general/cosmetic.js" with { type: "text" };
 import popupSource from "../src/popup.js" with { type: "text" };
 import popupHtml from "../src/popup.html" with { type: "text" };
 import youtubeSource from "../src/youtube.js" with { type: "text" };
+import backgroundSource from "../src/general-background.js" with { type: "text" };
 import manifest from "../manifest.json" with { type: "json" };
 
 function assert(condition, label) {
@@ -31,16 +32,20 @@ const packagedJs = [
   cosmeticSource,
 ];
 
-Deno.test("update policy is manual-only", () => {
-  assertEquals(api.POLICY, "manual-only");
-  assert(api.isManualOnly());
-  assert(api.mayFetchLists({ userInitiated: true }), "explicit Update is allowed");
-  assert(!api.mayFetchLists({ userInitiated: false }), "no implicit fetch");
-  assert(!api.mayFetchLists({ userInitiated: true, background: true }), "no background fetch");
-  assert(!api.mayFetchLists({ userInitiated: true, alarm: true }), "no alarm fetch");
-  assert(!api.mayFetchLists({ userInitiated: true, idle: true }), "no idle fetch");
-  assert(!api.mayFetchLists({ userInitiated: true, startup: true }), "no startup fetch");
-  assert(!api.mayFetchLists({}), "empty context is refused");
+Deno.test("update policy is startup refresh + manual, list hosts only", () => {
+  assertEquals(api.POLICY, "startup-and-manual");
+  assertEquals(api.STARTUP_DELAY_MS, 5000);
+  assert(api.MIN_INTERVAL_MS >= 12 * 60 * 60 * 1000, "at most every 12h");
+  assertEquals(api.LIST_HOSTS, ["pgl.yoyo.org", "malware-filter.gitlab.io", "easylist.to"]);
+  for (const src of api.SOURCES) assert(api.isListUrl(src.url), "source on a list host: " + src.url);
+  assert(!api.isListUrl("https://www.twitch.tv/"), "not a list host");
+  assert(!api.isListUrl("https://evil.example/easylist.to"), "host match, not substring");
+});
+
+Deno.test("only the background worker fetches lists, and only list hosts", () => {
+  assert(backgroundSource.includes("GU.isListUrl(url)"), "worker fetch is gated to list hosts");
+  assert(!backgroundSource.includes("setInterval"), "no polling");
+  assert(!backgroundSource.includes("chrome.alarms"), "no alarms");
 });
 
 Deno.test("manifest has no background worker for list fetching", () => {
@@ -65,9 +70,6 @@ Deno.test("packaged scripts do not auto-fetch filter lists", () => {
       assert(!text.includes(bit), "must not mention " + bit);
     }
   }
-  assert(api.isForbiddenAutoFetchUrl("https://easylist.to/easylist/easylist.txt"));
-  assert(api.isForbiddenAutoFetchUrl("https://pgl.yoyo.org/adservers/serverlist.php"));
-  assert(!api.isForbiddenAutoFetchUrl("https://www.twitch.tv/"));
 });
 
 Deno.test("popup stays local and does not schedule list downloads", () => {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.17 (beta)
+
+- YouTube: progress-aware start-stall watchdog (500ms polls; reload only after >=4s from navigation and 3s with no progress; stops permanently once playback starts; 2nd reload >=6s after the 1st; max 2).
+- Filter lists: quiet refresh ~5s after browser start (once per session, at most every 12h, per-list `! Expires` respected, ETag/If-Modified-Since), swapped into dynamic DNR rules; bundled ruleset restored on any error. "Update lists" runs the same refresh. New host permissions: easylist.to, pgl.yoyo.org, malware-filter.gitlab.io (list downloads only).
+- Cosmetic filtering: EasyList `##`/`#@#` generic + site-specific (incl. `name.*`) element hiding via one `<style>`; procedural/scriptlet rules skipped; selectors sanitized; bundled snapshot refreshed with the lists.
+
 ## 0.2.16
 
 - YouTube starts faster. Player requests are no longer marked "no ad". uBlock Origin keeps that switch off too. Ads are still removed from the player response, so the same video plays.

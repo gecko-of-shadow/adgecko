@@ -124,6 +124,20 @@ function installCosmeticHide(api) {
       removeStyle();
       return Promise.resolve(false);
     }
+    // Refreshed / installed rules in storage: generic sheet (top frame only)
+    // plus this host's site rules, minus its #@# exceptions. One <style>.
+    const P = api.parse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
+    const stored = state && typeof state === "object" ? state.stored : null;
+    if (P && stored && stored[P.KEY_META]) {
+      try {
+        const top = api.isTop != null ? api.isTop : (typeof window !== "undefined" && window.top === window);
+        const view = top ? stored : Object.assign({}, stored, { [P.KEY_GENERIC]: "" });
+        injectStyle(P.buildPageCss(hostname, view));
+        return Promise.resolve(true);
+      } catch {
+        // fall back to the bundled sheet below
+      }
+    }
     return loadCss(fetcher).then((text) => {
       injectStyle(text);
       return true;
@@ -148,9 +162,15 @@ function installCosmeticHide(api) {
         return;
       }
       try {
-        getter([STORAGE_KEY, ALLOWED_ORIGINS_KEY], (result) => {
+        const P = api.parse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
+        const host = api.hostname != null ? api.hostname : (typeof location !== "undefined" ? location.hostname : "");
+        const top = api.isTop != null ? api.isTop : (typeof window !== "undefined" && window.top === window);
+        // Subframes only need their host's site rules, not the generic sheet.
+        const extra = P ? P.keysForHost(host, top) : [];
+        getter([STORAGE_KEY, ALLOWED_ORIGINS_KEY].concat(extra), (result) => {
           if (typeof chrome !== "undefined") void chrome.runtime.lastError;
           resolve({
+            stored: result || {},
             enabled: result ? result[STORAGE_KEY] : undefined,
             allowedOrigins: result && Array.isArray(result[ALLOWED_ORIGINS_KEY])
               ? result[ALLOWED_ORIGINS_KEY]
@@ -180,7 +200,7 @@ function installCosmeticHide(api) {
       if (onChanged && onChanged.addListener) {
         onChanged.addListener((changes, area) => {
           if (area && area !== "local") return;
-          if (!changes || (!changes[STORAGE_KEY] && !changes[ALLOWED_ORIGINS_KEY])) return;
+          if (!changes || (!changes[STORAGE_KEY] && !changes[ALLOWED_ORIGINS_KEY] && !changes.cosMeta)) return;
           sync();
         });
       }

@@ -1,11 +1,16 @@
 {
   "manifest_version": 3,
   "name": "twitch-adblock",
-  "version": "0.2.16",
+  "version": "0.2.17",
   "description": "Blocks video ads on Twitch (TwitchAdSolutions video-swap-new, unmodified), YouTube, and Kick, plus general-site ad blocking.",
   "permissions": [
     "storage",
     "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "https://easylist.to/*",
+    "https://pgl.yoyo.org/*",
+    "https://malware-filter.gitlab.io/*"
   ],
   "background": {
     "service_worker": "src/general-background.js"
@@ -116,6 +121,7 @@
         "*://*.kickusercontent.com/*"
       ],
       "js": [
+        "src/general/cosmetic-parse.js",
         "src/cosmetic.js"
       ],
       "run_at": "document_start",
