@@ -968,7 +968,7 @@ function startYoutubeAdblock() {
   //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
   //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
   //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
-  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, umpBackoff: false, diag: true, decoyReloadMs: 150, decoyGapMs: 1500 };
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, umpBackoff: false, diag: true, decoyReloadMs: 150, decoyGapMs: 1500 };
   try {
     const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
     for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
@@ -1014,7 +1014,13 @@ function startYoutubeAdblock() {
     },
   });
   cloaked.set(toStringProxy, baseToString);
-  try { Function.prototype.toString = toStringProxy; } catch {}
+  // uBO layer present: it owns pruning, decoys (DNR) and the 105-byte wait
+  // reload (rpnt). Our fetch/XHR/JSON.parse hooks on top of it cost ~2-3s per
+  // start (the owner's PC 2026-10-16: uBO-only 0.8-2.2s vs 3.7-4.5s with hooks), so
+  // they stay out unless {"hooksUnderUbo":true}.
+  const HOOKS = !uboLayerPresent() || OPTS.hooksUnderUbo === true;
+  const NUDGE = !uboLayerPresent() || OPTS.nudgeUnderUbo === true;
+  if (HOOKS) try { Function.prototype.toString = toStringProxy; } catch {}
   function cloak(fn, impl) {
     const proxy = new Proxy(fn, {
       apply(target, self, args) {
@@ -1144,7 +1150,7 @@ function startYoutubeAdblock() {
   }
 
   function nudgeStart() {
-    if (!onWatchSurface()) return;
+    if (!NUDGE || !onWatchSurface()) return;
     let video;
     let player;
     try {
@@ -1563,7 +1569,7 @@ function startYoutubeAdblock() {
     });
   }
 
-  window.fetch = cloak(window.fetch, function (input, init) {
+  if (HOOKS) window.fetch = cloak(window.fetch, function (input, init) {
     const url = requestUrl(input);
     const kind = api.kindFor(url);
     if (!kind) {
@@ -1697,7 +1703,7 @@ function startYoutubeAdblock() {
       }),
     }));
   }
-  installXhrGetters();
+  if (HOOKS) installXhrGetters();
 
   function installSabrPatch(xhr) {
     if (!api.STEALTH.patchUmpBackoff) return;
@@ -1786,7 +1792,7 @@ function startYoutubeAdblock() {
     });
   }
 
-  XMLHttpRequest.prototype.open = cloak(nativeOpen, function (method, url) {
+  if (HOOKS) XMLHttpRequest.prototype.open = cloak(nativeOpen, function (method, url) {
     X(this).url = String(url || "");
     X(this).gen = (X(this).gen || 0) + 1;
     if (api.kindFor(X(this).url) === "player") diag("/player requested (xhr)");
@@ -1808,7 +1814,7 @@ function startYoutubeAdblock() {
     return nativeOpen.apply(this, arguments);
   });
 
-  XMLHttpRequest.prototype.send = cloak(nativeSend, function (body) {
+  if (HOOKS) XMLHttpRequest.prototype.send = cloak(nativeSend, function (body) {
     if (OPTS.noAdFlag && api.kindFor(X(this).url || "") === "player" && body != null) {
       try {
         const marked = api.applyNoAdPlayback(body);
@@ -1821,7 +1827,7 @@ function startYoutubeAdblock() {
     return nativeSend.call(this, body);
   });
 
-  JSON.parse = cloak(nativeParse, function (text, reviver) {
+  if (HOOKS) JSON.parse = cloak(nativeParse, function (text, reviver) {
     const value = nativeParse.call(this, text, reviver);
     if (typeof text === "string" && text.length > 2000 && text.includes("serverAbrStreamingUrl")) inspectPlayerText(text);
     if (typeof text !== "string" || (!api.textLooksLikeAds(text) && !api.textHasStartHold(text))) return value;

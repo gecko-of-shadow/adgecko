@@ -54,3 +54,33 @@ Deno.test("hooks look native: toString, name, length, no own props, no string gl
     globalThis.location = saved.location;
   }
 });
+
+Deno.test("uBO layer present: no fetch/XHR/JSON.parse/toString hooks (uBO-only speed)", () => {
+  const saved = { ts: Function.prototype.toString, parse: JSON.parse, fetch: globalThis.fetch, XHR: globalThis.XMLHttpRequest, document: globalThis.document, window: globalThis.window, location: globalThis.location };
+  function XMLHttpRequest() {}
+  XMLHttpRequest.prototype.open = function open() {};
+  XMLHttpRequest.prototype.send = function send() {};
+  const rt = { configurable: true, enumerable: true, get() { return ""; } };
+  Object.defineProperty(XMLHttpRequest.prototype, "responseText", rt);
+  Object.defineProperty(XMLHttpRequest.prototype, "response", rt);
+  const open = XMLHttpRequest.prototype.open, send = XMLHttpRequest.prototype.send;
+  globalThis.XMLHttpRequest = XMLHttpRequest;
+  globalThis.document = { readyState: "complete", documentElement: {}, getElementById() { return null; }, createElement() { return { style: {}, appendChild() {} }; }, querySelector() { return null; }, querySelectorAll() { return []; }, addEventListener() {} };
+  globalThis.location = { pathname: "/watch" };
+  globalThis.window = globalThis;
+  delete globalThis[Symbol.for("twitch-adblock.yt")];
+  Object.defineProperty(globalThis, Symbol.for("twitch-adblock.ubo"), { value: true, configurable: true });
+  try {
+    new Function(source)();
+    assert(globalThis.fetch === saved.fetch, "fetch untouched");
+    assert(JSON.parse === saved.parse, "JSON.parse untouched");
+    assert(Function.prototype.toString === saved.ts, "toString untouched");
+    assert(XMLHttpRequest.prototype.open === open && XMLHttpRequest.prototype.send === send, "XHR untouched");
+    assert(Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, "responseText").get === rt.get, "getters untouched");
+  } finally {
+    delete globalThis[Symbol.for("twitch-adblock.ubo")];
+    delete globalThis[Symbol.for("twitch-adblock.yt")];
+    Function.prototype.toString = saved.ts; JSON.parse = saved.parse; globalThis.fetch = saved.fetch;
+    globalThis.XMLHttpRequest = saved.XHR; globalThis.document = saved.document; globalThis.window = saved.window; globalThis.location = saved.location;
+  }
+});
