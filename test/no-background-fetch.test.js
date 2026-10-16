@@ -43,6 +43,7 @@ Deno.test("update policy is startup refresh + manual, list hosts only", () => {
   for (const src of api.SOURCES) assert(api.isListUrl(src.url), "source on a list host: " + src.url);
   assert(!api.isListUrl("https://www.twitch.tv/"), "not a list host");
   assert(!api.isListUrl("https://evil.example/easylist.to"), "host match, not substring");
+  assert(!api.isListUrl("http://easylist.to/easylist/easylist.txt"), "https only");
 });
 
 Deno.test("only the background worker fetches lists, and only list hosts", () => {

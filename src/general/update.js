@@ -387,7 +387,8 @@ function installGeneralAdblockUpdate(target) {
 
   function isListUrl(url) {
     try {
-      return LIST_HOSTS.includes(new URL(url).hostname);
+      const parsed = new URL(url);
+      return parsed.protocol === "https:" && LIST_HOSTS.includes(parsed.hostname);
     } catch {
       return false;
     }
