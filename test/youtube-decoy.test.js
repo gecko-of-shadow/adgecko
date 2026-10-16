@@ -81,3 +81,8 @@ Deno.test("player response inspection is wired into fetch, XHR, JSON.parse and t
   assert(source.includes('if (kind === "player") inspectPlayerValue(current);'), "initial");
   assert(/tries\+\+ < 12/.test(source), "bounded wait for the player to switch video");
 });
+
+Deno.test("video element src (progressive itag=18) is checked for decoys and errors", () => {
+  assert(/\["loadstart", "error"\]/.test(source) && source.includes("video element got a decoy stream url"), "element hook");
+  assert(source.includes('if (!api.isSabrPlayback(src)) return;'), "blob/MSE ignored");
+});

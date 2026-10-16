@@ -1352,6 +1352,23 @@ function startYoutubeAdblock() {
     }
   }, true);
 
+  // Progressive (itag=18) starts put the googlevideo url straight into
+  // <video src>, which bypasses fetch/XHR. Check the element itself.
+  for (const type of ["loadstart", "error"]) {
+    document.addEventListener(type, (event) => {
+      try {
+        const el = event.target;
+        if (!el || el.tagName !== "VIDEO") return;
+        const src = String(el.currentSrc || el.src || "");
+        if (!api.isSabrPlayback(src)) return; // blob: (MSE) and others: not ours
+        if (api.isDecoyStreamUrl(src)) onDecoyUrl(src, "video element got a decoy stream url (expire=" + new URL(src).searchParams.get("expire") + ")");
+        else if (type === "error") onDecoyUrl(src, "video element failed on its stream url");
+      } catch {
+        // optional
+      }
+    }, true);
+  }
+
   // Any media activity counts as progress for the stall watchdog.
   for (const type of ["timeupdate", "progress", "loadeddata", "canplay", "waiting", "seeking"]) {
     document.addEventListener(type, (event) => {
