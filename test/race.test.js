@@ -121,14 +121,14 @@ Deno.test("a reused player XHR returns the second response", async () => {
     xhr.send();
     const first = xhr.responseText;
     assert(first.includes("videoA"), "the first body is the first video");
-    assert(!first.includes("adPlacements"), "ads are removed from the first body");
+    assert(!/"adPlacements":\[\{/.test(first), "ads are removed from the first body");
     xhr.open("POST", "https://www.youtube.com/youtubei/v1/player?prettyPrint=false");
     xhr._body = playerBody("videoB");
     xhr.send();
     const second = xhr.responseText;
     assert(second.includes("videoB"), "a reused XHR moves to the second video");
     assert(!second.includes("videoA"), "the first body is not sticky");
-    assert(!second.includes("adPlacements"), "ads are removed from the second body");
+    assert(!/"adPlacements":\[\{/.test(second), "ads are removed from the second body");
     assert(xhr.response === second, "the default response getter follows responseText");
 
     await globalThis.fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false");
@@ -197,7 +197,7 @@ Deno.test("watch and shorts parsing keeps an ad-only player payload", () => {
     assert(shorts.playerAds, "an ad-only shorts payload is left so the ad can play");
     const withVideo = JSON.parse(playerBody("videoC"));
     assert(withVideo.videoDetails.videoId === "videoC", "a watch payload with video is kept");
-    assert(!withVideo.adPlacements, "ads are still removed when the video remains");
+    assert(!(withVideo.adPlacements || []).length, "ads are still removed when the video remains");
   } finally {
     JSON.parse = savedParse;
   }

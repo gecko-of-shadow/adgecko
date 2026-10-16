@@ -42,6 +42,7 @@ Deno.test("a DNS failure retries on the mn fallback and later requests skip the 
 
 Deno.test("a 403 moves on without reading the failed body", async () => {
   const api = fresh();
+  api.STEALTH.failoverOn403 = true; // legacy A/B mode
   const bodies = [];
   const result = await api.fetchWithFallback(BAD, (u, i) => {
     const r = i === 0 ? ok(403) : ok(200);
@@ -56,6 +57,7 @@ Deno.test("a 403 moves on without reading the failed body", async () => {
 
 Deno.test("all hosts failing is bounded (≤6 tries) and reported as exhausted", async () => {
   const api = fresh();
+  api.STEALTH.failoverOn403 = true; // legacy A/B mode
   let n = 0;
   let thrown = null;
   try {
@@ -66,7 +68,7 @@ Deno.test("all hosts failing is bounded (≤6 tries) and reported as exhausted",
   // 403 everywhere returns the last 403 instead of throwing
   const api2 = fresh();
   const r = await api2.fetchWithFallback(BAD, () => Promise.resolve(ok(403)));
-  assertEquals(r.exhausted, true);
+  assertEquals(r.flagged, true, "403 = flagged url: no failover by default");
   assertEquals(r.response.status, 403);
 });
 
@@ -99,7 +101,7 @@ Deno.test("host mappings cannot form a loop", () => {
 
 Deno.test("hooks recover fast and reload at most twice", () => {
   assert(source.includes("api.fetchWithFallback(url, doFetch)"), "fetch hook uses the fallback");
-  assert(source.includes("if (!response || !response.ok) return response;"), "failed responses are returned without wrapping");
+  assert(source.includes("if (!response || !response.ok || !api.STEALTH.patchUmpBackoff) return response;"), "failed responses are returned without wrapping");
   assert(source.includes("watchXhrFailure(this)"), "XHR media requests learn failed hosts");
   assert(source.includes("stalledReloaded >= 2"), "reload cap");
   assert(!/\.currentTime\s*=/.test(source), "no seeking");
@@ -129,7 +131,7 @@ Deno.test("log replay: everything fails -> exhausted once, dead names skipped af
   const api = fresh();
   const fail = (u) => (host(u) === "redirector.googlevideo.com" ? Promise.resolve(ok(403)) : Promise.reject(dnsError()));
   const r = await api.fetchWithFallback(LOG_URL, fail);
-  assert(r.exhausted, "exhausted -> stall reload");
+  assert(r.exhausted || r.flagged, "exhausted or 403-flagged -> reload");
   // Reload hands back the same host; a different edge now works. Dead names are not retried first.
   const RELOADED = LOG_URL.replace("expire=1", "expire=2") + "&mn=sn-5fgh9jkl";
   const calls = [];

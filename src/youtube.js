@@ -8,6 +8,12 @@
 // below, and player requests ask YouTube not to schedule the slot.
 function installYoutubeAdblock(target) {
   const nativeJSONParse = JSON.parse;
+  // A/B toggles for how visible our edits are to YouTube's ad-block checks.
+  // emptyAdFields: ad fields become [] (array fields) instead of being deleted.
+  // zeroStartPolicies: zero the start/resume readahead waits (old behaviour).
+  // patchUmpBackoff: rewrite backoff fields inside the SABR media stream.
+  // failoverOn403: try other hosts on a 403 (useless: 403 = flagged url).
+  const STEALTH = { emptyAdFields: true, zeroStartPolicies: false, patchUmpBackoff: false, failoverOn403: false };
   const PLAYER_AD_FIELDS = ["adPlacements", "playerAds", "adSlots", "adBreakHeartbeatParams", "adBreakParams"];
   const WATCH_AD_KEYS = [
     "adSlotRenderer",
@@ -266,6 +272,7 @@ function installYoutubeAdblock(target) {
   }
 
   function textHasStartHold(text) {
+    if (!STEALTH.zeroStartPolicies) return false;
     const source = String(text || "");
     return source.includes("startMinReadaheadPolicy")
       || source.includes("resumeMinReadaheadPolicy")
@@ -273,6 +280,12 @@ function installYoutubeAdblock(target) {
       || source.includes('"minReadaheadMs"')
       || source.includes('"minVideoReadaheadMs"')
       || source.includes('"minAudioReadaheadMs"');
+  }
+
+  // Normal no-ad responses carry empty lists, so keep the key and its type.
+  function clearAdField(node, field) {
+    if (STEALTH.emptyAdFields && Array.isArray(node[field])) node[field] = [];
+    else delete node[field];
   }
 
   function stripValue(value, kind) {
@@ -304,11 +317,11 @@ function installYoutubeAdblock(target) {
       if (isPlayerCarrier(node)) {
         for (const field of PLAYER_AD_FIELDS) {
           if (!hasRealAdField(node, field)) continue;
-          delete node[field];
+          clearAdField(node, field);
           blocked = true;
         }
       } else if (kind === "reel" && hasRealAdField(node, "adSlots")) {
-        delete node.adSlots;
+        clearAdField(node, "adSlots");
         blocked = true;
       }
       if (dropEntries) {
@@ -318,7 +331,7 @@ function installYoutubeAdblock(target) {
           blocked = true;
         }
       }
-      if (zeroStartPolicies(node)) blocked = true;
+      if (STEALTH.zeroStartPolicies && zeroStartPolicies(node)) blocked = true;
       for (const key of Object.keys(node)) visit(node[key]);
     }
 
@@ -499,6 +512,7 @@ function installYoutubeAdblock(target) {
   // (seen: 2017) on hosts that do not exist. Real urls expire hours in the
   // future. Such a url can never play, so failover is pointless: reload.
   const DECOY_EXPIRE_SLACK_S = 24 * 60 * 60;
+  const DECOY_FUTURE_MAX_S = 7 * 24 * 60 * 60;
   function isDecoyStreamUrl(url, nowMs) {
     let parsed;
     try {
@@ -510,7 +524,8 @@ function installYoutubeAdblock(target) {
     const raw = parsed.searchParams.get("expire");
     if (!raw || !/^\d{9,11}$/.test(raw)) return false;
     const now = (nowMs == null ? Date.now() : nowMs) / 1000;
-    return Number(raw) < now - DECOY_EXPIRE_SLACK_S;
+    // Seen: 2017 (past) and 2273 (future). Real urls expire ~6h out.
+    return Number(raw) < now - DECOY_EXPIRE_SLACK_S || Number(raw) > now + DECOY_FUTURE_MAX_S;
   }
 
   function errorKind(error) {
@@ -546,6 +561,13 @@ function installYoutubeAdblock(target) {
       const candidate = candidates[i];
       try {
         const response = await doFetch(candidate, i);
+        if (response && response.status === 403 && !(opts.failoverOn403 == null ? STEALTH.failoverOn403 : opts.failoverOn403)) {
+          for (const failure of failures) {
+            if (failure.reason === "dns" || failure.reason === "network") rememberBadHost(failure.url, "");
+          }
+          failures.push({ url: candidate, reason: "http 403" });
+          return { response, url: candidate, failures, exhausted: false, flagged: true, ms: now() - started };
+        }
         if (response && isRetryableStatus(response.status)) {
           failures.push({ url: candidate, reason: "http " + response.status });
           lastResponse = response;
@@ -863,6 +885,7 @@ function installYoutubeAdblock(target) {
   }
 
   Object.assign(target, {
+    STEALTH,
     DOM_AD_SELECTORS,
     HOME_FEED_AD_CSS,
     INTERRUPTIONS_TOAST_CSS,
@@ -1233,7 +1256,7 @@ function startYoutubeAdblock() {
   // Decoy media url seen: reload right away (shared 2-reload cap with the
   // stall watchdog, one per 1.5s), instead of failover + stall timer.
   let decoyTimer = 0;
-  function onDecoyUrl(url) {
+  function onDecoyUrl(url, why) {
     if (!OPTS.stallReload || decoyTimer || stalledReloaded >= 2 || startLogged || playbackSeen.any || !onWatchSurface()) return;
     if (lastReloadAt && Date.now() - lastReloadAt < OPTS.decoyGapMs) return;
     mediaFailed = true;
@@ -1245,7 +1268,7 @@ function startYoutubeAdblock() {
         const id = currentVideoId(player);
         if (!player || typeof player.loadVideoById !== "function" || !id) return armStall(500);
         clearTimeout(stallTimer);
-        reloadVideo(player, id, Date.now(), "got a decoy stream url (expire=" + new URL(url).searchParams.get("expire") + ")");
+        reloadVideo(player, id, Date.now(), why || ("got a decoy stream url (expire=" + new URL(url).searchParams.get("expire") + ")"));
       } catch (error) {
         logFailOpen(error);
       }
@@ -1403,10 +1426,14 @@ function startYoutubeAdblock() {
         return nativeFetch(input, init);
       }
       return api.fetchWithFallback(url, doFetch).then((result) => {
+        if (result.flagged) {
+          onDecoyUrl(url, "got HTTP 403 on the stream url");
+          return result.response;
+        }
         logFallback(result);
         if (result.exhausted) onMediaExhausted();
         const response = result.response;
-        if (!response || !response.ok) return response;
+        if (!response || !response.ok || !api.STEALTH.patchUmpBackoff) return response;
         try {
           return wrapSabrBody(response);
         } catch (error) {
@@ -1490,6 +1517,7 @@ function startYoutubeAdblock() {
   }
 
   function installSabrPatch(xhr) {
+    if (!api.STEALTH.patchUmpBackoff) return;
     if (!xhr.__ytSabr) {
       xhr.__ytSabr = true;
       const responseDesc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, "response");
@@ -1563,6 +1591,7 @@ function startYoutubeAdblock() {
         if (status !== 0 && !api.isRetryableStatus(status)) return;
         const url = xhr.__ytUrl || "";
         if (api.isDecoyStreamUrl(url)) return onDecoyUrl(url);
+        if (status === 403 && !api.STEALTH.failoverOn403) return onDecoyUrl(url, "got HTTP 403 on the stream url");
         const next = api.googlevideoFallbacks(url)[0];
         api.rememberBadHost(url, next || "");
         logFallback({ failures: [{ url, reason: status ? "http " + status : "network" }], exhausted: !next });

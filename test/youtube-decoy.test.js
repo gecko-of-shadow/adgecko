@@ -26,3 +26,32 @@ Deno.test("decoy: wiring in page hooks is bounded", () => {
   assert(source.includes("stalledReloaded >= 2") && /function onDecoyUrl[\s\S]*?stalledReloaded >= 2/.test(source), "decoy reload shares the 2-reload cap");
   assert(/decoyReloadMs: (\d+)/.exec(source)[1] < 1000, "reload well under 1s");
 });
+
+Deno.test("decoy: expire years in the future is a decoy (2273 seen live)", () => {
+  const api = fresh();
+  assert(api.isDecoyStreamUrl(url(9571572721), NOW), "2273 flagged");
+  assert(!api.isDecoyStreamUrl(url(Math.floor(NOW / 1000) + 6 * 86400), NOW), "6 days ahead is fine");
+});
+Deno.test("decoy: a 403 stops failover and is flagged (dead DNS names still remembered)", async () => {
+  const api = fresh();
+  const calls = [];
+  const r = await api.fetchWithFallback("https://rr5---sn-h9jk2mn5.googlevideo.com/videoplayback?expire=1&mn=sn-n5pqrstu&fvip=3", (u) => {
+    calls.push(new URL(u).hostname);
+    return calls.length === 1 ? Promise.reject(new TypeError("net::ERR_NAME_NOT_RESOLVED")) : Promise.resolve({ ok: false, status: 403 });
+  });
+  assert(r.flagged && calls.length === 2, "stopped at first 403: " + calls);
+  assert(api.badGvHosts.has("rr5---sn-h9jk2mn5.googlevideo.com"), "dns-dead host remembered");
+});
+Deno.test("stealth defaults: ad lists emptied not deleted, start policies and stream untouched", () => {
+  const api = fresh();
+  assert(api.STEALTH.emptyAdFields && !api.STEALTH.zeroStartPolicies && !api.STEALTH.patchUmpBackoff && !api.STEALTH.failoverOn403, "defaults");
+  const body = { videoDetails: { videoId: "v" }, streamingData: { formats: [{ url: "https://rr1---sn-a.googlevideo.com/videoplayback" }] },
+    playabilityStatus: { status: "OK" }, playerConfig: { mediaCommonConfig: { startMinReadaheadPolicy: [{ minReadaheadMs: 1500 }] } },
+    adPlacements: [{ adPlacementRenderer: { config: { adPlacementConfig: { kind: "AD_PLACEMENT_KIND_START" } } } }], playerAds: [{ playerLegacyDesktopWatchAdsRenderer: {} }] };
+  const out = api.stripResponseText(JSON.stringify(body), "https://www.youtube.com/youtubei/v1/player");
+  assert(out.blocked, "ads stripped");
+  const p = JSON.parse(out.text);
+  assert(Array.isArray(p.adPlacements) && p.adPlacements.length === 0 && Array.isArray(p.playerAds) && p.playerAds.length === 0, "keys kept as []");
+  assert(p.playerConfig.mediaCommonConfig.startMinReadaheadPolicy[0].minReadaheadMs === 1500, "YouTube's readahead kept");
+  assert(/installSabrPatch\(xhr\) \{\s*if \(!api\.STEALTH\.patchUmpBackoff\) return;/.test(source), "stream patch gated");
+});

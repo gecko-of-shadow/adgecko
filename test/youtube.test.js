@@ -14,6 +14,9 @@ function assert(condition, label) {
 const api = {};
 const installYoutubeAdblock = new Function(`${source}\nreturn installYoutubeAdblock;`)();
 installYoutubeAdblock(api);
+const STEALTH_DEFAULTS = { ...api.STEALTH };
+const denoTest = Deno.test;
+Deno.test = (name, fn) => denoTest(name, (...args) => { Object.assign(api.STEALTH, STEALTH_DEFAULTS); return fn(...args); });
 
 const playback = "https://rr3---sn.googlevideo.com/videoplayback?id=content";
 
@@ -45,10 +48,10 @@ Deno.test("player responses drop pre-roll, mid-roll, and overlay ads and keep th
   assertEquals(parsed.videoDetails, original.videoDetails);
   assertEquals(parsed.streamingData, original.streamingData);
   assertEquals(parsed.playabilityStatus, original.playabilityStatus);
-  assertEquals(parsed.adPlacements, undefined);
-  assertEquals(parsed.playerAds, undefined);
-  assertEquals(parsed.adSlots, undefined);
-  assertEquals(parsed.adBreakHeartbeatParams, undefined);
+  assertEquals((parsed.adPlacements || []).length, 0);
+  assertEquals((parsed.playerAds || []).length, 0);
+  assertEquals((parsed.adSlots || []).length, 0);
+  assertEquals((parsed.adBreakHeartbeatParams || []).length, 0);
   assert(!stripped.text.includes("AD_PLACEMENT_KIND_START"), "pre-roll placement is gone");
   assert(!stripped.text.includes("AD_PLACEMENT_KIND_MILLISECONDS"), "mid-roll placement is gone");
   assert(!stripped.text.includes("AD_PLACEMENT_KIND_OVERLAY"), "overlay placement is gone");
@@ -60,7 +63,7 @@ Deno.test("a nested player response is stripped without a blank media url", () =
   const stripped = api.stripResponseText(JSON.stringify(body), "/youtubei/v1/player");
   const parsed = JSON.parse(stripped.text);
   assertEquals(parsed.playerResponse.streamingData.formats[0].url, playback);
-  assertEquals(parsed.playerResponse.adPlacements, undefined);
+  assertEquals((parsed.playerResponse.adPlacements || []).length, 0);
   assert(!stripped.text.includes("blank"), "no blank frame is substituted");
 });
 
@@ -156,7 +159,7 @@ Deno.test("watch page banner and overlay nodes are removed and videos stay", () 
   const results = parsed.contents.twoColumnWatchNextResults.secondaryResults.results;
   assertEquals(results, [{ compactVideoRenderer: { videoId: "related" } }]);
   assertEquals(parsed.playerResponse.streamingData.formats[0].url, playback);
-  assertEquals(parsed.playerResponse.adPlacements, undefined);
+  assertEquals((parsed.playerResponse.adPlacements || []).length, 0);
 });
 
 Deno.test("a clean player response is not rewritten", () => {
@@ -705,6 +708,7 @@ Deno.test("the video start buffer on the playback policy is cleared and the keep
 });
 
 Deno.test("a player response clears the named video start buffer and keeps the stream", () => {
+  api.STEALTH.zeroStartPolicies = true; // legacy A/B mode
   const body = {
     videoDetails: { videoId: "dQw4w9WgXcQ", title: "Same video" },
     streamingData: {
@@ -737,6 +741,7 @@ Deno.test("a player response clears the named video start buffer and keeps the s
 });
 
 Deno.test("the start-buffer wait and the video readahead target are cleared", () => {
+  api.STEALTH.zeroStartPolicies = true; // legacy A/B mode
   const start = ajq(1500, 12000);
   const resume = ajq(800, 11000);
   const payload = [0x0a, start.length, ...start, 0x12, resume.length, ...resume];
@@ -762,6 +767,7 @@ Deno.test("the start-buffer wait and the video readahead target are cleared", ()
 });
 
 Deno.test("a player response loses its start-buffer wait and keeps the video", () => {
+  api.STEALTH.zeroStartPolicies = true; // legacy A/B mode
   const body = {
     videoDetails: { videoId: "dQw4w9WgXcQ", title: "Same video" },
     streamingData: {
@@ -804,6 +810,7 @@ Deno.test("a player response loses its start-buffer wait and keeps the video", (
 });
 
 Deno.test("a listed start policy is cleared and a normal quality pick stays", () => {
+  api.STEALTH.zeroStartPolicies = true; // legacy A/B mode
   const listed = {
     videoDetails: { videoId: "dQw4w9WgXcQ" },
     streamingData: { formats: [{ url: playback }], serverAbrStreamingUrl: playback },
