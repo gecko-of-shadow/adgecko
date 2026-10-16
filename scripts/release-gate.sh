@@ -233,7 +233,7 @@ rules_path = sys.argv[2]
 bad = []
 # DNR + storage, plus the popup UI worker. No host access and no auto-update.
 forbidden_keys = ("externally_connectable", "oauth2", "key")
-LIST_HOSTS = ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*"]
+LIST_HOSTS = ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*", "https://ublockorigin.github.io/*", "https://easylist-downloads.adblockplus.org/*", "https://secure.fanboy.co.nz/*"]
 if (m.get("host_permissions") or []) not in ([], LIST_HOSTS):
     bad.append(f"host_permissions must be only the filter-list hosts, got {m.get('host_permissions')!r}")
 for key in forbidden_keys:
@@ -485,7 +485,7 @@ python3 - "$SCAN_ROOT" <<'PY' || FAILS=$((FAILS + 1))
 import pathlib, re, sys
 root = pathlib.Path(sys.argv[1])
 allowed_host_bits = (
-    "easylist.to", "pgl.yoyo.org", "malware-filter.gitlab.io",  # filter-list refresh (host_permissions)
+    "easylist.to", "pgl.yoyo.org", "malware-filter.gitlab.io", "ublockorigin.github.io", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz",  # filter-list refresh (host_permissions)
     "twitch.tv", "ttvnw.net", "jtvnw.net", "twitchcdn",
     "youtube.com", "youtu.be", "googlevideo.com", "ytimg.com",
     "googleapis.com", "ggpht.com", "yt3.", "youtubei.",

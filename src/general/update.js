@@ -17,13 +17,33 @@ function installGeneralAdblockUpdate(target) {
   const ALLOW_RULE_ID_BASE = 900000; // user "Allow this page" rules (untouched)
   const FETCH_TIMEOUT_MS = 90000;
 
+  // Primary URL first, then mirrors of the same list (tried in order).
   const SOURCES = [
-    { name: "peter_lowe", url: "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext" },
-    { name: "urlhaus_hosts", url: "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt", maxDomains: 8000 },
-    { name: "easylist", url: "https://easylist.to/easylist/easylist.txt", cosmetic: true },
-    { name: "easyprivacy", url: "https://easylist.to/easylist/easyprivacy.txt", cosmetic: true },
+    { name: "peter_lowe", url: "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext", mirrors: [] },
+    { name: "urlhaus_hosts", url: "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt", mirrors: [], maxDomains: 8000 },
+    { name: "easylist", url: "https://easylist.to/easylist/easylist.txt", cosmetic: true, mirrors: [
+      "https://ublockorigin.github.io/uAssets/thirdparties/easylist.txt",
+      "https://easylist-downloads.adblockplus.org/easylist.txt",
+      "https://secure.fanboy.co.nz/easylist.txt",
+    ] },
+    { name: "easyprivacy", url: "https://easylist.to/easylist/easyprivacy.txt", cosmetic: true, mirrors: [
+      "https://ublockorigin.github.io/uAssets/thirdparties/easyprivacy.txt",
+      "https://easylist-downloads.adblockplus.org/easyprivacy.txt",
+      "https://secure.fanboy.co.nz/easyprivacy.txt",
+    ] },
   ];
-  const LIST_HOSTS = ["pgl.yoyo.org", "malware-filter.gitlab.io", "easylist.to"];
+  const LIST_HOSTS = ["pgl.yoyo.org", "malware-filter.gitlab.io", "easylist.to", "ublockorigin.github.io", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz"];
+  // Dynamic allow rule so no block rule (ours or a stale one) can stop the
+  // extension's own list downloads. Outside the list and user-allow id ranges.
+  const LIST_ALLOW_RULE_ID = 990001;
+  function listAllowRule(extensionId) {
+    return {
+      id: LIST_ALLOW_RULE_ID,
+      priority: 3000000,
+      action: { type: "allow" },
+      condition: { requestDomains: LIST_HOSTS.slice(), initiatorDomains: [extensionId], resourceTypes: ["xmlhttprequest", "other"] },
+    };
+  }
 
   const NEVER_BLOCK_SUFFIXES = [
     "twitch.tv", "ttvnw.net", "jtvnw.net", "twitchcdn.net", "twitchcdn.com", "ext-twitch.tv",
@@ -162,24 +182,40 @@ function installGeneralAdblockUpdate(target) {
       let changed = !state.dynamicActive;
       let cosmeticChanged = false;
       const errors = {};
+      const mirrorNotes = {};
       const CP = deps.cosmeticParse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
       for (const src of SOURCES) {
         const meta = lists[src.name];
         if (!listDue(meta, now, manual)) continue;
-        const headers = {};
-        if (meta && Array.isArray(meta.domains)) {
-          if (meta.etag) headers["If-None-Match"] = meta.etag;
-          if (meta.lastModified) headers["If-Modified-Since"] = meta.lastModified;
-        }
         try {
-          const ctrl = typeof AbortController === "function" ? new AbortController() : null;
-          const timer = ctrl ? setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS) : 0;
-          let res;
-          try {
-            res = await deps.fetch(src.url, { headers, cache: "no-cache", credentials: "omit", signal: ctrl ? ctrl.signal : undefined });
-          } finally {
-            clearTimeout(timer);
+          let res = null;
+          let usedUrl = "";
+          const tried = [];
+          for (const url of [src.url].concat(src.mirrors || [])) {
+            const headers = {};
+            // Validators only make sense for the URL that produced them.
+            if (meta && Array.isArray(meta.domains) && (meta.url || src.url) === url) {
+              if (meta.etag) headers["If-None-Match"] = meta.etag;
+              if (meta.lastModified) headers["If-Modified-Since"] = meta.lastModified;
+            }
+            const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+            const timer = ctrl ? setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS) : 0;
+            try {
+              const r = await deps.fetch(url, { headers, cache: "no-cache", credentials: "omit", signal: ctrl ? ctrl.signal : undefined });
+              if (r.ok || (r.status === 304 && headers["If-None-Match"] !== undefined) || (r.status === 304 && headers["If-Modified-Since"] !== undefined)) {
+                res = r;
+                usedUrl = url;
+                break;
+              }
+              tried.push(describeError({ url }, new Error("HTTP " + r.status)));
+            } catch (e) {
+              tried.push(describeError({ url }, e));
+            } finally {
+              clearTimeout(timer);
+            }
           }
+          if (!res) throw new Error(tried.join("; "));
+          if (tried.length) mirrorNotes[src.name] = tried.join("; ") + " (used " + new URL(usedUrl).hostname + ")";
           if (res.status === 304 && meta && Array.isArray(meta.domains)) {
             lists[src.name] = Object.assign({}, meta, { fetchedAt: now });
             continue;
@@ -189,6 +225,7 @@ function installGeneralAdblockUpdate(target) {
           const domains = parseList(text);
           if (domains.length < 50) throw new Error("parsed too few domains (" + domains.length + ")");
           lists[src.name] = {
+            url: usedUrl,
             etag: res.headers && res.headers.get ? res.headers.get("ETag") || "" : "",
             lastModified: res.headers && res.headers.get ? res.headers.get("Last-Modified") || "" : "",
             fetchedAt: now,
@@ -204,12 +241,12 @@ function installGeneralAdblockUpdate(target) {
         } catch (e) {
           // One list failing never sinks the others: keep its cached copy (if
           // any) and remember why, so the popup can show it.
-          errors[src.name] = describeError(src, e);
+          errors[src.name] = String(e && e.message || e);
         }
       }
       const usable = SOURCES.filter((x) => lists[x.name] && Array.isArray(lists[x.name].domains));
       if (!usable.length) throw new Error(Object.values(errors).join("; ") || "no lists");
-      await deps.setState({ lastErrors: errors, lastErrorAt: Object.keys(errors).length ? now : 0 });
+      await deps.setState({ lastErrors: errors, lastNotes: mirrorNotes, lastErrorAt: Object.keys(errors).length ? now : 0 });
 
       await deps.setState({ lists });
       if (cosmeticChanged && deps.writeCosmetic) {
@@ -258,7 +295,7 @@ function installGeneralAdblockUpdate(target) {
     const name = e && e.name;
     const msg = String(e && e.message || e || "error");
     if (name === "AbortError" || /abort/i.test(msg)) return host + ": timeout";
-    if (name === "TypeError" || /failed to fetch|network/i.test(msg)) return host + ": network error (DNS/blocked/offline)";
+    if (name === "TypeError" || /failed to fetch|network/i.test(msg)) return host + ": network error (" + msg + ")";
     return host + ": " + msg;
   }
 
@@ -273,9 +310,23 @@ function installGeneralAdblockUpdate(target) {
   }
 
   async function swap(deps, lists, now) {
-    const domains = mergeDomains(Object.fromEntries(Object.entries(lists).map(([k, v]) => [k, v.domains])));
     const bundled = await deps.loadBundled();
-    const bundledDomains = (bundled.rules || []).reduce((n, r) => n + (r.action && r.action.type === "block" ? (r.condition.requestDomains || []).length : 0), 0);
+    const extra = new Set(bundled.extraIds || []);
+    const packed = [];
+    for (const r of bundled.rules || []) {
+      if (r.action && r.action.type === "block" && !extra.has(r.id)) packed.push(...(r.condition.requestDomains || []));
+    }
+    const bundledDomains = packed.length;
+    const perList = Object.fromEntries(Object.entries(lists || {}).filter(([, v]) => v && Array.isArray(v.domains)).map(([k, v]) => [k, v.domains]));
+    const missing = SOURCES.filter((x) => !perList[x.name]).map((x) => x.name);
+    let domains = mergeDomains(perList);
+    if (missing.length) {
+      // Lists that failed and have no saved copy: keep the packed domains so a
+      // partial refresh never shrinks protection.
+      const seen = new Set(domains);
+      for (const d of packed) if (!seen.has(d) && !isNeverBlock(d)) { seen.add(d); domains.push(d); }
+      domains = domains.slice(0, MAX_LIST_RULES * DOMAINS_PER_RULE);
+    }
     // Sanity: a refreshed set much smaller than the bundle is a bad download.
     if (domains.length < bundledDomains * 0.5) throw new Error("refreshed list too small");
     const addRules = buildListRules(domains).concat(keptBundledRules(bundled.rules, bundled.extraIds));
@@ -346,7 +397,7 @@ function installGeneralAdblockUpdate(target) {
     POLICY, STARTUP_DELAY_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES,
     LIST_RULE_ID_BASE, KEPT_RULE_ID_BASE, ALLOW_RULE_ID_BASE, SOURCES, LIST_HOSTS,
     isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules,
-    shouldRun, listDue, refresh, describeError, applyEnabled, isListUrl,
+    shouldRun, listDue, refresh, describeError, LIST_ALLOW_RULE_ID, listAllowRule, applyEnabled, isListUrl,
   });
 }
 

@@ -10,7 +10,10 @@
   "host_permissions": [
     "https://easylist.to/*",
     "https://pgl.yoyo.org/*",
-    "https://malware-filter.gitlab.io/*"
+    "https://malware-filter.gitlab.io/*",
+    "https://ublockorigin.github.io/*",
+    "https://easylist-downloads.adblockplus.org/*",
+    "https://secure.fanboy.co.nz/*"
   ],
   "background": {
     "service_worker": "src/general-background.js"

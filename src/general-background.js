@@ -132,7 +132,20 @@ function syncAllowRules(origins) {
   });
 }
 
+function ensureListAllowRule() {
+  try {
+    const rule = GU.listAllowRule(chrome.runtime.id);
+    chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [rule.id], addRules: [rule] }, () => {
+      const err = chrome.runtime.lastError;
+      if (err) console.warn("twitch-adblock: list allow rule:", err.message);
+    });
+  } catch (e) {
+    console.warn("twitch-adblock: list allow rule:", e && e.message);
+  }
+}
+
 async function applyGeneralState() {
+  ensureListAllowRule();
   const settings = await getSettings();
   const enabled = settings.generalEnabled !== false;
   currentEnabled = enabled;
@@ -271,6 +284,8 @@ async function refreshLists(manual) {
     const state = await listDeps().getState();
     const when = state.updatedAt ? new Date(state.updatedAt).toLocaleString() : "";
     const errs = Object.values(state.lastErrors || {});
+    const notes = Object.values(state.lastNotes || {});
+    if (notes.length) console.log("twitch-adblock: list mirrors used:", notes);
     if (errs.length || !result.ok) console.warn("twitch-adblock: list refresh problems:", errs.length ? errs : result.reason);
     else console.log("twitch-adblock: list refresh", result);
     const errText = errs.length ? " Problems: " + errs.join("; ") + "." : (!result.ok && result.reason ? " Problem: " + result.reason + "." : "");

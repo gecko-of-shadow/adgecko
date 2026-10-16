@@ -122,3 +122,24 @@ Deno.test("all lists failing keeps the bundle and stores the reasons; manual cli
   const m = await U.refresh(d, { manual: true });
   assert(m.ok && !d.staticOn && Object.keys((await d.getState()).lastErrors).length === 0, "manual retry succeeds and clears errors");
 });
+
+Deno.test("easylist.to failing in Chrome falls through to a mirror; validators stay per URL", async () => {
+  const d = fakeDeps({ responses: (url) => (url.includes("easylist.to") ? new TypeError("Failed to fetch") : ok(url)) });
+  const r = await U.refresh(d, {});
+  const st = await d.getState();
+  assert(r.ok && !d.staticOn && Object.keys(st.lastErrors).length === 0, JSON.stringify(st.lastErrors));
+  assert(st.lists.easylist.url.includes("ublockorigin.github.io") && /easylist\.to: network error \(Failed to fetch\)/.test(st.lastNotes.easylist), JSON.stringify(st.lastNotes));
+  d.calls.length = 0;
+  await U.refresh(d, { manual: true });
+  const el = d.calls.filter((c) => c.url.includes("easylist.txt"));
+  assert(!el[0].headers["If-None-Match"] && el[1].headers["If-None-Match"], "etag sent only to the URL that issued it");
+});
+
+Deno.test("lists failing everywhere: successes merged with packed copies, no 'too small' rejection", async () => {
+  const d = fakeDeps({ responses: (url) => (/easylist|easyprivacy/.test(url) ? new TypeError("Failed to fetch") : ok(url)) });
+  const r = await U.refresh(d, {});
+  const st = await d.getState();
+  const packed = bundled.filter((x) => x.action.type === "block" && x.id !== 1347).reduce((n, x) => n + x.condition.requestDomains.length, 0);
+  assert(r.ok && !d.staticOn && st.domainCount >= packed, "partial swap keeps packed protection " + JSON.stringify(r));
+  assert(/easylist\.to: network error \(Failed to fetch\).*ublockorigin\.github\.io/.test(st.lastErrors.easylist), st.lastErrors.easylist);
+});

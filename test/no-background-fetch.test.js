@@ -36,7 +36,10 @@ Deno.test("update policy is startup refresh + manual, list hosts only", () => {
   assertEquals(api.POLICY, "startup-and-manual");
   assertEquals(api.STARTUP_DELAY_MS, 5000);
   assert(api.MIN_INTERVAL_MS >= 12 * 60 * 60 * 1000, "at most every 12h");
-  assertEquals(api.LIST_HOSTS, ["pgl.yoyo.org", "malware-filter.gitlab.io", "easylist.to"]);
+  assertEquals(api.LIST_HOSTS, ["pgl.yoyo.org", "malware-filter.gitlab.io", "easylist.to", "ublockorigin.github.io", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz"]);
+  for (const src of api.SOURCES) for (const m of src.mirrors) assert(api.isListUrl(m), "mirror on a list host: " + m);
+  const allow = api.listAllowRule("abcdefghijklmnop");
+  assert(allow.action.type === "allow" && allow.condition.initiatorDomains[0] === "abcdefghijklmnop" && allow.priority > 2000000, "list allow rule is extension-only and outranks blocks");
   for (const src of api.SOURCES) assert(api.isListUrl(src.url), "source on a list host: " + src.url);
   assert(!api.isListUrl("https://www.twitch.tv/"), "not a list host");
   assert(!api.isListUrl("https://evil.example/easylist.to"), "host match, not substring");
