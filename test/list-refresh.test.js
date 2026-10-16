@@ -94,9 +94,31 @@ Deno.test("a failed later refresh keeps a good earlier swap; toggling off/on wor
   const count = d.dynamic.length;
   d.fetch = async () => { throw new Error("offline"); };
   const r = await U.refresh(d, { manual: true });
-  assert(!r.ok && d.dynamic.length === count && !d.staticOn, "keeps previous dynamic set");
+  assert(d.dynamic.length === count && !d.staticOn && Object.keys((await d.getState()).lastErrors).length === 4, "keeps previous dynamic set, records errors");
   await U.applyEnabled(d, false);
   assert(!d.staticOn && d.dynamic.length === 0, "off removes list rules");
   await U.applyEnabled(d, true);
   assert(!d.staticOn && d.dynamic.length === count, "on rebuilds from cache");
+});
+
+Deno.test("one list failing keeps the others and records a readable reason", async () => {
+  const d = fakeDeps({ responses: (url) => (url.includes("malware-filter") ? { ok: false, status: 403, headers: new Headers() } : url.includes("pgl.yoyo") ? new TypeError("Failed to fetch") : ok(url)) });
+  const r = await U.refresh(d, {});
+  const st = await d.getState();
+  assert(r.ok && !d.staticOn && d.dynamic.length > 0, "partial success swaps " + JSON.stringify(r));
+  assert(st.lastErrors.urlhaus_hosts === "malware-filter.gitlab.io: HTTP 403", JSON.stringify(st.lastErrors));
+  assert(/pgl\.yoyo\.org: network error/.test(st.lastErrors.peter_lowe), st.lastErrors.peter_lowe);
+  const abort = new Error("aborted"); abort.name = "AbortError";
+  assert(U.describeError(U.SOURCES[2], abort) === "easylist.to: timeout", "timeout text");
+});
+
+Deno.test("all lists failing keeps the bundle and stores the reasons; manual click bypasses throttle", async () => {
+  const d = fakeDeps({ responses: () => new TypeError("Failed to fetch") });
+  const r = await U.refresh(d, {});
+  const st = await d.getState();
+  assert(!r.ok && d.staticOn && /network error/.test(st.lastErrors.all), JSON.stringify(st.lastErrors));
+  assert((await U.refresh(d, {})).reason === "throttled", "startup throttled after a failure");
+  d.fetch = async (url) => ok(url);
+  const m = await U.refresh(d, { manual: true });
+  assert(m.ok && !d.staticOn && Object.keys((await d.getState()).lastErrors).length === 0, "manual retry succeeds and clears errors");
 });

@@ -24,7 +24,7 @@ const ICON_OFF = {
 
 function getSettings() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(null, (stored) => {
+    chrome.storage.local.get(Object.keys(GS.DEFAULTS), (stored) => {
       void chrome.runtime.lastError;
       resolve(GS.withDefaults(stored));
     });
@@ -270,9 +270,13 @@ async function refreshLists(manual) {
     }
     const state = await listDeps().getState();
     const when = state.updatedAt ? new Date(state.updatedAt).toLocaleString() : "";
-    const status = state.dynamicActive
+    const errs = Object.values(state.lastErrors || {});
+    if (errs.length || !result.ok) console.warn("twitch-adblock: list refresh problems:", errs.length ? errs : result.reason);
+    else console.log("twitch-adblock: list refresh", result);
+    const errText = errs.length ? " Problems: " + errs.join("; ") + "." : (!result.ok && result.reason ? " Problem: " + result.reason + "." : "");
+    const status = (state.dynamicActive
       ? "Lists updated " + when + " (" + (state.domainCount || 0) + " domains)."
-      : "Using packed lists" + (result.ok ? "." : " (refresh failed; will retry later).");
+      : "Using packed lists" + (result.ok ? "." : " (refresh failed; will retry later).")) + errText;
     await new Promise((resolve) => chrome.storage.local.set({
       [KEYS.listStatus]: status,
       [KEYS.listUpdatedAt]: state.updatedAt || null,
@@ -317,7 +321,7 @@ scheduleStartupRefresh();
 
 chrome.runtime.onInstalled.addListener(() => {
   ensureCosmetic();
-  chrome.storage.local.get(null, (stored) => {
+  chrome.storage.local.get(Object.keys(GS.DEFAULTS), (stored) => {
     void chrome.runtime.lastError;
     const patch = {};
     if (stored.generalEnabled === undefined) patch.generalEnabled = true;

@@ -15,7 +15,7 @@ function installGeneralAdblockUpdate(target) {
   const LIST_RULE_ID_BASE = 100000;
   const KEPT_RULE_ID_BASE = 800000; // copies of bundled allow / extra rules
   const ALLOW_RULE_ID_BASE = 900000; // user "Allow this page" rules (untouched)
-  const FETCH_TIMEOUT_MS = 60000;
+  const FETCH_TIMEOUT_MS = 90000;
 
   const SOURCES = [
     { name: "peter_lowe", url: "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext" },
@@ -161,6 +161,7 @@ function installGeneralAdblockUpdate(target) {
       const lists = Object.assign({}, state.lists || {});
       let changed = !state.dynamicActive;
       let cosmeticChanged = false;
+      const errors = {};
       const CP = deps.cosmeticParse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
       for (const src of SOURCES) {
         const meta = lists[src.name];
@@ -170,39 +171,46 @@ function installGeneralAdblockUpdate(target) {
           if (meta.etag) headers["If-None-Match"] = meta.etag;
           if (meta.lastModified) headers["If-Modified-Since"] = meta.lastModified;
         }
-        const ctrl = typeof AbortController === "function" ? new AbortController() : null;
-        const timer = ctrl ? setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS) : 0;
-        let res;
         try {
-          res = await deps.fetch(src.url, { headers, cache: "no-cache", credentials: "omit", signal: ctrl ? ctrl.signal : undefined });
-        } finally {
-          clearTimeout(timer);
+          const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+          const timer = ctrl ? setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS) : 0;
+          let res;
+          try {
+            res = await deps.fetch(src.url, { headers, cache: "no-cache", credentials: "omit", signal: ctrl ? ctrl.signal : undefined });
+          } finally {
+            clearTimeout(timer);
+          }
+          if (res.status === 304 && meta && Array.isArray(meta.domains)) {
+            lists[src.name] = Object.assign({}, meta, { fetchedAt: now });
+            continue;
+          }
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const text = await res.text();
+          const domains = parseList(text);
+          if (domains.length < 50) throw new Error("parsed too few domains (" + domains.length + ")");
+          lists[src.name] = {
+            etag: res.headers && res.headers.get ? res.headers.get("ETag") || "" : "",
+            lastModified: res.headers && res.headers.get ? res.headers.get("Last-Modified") || "" : "",
+            fetchedAt: now,
+            expiresMs: parseExpires(text),
+            domains,
+          };
+          if (src.cosmetic && CP) {
+            lists[src.name].cosmetic = CP.parseCosmetic(text);
+            delete lists[src.name].cosmetic.stats;
+            cosmeticChanged = true;
+          }
+          changed = true;
+        } catch (e) {
+          // One list failing never sinks the others: keep its cached copy (if
+          // any) and remember why, so the popup can show it.
+          errors[src.name] = describeError(src, e);
         }
-        if (res.status === 304 && meta && Array.isArray(meta.domains)) {
-          lists[src.name] = Object.assign({}, meta, { fetchedAt: now });
-          continue;
-        }
-        if (!res.ok) throw new Error(src.name + " http " + res.status);
-        const text = await res.text();
-        const domains = parseList(text);
-        if (domains.length < 50) throw new Error(src.name + " parsed too few domains");
-        lists[src.name] = {
-          etag: res.headers && res.headers.get ? res.headers.get("ETag") || "" : "",
-          lastModified: res.headers && res.headers.get ? res.headers.get("Last-Modified") || "" : "",
-          fetchedAt: now,
-          expiresMs: parseExpires(text),
-          domains,
-        };
-        if (src.cosmetic && CP) {
-          lists[src.name].cosmetic = CP.parseCosmetic(text);
-          delete lists[src.name].cosmetic.stats;
-          cosmeticChanged = true;
-        }
-        changed = true;
       }
-      for (const src of SOURCES) {
-        if (!lists[src.name] || !Array.isArray(lists[src.name].domains)) throw new Error("missing " + src.name);
-      }
+      const usable = SOURCES.filter((x) => lists[x.name] && Array.isArray(lists[x.name].domains));
+      if (!usable.length) throw new Error(Object.values(errors).join("; ") || "no lists");
+      await deps.setState({ lastErrors: errors, lastErrorAt: Object.keys(errors).length ? now : 0 });
+
       await deps.setState({ lists });
       if (cosmeticChanged && deps.writeCosmetic) {
         try {
@@ -218,14 +226,40 @@ function installGeneralAdblockUpdate(target) {
       // Download/parse failed: whatever is active now (a previous good swap
       // or the bundled ruleset) stays. Make sure something is active.
       if (!(await dynamicLooksActive(deps, state))) await fallback(deps);
+      try {
+        await deps.setState({ lastErrors: { all: String(e && e.message || e) }, lastErrorAt: now });
+      } catch {
+        // silent
+      }
       return { ok: false, ran: true, reason: String(e && e.message || e) };
     }
     try {
       return await swap(deps, (await deps.getState()).lists, now);
     } catch (e) {
       await fallback(deps);
-      return { ok: false, ran: true, reason: "swap: " + String(e && e.message || e) };
+      const reason = "rules swap: " + String(e && e.message || e);
+      try {
+        const st = (await deps.getState()) || {};
+        await deps.setState({ lastErrors: Object.assign({}, st.lastErrors, { swap: reason }), lastErrorAt: now });
+      } catch {
+        // silent
+      }
+      return { ok: false, ran: true, reason };
     }
+  }
+
+  function describeError(src, e) {
+    let host = src.name;
+    try {
+      host = new URL(src.url).hostname;
+    } catch {
+      // keep name
+    }
+    const name = e && e.name;
+    const msg = String(e && e.message || e || "error");
+    if (name === "AbortError" || /abort/i.test(msg)) return host + ": timeout";
+    if (name === "TypeError" || /failed to fetch|network/i.test(msg)) return host + ": network error (DNS/blocked/offline)";
+    return host + ": " + msg;
   }
 
   async function dynamicLooksActive(deps, state) {
@@ -312,7 +346,7 @@ function installGeneralAdblockUpdate(target) {
     POLICY, STARTUP_DELAY_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES,
     LIST_RULE_ID_BASE, KEPT_RULE_ID_BASE, ALLOW_RULE_ID_BASE, SOURCES, LIST_HOSTS,
     isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules,
-    shouldRun, listDue, refresh, applyEnabled, isListUrl,
+    shouldRun, listDue, refresh, describeError, applyEnabled, isListUrl,
   });
 }
 

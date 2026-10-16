@@ -134,7 +134,7 @@
   function loadSettings() {
     return new Promise((resolve) => {
       try {
-        chrome.storage.local.get(null, (stored) => {
+        chrome.storage.local.get(Object.keys(DEFAULTS), (stored) => {
           void chrome.runtime.lastError;
           settings = withDefaults(stored);
           resolve(settings);
