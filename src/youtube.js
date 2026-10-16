@@ -952,7 +952,7 @@ function startYoutubeAdblock() {
   //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
   //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
   //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
-  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 4000, stallQuietMs: 3000, stallPollMs: 500, stallFailoverGraceMs: 2000, stallGiveUpMs: 30000, stallSecondGapMs: 6000, decoyReloadMs: 150, decoyGapMs: 1500 };
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 3500, decoyReloadMs: 150, decoyGapMs: 1500 };
   try {
     const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
     for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
@@ -1275,7 +1275,7 @@ function startYoutubeAdblock() {
     const now = Date.now();
     if (now - lastExhaustedAt < 3000) return;
     lastExhaustedAt = now;
-    armStall(stalledReloaded ? 4000 : 500);
+    armStall(stalledReloaded ? OPTS.stallSecondGapMs : 500);
   }
 
   // Decoy media url seen: reload right away (shared 2-reload cap with the

@@ -5,12 +5,13 @@ const start = source.indexOf("  let stallArmedAt = 0;");
 const end = source.indexOf("  // Every fallback host failed:");
 const block = source.slice(start, end);
 
-function sim({ onTick = () => {},  steps, hidden = () => false, classes = () => "unstarted-mode", failoverAt = () => 0, ms = 15000 }) {
+function sim({ opts = null, onTick = () => {},  steps, hidden = () => false, classes = () => "unstarted-mode", failoverAt = () => 0, ms = 15000 }) {
   let now = 0; const timers = [];
   const video = { currentTime: 0, readyState: 1, buffered: { length: 0, end: () => 0 } };
   const loads = [];
   const player = { className: "", querySelector: () => video, loadVideoById: (id) => loads.push(now), getVideoData: () => ({ video_id: "x" }), getPlayerState: () => -1, getCurrentTime: () => 0 };
   const OPTS = { stallReload: true, stallMs: 4000, stallQuietMs: 3000, stallPollMs: 500, stallFailoverGraceMs: 2000, stallGiveUpMs: 30000, stallSecondGapMs: 6000 };
+  if (opts) Object.assign(OPTS, opts);
   const doc = { get hidden() { return hidden(now); } };
   const f = new Function("Date", "setTimeout", "clearTimeout", "document", "env", `
     const OPTS = env.OPTS;
@@ -68,4 +69,21 @@ Deno.test("playing video, ads, hidden tab, user pause, failover retry hold off",
   assert(sim({ steps: (t, v, p) => { p.getPlayerState = () => 2; }, classes: () => "paused-mode" }).length === 0, "user paused");
   const l = sim({ steps: () => {}, failoverAt: (t) => (t <= 4000 ? t : 0), ms: 9000 });
   assert(l.length >= 1 && l[0] >= 7000, "waits for failover, fired " + l);
+});
+
+const SRC_OPTS = JSON.parse(source.match(/const OPTS = (\{ noAdFlag[^}]*\})/)[1].replace(/(\w+):/g, '"$1":'));
+Deno.test("shipped timing: dead start reloads within ~2.5s, second within ~3.5s more, max 2", () => {
+  const loads = sim({ opts: SRC_OPTS, steps: () => {}, ms: 20000 });
+  assert(loads.length === 2, "two reloads " + loads);
+  assert(loads[0] >= 2000 && loads[0] <= 2600, "first at " + loads[0]);
+  const gap = loads[1] - loads[0];
+  assert(gap >= 3500 && gap <= 4100, "second gap " + gap);
+});
+Deno.test("shipped timing: slow-but-loading start is not reloaded", () => {
+  const loads = sim({ opts: SRC_OPTS, steps: (t, v) => { v.buffered = { length: 1, end: () => t / 4000 }; }, ms: 8000 });
+  assert(loads.length === 0, "no reload " + loads);
+});
+Deno.test("shipped timing: ad showing holds the clock", () => {
+  const loads = sim({ opts: SRC_OPTS, steps: () => {}, classes: (t) => (t < 5000 ? "ad-showing" : "unstarted-mode"), ms: 6000 });
+  assert(loads.length === 0, "no reload during/just after ad " + loads);
 });
