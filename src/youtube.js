@@ -966,7 +966,7 @@ function startYoutubeAdblock() {
   //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
   //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
   //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
-  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 7000, diag: true, decoyReloadMs: 150, decoyGapMs: 1500 };
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, diag: true, decoyReloadMs: 150, decoyGapMs: 1500 };
   try {
     const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
     for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
@@ -1255,6 +1255,11 @@ function startYoutubeAdblock() {
     // retrying internally (SABR); give it OPTS.stallUboMs before we reload.
     // Floor for every reason except a decoy seen on this navigation.
     if (api.UBO_LAYER && !decoyThisNav && now - navAt < OPTS.stallUboMs) return again();
+    // uBO: once a reload got a fresh /player answer, never reload again.
+    if (api.UBO_LAYER && stalledReloaded >= 1 && lastPlayerAt > lastReloadAt) {
+      diag("no 2nd reload: /player answered " + (lastPlayerAt - lastReloadAt) + "ms after reload 1");
+      return stopStall();
+    }
     // A /player answer is progress: the reloaded start is loading.
     if (lastPlayerAt > stallLastProgressAt) stallLastProgressAt = lastPlayerAt;
     if (now - navAt < OPTS.stallMs || now - stallArmedAt < OPTS.stallMs || now - stallLastProgressAt < OPTS.stallQuietMs) return again();
