@@ -494,6 +494,25 @@ function installYoutubeAdblock(target) {
     return changed ? parsed.href : url;
   }
 
+  // Decoy stream urls: when YouTube suspects ad stripping it can hand out
+  // videoplayback urls whose signed "expire" (unix seconds) is long past
+  // (seen: 2017) on hosts that do not exist. Real urls expire hours in the
+  // future. Such a url can never play, so failover is pointless: reload.
+  const DECOY_EXPIRE_SLACK_S = 24 * 60 * 60;
+  function isDecoyStreamUrl(url, nowMs) {
+    let parsed;
+    try {
+      parsed = new URL(String(url || ""));
+    } catch {
+      return false;
+    }
+    if (!isSabrPlayback(parsed.href) || parsed.pathname !== "/videoplayback") return false;
+    const raw = parsed.searchParams.get("expire");
+    if (!raw || !/^\d{9,11}$/.test(raw)) return false;
+    const now = (nowMs == null ? Date.now() : nowMs) / 1000;
+    return Number(raw) < now - DECOY_EXPIRE_SLACK_S;
+  }
+
   function errorKind(error) {
     const text = String((error && (error.message || error.name)) || error || "");
     if (/name_not_resolved|dns/i.test(text)) return "dns";
@@ -868,6 +887,7 @@ function installYoutubeAdblock(target) {
     mapBadHost,
     rememberBadHost,
     fetchWithFallback,
+    isDecoyStreamUrl,
     badGvHosts,
     isInterruptionsToast,
     removeInterruptionsToast,
@@ -884,7 +904,7 @@ function startYoutubeAdblock() {
   //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
   //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
   //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
-  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 4000, stallQuietMs: 3000, stallPollMs: 500, stallFailoverGraceMs: 2000, stallGiveUpMs: 30000, stallSecondGapMs: 6000 };
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 4000, stallQuietMs: 3000, stallPollMs: 500, stallFailoverGraceMs: 2000, stallGiveUpMs: 30000, stallSecondGapMs: 6000, decoyReloadMs: 150, decoyGapMs: 1500 };
   try {
     const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
     for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
@@ -1167,9 +1187,13 @@ function startYoutubeAdblock() {
       id = "";
     }
     if (!id) return again();
+    reloadVideo(player, id, now, "start stalled at 0:00" + (mediaFailed ? " after media server failures" : ""));
+  }
+
+  function reloadVideo(player, id, now, why) {
     stalledReloaded += 1;
     lastReloadAt = now;
-    console.log("twitch-adblock: YouTube start stalled at 0:00" + (mediaFailed ? " after media server failures" : "") + ", reloading the video (" + stalledReloaded + "/2)");
+    console.log("twitch-adblock: YouTube " + why + ", reloading the video (" + stalledReloaded + "/2)");
     mediaFailed = false;
     mediaExhaustedNow = false;
     try {
@@ -1204,6 +1228,28 @@ function startYoutubeAdblock() {
     if (now - lastExhaustedAt < 3000) return;
     lastExhaustedAt = now;
     armStall(stalledReloaded ? 4000 : 500);
+  }
+
+  // Decoy media url seen: reload right away (shared 2-reload cap with the
+  // stall watchdog, one per 1.5s), instead of failover + stall timer.
+  let decoyTimer = 0;
+  function onDecoyUrl(url) {
+    if (!OPTS.stallReload || decoyTimer || stalledReloaded >= 2 || startLogged || playbackSeen.any || !onWatchSurface()) return;
+    if (lastReloadAt && Date.now() - lastReloadAt < OPTS.decoyGapMs) return;
+    mediaFailed = true;
+    decoyTimer = setTimeout(() => {
+      decoyTimer = 0;
+      try {
+        if (stalledReloaded >= 2 || startLogged || playbackSeen.any || !onWatchSurface()) return;
+        const player = playerRoot();
+        const id = currentVideoId(player);
+        if (!player || typeof player.loadVideoById !== "function" || !id) return armStall(500);
+        clearTimeout(stallTimer);
+        reloadVideo(player, id, Date.now(), "got a decoy stream url (expire=" + new URL(url).searchParams.get("expire") + ")");
+      } catch (error) {
+        logFailOpen(error);
+      }
+    }, OPTS.decoyReloadMs);
   }
 
   const loggedHosts = new Set();
@@ -1352,6 +1398,10 @@ function startYoutubeAdblock() {
         if (streamBody && attempt > 0) return Promise.reject(new TypeError("stream body not replayable"));
         return nativeFetch(target, init);
       };
+      if (api.isDecoyStreamUrl(url)) {
+        onDecoyUrl(url);
+        return nativeFetch(input, init);
+      }
       return api.fetchWithFallback(url, doFetch).then((result) => {
         logFallback(result);
         if (result.exhausted) onMediaExhausted();
@@ -1512,6 +1562,7 @@ function startYoutubeAdblock() {
         const status = xhr.status;
         if (status !== 0 && !api.isRetryableStatus(status)) return;
         const url = xhr.__ytUrl || "";
+        if (api.isDecoyStreamUrl(url)) return onDecoyUrl(url);
         const next = api.googlevideoFallbacks(url)[0];
         api.rememberBadHost(url, next || "");
         logFallback({ failures: [{ url, reason: status ? "http " + status : "network" }], exhausted: !next });
@@ -1528,6 +1579,7 @@ function startYoutubeAdblock() {
     this.__ytGen = (this.__ytGen || 0) + 1;
     if (api.kindFor(this.__ytUrl)) installXhrStrip(this);
     if (api.isSabrPlayback(this.__ytUrl)) {
+      if (api.isDecoyStreamUrl(this.__ytUrl)) onDecoyUrl(this.__ytUrl);
       const mapped = api.mapBadHost(this.__ytUrl);
       if (mapped !== this.__ytUrl) {
         const args = Array.prototype.slice.call(arguments);
@@ -1626,6 +1678,8 @@ function startYoutubeAdblock() {
     noticeLatched = false;
     startNudged = false;
     stalledReloaded = 0;
+    clearTimeout(decoyTimer);
+    decoyTimer = 0;
     mediaFailed = false;
     strippedThisVideo = false;
     startLogged = false;
