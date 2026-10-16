@@ -45,3 +45,5 @@ ytd-popup-container:has(yt-formatted-string[split-lines*="Experiencing interrupt
 ytd-popup-container:has(a[href*="3037019"]) { display: none !important; pointer-events: none !important; }
 ytd-popup-container:has(a[href*="ad_block"]) { display: none !important; pointer-events: none !important; }
 ytd-popup-container:has(a[href*="check_ad_blockers"]) { display: none !important; pointer-events: none !important; }
+/* .ytp-error flash guard (youtube.js createErrorFlashGuard): the attribute is set only for a bounded grace on watch starts. */
+html[data-ta-yterr] #movie_player .ytp-error { visibility: hidden !important; }
