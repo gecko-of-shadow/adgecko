@@ -528,6 +528,30 @@ function installYoutubeAdblock(target) {
     return Number(raw) < now - DECOY_EXPIRE_SLACK_S || Number(raw) > now + DECOY_FUTURE_MAX_S;
   }
 
+  // Scans a player response (text) for decoy media urls before any media
+  // request is made: streamingData formats/adaptiveFormats url or
+  // signatureCipher, and serverAbrStreamingUrl. Returns
+  // { expire, videoId } or null. Only the first few urls are checked.
+  const MEDIA_EXPIRE = /videoplayback(?:\?|%3F)[^"\s]*?expire(?:=|%3D)(\d{9,11})/g;
+  function findDecoyInPlayerText(text, nowMs) {
+    const source = typeof text === "string" ? text : "";
+    if (!source.includes("videoplayback") || !source.includes("expire")) return null;
+    const now = (nowMs == null ? Date.now() : nowMs) / 1000;
+    MEDIA_EXPIRE.lastIndex = 0;
+    let match;
+    let checked = 0;
+    let decoy = null;
+    while ((match = MEDIA_EXPIRE.exec(source)) && checked < 8) {
+      checked++;
+      const expire = Number(match[1]);
+      if (expire >= now - DECOY_EXPIRE_SLACK_S && expire <= now + DECOY_FUTURE_MAX_S) return null; // a real url: not a decoy response
+      decoy = decoy || String(expire);
+    }
+    if (!decoy) return null;
+    const id = /"videoId"\s*:\s*"([\w-]{11})"/.exec(source);
+    return { expire: decoy, videoId: id ? id[1] : "" };
+  }
+
   function errorKind(error) {
     const text = String((error && (error.message || error.name)) || error || "");
     if (/name_not_resolved|dns/i.test(text)) return "dns";
@@ -911,6 +935,7 @@ function installYoutubeAdblock(target) {
     rememberBadHost,
     fetchWithFallback,
     isDecoyStreamUrl,
+    findDecoyInPlayerText,
     badGvHosts,
     isInterruptionsToast,
     removeInterruptionsToast,
@@ -1256,23 +1281,42 @@ function startYoutubeAdblock() {
   // Decoy media url seen: reload right away (shared 2-reload cap with the
   // stall watchdog, one per 1.5s), instead of failover + stall timer.
   let decoyTimer = 0;
-  function onDecoyUrl(url, why) {
+  // A player response arrived with only decoy media urls: reload before
+  // the player even tries them.
+  function inspectPlayerText(text) {
+    try {
+      if (typeof text !== "string" || text.length < 200 || !text.includes("streamingData")) return;
+      const hit = api.findDecoyInPlayerText(text);
+      if (hit) onDecoyUrl("", "player response has decoy stream urls (expire=" + hit.expire + ")", hit.videoId);
+    } catch (error) {
+      logFailOpen(error);
+    }
+  }
+
+  function onDecoyUrl(url, why, wantId) {
     if (!OPTS.stallReload || decoyTimer || stalledReloaded >= 2 || startLogged || playbackSeen.any || !onWatchSurface()) return;
     if (lastReloadAt && Date.now() - lastReloadAt < OPTS.decoyGapMs) return;
     mediaFailed = true;
-    decoyTimer = setTimeout(() => {
+    let tries = 0;
+    const fire = () => {
       decoyTimer = 0;
       try {
         if (stalledReloaded >= 2 || startLogged || playbackSeen.any || !onWatchSurface()) return;
         const player = playerRoot();
         const id = currentVideoId(player);
-        if (!player || typeof player.loadVideoById !== "function" || !id) return armStall(500);
+        // The response may land before the player switched to that video.
+        if ((!player || !id || (wantId && id !== wantId)) && tries++ < 12) {
+          decoyTimer = setTimeout(fire, OPTS.decoyReloadMs);
+          return;
+        }
+        if (!player || typeof player.loadVideoById !== "function" || !id || (wantId && id !== wantId)) return armStall(500);
         clearTimeout(stallTimer);
         reloadVideo(player, id, Date.now(), why || ("got a decoy stream url (expire=" + new URL(url).searchParams.get("expire") + ")"));
       } catch (error) {
         logFailOpen(error);
       }
-    }, OPTS.decoyReloadMs);
+    };
+    decoyTimer = setTimeout(fire, OPTS.decoyReloadMs);
   }
 
   const loggedHosts = new Set();
@@ -1315,6 +1359,15 @@ function startYoutubeAdblock() {
     }, true);
   }
 
+  function inspectPlayerValue(value) {
+    try {
+      if (!value || typeof value !== "object" || !value.streamingData) return;
+      inspectPlayerText(JSON.stringify({ videoDetails: { videoId: (value.videoDetails || {}).videoId || "" }, streamingData: value.streamingData, pad: "x".repeat(200) }));
+    } catch {
+      // optional
+    }
+  }
+
   function hookInitial(name, kind) {
     if (!kind) return;
     let current;
@@ -1324,6 +1377,7 @@ function startYoutubeAdblock() {
       current = undefined;
     }
     if (current && typeof current === "object") {
+      if (kind === "player") inspectPlayerValue(current);
       try {
         const stripped = api.stripValue(current, kind);
         if (stripped.blocked && (kind !== "player" || api.rootHasPlayback(stripped.value))) {
@@ -1344,6 +1398,7 @@ function startYoutubeAdblock() {
         set(value) {
           current = value;
           if (!value || typeof value !== "object") return;
+          if (kind === "player") inspectPlayerValue(value);
           try {
             const stripped = api.stripValue(value, kind);
             if (!stripped.blocked) return;
@@ -1453,6 +1508,7 @@ function startYoutubeAdblock() {
     return prepare.then((prepared) => nativeFetch(prepared.input, prepared.init).then((response) => {
       if (!api.shouldBufferYoutubei(response)) return response;
       return response.clone().text().then((text) => {
+        if (kind === "player") inspectPlayerText(text);
         const stripped = api.stripResponseText(text, url);
         if (!stripped.blocked) {
           if ((kind === "player" || kind === "reel") && !api.textLooksLikeAds(text)) notify(false);
@@ -1488,6 +1544,7 @@ function startYoutubeAdblock() {
         const raw = textDesc.get.call(xhr);
         if (xhr.readyState !== 4) return raw;
         if (xhr.__ytCacheGen === xhr.__ytGen) return xhr.__ytCacheText;
+        if (api.kindFor(xhr.__ytUrl || "") === "player") inspectPlayerText(raw);
         const stripped = api.stripResponseText(raw, xhr.__ytUrl || "");
         xhr.__ytCacheText = stripped.blocked ? stripped.text : raw;
         xhr.__ytCacheGen = xhr.__ytGen;
@@ -1639,6 +1696,7 @@ function startYoutubeAdblock() {
 
   JSON.parse = function (text, reviver) {
     const value = nativeParse.call(this, text, reviver);
+    if (typeof text === "string" && text.length > 2000 && text.includes("serverAbrStreamingUrl")) inspectPlayerText(text);
     if (typeof text !== "string" || (!api.textLooksLikeAds(text) && !api.textHasStartHold(text))) return value;
     const path = location.pathname || "";
     const kind = path.startsWith("/shorts")

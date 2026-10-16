@@ -55,3 +55,29 @@ Deno.test("stealth defaults: ad lists emptied not deleted, start policies and st
   assert(p.playerConfig.mediaCommonConfig.startMinReadaheadPolicy[0].minReadaheadMs === 1500, "YouTube's readahead kept");
   assert(/installSabrPatch\(xhr\) \{\s*if \(!api\.STEALTH\.patchUmpBackoff\) return;/.test(source), "stream patch gated");
 });
+
+const playerText = (expires) => JSON.stringify({ videoDetails: { videoId: "IjkLmNo_QrS" }, streamingData: {
+  formats: expires.map((e) => ({ url: "https://rr5---sn-2cde6gh9.googlevideo.com/videoplayback?expire=" + e + "&itag=18" })),
+  adaptiveFormats: [{ signatureCipher: "s=x&url=https%3A%2F%2Frr5---sn-2cde6gh9.googlevideo.com%2Fvideoplayback%3Fexpire%3D" + expires[0] + "%26itag%3D137" }],
+}});
+Deno.test("player response: decoy urls (2189 seen live) are found before any media request", () => {
+  const api = fresh();
+  const hit = api.findDecoyInPlayerText(playerText([6938943669]), NOW);
+  assert(hit && hit.expire === "6938943669" && hit.videoId === "IjkLmNo_QrS", JSON.stringify(hit));
+  assert(api.findDecoyInPlayerText(playerText([1508648445]), NOW), "past decoy found");
+});
+Deno.test("player response: a real url means not a decoy; no urls means nothing", () => {
+  const api = fresh();
+  const real = Math.floor(NOW / 1000) + 6 * 3600;
+  assert(!api.findDecoyInPlayerText(playerText([real]), NOW), "real");
+  assert(!api.findDecoyInPlayerText(playerText([6938943669, real]), NOW), "any real url -> not decoy");
+  assert(!api.findDecoyInPlayerText('{"streamingData":{}}', NOW), "none");
+  assert(!api.findDecoyInPlayerText(null, NOW), "null");
+});
+Deno.test("player response inspection is wired into fetch, XHR, JSON.parse and the initial response", () => {
+  assert(source.includes('if (kind === "player") inspectPlayerText(text);'), "fetch");
+  assert(source.includes('=== "player") inspectPlayerText(raw);'), "xhr");
+  assert(source.includes('includes("serverAbrStreamingUrl")) inspectPlayerText(text);'), "JSON.parse");
+  assert(source.includes('if (kind === "player") inspectPlayerValue(current);'), "initial");
+  assert(/tries\+\+ < 12/.test(source), "bounded wait for the player to switch video");
+});
