@@ -143,7 +143,17 @@ const TOGGLES = {
 // got the same 105-byte waits but started in ~1s). rmnt/domBypass stay off.
 const PATCHES = [[
   "    const editObj = obj => {\n        let clone;",
-  "    // twitch-adblock: a root filter \"[?.key]\" can only match objects that\n    // carry that key, so skip the full stringify/parse clone otherwise. On\n    // JSON.stringify this ran on every call (top CPU item on the homepage).\n    const rootKey = /^\\[\\?\\.([A-Za-z_$][\\w$]*)\\]/.exec(jsonq);\n    const editObj = obj => {\n        if ( rootKey !== null && (typeof obj !== 'object' || obj === null || obj[rootKey[1]] === undefined) ) { return; }\n        let clone;",
+  [
+    "    // twitch-adblock: a root filter \"[?.key]\" can only match an object that",
+    "    // carries that key, or an array with an element that does, so skip the",
+    "    // full stringify/parse clone otherwise. On JSON.stringify this ran on",
+    "    // every call (top CPU item on the homepage).",
+    "    const rootKey = /^\\[\\?\\.([A-Za-z_$][\\w$]*)\\]/.exec(jsonq);",
+    "    const hasRootKey = o => typeof o === 'object' && o !== null && o[rootKey[1]] !== undefined;",
+    "    const editObj = obj => {",
+    "        if ( rootKey !== null && (Array.isArray(obj) ? obj.some(hasRootKey) : hasRootKey(obj)) === false ) { return; }",
+    "        let clone;",
+  ].join("\n"),
 ]];
 const OFF_BY_DEFAULT = ["rmnt", "domBypass"];
 const TOGGLE_PRELUDE = `const uboOn = (() => {

@@ -119,7 +119,7 @@ Deno.test("youtube.js: no DOM MutationObserver under uBO; throttled otherwise", 
 
 Deno.test("inboundEdit: root-key guard skips the clone for unrelated JSON.stringify calls, still edits attestation requests", async () => {
   const js = await Deno.readTextFile(new URL("../src/vendor/ubo-youtube.js", import.meta.url));
-  assert(js.includes("obj[rootKey[1]] === undefined) ) { return; }"), "guard in bundle");
+  assert(js.includes("(Array.isArray(obj) ? obj.some(hasRootKey) : hasRootKey(obj)) === false ) { return; }"), "guard in bundle");
   const r = await runBundle();
   assert(r.boot.every((x) => x === true), "bootstrap still runs " + JSON.stringify(r.boot));
 });
