@@ -20,8 +20,12 @@ function sim({ opts = null, onTick = () => {},  steps, hidden = () => false, cla
     let decoyThisNav = !!env.decoy, lastPlayerAt = 0;
     const console = { log() {} };
     ${block}
-    return { armStall, setFailover: (t) => { lastFailoverAt = t; }, played: (id) => { playbackSeen.any = true; startedVideoId = id; stopStall(); }, renav: () => { playbackSeen.any = false; startLogged = false; stalledReloaded = 0; } };`);
-  const api = f({ now: () => now }, (fn, d) => { const t = { at: now + d, fn }; timers.push(t); return t; }, (t) => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); }, doc, { playerRoot: () => player, OPTS, ubo: !!(opts && opts.ubo), decoy: !!(opts && opts.decoy), waitAt: opts && opts.waitAt });
+    return { armStall, setFailover: (t) => { lastFailoverAt = t; }, played: (id) => { playbackSeen.any = true; startedVideoId = id; stopStall(); }, renav: () => { playbackSeen.any = false; startLogged = false; stalledReloaded = 0; },
+      // yt-navigate-start's resets, then yt-navigate-finish's arm.
+      navigate: (t) => { navAt = t; stalledReloaded = 0; startLogged = false; playbackSeen.any = false; lastReloadAt = 0; lastMediaEventAt = 0; stopStall(); armStall(); },
+      waitReply: (t) => { api.lastWaitReplyAt = t; } };`);
+  let scheduled = 0;
+  const api = f({ now: () => now }, (fn, d) => { scheduled++; const t = { at: now + d, fn }; timers.push(t); return t; }, (t) => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); }, doc, { playerRoot: () => player, OPTS, ubo: !!(opts && opts.ubo), decoy: !!(opts && opts.decoy), waitAt: opts && opts.waitAt });
   api.armStall();
   while (now < ms) {
     now += 100;
@@ -31,6 +35,8 @@ function sim({ opts = null, onTick = () => {},  steps, hidden = () => false, cla
     const fo = failoverAt(now); if (fo) api.setFailover(fo);
     for (const t of timers.filter((t) => t.at <= now)) { timers.splice(timers.indexOf(t), 1); t.fn(); }
   }
+  loads.scheduled = scheduled;
+  loads.pending = timers.length;
   return loads;
 }
 
@@ -134,4 +140,29 @@ Deno.test("uBO gentle watchdog holds while a SABR wait reply is recent", () => {
   assert(held.length === 0, "no reload within 20s of the wait reply: " + held);
   const later = sim({ opts: { ...SRC_OPTS, ubo: true, waitAt: 1000 }, steps: () => {}, ms: 29000 });
   assert(later.length === 1 && later[0] >= 21000, "fires after the hold if still dead: " + later);
+});
+
+Deno.test("uBO gentle watchdog backoff: one reload per navigation, a new navigation allows one more", () => {
+  const loads = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, onTick: (t, api) => { if (t === 20000) api.navigate(t); }, ms: 52000 });
+  assert(loads.length === 2, "one per nav: " + loads);
+  assert(loads[0] >= 15000 && loads[0] <= 16500 && loads[1] >= 35000 && loads[1] <= 36500, "15s after each nav: " + loads);
+});
+
+Deno.test("uBO gentle watchdog: polling is bounded and stops at the give-up time (no runaway timer chain)", () => {
+  const dead = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, ms: 40000 });
+  assert(dead.length === 1 && dead.pending === 0, "stopped after its one reload: " + dead + " pending " + dead.pending);
+  const waits = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, onTick: (t, api) => { if (t % 5000 === 0) api.waitReply(t); }, ms: 40000 });
+  assert(waits.length === 0, "wait replies keep coming: no reload " + waits);
+  assert(waits.pending === 0, "poller gone after stallGiveUpMs");
+  const maxPolls = SRC_OPTS.stallGiveUpMs / SRC_OPTS.stallPollMs + 5;
+  assert(waits.scheduled <= maxPolls && dead.scheduled <= maxPolls, "timers scheduled " + waits.scheduled + "/" + dead.scheduled + " (max " + maxPolls + ")");
+});
+
+Deno.test("uBO gentle watchdog: a late wait reply (after ~10s) or a long hidden tab means no reload before give-up", () => {
+  const late = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, onTick: (t, api) => { if (t === 14000) api.waitReply(t); }, ms: 40000 });
+  assert(late.length === 0, "wait reply at 14s holds to 34s, past the 30s give-up: " + late);
+  const shortHide = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, hidden: (t) => t < 10000, ms: 40000 });
+  assert(shortHide.length === 1 && shortHide[0] >= 24500 && shortHide[0] <= 26500, "15s quiet counted from visible: " + shortHide);
+  const longHide = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, hidden: (t) => t < 18000, ms: 40000 });
+  assert(longHide.length === 0, "hidden 18s: gives up at 30s " + longHide);
 });
