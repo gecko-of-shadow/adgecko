@@ -520,6 +520,48 @@ function installYoutubeAdblock(target) {
     return changed ? parsed.href : url;
   }
 
+  // Brief grey .ytp-error flash on watch starts: the uBO layer's decoy DNR rule
+  // fails itag=18 decoy streams (ERR_BLOCKED_BY_CLIENT) and the player shows
+  // its error overlay for a moment before it moves to the real stream. The
+  // guard only hides the overlay (visibility), never touches the player, and
+  // always lets a persistent error through after a bounded grace.
+  //   window: hide from start until playing or windowMs.
+  //   delay:  any error is held back revealMs; reveal if it is still there.
+  //   gated:  an error seen in the start window is held until playing or
+  //           windowMs from start; later errors show at once.
+  function createErrorFlashGuard(o) {
+    const mode = o.mode;
+    const now = o.now || (() => Date.now());
+    const setT = o.setTimer || ((f, ms) => setTimeout(f, ms));
+    const clearT = o.clearTimer || ((t) => clearTimeout(t));
+    const st = { hidden: false, startAt: -1, played: false, timer: 0, error: false };
+    const hide = (on) => { if (st.hidden !== on) { st.hidden = on; o.setHidden(on); } };
+    const stopTimer = () => { if (st.timer) clearT(st.timer); st.timer = 0; };
+    const inWindow = () => st.startAt >= 0 && !st.played && now() - st.startAt < o.windowMs;
+    const holdUntil = (ms) => { stopTimer(); hide(true); st.timer = setT(() => { st.timer = 0; hide(false); }, Math.max(0, ms)); };
+    return {
+      state: st,
+      start() {
+        stopTimer(); st.startAt = now(); st.played = false;
+        // An error still up from the last video gets a fresh bounded hold, never an open-ended one.
+        if (mode === "window" || (mode === "gated" && st.error)) holdUntil(o.windowMs); else hide(false);
+      },
+      playing() {
+        st.played = true;
+        if (mode !== "delay") { stopTimer(); hide(false); }
+      },
+      errorShown() {
+        st.error = true;
+        if (mode === "delay") { if (!st.timer && !st.hidden) holdUntil(o.revealMs); return; }
+        if (mode === "gated" && inWindow() && !st.timer) holdUntil(o.windowMs - (now() - st.startAt));
+      },
+      errorGone() {
+        st.error = false;
+        if (mode !== "window") { stopTimer(); hide(false); }
+      },
+    };
+  }
+
   // Decoy stream urls: when YouTube suspects ad stripping it can hand out
   // videoplayback urls whose signed "expire" (unix seconds) is long past
   // (seen: 2017) on hosts that do not exist. Real urls expire hours in the
@@ -949,6 +991,7 @@ function installYoutubeAdblock(target) {
     rememberBadHost,
     fetchWithFallback,
     isDecoyStreamUrl,
+    createErrorFlashGuard,
     findDecoyInPlayerText,
     badGvHosts,
     isInterruptionsToast,
@@ -968,7 +1011,7 @@ function startYoutubeAdblock() {
   //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
   //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
   //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
-  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, stallUnderUbo: "gentle", stallGentleMs: 15000, waitReplyHoldMs: 20000, umpBackoff: false, diag: true, domSweepMs: 400, decoyReloadMs: 150, decoyGapMs: 1500 };
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, stallUnderUbo: "gentle", stallGentleMs: 15000, waitReplyHoldMs: 20000, umpBackoff: false, diag: true, domSweepMs: 400, decoyReloadMs: 150, decoyGapMs: 1500, errorFlash: "gated", errorFlashWindowMs: 5000, errorFlashRevealMs: 1500 };
   try {
     const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
     for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
@@ -1935,6 +1978,44 @@ function startYoutubeAdblock() {
     observer.observe(root, { childList: true, subtree: true });
     removeDomAds();
     api.removeInterruptionsToast();
+  }
+
+  // .ytp-error flash guard (see createErrorFlashGuard). Off with {"errorFlash":"off"}.
+  const flashGuard = (() => {
+    if (!["window", "delay", "gated"].includes(OPTS.errorFlash)) return null;
+    // The rule lives in src/youtube-ads.css (manifest CSS): no style element here.
+    const setHidden = (on) => {
+      try {
+        if (on) document.documentElement.setAttribute("data-ta-yterr", "");
+        else document.documentElement.removeAttribute("data-ta-yterr");
+        diag("error overlay " + (on ? "held back" : "released"));
+      } catch {}
+    };
+    const g = api.createErrorFlashGuard({ mode: OPTS.errorFlash, windowMs: OPTS.errorFlashWindowMs, revealMs: OPTS.errorFlashRevealMs, setHidden });
+    let observed = null, mo = null, had = false;
+    const check = () => {
+      const has = !!(observed && observed.querySelector(":scope > .ytp-error"));
+      if (has && !had) g.errorShown(); else if (!has && had) g.errorGone();
+      had = has;
+    };
+    const attach = () => {
+      const p = document.getElementById("movie_player");
+      if (!p || p === observed) return;
+      if (mo) mo.disconnect();
+      observed = p; had = false;
+      mo = new MutationObserver(check);
+      mo.observe(p, { childList: true });
+      check();
+    };
+    return { start(url) { let path = location.pathname; try { if (url) path = new URL(url, location.href).pathname; } catch {} if (path === "/watch") { attach(); g.start(); } }, playing: () => g.playing(), attach };
+  })();
+  if (flashGuard) {
+    document.addEventListener("yt-navigate-start", (e) => flashGuard.start(e && e.detail && e.detail.url), true);
+    document.addEventListener("yt-navigate-finish", () => { flashGuard.attach(); }, true);
+    document.addEventListener("playing", (e) => { if (e.target && e.target.tagName === "VIDEO") flashGuard.playing(); }, true);
+    if (location.pathname === "/watch") flashGuard.start();
+    const early = setInterval(() => { if (document.getElementById("movie_player")) { clearInterval(early); flashGuard.attach(); } }, 100);
+    setTimeout(() => clearInterval(early), 15000);
   }
 
   injectHomeFeedCss();
