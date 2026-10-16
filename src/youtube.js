@@ -406,6 +406,128 @@ function installYoutubeAdblock(target) {
     return host === "googlevideo.com" || host.endsWith(".googlevideo.com");
   }
 
+
+  // ---- googlevideo fallback ----
+  // A media URL looks like rr2---sn-h9jk2mn5.googlevideo.com/videoplayback?...&mn=sn-h9jk2mn5,sn-n5pqrstu&fvip=2
+  // "mn" lists the edge servers YouTube itself falls back across. redirector.googlevideo.com
+  // takes the same path and query and redirects to a server that is up.
+  const GV_HOST = /^rr(\d+)---(sn-[a-z0-9-]+)\.googlevideo\.com$/i;
+  const badGvHosts = new Map(); // failed host -> replacement host
+  const BAD_HOST_TTL_MS = 10 * 60 * 1000;
+
+  function isRetryableStatus(status) {
+    return status === 403 || status === 404 || status === 410 || status === 429 || (status >= 500 && status <= 599);
+  }
+
+  function googlevideoFallbacks(url) {
+    let parsed;
+    try {
+      parsed = new URL(String(url || ""));
+    } catch {
+      return [];
+    }
+    if (!isSabrPlayback(parsed.href)) return [];
+    const out = [];
+    const seen = new Set([parsed.hostname.toLowerCase()]);
+    const match = parsed.hostname.match(GV_HOST);
+    const fvip = parsed.searchParams.get("fvip");
+    const rr = (fvip && /^\d+$/.test(fvip)) ? fvip : (match ? match[1] : "");
+    const servers = String(parsed.searchParams.get("mn") || "").split(",").map((x) => x.trim()).filter((x) => /^sn-[a-z0-9-]+$/i.test(x));
+    const push = (host, count) => {
+      const key = host.toLowerCase();
+      if (seen.has(key)) return;
+      const bad = badGvHosts.get(key);
+      if (bad && Date.now() - bad.at <= BAD_HOST_TTL_MS) return;
+      seen.add(key);
+      const next = new URL(parsed.href);
+      next.hostname = host;
+      next.searchParams.set("fallback_count", String(count));
+      out.push(next.href);
+    };
+    let count = Number(parsed.searchParams.get("fallback_count") || 0) || 0;
+    if (rr) for (const server of servers) push("rr" + rr + "---" + server + ".googlevideo.com", ++count);
+    if (parsed.hostname.toLowerCase() !== "redirector.googlevideo.com") push("redirector.googlevideo.com", ++count);
+    return out.slice(0, 3);
+  }
+
+  function rememberBadHost(failedUrl, workingUrl) {
+    try {
+      const from = new URL(failedUrl).hostname.toLowerCase();
+      const to = workingUrl ? new URL(workingUrl).hostname.toLowerCase() : "";
+      if (!from || from === to) return;
+      const back = to ? badGvHosts.get(to) : null;
+      badGvHosts.set(from, { to: back && back.to === from ? "" : to, at: Date.now() });
+    } catch {
+      // Ignore a URL that does not parse.
+    }
+  }
+
+  // Requests to a host that already failed go straight to its working replacement.
+  function mapBadHost(url) {
+    let parsed;
+    try {
+      parsed = new URL(String(url || ""));
+    } catch {
+      return url;
+    }
+    if (!isSabrPlayback(parsed.href)) return url;
+    let hops = 0;
+    let changed = false;
+    while (hops < 4) {
+      const entry = badGvHosts.get(parsed.hostname.toLowerCase());
+      if (!entry || !entry.to || Date.now() - entry.at > BAD_HOST_TTL_MS) break;
+      parsed.hostname = entry.to;
+      changed = true;
+      hops++;
+    }
+    return changed ? parsed.href : url;
+  }
+
+  function errorKind(error) {
+    const text = String((error && (error.message || error.name)) || error || "");
+    if (/name_not_resolved|dns/i.test(text)) return "dns";
+    return "network";
+  }
+
+  // Tries the URL, then up to 3 fallbacks, within budgetMs. A failed response is
+  // never read or cloned, so a dead host costs one round trip, not a wait.
+  // doFetch(url, attemptIndex) must return a Promise<Response>.
+  async function fetchWithFallback(url, doFetch, options) {
+    const opts = options || {};
+    const budgetMs = opts.budgetMs == null ? 8000 : opts.budgetMs;
+    const now = opts.now || (() => Date.now());
+    const started = now();
+    const first = mapBadHost(url);
+    const candidates = [first].concat(googlevideoFallbacks(first));
+    const failures = [];
+    let lastResponse = null;
+    let lastError = null;
+    for (let i = 0; i < candidates.length; i++) {
+      if (i > 0 && now() - started > budgetMs) break;
+      const candidate = candidates[i];
+      try {
+        const response = await doFetch(candidate, i);
+        if (response && isRetryableStatus(response.status)) {
+          failures.push({ url: candidate, reason: "http " + response.status });
+          lastResponse = response;
+          continue;
+        }
+        for (const failure of failures) rememberBadHost(failure.url, candidate);
+        return { response, url: candidate, failures, exhausted: false, ms: now() - started };
+      } catch (error) {
+        if (error && error.name === "AbortError") throw error;
+        failures.push({ url: candidate, reason: errorKind(error) });
+        lastError = error;
+      }
+    }
+    // No working host found: do not blacklist anything, the reload brings new urls.
+    if (lastResponse) return { response: lastResponse, url: candidates[candidates.length - 1], failures, exhausted: true, ms: now() - started };
+    const error = lastError || new TypeError("Failed to fetch");
+    error.ytFailures = failures;
+    error.ytExhausted = true;
+    throw error;
+  }
+
   function concatBytes(parts) {
     let length = 0;
     for (let i = 0; i < parts.length; i++) length += parts[i].length;
@@ -716,6 +838,12 @@ function installYoutubeAdblock(target) {
     isSabrPlayback,
     createUmpBackoffParser,
     patchUmpBackoff,
+    isRetryableStatus,
+    googlevideoFallbacks,
+    mapBadHost,
+    rememberBadHost,
+    fetchWithFallback,
+    badGvHosts,
     isInterruptionsToast,
     removeInterruptionsToast,
     shouldNudgeStart,
@@ -725,6 +853,20 @@ function installYoutubeAdblock(target) {
 function startYoutubeAdblock() {
   if (globalThis.__twitchAdblockYoutube) return;
   globalThis.__twitchAdblockYoutube = true;
+
+  // Start switches. Defaults aim at a fast start; override for live A/B with
+  // localStorage["twitch-adblock-yt-opts"] = '{"noAdFlag":true}' and reload.
+  //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
+  //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
+  //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2500 };
+  try {
+    const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
+    for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
+  } catch {
+    // Defaults stay.
+  }
+
 
   function logFailOpen(error) {
     console.log("twitch-adblock youtube failed open", error);
@@ -737,7 +879,7 @@ function startYoutubeAdblock() {
   const nativeSend = XMLHttpRequest.prototype.send;
   const nativeParse = JSON.parse;
   const nativeAssign = Object.assign;
-  try {
+  if (OPTS.assignHook) try {
     Object.assign = function (target) {
       const result = nativeAssign.apply(Object, arguments);
       try {
@@ -793,6 +935,10 @@ function startYoutubeAdblock() {
   }
 
   function notify(blocking, attempt, generation) {
+    if (blocking && !strippedThisVideo) {
+      strippedThisVideo = true;
+      armStall();
+    }
     if (blocking && noticeLatched) return;
     const existing = document.getElementById("twitch-adblock-notice");
     if (!blocking) {
@@ -884,6 +1030,95 @@ function startYoutubeAdblock() {
     }
   }
 
+  let stalledReloaded = 0;
+  let stallTimer = 0;
+  let navAt = Date.now();
+  let startLogged = false;
+  let strippedThisVideo = false;
+
+  // Only after this script stripped ads for this video: a start that is still at
+  // 0:00 with no media data after stallMs gets one loadVideoById (uBO-style
+  // reload of the same video). It does not seek, pause, or touch an ad.
+  function checkStall() {
+    stallTimer = 0;
+    if (!OPTS.stallReload || stalledReloaded >= 2 || (!strippedThisVideo && !mediaFailed) || !onWatchSurface()) return;
+    let player;
+    let video;
+    try {
+      player = playerRoot();
+      video = player && player.querySelector ? player.querySelector("video") : null;
+    } catch {
+      return;
+    }
+    if (!player || !video) return;
+    const classes = String(player.className || "");
+    if (classes.includes("ad-showing") || classes.includes("ad-interrupting")) return;
+    if (video.currentTime > 0.1 || video.readyState >= 3) return;
+    if (typeof player.loadVideoById !== "function" || typeof player.getVideoData !== "function") return;
+    let id = "";
+    try {
+      id = (player.getVideoData() || {}).video_id || "";
+    } catch {
+      id = "";
+    }
+    if (!id) return;
+    stalledReloaded += 1;
+    console.log("twitch-adblock: YouTube start stalled at 0:00" + (mediaFailed ? " after media server failures" : "") + ", reloading the video (" + stalledReloaded + "/2)");
+    mediaFailed = false;
+    try {
+      player.loadVideoById(id, 0);
+    } catch (error) {
+      logFailOpen(error);
+    }
+  }
+
+  function armStall(delay) {
+    if (!OPTS.stallReload || stalledReloaded >= 2) return;
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(checkStall, delay == null ? OPTS.stallMs : delay);
+  }
+
+  // Every fallback host failed: get a fresh player response soon instead of
+  // waiting out the player's own long retry backoff.
+  let mediaFailed = false;
+  let lastExhaustedAt = 0;
+  function onMediaExhausted() {
+    mediaFailed = true;
+    const now = Date.now();
+    if (now - lastExhaustedAt < 3000) return;
+    lastExhaustedAt = now;
+    armStall(stalledReloaded ? 4000 : 500);
+  }
+
+  const loggedHosts = new Set();
+  function logFallback(result) {
+    try {
+      for (const failure of result.failures) {
+        const host = new URL(failure.url).hostname;
+        if (loggedHosts.has(host + failure.reason)) continue;
+        loggedHosts.add(host + failure.reason);
+        console.log("twitch-adblock: googlevideo " + host + " failed (" + failure.reason + ")");
+      }
+      if (!result.exhausted && result.failures.length) {
+        console.log("twitch-adblock: media recovered on " + new URL(result.url).hostname + " in " + result.ms + "ms");
+      }
+    } catch {
+      // Logging is optional.
+    }
+  }
+
+  document.addEventListener("playing", (event) => {
+    try {
+      if (startLogged || !event.target || event.target.tagName !== "VIDEO") return;
+      startLogged = true;
+      clearTimeout(stallTimer);
+      const ms = Date.now() - navAt;
+      console.log("twitch-adblock: YouTube playback started " + ms + "ms after navigation" + (strippedThisVideo ? " (ads stripped)" : ""));
+    } catch {
+      // Timing is optional.
+    }
+  }, true);
+
   function hookInitial(name, kind) {
     if (!kind) return;
     let current;
@@ -939,6 +1174,7 @@ function startYoutubeAdblock() {
   }
 
   async function rewritePlayerBody(input, init) {
+    if (!OPTS.noAdFlag) return { input, init };
     const stream = typeof ReadableStream !== "undefined" && init && init.body instanceof ReadableStream;
     if (init && init.body != null && !stream) {
       const marked = api.applyNoAdPlayback(init.body);
@@ -979,13 +1215,33 @@ function startYoutubeAdblock() {
     const kind = api.kindFor(url);
     if (!kind) {
       if (!api.isSabrPlayback(url)) return nativeFetch(input, init);
-      return nativeFetch(input, init).then((response) => {
+      const isReq = typeof Request !== "undefined" && input instanceof Request;
+      const streamBody = typeof ReadableStream !== "undefined" && init && init.body instanceof ReadableStream;
+      // A streamed body cannot be sent twice: one try, still mapped off known-bad hosts.
+      const base = isReq ? input.clone() : null;
+      const doFetch = (target, attempt) => {
+        if (attempt === 0 && target === url) return nativeFetch(input, init);
+        if (isReq) return nativeFetch(new Request(target, base.clone()), init);
+        if (streamBody && attempt > 0) return Promise.reject(new TypeError("stream body not replayable"));
+        return nativeFetch(target, init);
+      };
+      return api.fetchWithFallback(url, doFetch).then((result) => {
+        logFallback(result);
+        if (result.exhausted) onMediaExhausted();
+        const response = result.response;
+        if (!response || !response.ok) return response;
         try {
           return wrapSabrBody(response);
         } catch (error) {
           logFailOpen(error);
           return response;
         }
+      }, (error) => {
+        if (error && error.ytFailures) {
+          logFallback({ failures: error.ytFailures, exhausted: true });
+          onMediaExhausted();
+        }
+        throw error;
       });
     }
     const replay = input instanceof Request ? input.clone() : input;
@@ -1111,16 +1367,57 @@ function startYoutubeAdblock() {
     }
   }
 
+  // XHR cannot be retried in place, so a failed host is mapped to its first
+  // fallback and the player's own retry goes there.
+  function watchXhrFailure(xhr) {
+    if (xhr.__ytGvWatch) return;
+    xhr.__ytGvWatch = true;
+    let aborted = false;
+    xhr.addEventListener("abort", () => {
+      aborted = true;
+    });
+    xhr.addEventListener("loadstart", () => {
+      aborted = false;
+    });
+    xhr.addEventListener("loadend", () => {
+      try {
+        if (aborted) return;
+        const status = xhr.status;
+        if (status !== 0 && !api.isRetryableStatus(status)) return;
+        const url = xhr.__ytUrl || "";
+        const next = api.googlevideoFallbacks(url)[0];
+        api.rememberBadHost(url, next || "");
+        logFallback({ failures: [{ url, reason: status ? "http " + status : "network" }], exhausted: !next });
+        if (next) console.log("twitch-adblock: next media requests use " + new URL(next).hostname);
+        else onMediaExhausted();
+      } catch {
+        // Never break the player's own error handling.
+      }
+    });
+  }
+
   XMLHttpRequest.prototype.open = function (method, url) {
     this.__ytUrl = String(url || "");
     this.__ytGen = (this.__ytGen || 0) + 1;
     if (api.kindFor(this.__ytUrl)) installXhrStrip(this);
-    if (api.isSabrPlayback(this.__ytUrl)) installSabrPatch(this);
+    if (api.isSabrPlayback(this.__ytUrl)) {
+      const mapped = api.mapBadHost(this.__ytUrl);
+      if (mapped !== this.__ytUrl) {
+        const args = Array.prototype.slice.call(arguments);
+        args[1] = mapped;
+        this.__ytUrl = mapped;
+        installSabrPatch(this);
+        watchXhrFailure(this);
+        return nativeOpen.apply(this, args);
+      }
+      installSabrPatch(this);
+      watchXhrFailure(this);
+    }
     return nativeOpen.apply(this, arguments);
   };
 
   XMLHttpRequest.prototype.send = function (body) {
-    if (api.kindFor(this.__ytUrl || "") === "player" && body != null) {
+    if (OPTS.noAdFlag && api.kindFor(this.__ytUrl || "") === "player" && body != null) {
       try {
         const marked = api.applyNoAdPlayback(body);
         if (marked.changed) body = marked.body;
@@ -1201,6 +1498,12 @@ function startYoutubeAdblock() {
   document.addEventListener("yt-navigate-start", () => {
     noticeLatched = false;
     startNudged = false;
+    stalledReloaded = 0;
+    mediaFailed = false;
+    strippedThisVideo = false;
+    startLogged = false;
+    navAt = Date.now();
+    clearTimeout(stallTimer);
     notify(false);
   }, true);
   document.addEventListener("yt-navigate-finish", () => {

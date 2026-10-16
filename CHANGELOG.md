@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.16
+
+- YouTube starts faster. Player requests are no longer marked "no ad". uBlock Origin keeps that switch off too. Ads are still removed from the player response, so the same video plays.
+- The page-wide Object.assign hook is gone. It ran on every call YouTube made.
+- When a YouTube video server cannot be reached (a name that does not resolve, a 403, or a 5xx), the same request moves to the next server YouTube lists for that video, then to its redirector. A dead server is skipped for 10 minutes. A failed answer is never read or held.
+- If every server fails and the video is still at 0:00, the video is reloaded once, and a second time if needed. Never more than twice per video.
+- The console says which server failed, which one worked, and how long the start took.
+- Twitch, Kick, and ordinary-site blocking are unchanged.
+
 ## 0.2.15
 
 - The YouTube start wait on the playback policy is cleared. That wait is how long the picture stays black after the length is already known. The audio target and the request keepalive stay. The server start switch stays on. Nothing seeks or pauses.
