@@ -158,8 +158,9 @@ const PATCHES = [[
 // Local edits to filter arguments (the rpnt payload uBO splices into YouTube's
 // inline script). Same checks, less page-wide work: its document observer ran
 // player API calls (getStatsForNerds etc.) on every mutation batch, on every
-// page. Now: watch/embed URL test first, at most one check per 250ms, and the
-// Array.prototype.push trap tests length before constructor.name.
+// page. Now: watch/embed URL test first, and at most one check per 250ms.
+// Leave the Array.prototype.push trap's test order alone: constructor.name
+// first keeps it from reading .length on DOM prototypes ("Illegal invocation").
 const ARG_PATCHES = [
   [
     "const e=()=>{let e,s,{player:i,",
@@ -168,10 +169,6 @@ const ARG_PATCHES = [
   [
     "e(),new MutationObserver((()=>{e()})).observe(document,",
     "e();let q=0;new MutationObserver((()=>{q||(q=setTimeout((()=>{q=0,e()}),250))})).observe(document,",
-  ],
-  [
-    "\"Uint8Array\"!==o.constructor.name||o.buffer?.byteLength!==o.length||105!==o.length&&104!==o.length||",
-    "105!==o.length&&104!==o.length||\"Uint8Array\"!==o.constructor.name||o.buffer?.byteLength!==o.length||",
   ],
 ];
 const patchHits = new Set();

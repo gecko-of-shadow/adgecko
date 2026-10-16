@@ -93,6 +93,17 @@ Deno.test("rpnt payload: a mutation burst on a watch page is one check", () => {
   assert(ours.calls.stats === 3, "next burst re-arms: " + ours.calls.stats);
 });
 
+Deno.test("rpnt payload: push trap never reads .length on a non-Uint8Array", () => {
+  // DOM prototypes have brand-checked getters: reading .length throws "Illegal invocation".
+  const proto = Object.create(null, { length: { get() { throw new TypeError("Illegal invocation"); } } });
+  proto.constructor = { name: "HTMLCollection" };
+  for (const payload of [upstream, shipped]) {
+    const r = run(payload, "https://www.youtube.com/");
+    r.push(proto);
+    assert(r.calls.logs === 0, "not a wait reply");
+  }
+});
+
 Deno.test("rpnt payload: 105-byte wait reply reloads the same way", () => {
   const stuck = { stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
   for (const payload of [upstream, shipped]) {
