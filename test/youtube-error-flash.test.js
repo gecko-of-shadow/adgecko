@@ -34,6 +34,15 @@ Deno.test("error flash delay/gated: no attribute churn on a clean start", () => 
     assert(r.log.length === 0, mode + " never touched the DOM");
   }
 });
+Deno.test("error flash: a new start while an error is held never hides it for good", () => {
+  for (const mode of ["window", "delay", "gated"]) {
+    const r = rig(mode);
+    r.g.start(); r.advance(500); r.g.errorShown();
+    r.advance(1000); r.g.start();
+    r.advance(5500);
+    assert(!r.hidden(), mode + ": error from a failed SPA start is visible within 5.5s");
+  }
+});
 Deno.test("error flash gated: an error after playback shows at once", () => {
   const r = rig("gated"); r.g.start(); r.advance(1000); r.g.playing(); r.advance(60000); r.g.errorShown();
   assert(!r.hidden(), "mid-play error not hidden");

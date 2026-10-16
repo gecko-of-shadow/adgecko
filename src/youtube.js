@@ -543,7 +543,8 @@ function installYoutubeAdblock(target) {
       state: st,
       start() {
         stopTimer(); st.startAt = now(); st.played = false;
-        if (mode === "window") holdUntil(o.windowMs); else if (!st.error) hide(false);
+        // An error still up from the last video gets a fresh bounded hold, never an open-ended one.
+        if (mode === "window" || (mode === "gated" && st.error)) holdUntil(o.windowMs); else hide(false);
       },
       playing() {
         st.played = true;
