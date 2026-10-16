@@ -101,7 +101,7 @@ Deno.test("uBO layer, slow but loading SPA start is never reloaded", () => {
 Deno.test("uBO layer: floor holds even when media failed earlier; decoys too (eb034fd)", () => {
   const plain = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, ms: 12000 });
   assert(plain.length === 1 && plain[0] >= SRC_OPTS.stallUboMs, "floor " + plain);
-  const decoy = sim({ opts: { ...SRC_OPTS, ubo: true, decoy: true }, steps: () => {}, ms: 9000 });
+  const decoy = sim({ opts: { ...SRC_OPTS, ubo: true, decoy: true }, steps: () => {}, ms: 12000 });
   assert(decoy.length === 1 && decoy[0] >= SRC_OPTS.stallUboMs, "decoy under uBO still waits the floor " + decoy);
   const noUbo = sim({ opts: { ...SRC_OPTS, decoy: true }, steps: () => {}, ms: 9000 });
   assert(noUbo.length >= 1 && noUbo[0] < 3000, "no uBO: fast path kept " + noUbo);
