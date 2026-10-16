@@ -186,7 +186,10 @@ for (const h of HOSTS) {
   if (!groups.has(body)) groups.set(body, []);
   groups.get(body).push(h);
 }
-let js = banner + "(function() {\n// >>>> start of private namespace\n;\nconst scriptletGlobals = {};\n" + TOGGLE_PRELUDE + "\n" + fnDefs.join("\n\n") + "\n\nconst hostname = location.hostname;\n";
+const GUARD = world === "MAIN" ? "twitch-adblock.ubo" : "twitch-adblock.ubo-isolated";
+// Install once per document: each filter is its own uBO proxy (that layering is
+// by design), but the bundle itself must never stack a second time.
+let js = banner + "(function() {\n// >>>> start of private namespace\n;\nif (globalThis[Symbol.for(" + JSON.stringify(GUARD) + ")]) { return; }\nif (" + JSON.stringify(world) + " !== \"MAIN\") { try { Object.defineProperty(globalThis, Symbol.for(" + JSON.stringify(GUARD) + "), { value: true }); } catch (e) {} }\nconst scriptletGlobals = {};\n" + TOGGLE_PRELUDE + "\n" + fnDefs.join("\n\n") + "\n\nconst hostname = location.hostname;\n";
 for (const [body, hosts] of groups) {
   if (!body) continue;
   js += `\nif (${JSON.stringify(hosts)}.includes(hostname)) {\n${body}\n}\n`;

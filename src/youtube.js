@@ -965,7 +965,7 @@ function startYoutubeAdblock() {
   //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
   //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
   //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
-  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 3500, decoyReloadMs: 150, decoyGapMs: 1500 };
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 3500, stallUboMs: 7000, diag: true, decoyReloadMs: 150, decoyGapMs: 1500 };
   try {
     const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
     for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
@@ -976,6 +976,16 @@ function startYoutubeAdblock() {
 
   function logFailOpen(error) {
     console.log("twitch-adblock youtube failed open", error);
+  }
+
+  // Timing breadcrumbs relative to the last navigation, for start-delay logs.
+  function diag(msg) {
+    if (!OPTS.diag) return;
+    try {
+      console.log("twitch-adblock: [+" + (Date.now() - navAt) + "ms] " + msg);
+    } catch {
+      // Logging is optional.
+    }
   }
 
   const api = {};
@@ -1043,7 +1053,9 @@ function startYoutubeAdblock() {
   function notify(blocking, attempt, generation) {
     if (blocking && !strippedThisVideo) {
       strippedThisVideo = true;
-      armStall();
+      // With the uBO layer, our strips are watch/browse renderer drops only:
+      // they say nothing about the start, so they no longer arm the watchdog.
+      if (!api.UBO_LAYER) armStall(undefined, "ads stripped");
     }
     if (blocking && noticeLatched) return;
     const existing = document.getElementById("twitch-adblock-notice");
@@ -1238,6 +1250,9 @@ function startYoutubeAdblock() {
       stallLastProgressAt = now;
       return again();
     }
+    // uBO layer and no media failure seen: the player may be legitimately
+    // retrying internally (SABR); give it OPTS.stallUboMs before we reload.
+    if (api.UBO_LAYER && !mediaFailed && now - navAt < OPTS.stallUboMs) return again();
     if (now - navAt < OPTS.stallMs || now - stallArmedAt < OPTS.stallMs || now - stallLastProgressAt < OPTS.stallQuietMs) return again();
     if (lastReloadAt && now - lastReloadAt < OPTS.stallSecondGapMs) return again();
     if (typeof player.loadVideoById !== "function" || typeof player.getVideoData !== "function") return stopStall();
@@ -1254,7 +1269,7 @@ function startYoutubeAdblock() {
   function reloadVideo(player, id, now, why) {
     stalledReloaded += 1;
     lastReloadAt = now;
-    console.log("twitch-adblock: YouTube " + why + ", reloading the video (" + stalledReloaded + "/2)");
+    console.log("twitch-adblock: [+" + (now - navAt) + "ms] YouTube " + why + ", reloading the video (" + stalledReloaded + "/2)");
     mediaFailed = false;
     mediaExhaustedNow = false;
     try {
@@ -1263,12 +1278,13 @@ function startYoutubeAdblock() {
       logFailOpen(error);
     }
     // Watch the reloaded start too, giving it a little longer.
-    if (stalledReloaded < 2) armStall(OPTS.stallSecondGapMs);
+    if (stalledReloaded < 2) armStall(OPTS.stallSecondGapMs, "after reload");
     else stopStall();
   }
 
-  function armStall(minMs) {
+  function armStall(minMs, why) {
     if (!OPTS.stallReload || stalledReloaded >= 2 || startLogged || playbackSeen.any) return;
+    diag("stall watchdog armed" + (why ? " (" + why + ")" : "") + (api.UBO_LAYER && !mediaFailed ? ", uBO floor " + OPTS.stallUboMs + "ms" : ""));
     clearTimeout(stallTimer);
     const now = Date.now();
     // minMs shortens/lengthens the earliest fire time relative to stallMs.
@@ -1288,7 +1304,7 @@ function startYoutubeAdblock() {
     const now = Date.now();
     if (now - lastExhaustedAt < 3000) return;
     lastExhaustedAt = now;
-    armStall(stalledReloaded ? OPTS.stallSecondGapMs : 500);
+    armStall(stalledReloaded ? OPTS.stallSecondGapMs : 500, "all media hosts failed");
   }
 
   // Decoy media url seen: reload right away (shared 2-reload cap with the
@@ -1307,6 +1323,7 @@ function startYoutubeAdblock() {
   }
 
   function onDecoyUrl(url, why, wantId) {
+    diag("decoy seen: " + (why || "decoy stream url") + (url ? " expire=" + (/[?&]expire=(\d+)/.exec(url) || [])[1] : ""));
     if (!OPTS.stallReload || decoyTimer || stalledReloaded >= 2 || startLogged || playbackSeen.any || !onWatchSurface()) return;
     if (lastReloadAt && Date.now() - lastReloadAt < OPTS.decoyGapMs) return;
     mediaFailed = true;
@@ -1322,7 +1339,7 @@ function startYoutubeAdblock() {
           decoyTimer = setTimeout(fire, OPTS.decoyReloadMs);
           return;
         }
-        if (!player || typeof player.loadVideoById !== "function" || !id || (wantId && id !== wantId)) return armStall(500);
+        if (!player || typeof player.loadVideoById !== "function" || !id || (wantId && id !== wantId)) return armStall(500, "decoy, player not ready");
         clearTimeout(stallTimer);
         reloadVideo(player, id, Date.now(), why || ("got a decoy stream url (expire=" + new URL(url).searchParams.get("expire") + ")"));
       } catch (error) {
@@ -1508,7 +1525,10 @@ function startYoutubeAdblock() {
       };
       if (api.isDecoyStreamUrl(url)) {
         onDecoyUrl(url);
-        return nativeFetch(input, init);
+        return nativeFetch(input, init).catch((error) => {
+          diag("decoy fetch failed (" + String(error && error.message || error) + ")");
+          throw error;
+        });
       }
       return api.fetchWithFallback(url, doFetch).then((result) => {
         if (result.flagged) {
@@ -1534,11 +1554,15 @@ function startYoutubeAdblock() {
       });
     }
     const replay = input instanceof Request ? input.clone() : input;
+    if (kind === "player") diag("/player requested (fetch)");
     const prepare = kind === "player" ? rewritePlayerBody(input, init) : Promise.resolve({ input, init });
     return prepare.then((prepared) => nativeFetch(prepared.input, prepared.init).then((response) => {
       if (!api.shouldBufferYoutubei(response)) return response;
       return response.clone().text().then((text) => {
-        if (kind === "player") inspectPlayerText(text);
+        if (kind === "player") {
+          diag("/player response read (" + text.length + " chars)");
+          inspectPlayerText(text);
+        }
         const stripped = api.stripResponseText(text, url);
         if (!stripped.blocked) {
           if ((kind === "player" || kind === "reel") && !api.textLooksLikeAds(text)) notify(false);
@@ -1693,6 +1717,7 @@ function startYoutubeAdblock() {
   XMLHttpRequest.prototype.open = function (method, url) {
     this.__ytUrl = String(url || "");
     this.__ytGen = (this.__ytGen || 0) + 1;
+    if (api.kindFor(this.__ytUrl) === "player") diag("/player requested (xhr)");
     if (api.kindFor(this.__ytUrl)) installXhrStrip(this);
     if (api.isSabrPlayback(this.__ytUrl)) {
       if (api.isDecoyStreamUrl(this.__ytUrl)) onDecoyUrl(this.__ytUrl);
@@ -1811,6 +1836,10 @@ function startYoutubeAdblock() {
     notify(false);
   }, true);
   document.addEventListener("yt-navigate-finish", () => {
+    diag("navigation finished");
+    // uBO layer: nothing of ours arms the watchdog on a clean start, so arm it
+    // here; checkStall still waits OPTS.stallUboMs unless media failed.
+    if (api.UBO_LAYER && onWatchSurface()) armStall(undefined, "watch navigation");
     injectHomeFeedCss();
     removeDomAds();
     api.removeInterruptionsToast();

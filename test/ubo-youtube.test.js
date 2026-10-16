@@ -57,6 +57,7 @@ Deno.test("uBO bundle carries the exact uAssets prune paths and is pinned", asyn
   assert(/^[0-9a-f]{40}$/.test(meta.uassets_commit) && js.includes(meta.uassets_commit), "uAssets commit recorded");
   assert(js.includes(meta.ublock_commit), "uBO commit recorded");
   assert(!/\bchrome\./.test(js), "no extension APIs in MAIN world");
+  assert(js.includes("if (globalThis[Symbol.for(\"twitch-adblock.ubo\")]) { return; }"), "install-once guard");
   for (const k of ["rpnt", "rmnt", "domBypass", "inboundEdit", "nanoStb"]) assert(meta.off_by_default.includes(k), "off by default: " + k);
   const iso = await Deno.readTextFile(new URL("../src/vendor/ubo-youtube-isolated.js", import.meta.url));
   assert(iso.includes('if (uboOn("rpnt"))') && iso.includes('if (uboOn("rmnt"))'), "rpnt/rmnt in isolated world like uBO");

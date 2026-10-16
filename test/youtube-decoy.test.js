@@ -22,7 +22,7 @@ Deno.test("decoy: real future / recent expiry is not a decoy", () => {
   assert(!api.isDecoyStreamUrl("not a url", NOW), "garbage ignored");
 });
 Deno.test("decoy: wiring in page hooks is bounded", () => {
-  assert(/if \(api\.isDecoyStreamUrl\(url\)\) \{\s*onDecoyUrl\(url\);\s*return nativeFetch\(input, init\);/.test(source), "fetch skips failover for decoys");
+  assert(/if \(api\.isDecoyStreamUrl\(url\)\) \{\s*onDecoyUrl\(url\);\s*return nativeFetch\(input, init\)/.test(source), "fetch skips failover for decoys");
   assert(source.includes("stalledReloaded >= 2") && /function onDecoyUrl[\s\S]*?stalledReloaded >= 2/.test(source), "decoy reload shares the 2-reload cap");
   assert(/decoyReloadMs: (\d+)/.exec(source)[1] < 1000, "reload well under 1s");
 });
@@ -75,7 +75,7 @@ Deno.test("player response: a real url means not a decoy; no urls means nothing"
   assert(!api.findDecoyInPlayerText(null, NOW), "null");
 });
 Deno.test("player response inspection is wired into fetch, XHR, JSON.parse and the initial response", () => {
-  assert(source.includes('if (kind === "player") inspectPlayerText(text);'), "fetch");
+  assert(/if \(kind === "player"\) \{[^}]*inspectPlayerText\(text\);/.test(source), "fetch");
   assert(source.includes('=== "player") inspectPlayerText(raw);'), "xhr");
   assert(source.includes('includes("serverAbrStreamingUrl")) inspectPlayerText(text);'), "JSON.parse");
   assert(source.includes('if (kind === "player") inspectPlayerValue(current);'), "initial");

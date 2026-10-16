@@ -16,11 +16,11 @@ function sim({ opts = null, onTick = () => {},  steps, hidden = () => false, cla
   const f = new Function("Date", "setTimeout", "clearTimeout", "document", "env", `
     const OPTS = env.OPTS;
     let navAt = 0, stalledReloaded = 0, stallTimer = 0, startLogged = false, strippedThisVideo = true, mediaFailed = false;
-    const onWatchSurface = () => true, playerRoot = env.playerRoot, logFailOpen = () => {};
+    const onWatchSurface = () => true, playerRoot = env.playerRoot, logFailOpen = () => {}, diag = () => {}, api = { UBO_LAYER: !!env.ubo };
     const console = { log() {} };
     ${block}
     return { armStall, setFailover: (t) => { lastFailoverAt = t; }, played: (id) => { playbackSeen.any = true; startedVideoId = id; stopStall(); }, renav: () => { playbackSeen.any = false; startLogged = false; stalledReloaded = 0; } };`);
-  const api = f({ now: () => now }, (fn, d) => { const t = { at: now + d, fn }; timers.push(t); return t; }, (t) => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); }, doc, { playerRoot: () => player, OPTS });
+  const api = f({ now: () => now }, (fn, d) => { const t = { at: now + d, fn }; timers.push(t); return t; }, (t) => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); }, doc, { playerRoot: () => player, OPTS, ubo: !!(opts && opts.ubo) });
   api.armStall();
   while (now < ms) {
     now += 100;
@@ -86,4 +86,13 @@ Deno.test("shipped timing: slow-but-loading start is not reloaded", () => {
 Deno.test("shipped timing: ad showing holds the clock", () => {
   const loads = sim({ opts: SRC_OPTS, steps: () => {}, classes: (t) => (t < 5000 ? "ad-showing" : "unstarted-mode"), ms: 6000 });
   assert(loads.length === 0, "no reload during/just after ad " + loads);
+});
+
+Deno.test("uBO layer, no media failure: watchdog waits stallUboMs (SPA buffering is not reloaded at 2s)", () => {
+  const loads = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: () => {}, ms: 20000 });
+  assert(loads.length >= 1 && loads[0] >= SRC_OPTS.stallUboMs && loads[0] <= SRC_OPTS.stallUboMs + 700, "first at " + loads);
+});
+Deno.test("uBO layer, slow but loading SPA start is never reloaded", () => {
+  const loads = sim({ opts: { ...SRC_OPTS, ubo: true }, steps: (t, v) => { v.buffered = { length: 1, end: () => t / 4000 }; }, ms: 12000 });
+  assert(loads.length === 0, "no reload " + loads);
 });

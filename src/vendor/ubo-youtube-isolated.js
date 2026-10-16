@@ -5,6 +5,8 @@
 (function() {
 // >>>> start of private namespace
 ;
+if (globalThis[Symbol.for("twitch-adblock.ubo-isolated")]) { return; }
+if ("ISOLATED" !== "MAIN") { try { Object.defineProperty(globalThis, Symbol.for("twitch-adblock.ubo-isolated"), { value: true }); } catch (e) {} }
 const scriptletGlobals = {};
 const uboOn = (() => {
   const defaults = {"rpnt":false,"rmnt":false,"domBypass":false,"inboundEdit":false,"nanoStb":false};
