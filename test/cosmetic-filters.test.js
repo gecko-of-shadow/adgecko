@@ -55,14 +55,21 @@ Deno.test("perf + size numbers", () => {
   const bytes = new TextEncoder().encode(JSON.stringify(st)).length;
   const pick = (host) => Object.fromEntries(P.keysForHost(host).filter((k) => k in st).map((k) => [k, st[k]]));
   const page = pick("xhamster.com");
-  let t = performance.now();
-  for (let i = 0; i < 100; i++) P.buildPageCss("xhamster.com", page);
-  const build = (performance.now() - t) / 100;
+  // Best batch of several: a GC pause or a busy CPU slows one batch, not all.
+  const bestMs = (n, fn) => {
+    fn();
+    let best = Infinity;
+    for (let b = 0; b < 5; b++) {
+      const t = performance.now();
+      for (let i = 0; i < n; i++) fn();
+      best = Math.min(best, (performance.now() - t) / n);
+    }
+    return best;
+  };
+  const build = bestMs(100, () => P.buildPageCss("xhamster.com", page));
   const exc = Object.keys(bundle.exceptions)[0];
   const pe = pick(exc);
-  t = performance.now();
-  for (let i = 0; i < 20; i++) P.buildPageCss(exc, pe);
-  const buildExc = (performance.now() - t) / 20;
+  const buildExc = bestMs(20, () => P.buildPageCss(exc, pe));
   const readBytes = new TextEncoder().encode(JSON.stringify(page)).length;
   console.log(JSON.stringify({ storageKeys: Object.keys(st).length, storageMB: +(bytes / 1e6).toFixed(2), perPageReadKB: +(readBytes / 1e3).toFixed(0), buildMs: +build.toFixed(3), buildWithExceptionsMs: +buildExc.toFixed(2) }));
   assert(build < 5 && buildExc < 15, "fast build");
