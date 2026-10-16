@@ -111,7 +111,7 @@ Deno.test("a reused player XHR returns the second response", async () => {
     if (mode === "clean" || url.includes("clean=1")) return new Response(cleanBody("videoB"), { status: 200 });
     return new Response(playerBody("videoA"), { status: 200 });
   };
-  delete globalThis.__twitchAdblockYoutube;
+  delete globalThis[Symbol.for("twitch-adblock.yt")];
   try {
     new Function(source)();
     player = element();
@@ -146,7 +146,7 @@ Deno.test("a reused player XHR returns the second response", async () => {
     await new Promise((resolve) => setTimeout(resolve, 600));
     assert(!document.getElementById("twitch-adblock-notice"), "navigation cancels a label retry");
   } finally {
-    delete globalThis.__twitchAdblockYoutube;
+    delete globalThis[Symbol.for("twitch-adblock.yt")];
     JSON.parse = saved.JSON;
     globalThis.document = saved.document;
     globalThis.window = saved.window;
@@ -185,7 +185,7 @@ Deno.test("watch and shorts parsing keeps an ad-only player payload", () => {
   Object.defineProperty(XMLHttpRequest.prototype, "response", { configurable: true, get() { return ""; } });
   globalThis.XMLHttpRequest = XMLHttpRequest;
   globalThis.fetch = async () => new Response("{}");
-  delete globalThis.__twitchAdblockYoutube;
+  delete globalThis[Symbol.for("twitch-adblock.yt")];
   try {
     new Function(source)();
     const adOnly = '{"adPlacements":[{"adPlacementRenderer":{}}],"playerAds":[{"playerLegacyDesktopWatchAdsRenderer":{}}]}';

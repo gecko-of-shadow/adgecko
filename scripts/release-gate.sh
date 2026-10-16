@@ -563,7 +563,7 @@ PY
 section "5. Deno bug / logic / memory / race / youtube"
 if [[ -n "${TEST_ROOT}" && -d "${TEST_ROOT}/test" ]]; then
   set +e
-  (cd "$TEST_ROOT" && deno test --no-lock test/) 2>&1 | tee /tmp/gate-deno.txt
+  (cd "$TEST_ROOT" && deno test --no-lock --allow-read --allow-run --allow-env test/) 2>&1 | tee /tmp/gate-deno.txt
   DENO_RC=${PIPESTATUS[0]}
   set -e
   if [[ "$DENO_RC" -eq 0 ]]; then

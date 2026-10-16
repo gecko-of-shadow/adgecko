@@ -310,7 +310,7 @@ function installYoutubeAdblock(target) {
     }
     let blocked = false;
     const seen = new WeakSet();
-    const dropEntries = kind === "reel" || kind === "watch" || kind === "browse";
+    const dropEntries = !uboLayerPresent() && (kind === "reel" || kind === "watch" || kind === "browse");
 
     function visit(node) {
       if (!node || typeof node !== "object" || seen.has(node)) return;
@@ -958,8 +958,10 @@ function installYoutubeAdblock(target) {
 }
 
 function startYoutubeAdblock() {
-  if (globalThis.__twitchAdblockYoutube) return;
-  globalThis.__twitchAdblockYoutube = true;
+  // Non-enumerable symbol guard: no string-keyed global for the page to spot.
+  const GUARD = Symbol.for("twitch-adblock.yt");
+  if (globalThis[GUARD]) return;
+  try { Object.defineProperty(globalThis, GUARD, { value: true, configurable: true }); } catch { return; }
 
   // Start switches. Defaults aim at a fast start; override for live A/B with
   // localStorage["twitch-adblock-yt-opts"] = '{"noAdFlag":true}' and reload.
@@ -1000,6 +1002,34 @@ function startYoutubeAdblock() {
   const nativeOpen = XMLHttpRequest.prototype.open;
   const nativeSend = XMLHttpRequest.prototype.send;
   const nativeParse = JSON.parse;
+  // Stealth: every hook is a Proxy over the native function (name, length,
+  // prototype pass through) and Function.prototype.toString answers with the
+  // native source, the same shape uBO's proxyApplyFn uses. XHR state lives in
+  // a WeakMap so no instance grows own properties.
+  const cloaked = new WeakMap();
+  const baseToString = Function.prototype.toString;
+  const toStringProxy = new Proxy(baseToString, {
+    apply(target, self, args) {
+      return Reflect.apply(target, cloaked.has(self) ? cloaked.get(self) : self, args);
+    },
+  });
+  cloaked.set(toStringProxy, baseToString);
+  try { Function.prototype.toString = toStringProxy; } catch {}
+  function cloak(fn, impl) {
+    const proxy = new Proxy(fn, {
+      apply(target, self, args) {
+        return impl.apply(self, args);
+      },
+    });
+    cloaked.set(proxy, fn);
+    return proxy;
+  }
+  const xhrState = new WeakMap();
+  function X(xhr) {
+    let st = xhrState.get(xhr);
+    if (!st) xhrState.set(xhr, st = {});
+    return st;
+  }
   const nativeAssign = Object.assign;
   if (OPTS.assignHook) try {
     Object.assign = function (target) {
@@ -1533,7 +1563,7 @@ function startYoutubeAdblock() {
     });
   }
 
-  window.fetch = function (input, init) {
+  window.fetch = cloak(window.fetch, function (input, init) {
     const url = requestUrl(input);
     const kind = api.kindFor(url);
     if (!kind) {
@@ -1611,40 +1641,52 @@ function startYoutubeAdblock() {
       logFailOpen(error);
       return nativeFetch(replay, init);
     });
-  };
+  });
 
-  function installXhrStrip(xhr) {
-    if (xhr.__ytAdblock) return;
-    xhr.__ytAdblock = true;
-    const textDesc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, "responseText");
-    const responseDesc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, "response");
-    Object.defineProperty(xhr, "responseText", {
-      configurable: true,
-      get() {
-        const raw = textDesc.get.call(xhr);
-        if (xhr.readyState !== 4) return raw;
-        if (xhr.__ytCacheGen === xhr.__ytGen) return xhr.__ytCacheText;
-        if (api.kindFor(xhr.__ytUrl || "") === "player") {
-          lastPlayerAt = Date.now();
-          inspectPlayerText(raw);
-        }
-        const stripped = api.stripResponseText(raw, xhr.__ytUrl || "");
-        xhr.__ytCacheText = stripped.blocked ? stripped.text : raw;
-        xhr.__ytCacheGen = xhr.__ytGen;
-        if (stripped.blocked) notify(true);
-        else if ((api.kindFor(xhr.__ytUrl || "") === "player" || api.kindFor(xhr.__ytUrl || "") === "reel") && !api.textLooksLikeAds(raw)) notify(false);
-        return xhr.__ytCacheText;
-      },
-    });
-    Object.defineProperty(xhr, "response", {
-      configurable: true,
-      get() {
-        if (xhr.responseType === "" || xhr.responseType === "text") return xhr.responseText;
-        const raw = responseDesc.get.call(xhr);
-        if (xhr.readyState !== 4 || xhr.responseType !== "json" || !raw || typeof raw !== "object") return raw;
+  function stripXhrText(xhr, raw) {
+    const st = X(xhr);
+    if (xhr.readyState !== 4) return raw;
+    if (st.cacheGen === st.gen) return st.cacheText;
+    const url = st.url || "";
+    if (api.kindFor(url) === "player") {
+      lastPlayerAt = Date.now();
+      inspectPlayerText(raw);
+    }
+    const stripped = api.stripResponseText(raw, url);
+    st.cacheText = stripped.blocked ? stripped.text : raw;
+    st.cacheGen = st.gen;
+    if (stripped.blocked) notify(true);
+    else if ((api.kindFor(url) === "player" || api.kindFor(url) === "reel") && !api.textLooksLikeAds(raw)) notify(false);
+    return st.cacheText;
+  }
+
+  // Patched once on the prototype (descriptor shape unchanged, getters cloaked).
+  function installXhrGetters() {
+    const proto = XMLHttpRequest.prototype;
+    const textDesc = Object.getOwnPropertyDescriptor(proto, "responseText");
+    const responseDesc = Object.getOwnPropertyDescriptor(proto, "response");
+    if (!textDesc || !responseDesc || typeof textDesc.get !== "function" || typeof responseDesc.get !== "function") return;
+    const textGet = textDesc.get;
+    const responseGet = responseDesc.get;
+    Object.defineProperty(proto, "responseText", Object.assign({}, textDesc, {
+      get: cloak(textGet, function () {
+        const raw = textGet.call(this);
+        const st = xhrState.get(this);
+        if (!st || !st.strip) return raw;
+        try { return stripXhrText(this, raw); } catch (error) { logFailOpen(error); return raw; }
+      }),
+    }));
+    Object.defineProperty(proto, "response", Object.assign({}, responseDesc, {
+      get: cloak(responseGet, function () {
+        const raw = responseGet.call(this);
+        const st = xhrState.get(this);
+        if (!st || !st.strip || this.readyState !== 4) return raw;
         try {
-          const stripped = api.stripValue(raw, api.kindFor(xhr.__ytUrl || ""));
-          if (stripped.blocked && (api.kindFor(xhr.__ytUrl || "") !== "player" || api.rootHasPlayback(stripped.value))) {
+          if (this.responseType === "" || this.responseType === "text") return typeof raw === "string" ? stripXhrText(this, raw) : raw;
+          if (this.responseType !== "json" || !raw || typeof raw !== "object") return raw;
+          const kind = api.kindFor(st.url || "");
+          const stripped = api.stripValue(raw, kind);
+          if (stripped.blocked && (kind !== "player" || api.rootHasPlayback(stripped.value))) {
             notify(true);
             return stripped.value;
           }
@@ -1652,14 +1694,15 @@ function startYoutubeAdblock() {
           logFailOpen(error);
         }
         return raw;
-      },
-    });
+      }),
+    }));
   }
+  installXhrGetters();
 
   function installSabrPatch(xhr) {
     if (!api.STEALTH.patchUmpBackoff) return;
-    if (!xhr.__ytSabr) {
-      xhr.__ytSabr = true;
+    if (!X(xhr).sabr) {
+      X(xhr).sabr = true;
       const responseDesc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, "response");
       if (responseDesc && typeof responseDesc.get === "function") {
         let assigned;
@@ -1688,8 +1731,8 @@ function startYoutubeAdblock() {
       }
     }
     const fetchFn = xhr.fetch;
-    if (!xhr.__ytSabrFetch && typeof fetchFn === "function" && fetchFn.length === 3) {
-      xhr.__ytSabrFetch = true;
+    if (!X(xhr).sabrFetch && typeof fetchFn === "function" && fetchFn.length === 3) {
+      X(xhr).sabrFetch = true;
       xhr.fetch = function (onChunk, onDone, body) {
         const parser = api.createUmpBackoffParser();
         return fetchFn.call(xhr, function (chunk) {
@@ -1715,8 +1758,8 @@ function startYoutubeAdblock() {
   // XHR cannot be retried in place, so a failed host is mapped to its first
   // fallback and the player's own retry goes there.
   function watchXhrFailure(xhr) {
-    if (xhr.__ytGvWatch) return;
-    xhr.__ytGvWatch = true;
+    if (X(xhr).gvWatch) return;
+    X(xhr).gvWatch = true;
     let aborted = false;
     xhr.addEventListener("abort", () => {
       aborted = true;
@@ -1729,7 +1772,7 @@ function startYoutubeAdblock() {
         if (aborted) return;
         const status = xhr.status;
         if (status !== 0 && !api.isRetryableStatus(status)) return;
-        const url = xhr.__ytUrl || "";
+        const url = X(xhr).url || "";
         if (api.isDecoyStreamUrl(url)) return onDecoyUrl(url);
         if (status === 403 && !api.STEALTH.failoverOn403) return onDecoyUrl(url, "got HTTP 403 on the stream url");
         const next = api.googlevideoFallbacks(url)[0];
@@ -1743,18 +1786,18 @@ function startYoutubeAdblock() {
     });
   }
 
-  XMLHttpRequest.prototype.open = function (method, url) {
-    this.__ytUrl = String(url || "");
-    this.__ytGen = (this.__ytGen || 0) + 1;
-    if (api.kindFor(this.__ytUrl) === "player") diag("/player requested (xhr)");
-    if (api.kindFor(this.__ytUrl)) installXhrStrip(this);
-    if (api.isSabrPlayback(this.__ytUrl)) {
-      if (api.isDecoyStreamUrl(this.__ytUrl)) onDecoyUrl(this.__ytUrl);
-      const mapped = api.mapBadHost(this.__ytUrl);
-      if (mapped !== this.__ytUrl) {
+  XMLHttpRequest.prototype.open = cloak(nativeOpen, function (method, url) {
+    X(this).url = String(url || "");
+    X(this).gen = (X(this).gen || 0) + 1;
+    if (api.kindFor(X(this).url) === "player") diag("/player requested (xhr)");
+    X(this).strip = !!api.kindFor(X(this).url);
+    if (api.isSabrPlayback(X(this).url)) {
+      if (api.isDecoyStreamUrl(X(this).url)) onDecoyUrl(X(this).url);
+      const mapped = api.mapBadHost(X(this).url);
+      if (mapped !== X(this).url) {
         const args = Array.prototype.slice.call(arguments);
         args[1] = mapped;
-        this.__ytUrl = mapped;
+        X(this).url = mapped;
         installSabrPatch(this);
         watchXhrFailure(this);
         return nativeOpen.apply(this, args);
@@ -1763,10 +1806,10 @@ function startYoutubeAdblock() {
       watchXhrFailure(this);
     }
     return nativeOpen.apply(this, arguments);
-  };
+  });
 
-  XMLHttpRequest.prototype.send = function (body) {
-    if (OPTS.noAdFlag && api.kindFor(this.__ytUrl || "") === "player" && body != null) {
+  XMLHttpRequest.prototype.send = cloak(nativeSend, function (body) {
+    if (OPTS.noAdFlag && api.kindFor(X(this).url || "") === "player" && body != null) {
       try {
         const marked = api.applyNoAdPlayback(body);
         if (marked.changed) body = marked.body;
@@ -1774,11 +1817,11 @@ function startYoutubeAdblock() {
         logFailOpen(error);
       }
     }
-    if (api.isSabrPlayback(this.__ytUrl || "")) installSabrPatch(this);
+    if (api.isSabrPlayback(X(this).url || "")) installSabrPatch(this);
     return nativeSend.call(this, body);
-  };
+  });
 
-  JSON.parse = function (text, reviver) {
+  JSON.parse = cloak(nativeParse, function (text, reviver) {
     const value = nativeParse.call(this, text, reviver);
     if (typeof text === "string" && text.length > 2000 && text.includes("serverAbrStreamingUrl")) inspectPlayerText(text);
     if (typeof text !== "string" || (!api.textLooksLikeAds(text) && !api.textHasStartHold(text))) return value;
@@ -1803,18 +1846,20 @@ function startYoutubeAdblock() {
       logFailOpen(error);
       return value;
     }
-  };
+  });
 
   // uBO's set-constant owns ytInitialPlayerResponse when its layer is present.
   if (!api.UBO_LAYER) hookInitial("ytInitialPlayerResponse", "player");
-  hookInitial("ytInitialData", initialDataKind());
+  // With uBO, nothing in ytInitialData is ours to strip: no window accessor.
+  if (!api.UBO_LAYER) hookInitial("ytInitialData", initialDataKind());
 
+  let homeCssEl = null;
   function injectHomeFeedCss() {
     try {
       if (typeof document === "undefined" || !document.createElement) return;
-      if (document.getElementById && document.getElementById("twitch-adblock-yt-home-css")) return;
+      if (homeCssEl && homeCssEl.isConnected) return;
       const style = document.createElement("style");
-      style.id = "twitch-adblock-yt-home-css";
+      homeCssEl = style;
       style.textContent = api.HOME_FEED_AD_CSS + "{display:none!important;}"
         + api.INTERRUPTIONS_TOAST_CSS + "{display:none!important;pointer-events:none!important;}";
       const parent = document.head || document.documentElement;
