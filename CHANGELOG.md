@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.20
+
+- Ordinary-site blocking adds five network lists: HaGeZi Pro mini, uBO badware, Dandelion Sprout's Anti-Malware, Curben phishing, and AdGuard Base (EasyList already removed). About 212,000 domains in 2,655 rules.
+- List packing no longer turns `$removeparam`, popup-only, redirect, CSP, or site-scoped rules into full domain blocks. `live-video.net` and the other player frame hosts stay off the block list.
+- The 12-hour refresh downloads the same nine lists. A failed, empty, or garbage download keeps that list's last good copy.
+- Twitch, YouTube, and Kick playback are unchanged.
+
 ## 0.2.19
 
 - YouTube: the brief grey player error that flashed on some watch starts (a blocked decoy stream, before the real one plays) is held back. Only an error that appears before playback, within 5s of the start, is hidden, until playback starts or 5s pass. Errors after playback show at once. Turn it off with `{"errorFlash":"off"}` in `localStorage["twitch-adblock-yt-opts"]`.
