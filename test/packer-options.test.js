@@ -24,8 +24,18 @@ Deno.test("packer never-blocks live-video and skips non-blocking options", async
     "raise SystemExit(0 if mod.is_never_block('stats.live-video.net') else 2)",
   ].join("\n");
   const root = decodeURIComponent(new URL("..", import.meta.url).pathname).replace(/^\//, "");
-  const cmd = new Deno.Command("python", { args: ["-c", script], cwd: root });
-  const out = await cmd.output();
+  const bins = Deno.build.os === "windows" ? ["python", "python3"] : ["python3", "python"];
+  let out = null;
+  let lastErr = "";
+  for (const bin of bins) {
+    try {
+      out = await new Deno.Command(bin, { args: ["-c", script], cwd: root }).output();
+      break;
+    } catch (err) {
+      lastErr = String(err && err.message || err);
+    }
+  }
+  assert(out, "neither python3 nor python could start: " + lastErr);
   const text = new TextDecoder().decode(out.stdout);
   assert(out.code === 0, new TextDecoder().decode(out.stderr));
   assert(text.replace(/\r/g, "").trim() === "both.example.com\nok.example.com", JSON.stringify(text));
