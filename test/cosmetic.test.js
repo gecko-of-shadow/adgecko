@@ -89,7 +89,7 @@ Deno.test("manifest wires cosmetic script with stream exclude_matches", () => {
     assert(excluded.has(pattern), `exclude_matches missing ${pattern}`);
   }
   assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
-  assertEquals(manifest.host_permissions, ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*", "https://ublockorigin.github.io/*", "https://easylist-downloads.adblockplus.org/*", "https://secure.fanboy.co.nz/*"], "only the filter-list hosts");
+  assertEquals(manifest.host_permissions, ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*", "https://ublockorigin.github.io/*", "https://easylist-downloads.adblockplus.org/*", "https://secure.fanboy.co.nz/*", "https://raw.githubusercontent.com/hagezi/dns-blocklists/*", "https://raw.githubusercontent.com/DandelionSprout/adfilt/*", "https://filters.adtidy.org/extension/ublock/*"], "only the filter-list hosts");
 });
 
 Deno.test("trimmed EasyList cosmetic CSS credits authors and hides with important", () => {

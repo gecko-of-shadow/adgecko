@@ -84,6 +84,14 @@ YT_AD_BLOCK_PRIORITY = EXCLUSION_PRIORITY + 1
 YT_INITIATORS = ["youtube.com", "youtube-nocookie.com", "youtubekids.com"]
 YT_AD_HOSTS = ["doubleclick.net"]
 
+# Ordinary-site trackers that sit under a never-block parent (googleapis.com)
+# or that we keep even when a list drops them. Not stream hosts.
+EXTRA_TRACKER_DOMAINS = [
+    "facebook.net",
+    "fundingchoicesmessages.google.com",
+    "imasdk.googleapis.com",
+]
+
 
 def build_youtube_ad_block_rules() -> list[dict]:
     return [
@@ -125,7 +133,14 @@ def main() -> int:
 
     allows = build_exclusion_rules()
     yt_blocks = build_youtube_ad_block_rules()
-    merged = allows + yt_blocks + renumbered
+    extra_id = rid
+    extra_tracker = {
+        "id": extra_id,
+        "priority": BLOCK_PRIORITY,
+        "action": {"type": "block"},
+        "condition": {"requestDomains": list(EXTRA_TRACKER_DOMAINS)},
+    }
+    merged = allows + yt_blocks + renumbered + [extra_tracker]
     ids = [r["id"] for r in merged]
     if len(ids) != len(set(ids)):
         print("duplicate rule ids after merge", file=sys.stderr)
@@ -140,14 +155,16 @@ def main() -> int:
         "ruleset_id": "general",
         "path": "src/rules/general-network.json",
         "allow_rules": len(allows),
-        "block_rules": len(renumbered),
+        "block_rules": len(renumbered) + 1,
         "youtube_ad_block_rules": len(yt_blocks),
         "rule_count": len(merged),
         "exclusion_priority": EXCLUSION_PRIORITY,
         "site_domains": SITE_DOMAINS,
         "video_cdn_domains": VIDEO_CDN_DOMAINS,
         "block_id_start": BLOCK_ID_START,
-        "source_blocks": str(LIST_BLOCKS),
+        "source_blocks": "scripts/pack-filter-lists.py",
+        "extra_tracker_rule_id": extra_id,
+        "extra_tracker_domains": list(EXTRA_TRACKER_DOMAINS),
     }
     META_OUT.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(meta, indent=2))

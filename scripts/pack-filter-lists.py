@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import urllib.request
 from collections import OrderedDict
@@ -66,6 +67,51 @@ SOURCES = OrderedDict(
                 "priority": 50,
             },
         ),
+        (
+            "hagezi_pro_mini",
+            {
+                "url": "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt",
+                "license": "HaGeZi Pro mini — see https://github.com/hagezi/dns-blocklists for the current license. Credit: HaGeZi.",
+                "role": "ads_trackers",
+                "priority": 40,
+            },
+        ),
+        (
+            "ublock_badware",
+            {
+                "url": "https://ublockorigin.github.io/uAssets/filters/badware.txt",
+                "license": "uBlock Origin badware filters — GPL-3.0. Credit: Raymond Hill and uBlock Origin contributors.",
+                "role": "malware_threat",
+                "priority": 35,
+            },
+        ),
+        (
+            "dandelion_antimalware",
+            {
+                "url": "https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt",
+                "license": "Dandelion Sprout's Anti-Malware List — see https://github.com/DandelionSprout/adfilt for the current license. Credit: Dandelion Sprout.",
+                "role": "malware_threat",
+                "priority": 30,
+            },
+        ),
+        (
+            "curben_phishing",
+            {
+                "url": "https://malware-filter.gitlab.io/malware-filter/phishing-filter.txt",
+                "license": "phishing-filter (curbengh / malware-filter). Attribution required. https://gitlab.com/malware-filter/phishing-filter",
+                "role": "malware_threat",
+                "priority": 25,
+            },
+        ),
+        (
+            "adguard_base",
+            {
+                "url": "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt",
+                "license": "AdGuard Base filter (EasyList already removed) — GPL-3.0. Credit: AdGuard.",
+                "role": "ads",
+                "priority": 20,
+            },
+        ),
     ]
 )
 
@@ -87,6 +133,11 @@ NEVER_BLOCK_SUFFIXES = (
     "gstatic.com",
     "kick.com",
     "kick-streamer.com",
+    # Player CDN and the other YouTube/Kick frame hosts from
+    # src/general-exclude-hosts.js. HaGeZi lists stats.live-video.net.
+    "live-video.net",
+    "youtube-nocookie.com",
+    "youtubekids.com",
 )
 
 DOMAIN_RE = re.compile(
@@ -101,6 +152,61 @@ BARE_DOMAIN_RE = re.compile(
     r"^([a-z0-9][a-z0-9.-]*[a-z0-9])$",
     re.IGNORECASE,
 )
+# Options this packer cannot represent as a whole-domain block. A hit means
+# "skip the rule" rather than blocking every request to that host.
+_NON_BLOCK_MARKERS = (
+    "removeparam",
+    "queryprune",
+    "redirect",
+    "csp",
+    "badfilter",
+    "cookie",
+    "header",
+    "replace",
+    "permissions",
+    "urltransform",
+    "uritransform",
+    "generichide",
+    "elemhide",
+    "specifichide",
+    "ehide",
+    "shide",
+    "ghide",
+    "rewrite",
+    "sitekey=",
+    "domain=",
+    "from=",
+    "to=",
+    "denyallow",
+    "method=",
+    "jsonprune",
+)
+_POPUP_TYPES = {"popup", "popunder"}
+_OPT_IGNORE = {
+    "important",
+    "match-case",
+    "third-party",
+    "3p",
+    "first-party",
+    "1p",
+    "strict1p",
+    "strict3p",
+    "all",
+}
+
+
+def keeps_whole_domain(opts: str) -> bool:
+    """True when ||host^ options are a whole-domain block this packer can emit."""
+    if not opts:
+        return True
+    low = opts.lower()
+    if any(marker in low for marker in _NON_BLOCK_MARKERS):
+        return False
+    parts = [part.strip() for part in low.lstrip("$").split(",") if part.strip()]
+    meaningful = [part for part in parts if part not in _OPT_IGNORE and not part.startswith("~")]
+    if meaningful and all(part in _POPUP_TYPES for part in meaningful):
+        return False
+    return True
 COSMETIC_RE = re.compile(r"^([^#\n]*?)(#@?#|#\$#)(.+)$")
 
 
@@ -152,18 +258,8 @@ def extract_domains(text: str) -> list[str]:
         m = DOMAIN_RE.match(line)
         if m:
             domain = m.group(1).lower()
-            opts = (m.group(2) or "").lower()
-            # Skip narrow option filters that are not whole-domain blocks.
-            if opts and any(
-                k in opts
-                for k in (
-                    "domain=",
-                    "sitekey=",
-                    "csp=",
-                    "rewrite=",
-                    "header=",
-                )
-            ):
+            opts = m.group(2) or ""
+            if not keeps_whole_domain(opts):
                 continue
             if looks_like_domain(domain):
                 out.append(domain)
@@ -320,11 +416,24 @@ def main() -> int:
     domains, stats = merge_domains(buckets)
     rules = domains_to_dnr_rules(domains)
 
-    network_path = OUT_DIR / "general-network.json"
-    network_path.write_text(
+    # Block batches only. merge-dnr-rules.py owns general-network.json so the
+    # stream allows and the YouTube doubleclick rule are not wiped.
+    blocks_path = ROOT / "scripts" / ".dnr-cache" / "general-network.blocks.json"
+    blocks_path.parent.mkdir(parents=True, exist_ok=True)
+    gitignore = blocks_path.parent / ".gitignore"
+    if not gitignore.exists():
+        gitignore.write_text("*\n!.gitignore\n", encoding="utf-8")
+    blocks_path.write_text(
         json.dumps(rules, separators=(",", ":"), ensure_ascii=True) + "\n",
         encoding="utf-8",
     )
+    merged = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "merge-dnr-rules.py"), str(blocks_path)],
+        check=False,
+    )
+    if merged.returncode != 0:
+        return merged.returncode
+    network_path = OUT_DIR / "general-network.json"
 
     meta = {
         "packed_at_utc": fetched_at,

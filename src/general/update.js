@@ -19,20 +19,25 @@ function installGeneralAdblockUpdate(target) {
 
   // Primary URL first, then mirrors of the same list (tried in order).
   const SOURCES = [
-    { name: "peter_lowe", url: "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext", mirrors: [] },
-    { name: "urlhaus_hosts", url: "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt", mirrors: [], maxDomains: 8000 },
-    { name: "easylist", url: "https://easylist.to/easylist/easylist.txt", cosmetic: true, mirrors: [
+    { name: "peter_lowe", url: "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext", minDomains: 1000, mirrors: [] },
+    { name: "urlhaus_hosts", url: "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt", mirrors: [], maxDomains: 8000, minDomains: 50 },
+    { name: "easylist", url: "https://easylist.to/easylist/easylist.txt", cosmetic: true, minDomains: 10000, mirrors: [
       "https://ublockorigin.github.io/uAssets/thirdparties/easylist.txt",
       "https://easylist-downloads.adblockplus.org/easylist.txt",
       "https://secure.fanboy.co.nz/easylist.txt",
     ] },
-    { name: "easyprivacy", url: "https://easylist.to/easylist/easyprivacy.txt", cosmetic: true, mirrors: [
+    { name: "easyprivacy", url: "https://easylist.to/easylist/easyprivacy.txt", cosmetic: true, minDomains: 10000, mirrors: [
       "https://ublockorigin.github.io/uAssets/thirdparties/easyprivacy.txt",
       "https://easylist-downloads.adblockplus.org/easyprivacy.txt",
       "https://secure.fanboy.co.nz/easyprivacy.txt",
     ] },
+    { name: "hagezi_pro_mini", url: "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt", minDomains: 10000, mirrors: [] },
+    { name: "ublock_badware", url: "https://ublockorigin.github.io/uAssets/filters/badware.txt", minDomains: 500, mirrors: [] },
+    { name: "dandelion_antimalware", url: "https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt", minDomains: 1000, mirrors: [] },
+    { name: "curben_phishing", url: "https://malware-filter.gitlab.io/malware-filter/phishing-filter.txt", minDomains: 5000, mirrors: [] },
+    { name: "adguard_base", url: "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt", minDomains: 1000, mirrors: [] },
   ];
-  const LIST_HOSTS = ["pgl.yoyo.org", "malware-filter.gitlab.io", "easylist.to", "ublockorigin.github.io", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz"];
+  const LIST_HOSTS = ["pgl.yoyo.org", "malware-filter.gitlab.io", "easylist.to", "ublockorigin.github.io", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz", "raw.githubusercontent.com", "filters.adtidy.org"];
   // Dynamic allow rule so no block rule (ours or a stale one) can stop the
   // extension's own list downloads. Outside the list and user-allow id ranges.
   const LIST_ALLOW_RULE_ID = 990001;
@@ -49,12 +54,25 @@ function installGeneralAdblockUpdate(target) {
     "twitch.tv", "ttvnw.net", "jtvnw.net", "twitchcdn.net", "twitchcdn.com", "ext-twitch.tv",
     "youtube.com", "youtu.be", "googlevideo.com", "ytimg.com", "ggpht.com",
     "youtubei.googleapis.com", "googleapis.com", "gstatic.com", "kick.com", "kick-streamer.com",
+    "live-video.net", "youtube-nocookie.com", "youtubekids.com",
   ];
 
   const DOMAIN_RE = /^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])\^(\$[^#]*)?$/i;
   const HOSTS_RE = /^(?:0\.0\.0\.0|127\.0\.0\.1)\s+([a-z0-9][a-z0-9.-]*[a-z0-9])\s*$/i;
   const BARE_RE = /^([a-z0-9][a-z0-9.-]*[a-z0-9])$/i;
-  const SKIP_OPTS = ["domain=", "sitekey=", "csp=", "rewrite=", "header="];
+  const NON_BLOCK_MARKERS = ["removeparam", "queryprune", "redirect", "csp", "badfilter", "cookie", "header", "replace", "permissions", "urltransform", "uritransform", "generichide", "elemhide", "specifichide", "ehide", "shide", "ghide", "rewrite", "sitekey=", "domain=", "from=", "to=", "denyallow", "method=", "jsonprune"];
+  const POPUP_TYPES = { popup: true, popunder: true };
+  const OPT_IGNORE = { important: true, "match-case": true, "third-party": true, "3p": true, "first-party": true, "1p": true, strict1p: true, strict3p: true, all: true };
+
+  function keepsWholeDomain(opts) {
+    if (!opts) return true;
+    const low = String(opts).toLowerCase();
+    if (NON_BLOCK_MARKERS.some((marker) => low.includes(marker))) return false;
+    const parts = low.replace(/^\$/, "").split(",").map((part) => part.trim()).filter(Boolean);
+    const meaningful = parts.filter((part) => !OPT_IGNORE[part] && !part.startsWith("~"));
+    if (meaningful.length && meaningful.every((part) => POPUP_TYPES[part])) return false;
+    return true;
+  }
 
   function isNeverBlock(domain) {
     const d = String(domain || "").toLowerCase().replace(/\.$/, "");
@@ -76,8 +94,7 @@ function installGeneralAdblockUpdate(target) {
       if (line.includes("##") || line.includes("#@#") || line.includes("#$")) continue;
       let m = DOMAIN_RE.exec(line);
       if (m) {
-        const opts = (m[2] || "").toLowerCase();
-        if (opts && SKIP_OPTS.some((k) => opts.includes(k))) continue;
+        if (!keepsWholeDomain(m[2] || "")) continue;
         const d = m[1].toLowerCase();
         if (looksLikeDomain(d)) out.push(d);
         continue;
@@ -223,7 +240,8 @@ function installGeneralAdblockUpdate(target) {
           if (!res.ok) throw new Error("HTTP " + res.status);
           const text = await res.text();
           const domains = parseList(text);
-          if (domains.length < 50) throw new Error("parsed too few domains (" + domains.length + ")");
+          const floor = src.minDomains || 50;
+          if (domains.length < floor) throw new Error("parsed too few domains (" + domains.length + " < " + floor + ")");
           lists[src.name] = {
             url: usedUrl,
             etag: res.headers && res.headers.get ? res.headers.get("ETag") || "" : "",
@@ -397,7 +415,7 @@ function installGeneralAdblockUpdate(target) {
   Object.assign(target, {
     POLICY, STARTUP_DELAY_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES,
     LIST_RULE_ID_BASE, KEPT_RULE_ID_BASE, ALLOW_RULE_ID_BASE, SOURCES, LIST_HOSTS,
-    isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules,
+    isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules, keepsWholeDomain,
     shouldRun, listDue, refresh, describeError, LIST_ALLOW_RULE_ID, listAllowRule, applyEnabled, isListUrl,
   });
 }

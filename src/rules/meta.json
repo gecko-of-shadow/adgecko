@@ -1,47 +1,92 @@
 {
-  "packed_at_utc": "2026-10-11T04:18:30Z",
+  "packed_at_utc": "2026-10-17T00:18:55Z",
   "format": "chrome_declarativeNetRequest_rules_array",
-  "domains_total": 99729,
-  "dnr_rules_total": 1247,
+  "domains_total": 211995,
+  "dnr_rules_total": 2650,
   "domains_per_rule": 80,
   "max_dnr_rules_budget": 28000,
   "headroom_note": "Reserve remaining static rule quota for stream-site allow rules (DNR agent).",
   "sources": {
     "peter_lowe": {
       "url": "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext",
-      "sha256": "637f284766fac3871396cbef076ae7f03b4de2c0bce4936fec31e5996e600c0c",
+      "sha256": "d80faa52f2871c95bc224adba1676da5b69d3aeb03094f2bcd431d4ac4fad28d",
       "role": "ads_trackers",
       "priority": 100,
-      "raw": 3548,
-      "kept": 3544,
+      "raw": 3569,
+      "kept": 3565,
       "skipped_never": 4
     },
     "urlhaus_hosts": {
       "url": "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt",
-      "sha256": "ea6e529bf50a40297766b7f4ad7dacc3ea8389b6646d5bf260d86d63e3f03cd6",
+      "sha256": "756fbe728ca940ae0ad402b250a91cbecf05bccbda88dc6ba1adfda212c27d93",
       "role": "malware_threat",
       "priority": 90,
-      "raw": 523,
-      "kept": 523,
+      "raw": 536,
+      "kept": 536,
       "skipped_never": 0
     },
     "easylist": {
       "url": "https://easylist.to/easylist/easylist.txt",
-      "sha256": "9b73b708c424d98e155236015c3eb28d585fe9f64be1da329ecb20e8373f840f",
+      "sha256": "96c7bde591373a3485bde745c69569bdeea55d81eadb886db6ba502a49e8c2f3",
       "role": "ads",
       "priority": 70,
-      "raw": 52240,
-      "kept": 49564,
+      "raw": 51424,
+      "kept": 50368,
       "skipped_never": 3
     },
     "easyprivacy": {
       "url": "https://easylist.to/easylist/easyprivacy.txt",
-      "sha256": "2502b80f3f6de48956f76fc7b8e4eac27e12cc08acb7dd828cc69c688edd6633",
+      "sha256": "0256f929201407119a40b7e82d5c3d393bab537b49d24e67fe5a9d10b6653678",
       "role": "privacy",
       "priority": 50,
-      "raw": 47174,
-      "kept": 46098,
+      "raw": 47177,
+      "kept": 46118,
       "skipped_never": 6
+    },
+    "hagezi_pro_mini": {
+      "url": "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt",
+      "sha256": "2a9fc2a4d6d8fe14f04a3f434727c6fc36ee214dd642d10f489e03251e0fecd6",
+      "role": "ads_trackers",
+      "priority": 40,
+      "raw": 75175,
+      "kept": 56375,
+      "skipped_never": 26
+    },
+    "ublock_badware": {
+      "url": "https://ublockorigin.github.io/uAssets/filters/badware.txt",
+      "sha256": "dbb7b3a6e20266b92fb35e940a4ace8e023259078a3d6a2f716eaebc9b653d0f",
+      "role": "malware_threat",
+      "priority": 35,
+      "raw": 2869,
+      "kept": 2319,
+      "skipped_never": 0
+    },
+    "dandelion_antimalware": {
+      "url": "https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt",
+      "sha256": "80b39c7222b46707cea98cb5c4c9ddbb4ba29a2d6aeeaf41f0fa175adf3bb1df",
+      "role": "malware_threat",
+      "priority": 30,
+      "raw": 12126,
+      "kept": 11656,
+      "skipped_never": 0
+    },
+    "curben_phishing": {
+      "url": "https://malware-filter.gitlab.io/malware-filter/phishing-filter.txt",
+      "sha256": "c46f7d27fe71c419f0f080d2231f4d7b6badf8bdb9b7cbffd828d34eaacc6550",
+      "role": "malware_threat",
+      "priority": 25,
+      "raw": 30900,
+      "kept": 30391,
+      "skipped_never": 1
+    },
+    "adguard_base": {
+      "url": "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt",
+      "sha256": "8491a07b6bb6d639c4b2592fffc988ef3659c56737f54945d7ca982ffa714e39",
+      "role": "ads",
+      "priority": 20,
+      "raw": 12275,
+      "kept": 10667,
+      "skipped_never": 3
     }
   },
   "never_block_suffixes": [
@@ -60,7 +105,10 @@
     "googleapis.com",
     "gstatic.com",
     "kick.com",
-    "kick-streamer.com"
+    "kick-streamer.com",
+    "live-video.net",
+    "youtube-nocookie.com",
+    "youtubekids.com"
   ],
   "manifest_hint": {
     "permissions": [

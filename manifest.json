@@ -13,7 +13,10 @@
     "https://malware-filter.gitlab.io/*",
     "https://ublockorigin.github.io/*",
     "https://easylist-downloads.adblockplus.org/*",
-    "https://secure.fanboy.co.nz/*"
+    "https://secure.fanboy.co.nz/*",
+    "https://raw.githubusercontent.com/hagezi/dns-blocklists/*",
+    "https://raw.githubusercontent.com/DandelionSprout/adfilt/*",
+    "https://filters.adtidy.org/extension/ublock/*"
   ],
   "background": {
     "service_worker": "src/general-background.js"
