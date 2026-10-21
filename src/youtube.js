@@ -1011,7 +1011,7 @@ function startYoutubeAdblock() {
   //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
   //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
   //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
-  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, stallUnderUbo: "gentle", stallGentleMs: 15000, waitReplyHoldMs: 20000, umpBackoff: false, diag: true, domSweepMs: 400, decoyReloadMs: 150, decoyGapMs: 1500, errorFlash: "gated", errorFlashWindowMs: 5000, errorFlashRevealMs: 1500 };
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, stallUnderUbo: "gentle", stallGentleMs: 15000, waitReplyHoldMs: 20000, decoyWaitHoldMs: 10000, decoyWaitCapMs: 8000, decoyGentleMs: 7000, decoyNavFloor: false, decoyBufGuard: true, umpBackoff: false, diag: true, domSweepMs: 400, decoyReloadMs: 150, decoyGapMs: 1500, errorFlash: "gated", errorFlashWindowMs: 5000, errorFlashRevealMs: 1500 };
   try {
     const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
     for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
@@ -1062,15 +1062,37 @@ function startYoutubeAdblock() {
   // start (the owner's PC 2026-10-16: uBO-only 0.8-2.2s vs 3.7-4.5s with hooks), so
   // they stay out unless {"hooksUnderUbo":true}.
   const HOOKS = !uboLayerPresent() || OPTS.hooksUnderUbo === true;
+  let hooksStoodDown = false;
+  function hooksLive() {
+    if (!uboLayerPresent()) return true;
+    // Read-only and once per page: also when hooksUnderUbo keeps the hooks live.
+    installResourceObserver();
+    if (OPTS.hooksUnderUbo === true) return true;
+    if (!hooksStoodDown) { hooksStoodDown = true; diag("uBO layer appeared after hooks installed: hooks standing down"); }
+    return false;
+  }
   const NUDGE = !uboLayerPresent() || OPTS.nudgeUnderUbo === true;
   if (HOOKS) try { Function.prototype.toString = toStringProxy; } catch {}
   // Read-only: resource timing shows the tiny (104/105-byte) SABR wait reply
   // without touching fetch, so the gentle watchdog can hold off during it.
   api.lastWaitReplyAt = 0;
-  if (uboLayerPresent() && OPTS.stallUnderUbo === "gentle" && typeof PerformanceObserver === "function") {
+  // Also flags decoy media urls (blocked ones still get entries), so the
+  // gentle watchdog has decoy evidence while our fetch hooks are off. Installed
+  // at start under uBO, or on the first hooked call after a late uBO marker.
+  let resourceObserverOn = false;
+  function installResourceObserver() {
+    if (resourceObserverOn || OPTS.stallUnderUbo !== "gentle" || typeof PerformanceObserver !== "function") return;
+    resourceObserverOn = true;
     try {
       new PerformanceObserver((list) => {
         for (const e of list.getEntries()) {
+          if (!uboLayerPresent()) continue;
+          // Entries arrive async: one that started before yt-navigate-start is the previous video's.
+          if (typeof e.startTime === "number" && e.startTime < navPerfAt) continue;
+          if (!uboDecoyThisNav && e.name.includes("/videoplayback") && api.isDecoyStreamUrl(e.name)) {
+            uboDecoyThisNav = true;
+            diag("decoy seen via resource timing (expire=" + (/[?&]expire=(\d+)/.exec(e.name) || [])[1] + ")");
+          }
           if (e.name.includes("/videoplayback") && e.encodedBodySize >= 100 && e.encodedBodySize <= 110) {
             api.lastWaitReplyAt = Date.now();
             diag("SABR wait reply seen (" + e.encodedBodySize + "B)");
@@ -1081,9 +1103,13 @@ function startYoutubeAdblock() {
       logFailOpen(error);
     }
   }
+  if (uboLayerPresent()) installResourceObserver();
   function cloak(fn, impl) {
     const proxy = new Proxy(fn, {
       apply(target, self, args) {
+        // uBO marker can land after we install (late MAIN-world injection):
+        // once it is live, our hooks stand down to native unless hooksUnderUbo.
+        if (!hooksLive()) return Reflect.apply(target, self, args);
         return impl.apply(self, args);
       },
     });
@@ -1253,6 +1279,8 @@ function startYoutubeAdblock() {
   let stalledReloaded = 0;
   let stallTimer = 0;
   let navAt = Date.now();
+  // performance.now() at the last yt-navigate-start (resource-timing clock).
+  let navPerfAt = 0;
   let startLogged = false;
   let strippedThisVideo = false;
 
@@ -1264,6 +1292,10 @@ function startYoutubeAdblock() {
   // and readyState have not moved for stallQuietMs, so a slow-but-loading
   // start is never reloaded.
   let stallArmedAt = 0;
+  // Decoys seen while the uBO layer is live (hook, fetch failure or resource timing).
+  let uboDecoyThisNav = false;
+  // When the decoy path first held for a SABR wait reply this nav (decoyWaitCapMs).
+  let waitHoldStartAt = 0;
   let stallLastSig = "";
   let stallLastProgressAt = 0;
   let lastFailoverAt = 0;
@@ -1294,6 +1326,15 @@ function startYoutubeAdblock() {
       // optional
     }
     return false;
+  }
+
+  function bufferedEnd(video) {
+    try {
+      const b = video.buffered;
+      return b && b.length ? b.end(b.length - 1) : 0;
+    } catch {
+      return 0;
+    }
   }
 
   function stallSignature(video) {
@@ -1355,13 +1396,27 @@ function startYoutubeAdblock() {
     // uBO layer and no media failure seen: the player may be legitimately
     // retrying internally (SABR); give it OPTS.stallUboMs before we reload.
     // uBO layer: floor for every reason, decoys included.
-    if (api.UBO_LAYER && now - navAt < OPTS.stallUboMs) return again();
+    // Decoys seen and failed this nav: the start is known-broken, so a shorter
+    // gentle wait (decoyGentleMs since last progress); decoyNavFloor keeps the 10s nav floor.
+    // Only while nothing is buffered: real media trickling in (buffered end > 0)
+    // means the start is slow, not decoy-broken, so it keeps the full gentle wait.
+    const decoyFast = api.UBO_LAYER && OPTS.stallUnderUbo === "gentle" && uboDecoyThisNav && OPTS.decoyGentleMs > 0 && !(OPTS.decoyBufGuard && bufferedEnd(video) > 0);
+    if (api.UBO_LAYER && (!decoyFast || OPTS.decoyNavFloor) && now - navAt < OPTS.stallUboMs) return again();
     if (api.UBO_LAYER && OPTS.stallUnderUbo === "gentle") {
       if (stalledReloaded >= 1) return stopStall();
-      if (now - navAt < OPTS.stallGentleMs || now - stallLastProgressAt < OPTS.stallGentleMs) return again();
-      if (api.lastWaitReplyAt && now - api.lastWaitReplyAt < OPTS.waitReplyHoldMs) {
-        diag("gentle watchdog: SABR wait reply " + (now - api.lastWaitReplyAt) + "ms ago, holding");
-        return again();
+      const gentleMs = decoyFast ? OPTS.decoyGentleMs : OPTS.stallGentleMs;
+      if (now - navAt < gentleMs || now - stallLastProgressAt < gentleMs) return again();
+      // Decoys failed and nothing buffered: a wait reply holds only decoyWaitHoldMs,
+      // and all holds together stop decoyWaitCapMs after the first, so steady wait
+      // replies cannot push the reload past the plain gentle wait.
+      const holdMs = decoyFast && OPTS.decoyWaitHoldMs > 0 ? Math.min(OPTS.decoyWaitHoldMs, OPTS.waitReplyHoldMs) : OPTS.waitReplyHoldMs;
+      if (api.lastWaitReplyAt && now - api.lastWaitReplyAt < holdMs) {
+        if (decoyFast && (!waitHoldStartAt || waitHoldStartAt < navAt)) waitHoldStartAt = now;
+        if (!(decoyFast && OPTS.decoyWaitCapMs > 0 && now - waitHoldStartAt >= OPTS.decoyWaitCapMs)) {
+          diag("gentle watchdog: SABR wait reply " + (now - api.lastWaitReplyAt) + "ms ago, holding");
+          return again();
+        }
+        diag("gentle watchdog: decoys + empty buffer, wait-reply hold capped after " + (now - waitHoldStartAt) + "ms");
       }
     }
     // uBO: once a reload got a fresh /player answer, never reload again.
@@ -1381,14 +1436,14 @@ function startYoutubeAdblock() {
       id = "";
     }
     if (!id) return again();
-    diag("reload reason: no progress " + (now - stallLastProgressAt) + "ms, armed " + (now - stallArmedAt) + "ms ago, decoyThisNav=" + decoyThisNav + ", mediaFailed=" + mediaFailed + ", uBO=" + api.UBO_LAYER + ", reloads=" + stalledReloaded);
+    diag("reload reason: no progress " + (now - stallLastProgressAt) + "ms, armed " + (now - stallArmedAt) + "ms ago, decoyThisNav=" + decoyThisNav + ", uboDecoys=" + uboDecoyThisNav + ", mediaFailed=" + mediaFailed + ", uBO=" + api.UBO_LAYER + ", reloads=" + stalledReloaded);
     reloadVideo(player, id, now, "start stalled at 0:00" + (mediaFailed ? " after media server failures" : ""));
   }
 
   function reloadVideo(player, id, now, why) {
     stalledReloaded += 1;
     lastReloadAt = now;
-    console.log("twitch-adblock: [+" + (now - navAt) + "ms] YouTube " + why + ", reloading the video (" + stalledReloaded + "/2)");
+    console.log("twitch-adblock: [+" + (now - navAt) + "ms] YouTube " + why + ", reloading the video (" + stalledReloaded + "/" + (api.UBO_LAYER && OPTS.stallUnderUbo === "gentle" ? 1 : 2) + ")");
     mediaFailed = false;
     mediaExhaustedNow = false;
     try {
@@ -1408,7 +1463,7 @@ function startYoutubeAdblock() {
     // progress, never while a SABR wait reply (104/105-byte UMP) is recent.
     if (api.UBO_LAYER && OPTS.stallUnderUbo !== true && (OPTS.stallUnderUbo !== "gentle" || stalledReloaded >= 1)) return;
     if (!OPTS.stallReload || stalledReloaded >= 2 || startLogged || playbackSeen.any) return;
-    diag("stall watchdog armed" + (why ? " (" + why + ")" : "") + (api.UBO_LAYER && !decoyThisNav ? ", uBO floor " + OPTS.stallUboMs + "ms" : ""));
+    diag("stall watchdog armed" + (why ? " (" + why + ")" : "") + (api.UBO_LAYER ? (OPTS.stallUnderUbo === "gentle" ? ", uBO gentle " + (uboDecoyThisNav && OPTS.decoyGentleMs > 0 ? OPTS.decoyGentleMs + "ms (decoys)" : OPTS.stallGentleMs + "ms") + ", 1 reload max" : ", uBO floor " + OPTS.stallUboMs + "ms") : ""));
     clearTimeout(stallTimer);
     const now = Date.now();
     // minMs shortens/lengthens the earliest fire time relative to stallMs.
@@ -1450,6 +1505,7 @@ function startYoutubeAdblock() {
   }
 
   function onDecoyUrl(url, why, wantId) {
+    if (api.UBO_LAYER) uboDecoyThisNav = true; // evidence for the gentle watchdog only
     // uBO layer: its DNR rule already fails decoys and the player recovers on
     // its own (eb034fd log: a fast reload here cost ~10s). Only the 10s floor applies.
     if (api.UBO_LAYER) {
@@ -1660,6 +1716,7 @@ function startYoutubeAdblock() {
       if (api.isDecoyStreamUrl(url)) {
         onDecoyUrl(url);
         return nativeFetch(input, init).catch((error) => {
+          if (api.UBO_LAYER) uboDecoyThisNav = true;
           diag("decoy fetch failed (" + String(error && error.message || error) + ")");
           throw error;
         });
@@ -2027,6 +2084,7 @@ function startYoutubeAdblock() {
     decoyTimer = 0;
     mediaFailed = false;
     decoyThisNav = false;
+    uboDecoyThisNav = false;
     lastPlayerAt = 0;
     lastExhaustedAt = 0;
     stalledReloaded = 0;
@@ -2036,6 +2094,13 @@ function startYoutubeAdblock() {
     lastReloadAt = 0;
     lastMediaEventAt = 0;
     navAt = Date.now();
+    try {
+      navPerfAt = performance.now();
+    } catch {
+      navPerfAt = 0;
+    }
+    // The previous video's wait reply must not hold this video's watchdog.
+    api.lastWaitReplyAt = 0;
     mediaExhaustedNow = false;
     lastFailoverAt = 0;
     stopStall();
