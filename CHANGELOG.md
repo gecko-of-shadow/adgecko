@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.21
+
+- YouTube: a video stuck at 0:00 after its blocked ad (decoy) streams failed recovers sooner. When those streams failed and no video data has loaded, the one automatic reload now comes 7s after the last sign of progress instead of 15s. In replays of a real stuck start, playback came back at about 9s (about 12s when YouTube also sent its usual early "retry later" reply) instead of about 17s.
+- A start that has loaded some video data keeps the full 15s wait.
+- On those stuck starts, each YouTube "retry later" reply holds the reload for at most 10s, and all such holds end 8s after the first one began, so a steady stream of them can no longer keep the video at 0:00. Elsewhere a recent reply still holds the reload for up to 20s, and the reply watcher now runs whichever order the scripts load in.
+- A "retry later" reply from the previous video no longer delays the next video's reload.
+- Trade-off: a start that shows no progress for 7s after its ad streams failed is reloaded even if YouTube would have started it by itself a few seconds later.
+- Settings in `localStorage["twitch-adblock-yt-opts"]`: `decoyGentleMs` (7000; `0` turns the faster reload off), `decoyWaitHoldMs` (10000), `decoyWaitCapMs` (8000).
+- Twitch, Kick, and ordinary-site playback and blocking are unchanged.
+
 ## 0.2.20
 
 - Ordinary-site blocking adds five network lists: HaGeZi Pro mini, uBO badware, Dandelion Sprout's Anti-Malware, Curben phishing, and AdGuard Base (EasyList already removed). About 212,000 domains in 2,655 rules.
