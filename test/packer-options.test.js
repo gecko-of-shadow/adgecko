@@ -23,19 +23,28 @@ Deno.test("packer never-blocks live-video and skips non-blocking options", async
     "print('\\n'.join(merged))",
     "raise SystemExit(0 if mod.is_never_block('stats.live-video.net') else 2)",
   ].join("\n");
-  const root = decodeURIComponent(new URL("..", import.meta.url).pathname).replace(/^\//, "");
-  const bins = Deno.build.os === "windows" ? ["python", "python3"] : ["python3", "python"];
+  // A URL cwd works on every OS. Stripping the leading "/" off .pathname (meant for
+  // "/G:/...") turned POSIX roots relative ("workspace/twitch-adblock/"): "No such cwd".
+  const root = new URL("..", import.meta.url);
+  // Windows: the launcher first. The Store alias python.exe/python3.exe starts but
+  // exits 9009 ("Python was not found"), so it counts as missing and the next is tried.
+  const bins = Deno.build.os === "windows" ? [["py", "-3"], ["python"], ["python3"]] : [["python3"], ["python"]];
   let out = null;
-  let lastErr = "";
-  for (const bin of bins) {
+  const tried = [];
+  for (const [bin, ...pre] of bins) {
     try {
-      out = await new Deno.Command(bin, { args: ["-c", script], cwd: root }).output();
+      const res = await new Deno.Command(bin, { args: [...pre, "-c", script], cwd: root, env: { PYTHONDONTWRITEBYTECODE: "1" } }).output();
+      if (res.code === 9009 || /Python was not found|Microsoft Store/.test(new TextDecoder().decode(res.stderr))) {
+        tried.push(bin + ": Store alias, not a real Python");
+        continue;
+      }
+      out = res;
       break;
     } catch (err) {
-      lastErr = String(err && err.message || err);
+      tried.push(bin + ": " + String(err && err.message || err));
     }
   }
-  assert(out, "neither python3 nor python could start: " + lastErr);
+  assert(out, "no usable Python 3 (" + tried.join("; ") + ")");
   const text = new TextDecoder().decode(out.stdout);
   assert(out.code === 0, new TextDecoder().decode(out.stderr));
   assert(text.replace(/\r/g, "").trim() === "both.example.com\nok.example.com", JSON.stringify(text));
