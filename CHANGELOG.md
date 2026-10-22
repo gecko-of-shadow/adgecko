@@ -2,7 +2,7 @@
 
 ## 0.2.21
 
-- YouTube: a video stuck at 0:00 after its blocked ad (decoy) streams failed recovers sooner. When those streams failed and no video data has loaded, the one automatic reload now comes 7s after the last sign of progress instead of 15s. In replays of a real stuck start, playback came back at about 9s (about 12s when YouTube also sent its usual early "retry later" reply) instead of about 17s.
+- YouTube: a video stuck at 0:00 after its blocked ad (decoy) streams failed recovers sooner. When those streams failed and no video data has loaded, the one automatic reload now comes 7s after the last sign of progress instead of 15s. In replays of a real stuck start, the reload came at about 9s (about 12s when YouTube also sent its usual early "retry later" reply) instead of about 17s, and playback resumed about 2s later.
 - A start that has loaded some video data keeps the full 15s wait.
 - On those stuck starts, each YouTube "retry later" reply holds the reload for at most 10s, and all such holds end 8s after the first one began, so a steady stream of them can no longer keep the video at 0:00. Elsewhere a recent reply still holds the reload for up to 20s, and the reply watcher now runs whichever order the scripts load in.
 - A "retry later" reply from the previous video no longer delays the next video's reload.
