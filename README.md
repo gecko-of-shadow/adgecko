@@ -6,18 +6,24 @@
 
 A free Chrome extension that blocks ads on Twitch, YouTube, Kick, and other sites. It runs only in your browser. Nothing leaves your computer.
 
-## Quick Install (Chrome)
+## Quick Install (Chrome on Windows)
 
 1. **Download** the latest zip from [Releases](https://github.com/gecko-of-shadow/twitch-adblock/releases/latest)  
    → [Direct download v0.2.21](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.2.21/twitch-adblock-0.2.21.zip)
 
-2. **Unzip** the file. Keep the folder.
+2. **Unzip** the file (right-click → Extract All). Keep the folder.
+
+![How to extract the ZIP on Windows](docs/extract-zip-windows.jpg)
 
 3. **Open Chrome** and go to `chrome://extensions`
 
 4. **Turn on Developer mode** (toggle in the top right)
 
+![Chrome extensions page with Developer mode](docs/chrome-extensions.png)
+
 5. **Click "Load unpacked"** and select the unzipped folder (the one with `manifest.json`)
+
+![Load unpacked step](docs/load-unpacked.png)
 
 Done. The gecko icon appears in your toolbar. Eyes glow when general blocking is on.
 
