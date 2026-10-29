@@ -177,7 +177,10 @@ else
   pass "popup.html loads only popup.js"
 fi
 echo "  package bytes: $SIZE"
-if [[ "$SIZE" -gt 5000000 ]]; then fail "package unexpectedly large (>5MB)"; else pass "package size sane"; fi
+# 0.2.20 packed five more network lists: general-network.json grew from 2.3MB to
+# 5.2MB. Repo mode sums only REQUIRED (~5.5MB); --zip counts every shipped file
+# (~6.7MB, ~0.3MB under this limit). 7MB still catches a runaway list pack.
+if [[ "$SIZE" -gt 7000000 ]]; then fail "package unexpectedly large (>7MB)"; else pass "package size sane"; fi
 
 section "1b. Playback files untouched"
 PLAYBACK_OK=1
@@ -234,7 +237,7 @@ rules_path = sys.argv[2]
 bad = []
 # DNR + storage, plus the popup UI worker. No host access and no auto-update.
 forbidden_keys = ("externally_connectable", "oauth2", "key")
-LIST_HOSTS = ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*", "https://ublockorigin.github.io/*", "https://easylist-downloads.adblockplus.org/*", "https://secure.fanboy.co.nz/*"]
+LIST_HOSTS = ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*", "https://ublockorigin.github.io/*", "https://easylist-downloads.adblockplus.org/*", "https://secure.fanboy.co.nz/*", "https://raw.githubusercontent.com/hagezi/dns-blocklists/*", "https://raw.githubusercontent.com/DandelionSprout/adfilt/*", "https://filters.adtidy.org/extension/ublock/*"]
 if (m.get("host_permissions") or []) not in ([], LIST_HOSTS):
     bad.append(f"host_permissions must be only the filter-list hosts, got {m.get('host_permissions')!r}")
 for key in forbidden_keys:
@@ -486,7 +489,7 @@ python3 - "$SCAN_ROOT" <<'PY' || FAILS=$((FAILS + 1))
 import pathlib, re, sys
 root = pathlib.Path(sys.argv[1])
 allowed_host_bits = (
-    "easylist.to", "pgl.yoyo.org", "malware-filter.gitlab.io", "ublockorigin.github.io", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz",  # filter-list refresh (host_permissions)
+    "easylist.to", "pgl.yoyo.org", "malware-filter.gitlab.io", "ublockorigin.github.io", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz", "filters.adtidy.org",  # filter-list refresh (host_permissions)
     "twitch.tv", "ttvnw.net", "jtvnw.net", "twitchcdn",
     "youtube.com", "youtu.be", "googlevideo.com", "ytimg.com",
     "googleapis.com", "ggpht.com", "yt3.", "youtubei.",
