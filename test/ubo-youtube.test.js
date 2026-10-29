@@ -136,3 +136,22 @@ Deno.test("inboundEdit: root-key guard skips the clone for unrelated JSON.string
   const r = await runBundle();
   assert(r.boot.every((x) => x === true), "bootstrap still runs " + JSON.stringify(r.boot));
 });
+
+// uBO's videoplayback rule allows only a rolling window of `expire=` timestamps and
+// blocks everything else. uBO ships a new window before it runs out; this bundle
+// only gets one from scripts/sync-ubo-youtube.mjs. Once real links fall outside the
+// window, every YouTube video (on youtube.com and in embeds) stops loading.
+Deno.test("uBO videoplayback expire window still covers real links for 30 days (re-sync if this fails)", () => {
+  const rule = rules.find((r) => r.condition?.regexFilter?.includes("videoplayback\\?expire="));
+  if (!rule) return; // rule dropped upstream: nothing to expire
+  const re = new RegExp(rule.condition.regexFilter);
+  const url = (sec) => `https://rr1---sn-abc.googlevideo.com/videoplayback?expire=${sec}&ei=x&itag=137`;
+  const now = Math.floor(Date.now() / 1000);
+  for (const days of [0, 30]) {
+    const expire = now + days * 86400 + 6 * 3600; // links expire about 6 h after they're issued
+    if (re.test(url(expire))) {
+      throw new Error(`a normal link with expire=${expire} (${new Date(expire * 1000).toISOString()}) is blocked; run scripts/sync-ubo-youtube.mjs`);
+    }
+  }
+  if (!re.test(url(1500000000))) throw new Error("sanity: the rule still blocks out-of-window links");
+});

@@ -195,6 +195,21 @@ function installCosmeticHide(api) {
 
     sync();
 
+    // The popup can't read tab URLs (no "tabs" permission), so the top frame
+    // tells it which origin "Allow this page" should toggle.
+    try {
+      const onMessage = opts.onMessage || (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage);
+      const top = opts.isTop != null ? opts.isTop : (typeof window !== "undefined" && window.top === window);
+      if (top && onMessage && onMessage.addListener) {
+        onMessage.addListener((msg, _sender, sendResponse) => {
+          if (!msg || msg.type !== "pageOrigin") return;
+          sendResponse({ origin: pageOrigin(opts.hostname, opts.href != null ? opts.href : (typeof location !== "undefined" ? location.href : "")) });
+        });
+      }
+    } catch {
+      // Popup falls back to "Open a normal http(s) page".
+    }
+
     try {
       const onChanged = opts.onChanged || (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged);
       if (onChanged && onChanged.addListener) {

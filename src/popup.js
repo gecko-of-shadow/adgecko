@@ -86,8 +86,10 @@
   }
 
   function currentOrigin() {
-    if (!activeTab || !activeTab.url) return null;
-    return normalizeOrigin(activeTab.url);
+    if (!activeTab) return null;
+    // Without the "tabs" permission Chrome leaves tab.url out, so the page's
+    // own content script (cosmetic.js) reports its origin instead.
+    return normalizeOrigin(activeTab.url || activeTab.pageOrigin || "");
   }
 
   function renderGeneral() {
@@ -184,6 +186,22 @@
         activeTab = tabs && tabs[0] ? tabs[0] : null;
         resolve(activeTab);
       });
+    }).then(askPageOrigin);
+  }
+
+  // Stream sites and browser pages have no cosmetic script: no answer, no origin.
+  function askPageOrigin(tab) {
+    if (!tab || tab.url || typeof tab.id !== "number") return tab;
+    return new Promise((resolve) => {
+      try {
+        chrome.tabs.sendMessage(tab.id, { type: "pageOrigin" }, { frameId: 0 }, (response) => {
+          void chrome.runtime.lastError;
+          if (response && typeof response.origin === "string") tab.pageOrigin = response.origin;
+          resolve(tab);
+        });
+      } catch {
+        resolve(tab);
+      }
     });
   }
 

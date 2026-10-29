@@ -158,3 +158,27 @@ Deno.test("playback files are untouched by cosmetic branch", () => {
   assert(!vendorSource.includes("cosmetic-hide"), "vendor userscript has no cosmetic hide");
   assert(!source.includes("chrome.declarativeNetRequest"), "cosmetic path is not DNR");
 });
+
+Deno.test("top frame answers the popup's pageOrigin question; subframes and stream sites stay quiet", () => {
+  const listen = (opts) => {
+    const local = {};
+    installCosmeticHide(local);
+    let handler = null;
+    local.start(Object.assign({
+      getLocal: (_keys, cb) => cb({}),
+      fetch: () => Promise.resolve({ ok: false }),
+      onChanged: { addListener() {} },
+      onMessage: { addListener(fn) { handler = fn; } },
+    }, opts));
+    return handler;
+  };
+  const top = listen({ hostname: "yoomy.example.workers.dev", href: "https://yoomy.example.workers.dev/room?x=1", isTop: true });
+  let reply = null;
+  top({ type: "pageOrigin" }, {}, (r) => { reply = r; });
+  assertEquals(reply, { origin: "https://yoomy.example.workers.dev" }, "top frame reports its origin");
+  let other = "untouched";
+  top({ type: "something-else" }, {}, (r) => { other = r; });
+  assertEquals(other, "untouched", "other messages are ignored");
+  assertEquals(listen({ hostname: "ads.example.com", href: "https://ads.example.com/", isTop: false }), null, "subframes don't answer");
+  assertEquals(listen({ hostname: "www.twitch.tv", href: "https://www.twitch.tv/", isTop: true }), null, "stream sites don't answer");
+});

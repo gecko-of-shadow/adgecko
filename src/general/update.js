@@ -150,13 +150,20 @@ function installGeneralAdblockUpdate(target) {
     return rules;
   }
 
-  // Bundled non-list rules (stream-site allows, extra trackers) must survive
-  // the static ruleset being disabled, so copy them into dynamic rules.
+  // Packed list rules are priority-1 blocks. Anything else in the bundle
+  // (stream-site allows, extra trackers, higher-priority blocks that must beat
+  // the YouTube allow) is a hand-written rule.
+  function isPackedListRule(r, extra) {
+    return !!(r && r.action && r.action.type === "block" && !(r.priority > 1) && !extra.has(r.id));
+  }
+
+  // Bundled non-list rules must survive the static ruleset being disabled,
+  // so copy them into dynamic rules.
   function keptBundledRules(bundled, extraIds) {
     const extra = new Set(extraIds || []);
     let id = KEPT_RULE_ID_BASE;
     return (bundled || [])
-      .filter((r) => r && r.action && (r.action.type !== "block" || extra.has(r.id)))
+      .filter((r) => r && r.action && !isPackedListRule(r, extra))
       .map((r) => Object.assign({}, r, { id: id++ }));
   }
 
@@ -267,9 +274,14 @@ function installGeneralAdblockUpdate(target) {
       await deps.setState({ lastErrors: errors, lastNotes: mirrorNotes, lastErrorAt: Object.keys(errors).length ? now : 0 });
 
       await deps.setState({ lists });
-      if (cosmeticChanged && deps.writeCosmetic) {
+      // Write the hide list only when every cosmetic source has a parsed copy:
+      // EasyPrivacy alone would replace the whole EasyList sheet with a couple
+      // of selectors, and the bundled sheet is never restored over a refresh.
+      const cosmeticSources = SOURCES.filter((x) => x.cosmetic);
+      const cosmeticReady = cosmeticSources.every((x) => lists[x.name] && lists[x.name].cosmetic);
+      if (cosmeticChanged && cosmeticReady && deps.writeCosmetic) {
         try {
-          const parts = SOURCES.filter((x) => x.cosmetic && lists[x.name] && lists[x.name].cosmetic).map((x) => lists[x.name].cosmetic);
+          const parts = cosmeticSources.map((x) => lists[x.name].cosmetic);
           await deps.writeCosmetic(CP.mergeCosmetic(parts), { source: "refresh", updatedAt: now });
         } catch {
           // Cosmetic stays on the previous rules (or the bundled sheet).
@@ -332,7 +344,7 @@ function installGeneralAdblockUpdate(target) {
     const extra = new Set(bundled.extraIds || []);
     const packed = [];
     for (const r of bundled.rules || []) {
-      if (r.action && r.action.type === "block" && !extra.has(r.id)) packed.push(...(r.condition.requestDomains || []));
+      if (isPackedListRule(r, extra)) packed.push(...(r.condition.requestDomains || []));
     }
     const bundledDomains = packed.length;
     const perList = Object.fromEntries(Object.entries(lists || {}).filter(([, v]) => v && Array.isArray(v.domains)).map(([k, v]) => [k, v.domains]));

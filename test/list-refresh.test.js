@@ -25,7 +25,10 @@ Deno.test("merge drops stream domains and dupes; 80 domains per rule", () => {
   const rules = U.buildListRules(Array.from({ length: 161 }, (_, i) => "d" + i + ".com"));
   assert(rules.length === 3 && rules[0].condition.requestDomains.length === 80 && rules[0].id === U.LIST_RULE_ID_BASE, "chunking");
   const kept = U.keptBundledRules(bundled, [EXTRA_ID]);
-  assert(kept.length === 4 && kept.every((r) => r.id >= U.KEPT_RULE_ID_BASE && r.id < U.ALLOW_RULE_ID_BASE), "allows + extra tracker kept");
+  assert(kept.length === 5 && kept.every((r) => r.id >= U.KEPT_RULE_ID_BASE && r.id < U.ALLOW_RULE_ID_BASE), "allows + extra tracker + priority blocks kept");
+  // The YouTube doubleclick block outranks the YouTube allowAllRequests; losing it on refresh lets ads load.
+  const dc = kept.find((r) => r.action.type === "block" && r.condition.requestDomains?.includes("doubleclick.net"));
+  assert(dc && dc.priority === 2000001 && dc.condition.initiatorDomains.includes("youtube.com"), "doubleclick-on-YouTube block kept");
 });
 
 function fakeDeps({ responses, enabled = true, failUpdate = false }) {
@@ -101,6 +104,17 @@ Deno.test("a failed later refresh keeps a good earlier swap; toggling off/on wor
   assert(!d.staticOn && d.dynamic.length === 0, "off removes list rules");
   await U.applyEnabled(d, true);
   assert(!d.staticOn && d.dynamic.length === count, "on rebuilds from cache");
+});
+
+Deno.test("EasyList failing on the first refresh leaves the hide list alone until both cosmetic lists are in", async () => {
+  let easylistDown = true;
+  const d = fakeDeps({ responses: (url) => (easylistDown && /easylist\.txt|easylist-downloads|fanboy/.test(url) ? new TypeError("Failed to fetch") : ok(url)) });
+  const r = await U.refresh(d, {});
+  assert(r.ok && !d.staticOn, "network lists still swap " + JSON.stringify(r));
+  assert(d.cosmetic.length === 0, "no partial hide list written: " + JSON.stringify(d.cosmetic.map((c) => c.general?.length)));
+  easylistDown = false;
+  await U.refresh(d, { manual: true });
+  assert(d.cosmetic.length === 1 && d.cosmetic[0].sites["example.com"].length === 2, "written once both lists parsed");
 });
 
 Deno.test("one list failing keeps the others and records a readable reason", async () => {

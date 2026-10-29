@@ -7,6 +7,10 @@
 - YouTube: going back to a video that already played (A, then B or the home page, then A) and getting stuck at 0:00 now gets the same automatic reload as any other stuck start.
 - YouTube (only with the extra fetch hooks on): `fetch(new URL(...))` is filtered too, and a failed request is no longer sent twice.
 - Tests: the uBO fixture runs no longer share Deno's on-disk localStorage, which made "uBO risky groups are individually switchable" fail under load.
+- "Allow this page" works again. Chrome hides tab addresses from extensions without the `tabs` permission, so the button was always greyed out ("Open a normal http(s) page"). The popup now asks the page's own content script for its address. No new permission.
+- After the first list refresh, the YouTube doubleclick block is kept. The refresh copied only the allow rules and the extra tracker rule into the new rule set, so `doubleclick.net` loaded on YouTube (and in YouTube embeds on other sites) once the packed rules were switched off.
+- If EasyList fails to download on a refresh, the hide list is left as it was. Before, EasyPrivacy alone replaced it (a couple of selectors instead of about 13,600) and it stayed that way until EasyList came back.
+- New test: fails 30 days before the bundled uBO YouTube `videoplayback` rule starts blocking normal videos (2027-01-15). Re-run `scripts/sync-ubo-youtube.mjs` before then.
 
 ## 0.2.21
 
