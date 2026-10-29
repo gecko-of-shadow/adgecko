@@ -7,14 +7,87 @@
 </p>
 
 <p align="center">
-  <img src="icons/icon48-working.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is on: purple gecko with bright eyes">
+  <img src="icons/icon48-working.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is on: green gecko with an amber glowing eye">
   &nbsp;
-  <img src="icons/icon48-off.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is off: purple gecko with dark eyes">
+  <img src="icons/icon48-off.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is off: grey gecko with a half-shut eye">
 </p>
 
-🦎 Bright eyes mean ordinary-site blocking is on. Dark eyes mean it is off. Twitch, YouTube, and Kick filters keep running either way.
+🦎 The toolbar icon is a green gecko. An amber glowing eye means ordinary-site blocking is on. When it is off, the icon turns grey and the eye is half-shut. Twitch, YouTube, and Kick filters keep running either way.
 
 That version is the `version` field in `manifest.json`. The matching release zip is [twitch-adblock-0.2.21.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.2.21/twitch-adblock-0.2.21.zip) ([release v0.2.21](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.2.21)).
+
+## 🦎 Start here (plain words)
+
+This part is for people who just want to use the extension. The sections after it go into detail.
+
+### In short
+
+- It blocks video ads on Twitch, YouTube, and Kick.
+- It blocks ads on other websites, using public ad lists.
+- It hides the empty boxes that ads leave behind on other websites.
+- It works inside Chrome. No separate program is installed. There is no account.
+
+### What it does not do
+
+- Ads that are part of the video itself still play. Example: a YouTuber reading out a sponsor.
+- On Twitch, the picture can drop to lower quality for a moment during an ad break. The stream keeps playing.
+- Sometimes a Twitch ad still shows, when no ad-free copy of the stream is available.
+- On Kick, some ads still play. It only skips an ad when it can do that safely.
+- YouTube Music and YouTube Kids are not covered.
+- It does not send your browsing history anywhere. It downloads the public ad lists. On Twitch it also asks Twitch for ad-free copies of the stream.
+
+### How to install it
+
+"Developer mode" is a Chrome switch that lets you add an extension from a folder on your computer. "Load unpacked" is the Chrome button that does that. The "toolbar" is the row of icons to the right of the address bar.
+
+1. Get the extension files. Pick one:
+   - Download [twitch-adblock-0.2.21.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.2.21/twitch-adblock-0.2.21.zip) and unzip it.
+   - Or, on this GitHub page, click the green **Code** button, then **Download ZIP**, and unzip it. This gives you the newest code, which may be newer than the last numbered release. Chrome still shows the version number of that release.
+2. Open Chrome. Type `chrome://extensions` in the address bar and press Enter.
+3. Turn on **Developer mode** (top right).
+4. Click **Load unpacked**.
+5. Pick the unzipped folder. It is the folder that has `manifest.json` directly inside it.
+6. Optional: click the puzzle-piece icon next to the address bar, then the pin next to **twitch-adblock**. Now the gecko stays visible in your toolbar.
+
+Keep the folder where it is. Chrome runs the extension from that folder. If you had an older copy loaded, remove it first.
+
+### How to allow a page
+
+Some websites break or refuse to work when ads are blocked. You can switch off blocking for one website.
+
+1. Open the website you want to allow.
+2. Click the gecko icon in the toolbar. A small window opens.
+3. Click **Allow this page**.
+4. The button now says **Blocking this page** and is highlighted. That label means the site is now allowed. The line under it says **Allowed for this site:** and the site address.
+5. Reload the page, so the things that were blocked can load.
+
+What that changes:
+
+- On that website, the extension stops blocking from the ad lists and stops hiding ad boxes.
+- It counts for the whole website address (for example every page on `https://www.example.com`), not only the page you are on.
+- Other addresses of the same site count separately. For example `example.com` without `www`, or `shop.example.com`. Allow each one you need.
+- Chrome remembers it. It stays until you undo it.
+- If you remove the extension, or load a new copy from a different folder, the allowed sites are forgotten. Allow them again.
+- Twitch, YouTube, and Kick are not affected. Their ad filters always keep running.
+
+How to undo it:
+
+1. Open the same website.
+2. Click the gecko icon.
+3. Click **Blocking this page**. It goes back to **Allow this page**.
+4. Reload the page.
+
+When the window opens, the line under the button may say **Checking this page…** for a moment while it asks the page for its address.
+
+If the button is grey and does nothing, the line under it says why. Common reasons:
+
+- It says **Turn general blocking on to change page allows.** The **Block ads on ordinary sites** switch in the same window is off. Turn it on first.
+- It says **Open a normal http(s) page to allow it. Already on one? Reload it.** This means one of these:
+  - You are on Twitch, YouTube, or Kick. Allowing does not work there.
+  - You are on a Chrome page, like a new tab or `chrome://extensions`. Allowing only works on normal websites.
+  - The page was already open before you installed or reloaded the extension. Reload the page, then open the window again.
+
+The 0.2.21 zip came out before the "Allow this page" fix, so in that copy the button always stays grey. A copy from **Download ZIP** has the fix.
 
 ## 🦎 What it does
 
@@ -23,7 +96,7 @@ That version is the `version` field in `manifest.json`. The matching release zip
 - **Kick** (`kick.com` and subdomains). An in-player ad is skipped only when the IVS player can seek back to the stream without a long rewind, at most twice in 60 seconds. Otherwise the ad plays. The live video is left visible, audible, and at normal speed. A post-roll cover can be paused, and some ad chrome and page banners are hidden.
 - **Other http and https sites.** `declarativeNetRequest` blocks domains from the packed lists, and `src/cosmetic.js` hides leftover ad boxes. The packed snapshot in `src/rules/meta.json` is 211,995 domains. Twitch, YouTube (including `youtu.be`, nocookie, Kids, and the video CDNs), and Kick are excluded from this general pass. Ordinary-site blocking starts **on**.
 
-The popup turns ordinary-site blocking on or off and can ask for a list refresh. It also draws an **Allow this page** button. That button reads `tab.url`. This manifest does not include `tabs` or `activeTab`, and its host permissions are only the filter-list sites below, so Chrome leaves `tab.url` unset on a normal page and the button stays disabled.
+The popup turns ordinary-site blocking on or off and can ask for a list refresh. It also draws an **Allow this page** button. This manifest does not include `tabs` or `activeTab`, so Chrome leaves `tab.url` unset on a normal page. The popup instead asks the page's top-frame content script (`src/cosmetic.js`) for its origin with `chrome.tabs.sendMessage`, and shows “Checking this page…” while it waits. Pages without that script (Twitch, YouTube, Kick, Chrome's own pages, and pages opened before the extension loaded) give no answer, so the button stays disabled there with “Open a normal http(s) page to allow it. Already on one? Reload it.”
 
 ## Install
 
