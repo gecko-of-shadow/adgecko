@@ -50,6 +50,7 @@
   const listsStatus = document.getElementById("lists-status");
 
   let activeTab = null;
+  let pageChecked = false;
   let settings = withDefaults(null);
 
   function packagedVersion() {
@@ -109,7 +110,10 @@
       allowPage.disabled = true;
       allowPage.setAttribute("aria-pressed", "false");
       allowPage.textContent = "Allow this page";
-      pageStatus.textContent = "Open a normal http(s) page to allow it.";
+      // Pages open from before the extension loaded have no content script to ask.
+      pageStatus.textContent = pageChecked
+        ? "Open a normal http(s) page to allow it. Already on one? Reload it."
+        : "Checking this page…";
     } else if (isHardExcludedOrigin(origin)) {
       allowPage.disabled = true;
       allowPage.setAttribute("aria-pressed", "false");
@@ -249,8 +253,11 @@
   });
 
   (async function init() {
-    await queryActiveTab();
+    // A busy page answers late, so show the stored settings before asking it.
     await loadSettings();
+    renderGeneral();
+    await queryActiveTab();
+    pageChecked = true;
     renderGeneral();
     await notifyBackground("applyGeneralState");
   })();
