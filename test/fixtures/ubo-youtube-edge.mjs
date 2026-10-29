@@ -2,6 +2,7 @@
 // output and the nanoStb setTimeout boost. Used by test/ubo-youtube-edge.test.js.
 //   UBO_VARIANT=upstream  root-key guard stripped (uBO's own behaviour)
 //   UBO_VARIANT=double    bundle loaded twice, as when uBO Lite injects its own copy
+import "./memory-storage.mjs";
 globalThis.window = globalThis;
 globalThis.self = globalThis;
 localStorage.removeItem("twitch-adblock-ubo-opts");

@@ -46,6 +46,19 @@ Deno.test("uBO risky groups are individually switchable via localStorage", async
   assert(Array.isArray(off.player.adPlacements), "default-on groups can be switched off");
 });
 
+Deno.test("fixture runs at the same time keep their own uBO options (no shared localStorage)", async () => {
+  // Deno shares --location localStorage between processes; fixtures/memory-storage.mjs
+  // gives each run its own. Without it these runs read each other's options.
+  const jobs = [];
+  for (let i = 0; i < 8; i++) {
+    jobs.push(runBundle({ nanoStb: false, inboundEdit: false }).then((r) => r.globalsTouched.join() || "none"));
+    jobs.push(runBundle().then((r) => r.globalsTouched.join()));
+  }
+  const got = await Promise.all(jobs);
+  const want = got.map((_, i) => (i % 2 ? "setTimeout,stringify" : "none"));
+  assert(JSON.stringify(got) === JSON.stringify(want), "cross-talk between runs: " + got.join(" | "));
+});
+
 Deno.test("uBO bundle carries the exact uAssets prune paths and is pinned", async () => {
   const js = await Deno.readTextFile(new URL("../src/vendor/ubo-youtube.js", import.meta.url));
   for (const call of [

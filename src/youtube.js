@@ -1146,6 +1146,7 @@ function startYoutubeAdblock() {
   function requestUrl(input) {
     if (typeof input === "string") return input;
     if (input && typeof input.url === "string") return input.url;
+    if (typeof URL !== "undefined" && input instanceof URL) return input.href;
     return "";
   }
 
@@ -1562,7 +1563,7 @@ function startYoutubeAdblock() {
       if (!event.target || event.target.tagName !== "VIDEO") return;
       playbackSeen.any = true;
       stopStall();
-      if (!startedVideoId) startedVideoId = currentVideoId(playerRoot());
+      startedVideoId = currentVideoId(playerRoot()) || startedVideoId;
       if (startLogged) return;
       startLogged = true;
       const ms = Date.now() - navAt;
@@ -1747,7 +1748,12 @@ function startYoutubeAdblock() {
     const replay = input instanceof Request ? input.clone() : input;
     if (kind === "player") diag("/player requested (fetch)");
     const prepare = kind === "player" ? rewritePlayerBody(input, init) : Promise.resolve({ input, init });
-    return prepare.then((prepared) => nativeFetch(prepared.input, prepared.init).then((response) => {
+    // Fall back to the untouched request only if our body rewrite failed. A network
+    // failure of the real request goes to the page as-is (no second send).
+    return prepare.then((prepared) => nativeFetch(prepared.input, prepared.init), (error) => {
+      logFailOpen(error);
+      return nativeFetch(replay, init);
+    }).then((response) => {
       if (!api.shouldBufferYoutubei(response)) return response;
       return response.clone().text().then((text) => {
         if (kind === "player") {
@@ -1773,9 +1779,6 @@ function startYoutubeAdblock() {
         logFailOpen(error);
         return response;
       });
-    })).catch((error) => {
-      logFailOpen(error);
-      return nativeFetch(replay, init);
     });
   });
 
@@ -2076,7 +2079,18 @@ function startYoutubeAdblock() {
   }
 
   injectHomeFeedCss();
-  document.addEventListener("yt-navigate-start", () => {
+  document.addEventListener("yt-navigate-start", (event) => {
+    // Only a same-video navigation (timestamp link, reload) keeps the "already played" guard.
+    const navUrl = event && event.detail && event.detail.url;
+    if (navUrl) {
+      let to = "";
+      try {
+        to = new URL(String(navUrl), "https://www.youtube.com").searchParams.get("v") || "";
+      } catch {
+        // Unparsable: treat as another page.
+      }
+      if (to !== startedVideoId) startedVideoId = "";
+    }
     noticeLatched = false;
     startNudged = false;
     stalledReloaded = 0;

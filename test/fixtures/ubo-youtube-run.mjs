@@ -1,5 +1,6 @@
 // Runs the generated uBO MAIN-world bundle under a minimal www.youtube.com shim
 // and prints what the ported prune paths did. Used by test/ubo-youtube.test.js.
+import "./memory-storage.mjs";
 globalThis.window = globalThis;
 if (Deno.env.get("UBO_OPTS") != null) localStorage.setItem("twitch-adblock-ubo-opts", Deno.env.get("UBO_OPTS"));
 else localStorage.removeItem("twitch-adblock-ubo-opts");

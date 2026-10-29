@@ -3,6 +3,7 @@
 // late-uBO hooks stand-down and the yt-navigate reset. SCENARIO picks the setup:
 // "manifest" (ubo,yt), "late" (yt,ubo), "late-hooks" (yt,ubo + hooksUnderUbo), "yt".
 // Used by test/youtube-decoy-nav.test.js. All urls are synthetic.
+import "./memory-storage.mjs";
 globalThis.window = globalThis;
 globalThis.self = globalThis;
 const SCENARIO = Deno.env.get("SCENARIO") || "manifest";

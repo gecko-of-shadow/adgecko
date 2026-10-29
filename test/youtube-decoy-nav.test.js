@@ -24,7 +24,7 @@ async function clock(scenario) {
   return JSON.parse(new TextDecoder().decode(out.stdout).trim().split("\n").pop());
 }
 
-// One at a time: "late-hooks" writes the shared localStorage opts key.
+// "late-hooks" writes the opts key; each run has its own localStorage (fixtures/memory-storage.mjs).
 const manifest = await run("manifest");
 const late = await run("late");
 const lateHooks = await run("late-hooks");

@@ -144,7 +144,18 @@ function ensureListAllowRule() {
   }
 }
 
-async function applyGeneralState() {
+// The popup's switch and "Allow this page" both write storage (storage.onChanged)
+// and message the worker, so each click starts two runs. Run them one at a time:
+// two overlapping runs read the same rules and the second rebuild failed on
+// duplicate rule ids, dropping refreshed lists back to the packed ones.
+let applyQueue = Promise.resolve();
+function applyGeneralState() {
+  const run = applyQueue.then(applyGeneralStateNow, applyGeneralStateNow);
+  applyQueue = run.catch(() => {});
+  return run;
+}
+
+async function applyGeneralStateNow() {
   ensureListAllowRule();
   const settings = await getSettings();
   const enabled = settings.generalEnabled !== false;
@@ -281,6 +292,8 @@ async function refreshLists(manual) {
     } catch (e) {
       result = { ok: false, reason: String(e && e.message || e) };
     }
+    // The switch may have flipped while the refresh was swapping rules in.
+    await applyGeneralState();
     const state = await listDeps().getState();
     const when = state.updatedAt ? new Date(state.updatedAt).toLocaleString() : "";
     const errs = Object.values(state.lastErrors || {});

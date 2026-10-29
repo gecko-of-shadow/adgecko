@@ -1,6 +1,7 @@
 // Loads src/vendor/ubo-youtube.js and src/youtube.js in one realm, in the order
 // given by LAYERS ("ubo,yt", "yt", "yt,ubo"), under a minimal watch-page shim,
 // and prints what youtube.js hooked. Used by test/youtube-layers.test.js.
+import "./memory-storage.mjs";
 globalThis.window = globalThis;
 globalThis.self = globalThis;
 localStorage.removeItem("twitch-adblock-ubo-opts");

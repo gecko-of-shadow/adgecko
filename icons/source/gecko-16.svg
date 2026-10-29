@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" shape-rendering="crispEdges" data-state="normal">
+  <!--
+    16px toolbar cut of gecko.svg, drawn pixel by pixel: head, one big eye and the shield.
+    Source for icons/icon16*.png. Rebuild with: node scripts/build-icons.mjs
+    data-state on the root picks the variant: "normal", "working" (glowing eye) or "off" (greyed out).
+
+    Pixel map (D rim, T teal, g teal that glows, K outline, O eye outline, G/L gecko, E/W eye, P pupil, B shield, w no-sign):
+      .....DDDDDD.....
+      ...DDTgOOOgDD...
+      ..DTKKOEEEOgTD..
+      .DTKGGOWPWOKTTD.
+      .DKGGGOWWWOGKTD.
+      DKGGGGGOOOGGKTTD
+      DKGGGGGGGGGGKTTD
+      DKKKKGGGKKKKKKKD
+      DTTTKGGGKwwwwBKD
+      DTTKGLGGKwwBBwKD
+      DTTKGLGGKwBwBwKD
+      .DTKGLGGKwBBwwK.
+      .DKGGGGGKBwwwwK.
+      ..KKKGGGGKBBBK..
+      ...DDKKKKKKKKD..
+      .....DDDDDD.....
+  -->
+  <defs>
+    <filter id="grey" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values="0.25 0.55 0.1 0 0.06  0.25 0.55 0.1 0 0.06  0.25 0.55 0.1 0 0.06  0 0 0 1 0"/>
+    </filter>
+  </defs>
+  <style>
+    .rim { fill: #0a6266; }
+    .bg { fill: #17a7a7; }
+    .ink { fill: #11221d; }
+    .skin { fill: #7fd327; }
+    .belly { fill: #b4ec6a; }
+    .eye { fill: #ffffff; }
+    .shield { fill: #1f73dc; }
+    .mark { fill: #ffffff; }
+    svg[data-state="working"] .eye { fill: #ffd447; }
+    svg[data-state="working"] .ring { fill: #e07b00; }
+    svg[data-state="working"] .halo { fill: #f2c14e; }
+    svg[data-state="off"] .lid { fill: #3f7a12; }
+    svg[data-state="off"] #art { filter: url(#grey); }
+  </style>
+  <g id="art">
+    <path class="rim" d="M5 0h6v1h-6zM3 1h2v1h-2zM11 1h2v1h-2zM2 2h1v1h-1zM13 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM0 5h1v1h-1zM15 5h1v1h-1zM0 6h1v1h-1zM15 6h1v1h-1zM0 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM15 8h1v1h-1zM0 9h1v1h-1zM15 9h1v1h-1zM0 10h1v1h-1zM15 10h1v1h-1zM1 11h1v1h-1zM1 12h1v1h-1zM3 14h2v1h-2zM13 14h1v1h-1zM5 15h6v1h-6z"/>
+    <path class="bg" d="M5 1h1v1h-1zM3 2h1v1h-1zM12 2h1v1h-1zM2 3h1v1h-1zM12 3h2v1h-2zM13 4h1v1h-1zM13 5h2v1h-2zM13 6h2v1h-2zM1 8h3v1h-3zM1 9h2v1h-2zM1 10h2v1h-2zM2 11h1v1h-1z"/>
+    <path class="bg halo" d="M6 1h1v1h-1zM10 1h1v1h-1zM11 2h1v1h-1z"/>
+    <path class="ink" d="M4 2h2v1h-2zM3 3h1v1h-1zM11 3h1v1h-1zM2 4h1v1h-1zM12 4h1v1h-1zM1 5h1v1h-1zM12 5h1v1h-1zM1 6h1v1h-1zM12 6h1v1h-1zM1 7h4v1h-4zM8 7h7v1h-7zM4 8h1v1h-1zM8 8h1v1h-1zM14 8h1v1h-1zM3 9h1v1h-1zM8 9h1v1h-1zM14 9h1v1h-1zM3 10h1v1h-1zM8 10h1v1h-1zM14 10h1v1h-1zM3 11h1v1h-1zM8 11h1v1h-1zM14 11h1v1h-1zM2 12h1v1h-1zM8 12h1v1h-1zM14 12h1v1h-1zM2 13h3v1h-3zM9 13h1v1h-1zM13 13h1v1h-1zM5 14h8v1h-8z"/>
+    <path class="ink ring" d="M7 1h3v1h-3zM6 2h1v1h-1zM10 2h1v1h-1zM6 3h1v1h-1zM10 3h1v1h-1zM6 4h1v1h-1zM10 4h1v1h-1zM7 5h3v1h-3z"/>
+    <path class="skin" d="M4 3h2v1h-2zM3 4h3v1h-3zM11 4h1v1h-1zM2 5h5v1h-5zM10 5h2v1h-2zM2 6h10v1h-10zM5 7h3v1h-3zM5 8h3v1h-3zM4 9h1v1h-1zM6 9h2v1h-2zM4 10h1v1h-1zM6 10h2v1h-2zM4 11h1v1h-1zM6 11h2v1h-2zM3 12h5v1h-5zM5 13h4v1h-4z"/>
+    <path class="belly" d="M5 9h1v1h-1zM5 10h1v1h-1zM5 11h1v1h-1z"/>
+    <path class="eye" d="M7 3h1v1h-1zM9 3h1v1h-1zM7 4h3v1h-3z"/>
+    <path class="eye lid" d="M7 2h3v1h-3z"/>
+    <path class="ink" d="M8 3h1v1h-1z"/>
+    <path class="shield" d="M13 8h1v1h-1zM11 9h2v1h-2zM10 10h1v1h-1zM12 10h1v1h-1zM10 11h2v1h-2zM9 12h1v1h-1zM10 13h3v1h-3z"/>
+    <path class="mark" d="M9 8h4v1h-4zM9 9h2v1h-2zM13 9h1v1h-1zM9 10h1v1h-1zM11 10h1v1h-1zM13 10h1v1h-1zM9 11h1v1h-1zM12 11h2v1h-2zM10 12h4v1h-4z"/>
+  </g>
+</svg>

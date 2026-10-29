@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- New gecko icon: a green gecko with a blue "no ads" shield on a round teal badge. The eye glows amber while list blocking is on and the icon goes grey with a sleepy eye when it is off. Sources in `icons/source/`, rebuilt with `node scripts/build-icons.mjs`. The popup icon glow is round to match.
+- Ordinary sites: switching lists off and on again (or a quick "Allow this page" and undo) no longer drops the refreshed lists back to the packed ones. Switching lists off while a list refresh is running now leaves them off.
+- YouTube: going back to a video that already played (A, then B or the home page, then A) and getting stuck at 0:00 now gets the same automatic reload as any other stuck start.
+- YouTube (only with the extra fetch hooks on): `fetch(new URL(...))` is filtered too, and a failed request is no longer sent twice.
+- Tests: the uBO fixture runs no longer share Deno's on-disk localStorage, which made "uBO risky groups are individually switchable" fail under load.
+
 ## 0.2.21
 
 - YouTube: a video stuck at 0:00 after its blocked ad (decoy) streams failed recovers sooner. When those streams failed and no video data has loaded, the one automatic reload now comes 7s after the last sign of progress instead of 15s. In replays of a real stuck start, the reload came at about 9s (about 12s when YouTube also sent its usual early "retry later" reply) instead of about 17s, and playback resumed about 2s later.
