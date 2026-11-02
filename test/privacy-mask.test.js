@@ -28,7 +28,9 @@ function splitLog(raw) {
   return { masks, visible: visible.join("\n") };
 }
 
-const root = new URL("..", import.meta.url).pathname;
+// A URL cwd works on every OS and with spaces in the path. `.pathname` keeps the
+// percent-encoding ("D:/My%20Code/...") and a leading "/" on Windows: "No such cwd".
+const root = new URL("..", import.meta.url);
 const headOut = await new Deno.Command("git", {
   args: ["rev-parse", "HEAD"],
   cwd: root,
