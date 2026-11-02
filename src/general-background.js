@@ -1,8 +1,8 @@
 /**
  * General-list UI worker: icon glow, DNR enable/allow sync, manual Update signal.
  * Does not touch Twitch / YouTube / Kick playback scripts.
- * Filter lists: one quiet refresh ~5s after the worker starts (once per browser
- * session, at most every 12h, per-list expiry respected) and on popup Update.
+ * Filter lists: refreshed from the "gecko-refresh" alarm (every 3 h, at most
+ * one real run per 12 h, per-list expiry respected) and on popup Update.
  */
 importScripts("general-settings.js", "general/update.js", "general/cosmetic-parse.js");
 const CP = self.GeneralCosmeticParse;
@@ -173,7 +173,14 @@ async function applyGeneralStateNow() {
   return { ok: true, enabled, ruleset, allows };
 }
 
-const LIST_STATE_KEY = "generalListRefresh";
+// Storage layout (worker only; the popup and content scripts never read these):
+//   listState            small run metadata (see general/update.js), < a few KB
+//   listData:<list name> one list's parsed payload {domains, cosmetic?}
+// Before this split everything sat in one ~6 MB "generalListRefresh" key that
+// was re-read and rewritten 4 times per refresh, and write errors were dropped.
+const LIST_STATE_KEY = "listState";
+const LIST_DATA_PREFIX = "listData:";
+const OLD_LIST_STATE_KEY = "generalListRefresh";
 
 function cb(fn) {
   return new Promise((resolve, reject) => {
@@ -185,6 +192,114 @@ function cb(fn) {
   });
 }
 
+function localGet(keys) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(keys, (s) => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message || String(err)));
+      else resolve(s || {});
+    });
+  });
+}
+
+// Every storage.local write in the worker goes through here: a failure (quota,
+// I/O) is remembered and shown in the popup's list status instead of vanishing.
+let lastWriteError = null;
+async function localSet(items) {
+  try {
+    await cb((done) => chrome.storage.local.set(items, done));
+  } catch (e) {
+    recordWriteError(e, Object.keys(items));
+    throw e;
+  }
+}
+async function localRemove(keys) {
+  try {
+    await cb((done) => chrome.storage.local.remove(keys, done));
+  } catch (e) {
+    recordWriteError(e, keys);
+    throw e;
+  }
+}
+function recordWriteError(e, keys) {
+  const record = { message: String(e && e.message || e), keys: [].concat(keys || []).slice(0, 3), at: Date.now() };
+  lastWriteError = record;
+  console.warn("twitch-adblock: storage write failed:", record.message);
+  // Small key, so this usually still fits when a big payload write did not.
+  // Raw set (no recursion into recordWriteError); same queue as setListState.
+  const run = stateQueue.then(async () => {
+    const cur = (await localGet([LIST_STATE_KEY]).catch(() => ({})))[LIST_STATE_KEY] || {};
+    await new Promise((resolve) => {
+      chrome.storage.local.set({ [LIST_STATE_KEY]: Object.assign({}, cur, { lastError: record }) }, () => {
+        void chrome.runtime.lastError;
+        resolve();
+      });
+    });
+  });
+  stateQueue = run.catch(() => {});
+}
+
+// One-time move from the old single key. One list at a time, so peak storage
+// is the old blob plus one list (the whole copy would not fit next to it):
+// write the list's payload key, read it back and check it, then drop that
+// list's arrays from the old blob. Resumable after a crash at any point; the
+// old key is removed only once the new state key reads back.
+async function migrateListStorage() {
+  const s = await localGet([OLD_LIST_STATE_KEY]);
+  const old = s[OLD_LIST_STATE_KEY];
+  if (!old || typeof old !== "object") return { migrated: false };
+  const lists = Object.assign({}, old.lists || {});
+  for (const name of Object.keys(lists)) {
+    const entry = lists[name];
+    if (!entry || !Array.isArray(entry.domains)) continue; // moved already
+    const payload = { domains: entry.domains };
+    if (entry.cosmetic) payload.cosmetic = entry.cosmetic;
+    const key = LIST_DATA_PREFIX + name;
+    await localSet({ [key]: payload });
+    const back = (await localGet([key]))[key];
+    if (!back || !Array.isArray(back.domains) || back.domains.length !== entry.domains.length) {
+      throw new Error("list storage migration: " + name + " did not read back");
+    }
+    lists[name] = Object.assign(GU.listMeta(entry), { count: entry.domains.length, cosmetic: !!entry.cosmetic });
+    old.lists = lists;
+    await localSet({ [OLD_LIST_STATE_KEY]: old });
+  }
+  const next = Object.assign({}, old, { lists, schema: 2 });
+  await localSet({ [LIST_STATE_KEY]: next });
+  const back = (await localGet([LIST_STATE_KEY]))[LIST_STATE_KEY];
+  if (!back || back.schema !== 2) throw new Error("list storage migration: state did not read back");
+  await localRemove([OLD_LIST_STATE_KEY]);
+  return { migrated: true, lists: Object.keys(lists).length };
+}
+
+let migrationReady = null;
+function storageReady() {
+  if (!migrationReady) {
+    migrationReady = migrateListStorage().catch((e) => {
+      recordWriteError(e, [OLD_LIST_STATE_KEY]);
+      return { migrated: false, error: String(e && e.message || e) };
+    });
+  }
+  return migrationReady;
+}
+
+async function getListState() {
+  await storageReady();
+  return (await localGet([LIST_STATE_KEY]))[LIST_STATE_KEY] || {};
+}
+
+// Serialized so two patches never read the same old state.
+let stateQueue = Promise.resolve();
+function setListState(patch) {
+  const run = stateQueue.then(async () => {
+    await storageReady();
+    const cur = (await localGet([LIST_STATE_KEY]))[LIST_STATE_KEY] || {};
+    await localSet({ [LIST_STATE_KEY]: Object.assign({}, cur, patch, { schema: 2 }) });
+  });
+  stateQueue = run.catch(() => {});
+  return run;
+}
+
 function listDeps() {
   const dnr = chrome.declarativeNetRequest;
   return {
@@ -193,22 +308,37 @@ function listDeps() {
       return fetch(url, init);
     },
     now: () => Date.now(),
-    getState: () => new Promise((resolve) => {
-      chrome.storage.local.get([LIST_STATE_KEY], (s) => {
-        void chrome.runtime.lastError;
-        resolve((s && s[LIST_STATE_KEY]) || {});
-      });
-    }),
-    setState: (patch) => new Promise((resolve) => {
-      chrome.storage.local.get([LIST_STATE_KEY], (s) => {
-        void chrome.runtime.lastError;
-        const next = Object.assign({}, (s && s[LIST_STATE_KEY]) || {}, patch);
-        chrome.storage.local.set({ [LIST_STATE_KEY]: next }, () => {
+    getState: getListState,
+    setState: setListState,
+    getListData: async (names) => {
+      await storageReady();
+      const got = await localGet(names.map((n) => LIST_DATA_PREFIX + n));
+      const out = {};
+      for (const n of names) if (got[LIST_DATA_PREFIX + n]) out[n] = got[LIST_DATA_PREFIX + n];
+      return out;
+    },
+    setListData: async (name, payload) => {
+      await storageReady();
+      await localSet({ [LIST_DATA_PREFIX + name]: payload });
+    },
+    // Size only, so checking for a payload does not read megabytes.
+    listDataPresent: async (names) => {
+      await storageReady();
+      const local = chrome.storage.local;
+      if (typeof local.getBytesInUse !== "function") {
+        const got = await localGet(names.map((n) => LIST_DATA_PREFIX + n));
+        return names.filter((n) => got[LIST_DATA_PREFIX + n]);
+      }
+      const out = [];
+      for (const n of names) {
+        const bytes = await new Promise((resolve) => local.getBytesInUse([LIST_DATA_PREFIX + n], (b) => {
           void chrome.runtime.lastError;
-          resolve();
-        });
-      });
-    }),
+          resolve(b || 0);
+        }));
+        if (bytes > 0) out.push(n);
+      }
+      return out;
+    },
     getDynamicRules: () => new Promise((resolve) => dnr.getDynamicRules((r) => {
       void chrome.runtime.lastError;
       resolve(r || []);
@@ -253,11 +383,11 @@ async function writeCosmetic(data, meta) {
   }));
   const metaItem = items[CP.KEY_META];
   delete items[CP.KEY_META];
-  await cb((done) => chrome.storage.local.set(items, done));
-  await cb((done) => chrome.storage.local.set({ [CP.KEY_META]: metaItem }, done));
+  await localSet(items);
+  await localSet({ [CP.KEY_META]: metaItem });
   const keep = new Set(metaItem.keys);
   const stale = old.filter((k) => !keep.has(k));
-  if (stale.length) await cb((done) => chrome.storage.local.remove(stale, done));
+  if (stale.length) await localRemove(stale);
 }
 
 // First run / new version: seed storage from the bundled snapshot unless a
@@ -280,6 +410,22 @@ async function ensureCosmetic() {
 let currentEnabled = true;
 let refreshing = null;
 
+// Popup text for the list status (the popup reads only this short string).
+function listStatusText(state, result, writeError) {
+  const when = state.updatedAt ? new Date(state.updatedAt).toLocaleString() : "";
+  const errs = Object.values(state.lastErrors || {});
+  const notes = Object.values(state.lastNotes || {});
+  if (notes.length) console.log("twitch-adblock: list mirrors used:", notes);
+  if (errs.length || !result.ok) console.warn("twitch-adblock: list refresh problems:", errs.length ? errs : result.reason);
+  else console.log("twitch-adblock: list refresh", result);
+  const errText = errs.length ? " Problems: " + errs.join("; ") + "." : (!result.ok && result.reason ? " Problem: " + result.reason + "." : "");
+  const werr = writeError || state.lastError;
+  const storageText = werr && werr.message ? " Storage error: " + werr.message + "." : "";
+  return (state.dynamicActive
+    ? "Lists updated " + when + " (" + (state.domainCount || 0) + " domains)."
+    : "Using packed lists" + (result.ok ? "." : " (refresh failed; will retry later).")) + errText + storageText;
+}
+
 async function refreshLists(manual) {
   if (refreshing) return refreshing;
   refreshing = (async () => {
@@ -288,30 +434,25 @@ async function refreshLists(manual) {
     currentEnabled = settings.generalEnabled !== false;
     let result;
     try {
+      // A new attempt starts with a clean storage-error slate.
+      lastWriteError = null;
+      await setListState({ lastError: null }).catch(() => {});
       result = await GU.refresh(listDeps(), { manual });
     } catch (e) {
       result = { ok: false, reason: String(e && e.message || e) };
     }
     // The switch may have flipped while the refresh was swapping rules in.
     await applyGeneralState();
-    const state = await listDeps().getState();
-    const when = state.updatedAt ? new Date(state.updatedAt).toLocaleString() : "";
-    const errs = Object.values(state.lastErrors || {});
-    const notes = Object.values(state.lastNotes || {});
-    if (notes.length) console.log("twitch-adblock: list mirrors used:", notes);
-    if (errs.length || !result.ok) console.warn("twitch-adblock: list refresh problems:", errs.length ? errs : result.reason);
-    else console.log("twitch-adblock: list refresh", result);
-    const errText = errs.length ? " Problems: " + errs.join("; ") + "." : (!result.ok && result.reason ? " Problem: " + result.reason + "." : "");
-    const status = (state.dynamicActive
-      ? "Lists updated " + when + " (" + (state.domainCount || 0) + " domains)."
-      : "Using packed lists" + (result.ok ? "." : " (refresh failed; will retry later).")) + errText;
-    await new Promise((resolve) => chrome.storage.local.set({
-      [KEYS.listStatus]: status,
-      [KEYS.listUpdatedAt]: state.updatedAt || null,
-    }, () => {
-      void chrome.runtime.lastError;
-      resolve();
-    }));
+    const state = await getListState().catch(() => ({}));
+    const status = listStatusText(state, result, lastWriteError);
+    try {
+      await localSet({
+        [KEYS.listStatus]: status,
+        [KEYS.listUpdatedAt]: state.updatedAt || null,
+      });
+    } catch {
+      // recorded by localSet; the popup falls back to its default text
+    }
     return result;
   })();
   try {
@@ -326,39 +467,62 @@ async function updateLists() {
   return { ok: !!result.ok, result };
 }
 
-// One quiet refresh per browser session, ~5s after the worker starts.
-function scheduleStartupRefresh() {
-  setTimeout(() => {
-    const session = chrome.storage && chrome.storage.session;
-    if (!session) {
-      refreshLists(false);
-      return;
+// Background refresh: the "gecko-refresh" alarm fires every 3 h (first one 5 to
+// 30 min after it is created); GU.refresh skips the run unless 12 h passed since
+// the last successful one. Chrome may drop alarms on browser restart (before
+// Chrome 150 persistAcrossSessions is not honoured), so every worker start checks
+// that the alarm exists and creates it only if missing: re-creating it on each
+// start would reset the timer and a short-lived worker would never see it fire.
+const REFRESH_ALARM = GU.REFRESH_ALARM;
+
+function createRefreshAlarm() {
+  const info = { delayInMinutes: 5 + Math.random() * 25, periodInMinutes: GU.ALARM_PERIOD_MINUTES };
+  const done = () => { void chrome.runtime.lastError; };
+  try {
+    // Older Chrome rejects unknown keys ("Unexpected property"); retry without it.
+    chrome.alarms.create(REFRESH_ALARM, Object.assign({ persistAcrossSessions: true }, info), done);
+  } catch {
+    try {
+      chrome.alarms.create(REFRESH_ALARM, info, done);
+    } catch (e) {
+      console.warn("twitch-adblock: refresh alarm:", e && e.message);
     }
-    session.get(["listRefreshStarted"], (s) => {
-      void chrome.runtime.lastError;
-      if (s && s.listRefreshStarted) return;
-      session.set({ listRefreshStarted: true }, () => {
-        void chrome.runtime.lastError;
-        refreshLists(false);
-      });
-    });
-  }, GU.STARTUP_DELAY_MS);
+  }
 }
 
-scheduleStartupRefresh();
+function ensureRefreshAlarm() {
+  if (!chrome.alarms || !chrome.alarms.get) return;
+  try {
+    chrome.alarms.get(REFRESH_ALARM, (alarm) => {
+      void chrome.runtime.lastError;
+      if (!alarm) createRefreshAlarm();
+    });
+  } catch (e) {
+    console.warn("twitch-adblock: refresh alarm:", e && e.message);
+  }
+}
+
+// Top level, so a worker woken by the alarm has the listener in place.
+if (chrome.alarms && chrome.alarms.onAlarm) {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (!alarm || alarm.name !== REFRESH_ALARM) return;
+    refreshLists(false);
+  });
+}
+
+ensureRefreshAlarm();
+storageReady();
 
 chrome.runtime.onInstalled.addListener(() => {
   ensureCosmetic();
+  ensureRefreshAlarm();
   chrome.storage.local.get(Object.keys(GS.DEFAULTS), (stored) => {
     void chrome.runtime.lastError;
     const patch = {};
     if (stored.generalEnabled === undefined) patch.generalEnabled = true;
     if (!Array.isArray(stored.generalAllowedOrigins)) patch.generalAllowedOrigins = [];
     if (Object.keys(patch).length) {
-      chrome.storage.local.set(patch, () => {
-        void chrome.runtime.lastError;
-        applyGeneralState();
-      });
+      localSet(patch).catch(() => {}).then(() => applyGeneralState());
     } else {
       applyGeneralState();
     }

@@ -244,6 +244,6 @@ Deno.test("a slow page doesn't hold up the rest of the popup", async () => {
 });
 
 Deno.test("the allow fix adds no permission", () => {
-  assertEquals(manifest.permissions, ["storage", "declarativeNetRequest"]);
+  assertEquals(manifest.permissions, ["storage", "declarativeNetRequest", "alarms"]);
   assert(!manifest.optional_permissions, "no optional permissions");
 });

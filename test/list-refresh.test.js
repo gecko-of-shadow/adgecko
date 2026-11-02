@@ -32,13 +32,15 @@ Deno.test("merge drops stream domains and dupes; 80 domains per rule", () => {
 });
 
 function fakeDeps({ responses, enabled = true, failUpdate = false }) {
-  const state = {}; let dynamic = []; const calls = []; let staticOn = true; const cosmetic = [];
+  const state = {}; let dynamic = []; const calls = []; let staticOn = true; const cosmetic = []; const data = {};
   const deps = {
-    calls, cosmetic, get staticOn() { return staticOn; }, get dynamic() { return dynamic; }, t: 1e12,
+    calls, cosmetic, data, get staticOn() { return staticOn; }, get dynamic() { return dynamic; }, t: 1e12,
     fetch: async (url, init) => { calls.push({ url, headers: init.headers }); const r = responses(url, init); if (r instanceof Error) throw r; return r; },
     now: () => deps.t,
     getState: async () => structuredClone(state),
     setState: async (p) => Object.assign(state, structuredClone(p)),
+    getListData: async (names) => Object.fromEntries(names.filter((n) => data[n]).map((n) => [n, structuredClone(data[n])])),
+    setListData: async (name, payload) => { data[name] = structuredClone(payload); },
     getDynamicRules: async () => dynamic.slice(),
     updateDynamicRules: async ({ removeRuleIds, addRules }) => {
       if (failUpdate && addRules.length) throw new Error("quota");
@@ -191,7 +193,8 @@ Deno.test("offline, garbage, and empty lists keep the last good copy", async () 
   assert(first.ok && !d.staticOn, JSON.stringify(first));
   const before = await d.getState();
   const keep = ["hagezi_pro_mini", "curben_phishing", "adguard_base"];
-  const saved = Object.fromEntries(keep.map((name) => [name, before.lists[name].domains.length]));
+  const saved = Object.fromEntries(keep.map((name) => [name, before.lists[name].count]));
+  const savedData = Object.fromEntries(keep.map((name) => [name, d.data[name].domains.length]));
   const rulesBefore = d.dynamic.length;
   d.fetch = async (url) => {
     if (url.includes("pro.mini")) throw new Error("offline");
@@ -204,7 +207,8 @@ Deno.test("offline, garbage, and empty lists keep the last good copy", async () 
   assert(again.ok && !d.staticOn && d.dynamic.length > 0, JSON.stringify(again));
   assert(d.dynamic.length >= rulesBefore, "rules were not dropped");
   for (const name of keep) {
-    assert(st.lists[name].domains.length === saved[name], name + " kept " + st.lists[name].domains.length);
+    assert(st.lists[name].count === saved[name], name + " kept " + st.lists[name].count);
+    assert(d.data[name].domains.length === savedData[name] && savedData[name] === saved[name], name + " payload kept " + d.data[name].domains.length);
     assert(st.lastErrors[name], name + " recorded " + JSON.stringify(st.lastErrors));
   }
 });

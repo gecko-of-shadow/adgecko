@@ -1,14 +1,23 @@
 // Filter-list refresh engine.
-// Policy "startup-and-manual": one quiet refresh ~5s after the background worker
-// starts (skipped if a refresh ran in the last 12h, and each list is only
-// re-downloaded after its own "! Expires:" window), plus the popup's Update
-// button. Conditional requests (ETag / If-Modified-Since). Lists are parsed to
+// Policy "alarm-and-manual": the worker's "gecko-refresh" alarm (every 3 h) asks
+// for a refresh; it runs at most once per 12 h after a successful run (and at
+// most every 30 min after a failed attempt), each list is only re-downloaded
+// after its own "! Expires:" window, plus the popup's Update button.
+// Conditional requests (ETag / If-Modified-Since). Lists are parsed to
 // domain block rules and swapped into dynamic DNR rules; the bundled static
 // ruleset is disabled only after a successful swap and is restored on any error.
+//
+// Storage split: deps.getState()/setState() hold only small run metadata (per
+// list: url, etag, lastModified, fetchedAt, expiresMs, count, cosmetic flag).
+// The bulky parsed payload ({domains, cosmetic}) goes through
+// deps.setListData(name, payload) / deps.getListData(names) and is written only
+// after a 200 response parsed cleanly; it is read only when rules are rebuilt.
 function installGeneralAdblockUpdate(target) {
-  const POLICY = "startup-and-manual";
-  const STARTUP_DELAY_MS = 5000;
+  const POLICY = "alarm-and-manual";
+  const REFRESH_ALARM = "gecko-refresh";
+  const ALARM_PERIOD_MINUTES = 180;
   const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000;
+  const RETRY_MIN_MS = 30 * 60 * 1000;
   const DEFAULT_EXPIRES_MS = 24 * 60 * 60 * 1000;
   const DOMAINS_PER_RULE = 80;
   const MAX_LIST_RULES = 25000; // dynamic limit is 30000; leave room for allows
@@ -171,21 +180,48 @@ function installGeneralAdblockUpdate(target) {
     return id >= LIST_RULE_ID_BASE && id < ALLOW_RULE_ID_BASE;
   }
 
-  // Throttle: startup runs at most once per 12h; manual clicks always run.
+  // Throttle: automatic runs at most once per 12h after a successful run, and
+  // at most every 30 min after a failed attempt; manual clicks always run.
+  // lastRunAt is written only after a successful run (M-2), lastAttemptAt at
+  // the start of every run.
   function shouldRun(state, now, manual) {
     if (manual) return true;
     const last = state && state.lastRunAt || 0;
-    return !(now - last < MIN_INTERVAL_MS);
+    if (now - last < MIN_INTERVAL_MS) return false;
+    const attempt = state && state.lastAttemptAt || 0;
+    return !(now - attempt < RETRY_MIN_MS);
   }
 
-  function listDue(meta, now, manual) {
-    if (!meta || !meta.fetchedAt || !Array.isArray(meta.domains)) return true;
+  // `present`: the list's payload is actually stored (validators are useless,
+  // and a 304 would leave the list empty, when it is not).
+  function listDue(meta, now, manual, present) {
+    if (!meta || !meta.fetchedAt || !present) return true;
     if (manual) return true; // still conditional; a 304 costs nothing
     return now - meta.fetchedAt >= (meta.expiresMs || DEFAULT_EXPIRES_MS);
   }
 
+  function listMeta(m) {
+    const out = {};
+    for (const k of ["url", "etag", "lastModified", "fetchedAt", "expiresMs", "count", "cosmetic"]) if (m && m[k] !== undefined) out[k] = m[k];
+    return out;
+  }
+
+  async function payloadsPresent(deps, names) {
+    if (!names.length) return new Set();
+    if (deps.listDataPresent) {
+      try {
+        return new Set(await deps.listDataPresent(names));
+      } catch {
+        return new Set();
+      }
+    }
+    const got = (await deps.getListData(names)) || {};
+    return new Set(names.filter((n) => got[n] && Array.isArray(got[n].domains)));
+  }
+
   /**
-   * deps: { fetch, now(), getState(), setState(patch), getDynamicRules(),
+   * deps: { fetch, now(), getState(), setState(patch), getListData(names),
+   *         setListData(name, payload), listDataPresent?(names), getDynamicRules(),
    *         updateDynamicRules({removeRuleIds, addRules}), setStaticEnabled(bool),
    *         loadBundled() -> {rules, extraIds}, enabled() -> bool }
    * Never throws. Returns { ok, ran, reason?, rules? }.
@@ -200,9 +236,13 @@ function installGeneralAdblockUpdate(target) {
     }
     const now = deps.now();
     if (!shouldRun(state, now, manual)) return { ok: true, ran: false, reason: "throttled" };
+    const fresh = {};
     try {
-      await deps.setState({ lastRunAt: now });
-      const lists = Object.assign({}, state.lists || {});
+      await deps.setState({ lastAttemptAt: now });
+      const lists = {};
+      for (const [k, v] of Object.entries(state.lists || {})) lists[k] = listMeta(v);
+      const present = await payloadsPresent(deps, Object.keys(lists));
+      for (const k of Object.keys(lists)) if (!present.has(k)) delete lists[k];
       let changed = !state.dynamicActive;
       let cosmeticChanged = false;
       const errors = {};
@@ -210,7 +250,7 @@ function installGeneralAdblockUpdate(target) {
       const CP = deps.cosmeticParse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
       for (const src of SOURCES) {
         const meta = lists[src.name];
-        if (!listDue(meta, now, manual)) continue;
+        if (!listDue(meta, now, manual, !!meta)) continue;
         try {
           let res = null;
           let usedUrl = "";
@@ -218,7 +258,7 @@ function installGeneralAdblockUpdate(target) {
           for (const url of [src.url].concat(src.mirrors || [])) {
             const headers = {};
             // Validators only make sense for the URL that produced them.
-            if (meta && Array.isArray(meta.domains) && (meta.url || src.url) === url) {
+            if (meta && (meta.url || src.url) === url) {
               if (meta.etag) headers["If-None-Match"] = meta.etag;
               if (meta.lastModified) headers["If-Modified-Since"] = meta.lastModified;
             }
@@ -240,7 +280,7 @@ function installGeneralAdblockUpdate(target) {
           }
           if (!res) throw new Error(tried.join("; "));
           if (tried.length) mirrorNotes[src.name] = tried.join("; ") + " (used " + new URL(usedUrl).hostname + ")";
-          if (res.status === 304 && meta && Array.isArray(meta.domains)) {
+          if (res.status === 304 && meta) {
             lists[src.name] = Object.assign({}, meta, { fetchedAt: now });
             continue;
           }
@@ -249,19 +289,24 @@ function installGeneralAdblockUpdate(target) {
           const domains = parseList(text);
           const floor = src.minDomains || 50;
           if (domains.length < floor) throw new Error("parsed too few domains (" + domains.length + " < " + floor + ")");
+          const payload = { domains };
+          if (src.cosmetic && CP) {
+            payload.cosmetic = CP.parseCosmetic(text);
+            delete payload.cosmetic.stats;
+          }
+          // Payload first; the validators go into state only once it is stored.
+          await deps.setListData(src.name, payload);
+          fresh[src.name] = payload;
           lists[src.name] = {
             url: usedUrl,
             etag: res.headers && res.headers.get ? res.headers.get("ETag") || "" : "",
             lastModified: res.headers && res.headers.get ? res.headers.get("Last-Modified") || "" : "",
             fetchedAt: now,
             expiresMs: parseExpires(text),
-            domains,
+            count: domains.length,
+            cosmetic: !!payload.cosmetic,
           };
-          if (src.cosmetic && CP) {
-            lists[src.name].cosmetic = CP.parseCosmetic(text);
-            delete lists[src.name].cosmetic.stats;
-            cosmeticChanged = true;
-          }
+          if (payload.cosmetic) cosmeticChanged = true;
           changed = true;
         } catch (e) {
           // One list failing never sinks the others: keep its cached copy (if
@@ -269,11 +314,9 @@ function installGeneralAdblockUpdate(target) {
           errors[src.name] = String(e && e.message || e);
         }
       }
-      const usable = SOURCES.filter((x) => lists[x.name] && Array.isArray(lists[x.name].domains));
+      const usable = SOURCES.filter((x) => lists[x.name]);
       if (!usable.length) throw new Error(Object.values(errors).join("; ") || "no lists");
-      await deps.setState({ lastErrors: errors, lastNotes: mirrorNotes, lastErrorAt: Object.keys(errors).length ? now : 0 });
-
-      await deps.setState({ lists });
+      await deps.setState({ lists, lastErrors: errors, lastNotes: mirrorNotes, lastErrorAt: Object.keys(errors).length ? now : 0 });
       // Write the hide list only when every cosmetic source has a parsed copy:
       // EasyPrivacy alone would replace the whole EasyList sheet with a couple
       // of selectors, and the bundled sheet is never restored over a refresh.
@@ -281,14 +324,22 @@ function installGeneralAdblockUpdate(target) {
       const cosmeticReady = cosmeticSources.every((x) => lists[x.name] && lists[x.name].cosmetic);
       if (cosmeticChanged && cosmeticReady && deps.writeCosmetic) {
         try {
-          const parts = cosmeticSources.map((x) => lists[x.name].cosmetic);
-          await deps.writeCosmetic(CP.mergeCosmetic(parts), { source: "refresh", updatedAt: now });
+          const need = cosmeticSources.filter((x) => !fresh[x.name]).map((x) => x.name);
+          const stored = need.length ? (await deps.getListData(need)) || {} : {};
+          const parts = cosmeticSources.map((x) => (fresh[x.name] || stored[x.name] || {}).cosmetic);
+          if (parts.every(Boolean)) await deps.writeCosmetic(CP.mergeCosmetic(parts), { source: "refresh", updatedAt: now });
         } catch {
           // Cosmetic stays on the previous rules (or the bundled sheet).
         }
       }
-      if (!changed) return { ok: true, ran: true, reason: "unchanged" };
-      if (!deps.enabled()) return { ok: true, ran: true, reason: "lists off; cached" };
+      if (!changed) {
+        await deps.setState({ lastRunAt: now });
+        return { ok: true, ran: true, reason: "unchanged" };
+      }
+      if (!deps.enabled()) {
+        await deps.setState({ lastRunAt: now });
+        return { ok: true, ran: true, reason: "lists off; cached" };
+      }
     } catch (e) {
       // Download/parse failed: whatever is active now (a previous good swap
       // or the bundled ruleset) stays. Make sure something is active.
@@ -301,7 +352,9 @@ function installGeneralAdblockUpdate(target) {
       return { ok: false, ran: true, reason: String(e && e.message || e) };
     }
     try {
-      return await swap(deps, (await deps.getState()).lists, now);
+      const result = await swap(deps, (await deps.getState()).lists, now, fresh);
+      await deps.setState({ lastRunAt: now });
+      return result;
     } catch (e) {
       await fallback(deps);
       const reason = "rules swap: " + String(e && e.message || e);
@@ -339,7 +392,21 @@ function installGeneralAdblockUpdate(target) {
     }
   }
 
-  async function swap(deps, lists, now) {
+  // Payloads for the lists named in `lists` (small meta), newest first from
+  // `fresh` (parsed this run), the rest from storage.
+  async function readPayloads(deps, lists, fresh) {
+    const names = Object.keys(lists || {});
+    const need = names.filter((n) => !(fresh && fresh[n]));
+    const stored = need.length ? (await deps.getListData(need)) || {} : {};
+    const out = {};
+    for (const n of names) {
+      const p = (fresh && fresh[n]) || stored[n];
+      if (p && Array.isArray(p.domains)) out[n] = p.domains;
+    }
+    return out;
+  }
+
+  async function swap(deps, lists, now, fresh) {
     const bundled = await deps.loadBundled();
     const extra = new Set(bundled.extraIds || []);
     const packed = [];
@@ -347,7 +414,7 @@ function installGeneralAdblockUpdate(target) {
       if (isPackedListRule(r, extra)) packed.push(...(r.condition.requestDomains || []));
     }
     const bundledDomains = packed.length;
-    const perList = Object.fromEntries(Object.entries(lists || {}).filter(([, v]) => v && Array.isArray(v.domains)).map(([k, v]) => [k, v.domains]));
+    const perList = await readPayloads(deps, lists, fresh);
     const missing = SOURCES.filter((x) => !perList[x.name]).map((x) => x.name);
     let domains = mergeDomains(perList);
     if (missing.length) {
@@ -399,7 +466,7 @@ function installGeneralAdblockUpdate(target) {
       if (removeRuleIds.length) await deps.updateDynamicRules({ removeRuleIds, addRules: [] });
       return { ok: true, mode: "off" };
     }
-    if (state.dynamicActive && state.lists) {
+    if (state.dynamicActive && state.lists && Object.keys(state.lists).length) {
       if (await dynamicLooksActive(deps, state)) {
         await deps.setStaticEnabled(false);
         return { ok: true, mode: "dynamic" };
@@ -425,7 +492,7 @@ function installGeneralAdblockUpdate(target) {
   }
 
   Object.assign(target, {
-    POLICY, STARTUP_DELAY_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES,
+    POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
     LIST_RULE_ID_BASE, KEPT_RULE_ID_BASE, ALLOW_RULE_ID_BASE, SOURCES, LIST_HOSTS,
     isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules, keepsWholeDomain,
     shouldRun, listDue, refresh, describeError, LIST_ALLOW_RULE_ID, listAllowRule, applyEnabled, isListUrl,

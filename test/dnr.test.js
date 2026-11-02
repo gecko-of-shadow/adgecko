@@ -98,8 +98,8 @@ Deno.test("block rules never target protected stream hosts", () => {
   }
 });
 
-Deno.test("permissions stay DNR + storage; no host_permissions / background", () => {
-  assertEquals(manifest.permissions?.slice().sort(), ["declarativeNetRequest", "storage"].sort());
+Deno.test("permissions stay DNR + storage + alarms; only list host_permissions", () => {
+  assertEquals(manifest.permissions?.slice().sort(), ["alarms", "declarativeNetRequest", "storage"].sort());
   assertEquals(manifest.host_permissions, ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*", "https://ublockorigin.github.io/*", "https://easylist-downloads.adblockplus.org/*", "https://secure.fanboy.co.nz/*", "https://raw.githubusercontent.com/hagezi/dns-blocklists/*", "https://raw.githubusercontent.com/DandelionSprout/adfilt/*", "https://filters.adtidy.org/extension/ublock/*"], "only the filter-list hosts");
   assertEquals(manifest.background?.service_worker, "src/general-background.js");
 });

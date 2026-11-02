@@ -32,9 +32,10 @@ const packagedJs = [
   cosmeticSource,
 ];
 
-Deno.test("update policy is startup refresh + manual, list hosts only", () => {
-  assertEquals(api.POLICY, "startup-and-manual");
-  assertEquals(api.STARTUP_DELAY_MS, 5000);
+Deno.test("update policy is alarm refresh + manual, list hosts only", () => {
+  assertEquals(api.POLICY, "alarm-and-manual");
+  assertEquals(api.REFRESH_ALARM, "gecko-refresh");
+  assertEquals(api.ALARM_PERIOD_MINUTES, 180);
   assert(api.MIN_INTERVAL_MS >= 12 * 60 * 60 * 1000, "at most every 12h");
   assertEquals(api.LIST_HOSTS, ["pgl.yoyo.org", "malware-filter.gitlab.io", "easylist.to", "ublockorigin.github.io", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz", "raw.githubusercontent.com", "filters.adtidy.org"]);
   for (const src of api.SOURCES) for (const m of src.mirrors) assert(api.isListUrl(m), "mirror on a list host: " + m);
@@ -49,15 +50,19 @@ Deno.test("update policy is startup refresh + manual, list hosts only", () => {
 Deno.test("only the background worker fetches lists, and only list hosts", () => {
   assert(backgroundSource.includes("GU.isListUrl(url)"), "worker fetch is gated to list hosts");
   assert(!backgroundSource.includes("setInterval"), "no polling");
-  assert(!backgroundSource.includes("chrome.alarms"), "no alarms");
+  // Owner decision 2026-11-02: one alarm drives refreshes (was: no alarms at all).
+  const creates = backgroundSource.match(/chrome\.alarms\.create\(/g) || [];
+  assert(creates.length >= 1 && /chrome\.alarms\.create\(REFRESH_ALARM,/.test(backgroundSource), "only the refresh alarm is created");
+  assert(!/chrome\.alarms\.create\((?!REFRESH_ALARM,)/.test(backgroundSource), "no other alarm");
 });
 
-Deno.test("manifest has no background worker for list fetching", () => {
+Deno.test("manifest: alarms is the only background-scheduling permission", () => {
   const worker = (manifest.background || {}).service_worker;
   assertEquals(worker, "src/general-background.js", "only the icon and switch worker");
   const perms = manifest.permissions || [];
-  assert(!perms.includes("alarms"), "no alarms permission");
+  assert(perms.includes("alarms"), "alarms permission for the 3 h refresh");
   assert(!perms.includes("unlimitedStorage"), "no unlimitedStorage for list caches");
+  for (const p of ["tabs", "scripting", "webRequest", "activeTab", "downloads", "declarativeNetRequestFeedback"]) assert(!perms.includes(p), "no " + p);
 });
 
 Deno.test("packaged scripts do not auto-fetch filter lists", () => {

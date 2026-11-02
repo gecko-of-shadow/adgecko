@@ -134,7 +134,7 @@
         : "Lists apply on this page.";
     }
 
-    listsStatus.textContent = formatListStatus(settings);
+    listsStatus.textContent = formatListStatus(settings) + (saveError ? " " + saveError : "");
   }
 
   function loadSettings() {
@@ -152,15 +152,20 @@
     });
   }
 
+  // A failed write (quota, I/O) is shown in the list status line instead of
+  // being dropped; the setting still applies for this popup session.
+  let saveError = "";
   function savePartial(patch) {
     return new Promise((resolve) => {
       try {
         chrome.storage.local.set(patch, () => {
-          void chrome.runtime.lastError;
+          const err = chrome.runtime.lastError;
+          saveError = err ? "Could not save setting: " + (err.message || String(err)) + "." : "";
           Object.assign(settings, patch);
           resolve();
         });
-      } catch {
+      } catch (e) {
+        saveError = "Could not save setting: " + String(e && e.message || e) + ".";
         Object.assign(settings, patch);
         resolve();
       }

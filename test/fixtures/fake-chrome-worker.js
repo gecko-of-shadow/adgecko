@@ -19,9 +19,19 @@ export function loadWorker(opts = {}) {
     get lastError() { return lastError; },
     getURL: (p) => "chrome-extension://" + EXT + "/" + p,
     onMessage: { addListener(f) { onMessage = f; } },
-    onInstalled: { addListener() {} }, onStartup: { addListener() {} },
+    onInstalled: { addListener(f) { installListeners.push(f); } }, onStartup: { addListener() {} },
   };
+  const installListeners = [];
   const withErr = (err, cb, ...args) => { lastError = err; try { cb && cb(...args); } finally { lastError = undefined; } };
+  // Storage size like Chrome counts it (key + JSON value). opts.quotaBytes makes a
+  // set that would exceed it fail with Chrome's quota message; opts.setError(items)
+  // may return a message to fail any set.
+  const sizeOf = (k, v) => k.length + JSON.stringify(v).length;
+  const totalBytes = () => Object.entries(store).reduce((n, [k, v]) => n + sizeOf(k, v), 0);
+  let peakBytes = totalBytes();
+  const alarms = new Map();
+  const alarmListeners = [];
+  const alarmCreates = [];
   const chrome = {
     runtime,
     storage: {
@@ -32,9 +42,22 @@ export function loadWorker(opts = {}) {
           bytesRead += JSON.stringify(snap).length;
           later(() => withErr(undefined, cb, snap));
         },
+        getBytesInUse(keys, cb) {
+          let n = 0;
+          for (const k of [].concat(keys || [])) if (k in store) n += sizeOf(k, store[k]);
+          later(() => withErr(undefined, cb, n));
+        },
         set(items, cb) {
+          let msg = opts.setError ? opts.setError(items) : null;
+          if (!msg && opts.quotaBytes) {
+            let after = totalBytes();
+            for (const [k, v] of Object.entries(items)) after += sizeOf(k, v) - (k in store ? sizeOf(k, store[k]) : 0);
+            if (after > opts.quotaBytes) msg = "QUOTA_BYTES quota exceeded";
+          }
+          if (msg) { later(() => withErr({ message: msg }, cb)); return; }
           const changes = {};
           for (const [k, v] of Object.entries(items)) { changes[k] = { oldValue: store[k], newValue: v }; store[k] = structuredClone(v); }
+          peakBytes = Math.max(peakBytes, totalBytes());
           later(() => { withErr(undefined, cb); for (const l of changeListeners) l(changes, "local"); });
         },
         remove(keys, cb) { for (const k of [].concat(keys)) delete store[k]; later(() => withErr(undefined, cb)); },
@@ -61,7 +84,21 @@ export function loadWorker(opts = {}) {
       },
     },
     action: { setIcon(_o, cb) { if (cb) cb(); }, setTitle() {} },
+    // Like Chrome before 150 when opts.strictAlarms: unknown keys throw.
+    alarms: opts.noAlarms ? undefined : {
+      create(name, info, cb) {
+        const known = ["when", "delayInMinutes", "periodInMinutes"].concat(opts.strictAlarms ? [] : ["persistAcrossSessions"]);
+        for (const k of Object.keys(info || {})) if (!known.includes(k)) throw new TypeError("Error in invocation of alarms.create: Unexpected property: '" + k + "'.");
+        alarmCreates.push({ name, info: structuredClone(info) });
+        alarms.set(name, { name, periodInMinutes: info.periodInMinutes, scheduledTime: Date.now() + (info.delayInMinutes || 0) * 60000 });
+        if (cb) later(() => withErr(undefined, cb));
+      },
+      get(name, cb) { const a = alarms.get(name); later(() => withErr(undefined, cb, a ? structuredClone(a) : undefined)); },
+      clear(name, cb) { const had = alarms.delete(name); if (cb) later(() => withErr(undefined, cb, had)); },
+      onAlarm: { addListener(f) { alarmListeners.push(f); } },
+    },
   };
+  if (opts.alarms) for (const a of opts.alarms) alarms.set(a.name, a);
   const importScripts = (...names) => {
     for (const n of names) (0, eval)(Deno.readTextFileSync(new URL(n, SRC)));
   };
@@ -84,10 +121,18 @@ export function loadWorker(opts = {}) {
     const keep = onMessage(message, { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" }, resolve);
     if (keep !== true) resolve(undefined);
   });
-  return { chrome, store, dnr, send, get bytesRead() { return bytesRead; }, resetBytes() { bytesRead = 0; } };
+  const fireAlarm = (name) => { for (const f of alarmListeners) f({ name, scheduledTime: Date.now() }); };
+  const install = (details = { reason: "update" }) => { for (const f of installListeners) f(details); };
+  return {
+    chrome, store, dnr, send, alarms, alarmCreates, fireAlarm, install,
+    get alarmListenerCount() { return alarmListeners.length; },
+    get bytesRead() { return bytesRead; }, resetBytes() { bytesRead = 0; },
+    get peakBytes() { return peakBytes; }, totalBytes,
+  };
 }
 export const settle = (ms = 400) => tick(ms);
 // Synthetic refreshed state that passes swap()'s "not smaller than half the bundle" check.
+// Old (pre-split) layout: everything in one "generalListRefresh" value.
 export function refreshedState(SOURCES) {
   const lists = {};
   let n = 0;

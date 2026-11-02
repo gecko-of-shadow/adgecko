@@ -29,7 +29,8 @@ Deno.test("lists off then on keeps the refreshed rule set (no duplicate-id rebui
   assert(listRules(w) === 0 && !w.dnr.staticOn, "off removes every list rule");
   await popupWrite(w, { generalEnabled: true });
   await settle(800);
-  const st = w.store.generalListRefresh;
+  // Seeded in the old one-key layout; the worker migrates it to listState + listData:*.
+  const st = w.store.listState;
   assert(w.dnr.errors.length === 0, "DNR errors: " + w.dnr.errors.join("; "));
   assert(listRules(w) === before && !w.dnr.staticOn && st.dynamicActive,
     `refreshed lists dropped: listRules=${listRules(w)} staticOn=${w.dnr.staticOn} dynamicActive=${st.dynamicActive}`);
