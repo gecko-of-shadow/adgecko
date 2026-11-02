@@ -137,21 +137,90 @@ Deno.test("inboundEdit: root-key guard skips the clone for unrelated JSON.string
   assert(r.boot.every((x) => x === true), "bootstrap still runs " + JSON.stringify(r.boot));
 });
 
-// uBO's videoplayback rule allows only a rolling window of `expire=` timestamps and
-// blocks everything else. uBO ships a new window before it runs out; this bundle
-// only gets one from scripts/sync-ubo-youtube.mjs. Once real links fall outside the
-// window, every YouTube video (on youtube.com and in embeds) stops loading.
-Deno.test("uBO videoplayback expire window still covers real links for 30 days (re-sync if this fails)", () => {
-  const rule = rules.find((r) => r.condition?.regexFilter?.includes("videoplayback\\?expire="));
+// uBO's videoplayback rule allows only a window of `expire=` timestamps and blocks
+// everything else (a decoy filter). Upstream widens it only after real links break,
+// so scripts/sync-ubo-youtube.mjs widens it locally (scripts/lib/youtube-expire-window.mjs).
+// Once real links fall outside the window, every YouTube video (on youtube.com and in
+// embeds) stops loading. The window must cover every day through 2033-05-01.
+const expireUrl = (sec) => `https://rr1---sn-example.googlevideo.com/videoplayback?expire=${sec}&ei=x&itag=137`;
+const shippedExpireRule = () => rules.find((r) => r.condition?.regexFilter?.includes("videoplayback\\?expire="));
+
+Deno.test("uBO videoplayback expire window allows real links every day from today through 2033-05-01", () => {
+  const rule = shippedExpireRule();
   if (!rule) return; // rule dropped upstream: nothing to expire
   const re = new RegExp(rule.condition.regexFilter);
-  const url = (sec) => `https://rr1---sn-abc.googlevideo.com/videoplayback?expire=${sec}&ei=x&itag=137`;
-  const now = Math.floor(Date.now() / 1000);
-  for (const days of [0, 30]) {
-    const expire = now + days * 86400 + 6 * 3600; // links expire about 6 h after they're issued
-    if (re.test(url(expire))) {
-      throw new Error(`a normal link with expire=${expire} (${new Date(expire * 1000).toISOString()}) is blocked; run scripts/sync-ubo-youtube.mjs`);
+  const end = Date.UTC(2033, 4, 1) / 1000;
+  const start = Math.floor(Date.now() / 1000 / 86400) * 86400;
+  let days = 0;
+  for (let day = start; day <= end; day += 86400, days++) {
+    const expire = day + 6 * 3600; // links expire about 6 h after they're issued
+    if (re.test(expireUrl(expire))) {
+      throw new Error(`a normal link with expire=${expire} (${new Date(expire * 1000).toISOString()}) is blocked; see scripts/lib/youtube-expire-window.mjs`);
     }
   }
-  if (!re.test(url(1500000000))) throw new Error("sanity: the rule still blocks out-of-window links");
+  assert(days > 2000, "checked " + days + " days");
+});
+
+Deno.test("uBO videoplayback expire rule still blocks the decoy expiries", () => {
+  const rule = shippedExpireRule();
+  if (!rule) return;
+  const re = new RegExp(rule.condition.regexFilter);
+  for (const decoy of ["0123456789", "1234567890", "1750000000", "2500000000"]) {
+    assert(re.test(expireUrl(decoy)), "decoy not blocked: " + decoy);
+  }
+  assert(rule.action.type === "block", "still a block rule");
+});
+
+Deno.test("expire window post-processing: widens the known upstream window, is idempotent, and never blocks more", async () => {
+  const mod = await import("../scripts/lib/youtube-expire-window.mjs");
+  const mk = (win) => [
+    { id: 1, action: { type: "block" }, condition: { urlFilter: "||doubleclick.net^" } },
+    { id: 3, action: { type: "block" }, condition: { regexFilter: mod.EXPIRE_PREFIX + win + mod.EXPIRE_SUFFIX, resourceTypes: ["xmlhttprequest"] } },
+  ];
+  const first = mod.widenYoutubeExpireWindow(mk(mod.UPSTREAM_WINDOW));
+  assert(first.action === "widened", "known window widened");
+  assert(first.rules[1].condition.regexFilter === mod.EXPIRE_PREFIX + mod.WIDENED_WINDOW + mod.EXPIRE_SUFFIX, "widened regex");
+  assert(first.rules[1].condition.resourceTypes[0] === "xmlhttprequest" && first.rules[0].id === 1, "other fields kept");
+  const second = mod.widenYoutubeExpireWindow(first.rules);
+  assert(second.action === "unchanged", "idempotent");
+  assert(JSON.stringify(second.rules) === JSON.stringify(first.rules), "idempotent output");
+  // Allow-only: everything the widened rule blocks, the upstream rule also blocked.
+  const up = new RegExp(mk(mod.UPSTREAM_WINDOW)[1].condition.regexFilter);
+  const wide = new RegExp(first.rules[1].condition.regexFilter);
+  for (let p = 0; p < 1000; p++) {
+    const u = expireUrl(String(p).padStart(3, "0") + "4567890");
+    if (wide.test(u)) assert(up.test(u), "widened blocks more than upstream at prefix " + p);
+  }
+  // Upstream already more permissive: kept as is.
+  const looser = mod.widenYoutubeExpireWindow(mk("(?:[02-9]\\d+|1[1-5]\\d+)"));
+  assert(looser.action === "unchanged" && looser.rules[1].condition.regexFilter.includes("1[1-5]"), "keeps a more permissive upstream window");
+  // Upstream moved but stricter than ours (subset): ours wins.
+  const stricter = mod.widenYoutubeExpireWindow(mk("(?:[02-9]\\d+|1[1-79]\\d+)"));
+  assert(stricter.action === "widened", "stricter upstream window replaced");
+  // No expire rule: nothing to do.
+  assert(mod.widenYoutubeExpireWindow([{ id: 1, action: { type: "block" }, condition: {} }]).action === "none", "no rule");
+});
+
+Deno.test("expire window post-processing: an unrecognised rule shape stops the generator", async () => {
+  const mod = await import("../scripts/lib/youtube-expire-window.mjs");
+  const bad = [
+    [{ id: 3, action: { type: "block" }, condition: { regexFilter: "googlevideo\\.com/videoplayback\\?expire=\\d+" } }],
+    [{ id: 3, action: { type: "block" }, condition: { regexFilter: mod.EXPIRE_PREFIX + "(?:(?!x).)+" + mod.EXPIRE_SUFFIX } }],
+    [{ id: 3, action: { type: "allow" }, condition: { regexFilter: mod.EXPIRE_PREFIX + mod.UPSTREAM_WINDOW + mod.EXPIRE_SUFFIX } }],
+    [
+      { id: 3, action: { type: "block" }, condition: { regexFilter: mod.EXPIRE_PREFIX + mod.UPSTREAM_WINDOW + mod.EXPIRE_SUFFIX } },
+      { id: 4, action: { type: "block" }, condition: { regexFilter: mod.EXPIRE_PREFIX + mod.UPSTREAM_WINDOW + mod.EXPIRE_SUFFIX } },
+    ],
+    // Not comparable with ours (allows 0.., blocks 18..): needs a human.
+    [{ id: 3, action: { type: "block" }, condition: { regexFilter: mod.EXPIRE_PREFIX + "(?:[2-9]\\d+|18\\d+)" + mod.EXPIRE_SUFFIX } }],
+  ];
+  for (const rulesIn of bad) {
+    let threw = false;
+    try { mod.widenYoutubeExpireWindow(rulesIn); } catch { threw = true; }
+    assert(threw, "accepted " + JSON.stringify(rulesIn));
+  }
+  const gen = await Deno.readTextFile(new URL("../scripts/sync-ubo-youtube.mjs", import.meta.url));
+  const call = gen.indexOf("widenYoutubeExpireWindow(rules)");
+  const write = gen.indexOf('src/rules/ubo-youtube-network.json", JSON.stringify(expireFix.rules');
+  assert(call > 0 && write > call, "generator post-processes before it writes the rule file");
 });

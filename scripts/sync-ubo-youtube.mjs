@@ -12,6 +12,7 @@
 //   src/rules/ubo-youtube-network.json   DNR rules (uBO's own DNR converter)
 //   src/vendor/ubo-youtube-meta.json     commits used, ported and skipped filters
 // uBlock Origin and uAssets are GPLv3; see src/vendor/LICENSE-uBlock.md.
+import { widenYoutubeExpireWindow } from "./lib/youtube-expire-window.mjs";
 const ROOT = decodeURIComponent(new URL("..", import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, "$1");
 const arg = (k, d) => { const i = Deno.args.indexOf(k); return i >= 0 ? Deno.args[i + 1] : d; };
 const run = async (cmd, cwd) => {
@@ -284,7 +285,11 @@ for (const r of result.network.ruleset || []) {
   rules.push(clean);
 }
 rules.forEach((r, i) => { r.id = i + 1; });
-await Deno.writeTextFile(ROOT + "src/rules/ubo-youtube-network.json", JSON.stringify(rules, null, 1) + "\n");
+// Upstream's videoplayback?expire= decoy window is only widened after real links
+// break; widen it locally (allow-only) or stop here. See scripts/lib/youtube-expire-window.mjs.
+const expireFix = widenYoutubeExpireWindow(rules);
+console.log("videoplayback expire window: " + expireFix.action);
+await Deno.writeTextFile(ROOT + "src/rules/ubo-youtube-network.json", JSON.stringify(expireFix.rules, null, 1) + "\n");
 for (const x of networkLines) ported.network.push(x.line);
 
 const meta = {

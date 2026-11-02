@@ -35,7 +35,7 @@
    "initiatorDomains": [
     "www.youtube.com"
    ],
-   "regexFilter": "\\.googlevideo\\.com\\/videoplayback\\?expire=(?:[02-9]\\d+|1[1-68-9]\\d+|17[1-7]\\d+)&",
+   "regexFilter": "\\.googlevideo\\.com\\/videoplayback\\?expire=(?:[02-9]\\d+|1[1-6]\\d+|17[1-7]\\d+)&",
    "requestMethods": [
     "get"
    ],

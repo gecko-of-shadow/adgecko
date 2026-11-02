@@ -10,7 +10,8 @@
 - "Allow this page" works again. Chrome hides tab addresses from extensions without the `tabs` permission, so the button was always greyed out ("Open a normal http(s) page"). The popup now asks the page's own content script for its address. No new permission.
 - After the first list refresh, the YouTube doubleclick block is kept. The refresh copied only the allow rules and the extra tracker rule into the new rule set, so `doubleclick.net` loaded on YouTube (and in YouTube embeds on other sites) once the packed rules were switched off.
 - If EasyList fails to download on a refresh, the hide list is left as it was. Before, EasyPrivacy alone replaced it (a couple of selectors instead of about 13,600) and it stayed that way until EasyList came back.
-- New test: fails 30 days before the bundled uBO YouTube `videoplayback` rule starts blocking normal videos (2027-01-15). Re-run `scripts/sync-ubo-youtube.mjs` before then.
+- YouTube: the bundled uBO `videoplayback?expire=` decoy rule would have started blocking every normal YouTube video (and embeds) on 2027-01-15. `scripts/sync-ubo-youtube.mjs` now widens its allowed window locally (allow-only) to cover real links up to 2033-05-18, and stops with an error if upstream changes the rule's shape. A plain re-sync is not enough because upstream widens the window only after links break. The guard test now checks every day through 2033-05-01 instead of 30 days ahead. See `docs/youtube-expire-window.md`.
+- YouTube: uBO filters re-synced to uAssets@205b212 (was 69831a8; scriptlets still uBO 1.75.0). Picks up the comment-posting user-agent cleanup and newer inline/prefetch ad edits.
 
 ## 0.2.21
 
