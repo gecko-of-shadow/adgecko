@@ -2,7 +2,7 @@
   "packed_at_utc": "2026-11-03T20:37:57Z",
   "format": "chrome_declarativeNetRequest_rules_array",
   "domains_total": 187014,
-  "scoped_entries_total": 5481,
+  "scoped_entries_total": 5480,
   "dnr_rules_total": 2439,
   "domains_per_rule": 80,
   "max_dnr_rules_budget": 28000,
@@ -39,7 +39,7 @@
       "kept": 43225,
       "skipped_never": 3,
       "scoped_raw": 2209,
-      "scoped_kept": 1176
+      "scoped_kept": 1175
     },
     "easyprivacy": {
       "url": "https://easylist.to/easylist/easyprivacy.txt",

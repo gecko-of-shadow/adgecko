@@ -59,7 +59,8 @@
       "redirectingat.com": "affiliate",
       "ojrq.net": "affiliate",
       "invol.co": "affiliate",
-      "adtraction.com": "affiliate"
+      "adtraction.com": "affiliate",
+      "linksprf.com": "deals"
     }
   }/*NAV-EXEMPT-END*/;
 

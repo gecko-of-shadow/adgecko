@@ -197,8 +197,9 @@ function syncAllowRules(origins) {
   });
 }
 
-// User "Allow this domain" override for the threat tier (priority 2,000,020,
-// all resource types incl. main_frame). Domains in storage key
+// User "Allow this domain" override (priority 2,000,020, all resource types
+// incl. main_frame): beats the threat tier and the priority-1 list rules, so it
+// also opens a page the filter lists block from opening. Domains in storage key
 // `threatAllowDomains`; the text box comes with the settings page.
 const THREAT_ALLOW_KEY = "threatAllowDomains";
 const THREAT_ALLOW_ID_BASE = 950000;

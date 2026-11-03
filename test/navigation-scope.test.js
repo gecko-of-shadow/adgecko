@@ -116,7 +116,13 @@ Deno.test("runtime rebuild of the packed rules: only explicit main_frame rules c
     getListData: async () => ({}), setListData: async () => {}, removeListData: async () => {},
     getDynamicRules: async () => dynamic.slice(),
     updateDynamicRules: async ({ removeRuleIds, addRules }) => { dynamic = dynamic.filter((r) => !removeRuleIds.includes(r.id)).concat(addRules); },
-    setStaticEnabled: async () => {}, loadBundled: async () => ({ rules: bundled, extraIds: [EXTRA_ID] }),
+    // The shipped bundle plus rules in the pre-fix packed shape (excluded-only
+    // without main_frame, as packed before 861a3ad), so the rebuild guards the
+    // converter whatever the current file holds.
+    setStaticEnabled: async () => {}, loadBundled: async () => ({ rules: bundled.concat([
+      { id: 99001, priority: 1, action: { type: "block" }, condition: { requestDomains: ["oldneg.example"], excludedResourceTypes: ["script"] } },
+      { id: 99002, priority: 1, action: { type: "block" }, condition: { requestDomains: ["oldneg3p.example"], domainType: "thirdParty", excludedResourceTypes: ["stylesheet"] } },
+    ]), extraIds: [EXTRA_ID] }),
     enabled: () => true, cosmeticParse: null, writeCosmetic: async () => {},
   };
   const r = await U.refresh(deps, { manual: true });
@@ -135,6 +141,10 @@ Deno.test("runtime rebuild of the packed rules: only explicit main_frame rules c
   }
   assert(navRules > 0, "the explicit $doc rules are still there");
   for (const rule of excludedOnly) assert(rule.condition.excludedResourceTypes.includes("main_frame"), "excluded-only rule excludes main_frame: " + rule.id);
+  for (const h of ["oldneg.example", "oldneg3p.example"]) {
+    assert(list.some((x) => x.condition.requestDomains.includes(h)), "old-shape packed rule rebuilt: " + h);
+    assert(opensPage(list, h), "old-shape packed rule no longer blocks opening " + h);
+  }
 });
 
 Deno.test("matcher follows Chrome: excluded-only matches navigations, third-party includes typed URLs", () => {
@@ -273,7 +283,7 @@ Deno.test("bug 1: stream and never-block hosts never get a navigation block (gua
     "print(json.dumps(mod.domains_to_dnr_rules(domains, merged)))",
   ].join("\n"));
   const py = JSON.parse(out);
-  for (const h of STREAM_HOSTS) assert(opensPage(py, h), "packer: stream host navigation blocked: " + h);
+  for (const h of STREAM_HOSTS) assert(opensPage(py, h) && opensPage(py, "ads." + h), "packer: stream host navigation blocked: " + h);
   const arrays = JSON.parse(await runPython(PY_LOAD + "\nprint(json.dumps([mod.PROTECTED_SUFFIX, mod.PROTECTED_EXACT]))"));
   const PH = globalThis.GeckoProtectedHosts;
   assert(JSON.stringify(arrays) === JSON.stringify([PH.SUFFIX, PH.EXACT]), "packer reads the same protected-host list");

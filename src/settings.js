@@ -1,6 +1,6 @@
 // Settings page (options_ui). Lists every feature from src/settings/features.js,
 // the threat feed status with "Pause threat feed", "Revert lists", the
-// threat-tier "Allow this domain" box and the per-site switches. Writes only
+// "Allow this domain" box (threat tier and filter lists) and the per-site switches. Writes only
 // the small keys settings / siteOverrides / threatAllowDomains; the worker does
 // the rest. No remote code, no eval, text only (no innerHTML).
 (function () {
