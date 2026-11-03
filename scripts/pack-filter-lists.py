@@ -278,15 +278,56 @@ def is_never_block(domain: str) -> bool:
     return False
 
 
+# Public-suffix subset shared with the runtime (src/threat/psl.js, data between
+# the PSL-SUBSET markers; security review L-3). A list line naming a public
+# suffix ("co.uk") or a non-public IPv4 address never becomes a rule. Same
+# check as looksLikeDomain() in src/general/update.js (test/psl.test.js).
+PSL_JS = ROOT / "src" / "threat" / "psl.js"
+
+
+def load_psl_subset() -> dict:
+    text = PSL_JS.read_text(encoding="utf-8")
+    start = text.index("/*PSL-SUBSET-START*/") + len("/*PSL-SUBSET-START*/")
+    end = text.index("/*PSL-SUBSET-END*/")
+    data = json.loads(text[start:end])
+    return {"generic": set(data["generic"]), "wildcard": set(data["wildcardTlds"]), "suffixes": set(data["suffixes"])}
+
+
+PSL = load_psl_subset()
+
+
+def is_public_suffix(host: str) -> bool:
+    h = host.lower().rstrip(".")
+    if "." not in h:
+        return True
+    if h in PSL["suffixes"]:
+        return True
+    labels = h.split(".")
+    if len(labels) != 2:
+        return False
+    return (len(labels[1]) == 2 and labels[0] in PSL["generic"]) or labels[1] in PSL["wildcard"]
+
+
+def is_local_address(host: str) -> bool:
+    m = re.fullmatch(r"(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})", host)
+    if not m:
+        return False
+    a, b = int(m.group(1)), int(m.group(2))
+    return (a in (0, 10, 127) or a >= 224 or (a == 169 and b == 254) or (a == 172 and 16 <= b <= 31)
+            or (a == 192 and b == 168) or (a == 100 and 64 <= b <= 127))
+
+
 def looks_like_domain(domain: str) -> bool:
     d = domain.lower()
     if "." not in d or d.startswith(".") or d.endswith("."):
         return False
     if any(ch in d for ch in "/*?|()[]{}"):
         return False
-    if d.count(".") >= 1 and all(part for part in d.split(".")):
-        return True
-    return False
+    if not all(part for part in d.split(".")):
+        return False
+    if is_local_address(d) or is_public_suffix(d):
+        return False
+    return True
 
 
 def extract_entries(text: str) -> tuple[list[str], list[list[str]]]:

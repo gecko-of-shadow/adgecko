@@ -15,6 +15,12 @@
 // under a SUFFIX entry (e.g. fonts.googleapis.com).
 // Single-label hosts ("com", "tv") and hosts that are not plain DNS names are
 // always rejected (a stray public suffix would take out a whole TLD).
+// Also rejected (security review M-3): public suffixes, shared-hosting and big
+// platform parents (github.io, pages.dev, amazonaws.com, blogspot.com, ...)
+// and their parents, from src/threat/psl.js (must be loaded first: without it
+// every host is rejected, so a load-order mistake blocks nothing); and IPv4
+// literals in private, loopback, link-local, shared (CGNAT) or multicast
+// ranges (a block there could cut off the visitor's own router or network).
 (function (root) {
   const SUFFIX = Object.freeze([
     // Twitch
@@ -47,6 +53,16 @@
 
   const under = (h, d) => h === d || h.endsWith("." + d);
 
+  // Non-public IPv4 literal -> reason, else null.
+  function localAddressReason(h) {
+    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+    if (!m) return null;
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 0 || a === 10 || a === 127 || a >= 224) return "non-public address";
+    if ((a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)) return "non-public address";
+    return null;
+  }
+
   // null when the host may be used in a threat rule, else a reason string.
   function protectedReason(host) {
     const h = normalizeHost(host);
@@ -57,12 +73,16 @@
     if (labels.length === 2 && SUFFIX_LIKE_FIRST_LABEL.has(labels[0])) return "looks like a public suffix";
     for (const p of SUFFIX) if (under(h, p)) return "protected: " + p;
     for (const p of ALL) if (under(p, h)) return "ancestor of protected " + p;
-    return null;
+    const local = localAddressReason(h);
+    if (local) return local;
+    const ps = root.GeckoPublicSuffix;
+    if (!ps) return "public-suffix data not loaded";
+    return ps.suffixReason(h);
   }
 
   function isProtectedHost(host) {
     return protectedReason(host) !== null;
   }
 
-  root.GeckoProtectedHosts = Object.freeze({ SUFFIX, EXACT, ALL, normalizeHost, protectedReason, isProtectedHost });
+  root.GeckoProtectedHosts = Object.freeze({ SUFFIX, EXACT, ALL, normalizeHost, protectedReason, isProtectedHost, localAddressReason });
 })(typeof self !== "undefined" ? self : globalThis);

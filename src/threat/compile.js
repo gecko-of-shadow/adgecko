@@ -87,12 +87,24 @@
   // User "Allow this domain" override: one allow rule per domain at 2,000,020,
   // every resource type listed (main_frame included). DNR matches subdomains
   // too, so "example.test" also allows "www.example.test" (only ever allows more).
-  function normalizeUserDomain(input) {
+  // Same public-suffix / platform check as the threat hosts (src/threat/psl.js):
+  // "github.io" or "co.uk" would let a whole platform or country through, so
+  // they are refused (a site under them, e.g. "me.github.io", is fine).
+  // Without the data loaded nothing is accepted.
+  function userDomainReason(input) {
     let s = String(input == null ? "" : input).trim().toLowerCase();
     s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//, "").replace(/[/?#].*$/, "").replace(/:\d+$/, "");
     if (s.startsWith("*.")) s = s.slice(2);
     if (s.endsWith(".")) s = s.slice(0, -1);
-    return /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(s) ? s : null;
+    if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(s)) return { domain: null, reason: "not a domain name" };
+    const ps = root.GeckoPublicSuffix;
+    if (!ps) return { domain: null, reason: "public-suffix data not loaded" };
+    const why = ps.suffixReason(s);
+    return why ? { domain: null, reason: why } : { domain: s, reason: null };
+  }
+
+  function normalizeUserDomain(input) {
+    return userDomainReason(input).domain;
   }
 
   function buildUserAllowRules(domains, idBase, max) {
@@ -115,6 +127,6 @@
 
   root.GeckoThreatCompile = Object.freeze({
     THREAT_PRIORITY, USER_ALLOW_PRIORITY, THREAT_TYPES, ALL_TYPES, HOSTS_PER_RULE, THREAT_LISTS, THREAT_SCOPES,
-    threatHostsFromEntries, compileThreatRules, normalizeUserDomain, buildUserAllowRules,
+    threatHostsFromEntries, compileThreatRules, normalizeUserDomain, userDomainReason, buildUserAllowRules,
   });
 })(typeof self !== "undefined" ? self : globalThis);

@@ -1,5 +1,6 @@
 // Block G: signed-feed client wiring (dormant until configured). Fake chrome
 // storage / session rules / fetch; throwaway keys generated in memory.
+import "../src/threat/psl.js";
 import "../src/threat/protected-hosts.js";
 import "../src/feed/config.js";
 import "../src/feed/keys.js";

@@ -100,10 +100,28 @@ function installGeneralAdblockUpdate(target) {
     return NEVER_BLOCK_SUFFIXES.some((s) => d === s || d.endsWith("." + s));
   }
 
+  // Security review L-3: a list line naming a public suffix ("co.uk") or a
+  // private / loopback / link-local IPv4 address is never turned into a rule.
+  // Same data as the threat tier (src/threat/psl.js; skipped when not loaded,
+  // e.g. in old harnesses). Shared-platform parents (github.io, ...) are left
+  // to the lists here: this tier is priority 1, never blocks navigations, and
+  // "Allow this page" overrides it. The packer applies the same check.
+  function localAddress(d) {
+    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(d);
+    if (!m) return false;
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+  }
+
   function looksLikeDomain(d) {
     if (!d.includes(".") || d.startsWith(".") || d.endsWith(".")) return false;
     if (/[\/*?|()[\]{}]/.test(d)) return false;
-    return d.split(".").every(Boolean);
+    if (!d.split(".").every(Boolean)) return false;
+    if (localAddress(d)) return false;
+    const PS = typeof globalThis !== "undefined" && globalThis.GeckoPublicSuffix;
+    if (PS && PS.isPublicSuffix(d)) return false;
+    return true;
   }
 
   // Same rules as scripts/pack-filter-lists.py extract_entries().
@@ -208,6 +226,9 @@ function installGeneralAdblockUpdate(target) {
   function buildListRules(domains, scoped) {
     const FO = filterOptions();
     const rules = [];
+    // Stored payloads may predate the host checks in looksLikeDomain.
+    domains = (domains || []).filter((d) => looksLikeDomain(d));
+    scoped = (scoped || []).filter((e) => looksLikeDomain(e[0]));
     const push = (chunk, extra) => {
       rules.push({
         id: LIST_RULE_ID_BASE + rules.length,
@@ -261,6 +282,20 @@ function installGeneralAdblockUpdate(target) {
     return id >= LIST_RULE_ID_BASE && id < ALLOW_RULE_ID_BASE && !isThreatRule(id);
   }
 
+  // Per-refresh cap on NEW threat hosts (security review M-3): one refresh may
+  // add at most this many hosts, and at most this share of the previous set
+  // (the last refreshed set, else the packed `threat` ruleset). More than that
+  // keeps the previous rules and records why; the same jump seen again on the
+  // next refresh (within 10%) is accepted as real.
+  const MAX_NEW_THREAT_HOSTS = 2500;
+  const MAX_NEW_THREAT_RATIO = 0.2;
+
+  function threatHostsOf(rules) {
+    const out = new Set();
+    for (const r of rules || []) for (const d of (r && r.condition && r.condition.requestDomains) || []) out.add(d);
+    return out;
+  }
+
   // Rebuild the dynamic threat rules from the threat lists' payloads. Errors
   // are recorded, never thrown: the static "threat" ruleset stays the floor.
   async function applyThreatRules(deps, payloads, now) {
@@ -282,9 +317,34 @@ function installGeneralAdblockUpdate(target) {
       const others = existing.filter((r) => !isThreatRule(r.id)).length;
       const budget = Math.max(0, Math.min(THREAT_RULE_ID_END - THREAT_RULE_ID_BASE, DYNAMIC_RULE_LIMIT - others - 100));
       const compiled = TC.compileThreatRules(hosts, { idBase: THREAT_RULE_ID_BASE, maxRules: budget, popupHosts });
-      const removeRuleIds = existing.filter((r) => isThreatRule(r.id)).map((r) => r.id);
+      const previousRules = existing.filter((r) => isThreatRule(r.id));
+      let previous = threatHostsOf(previousRules);
+      if (!previous.size && deps.loadPackedThreatRules) {
+        try {
+          previous = threatHostsOf(await deps.loadPackedThreatRules());
+        } catch {
+          previous = new Set();
+        }
+      }
+      if (previous.size) {
+        const added = compiled.accepted.concat(compiled.popupAccepted).filter((h) => !previous.has(h)).length;
+        const tooMany = added > MAX_NEW_THREAT_HOSTS || added / previous.size > MAX_NEW_THREAT_RATIO;
+        let st = {};
+        try {
+          st = (await deps.getState()) || {};
+        } catch {
+          st = {};
+        }
+        const seenBefore = st.threatRejectedNew > 0 && Math.abs(added - st.threatRejectedNew) / st.threatRejectedNew <= CONFIRM_RATIO;
+        if (tooMany && !seenBefore) {
+          const reason = "too many new threat hosts in one refresh (" + added + " new, " + previous.size + " before); kept the previous rules";
+          await deps.setState({ threatError: reason, threatRejectedNew: added });
+          return { ok: false, reason, held: true };
+        }
+      }
+      const removeRuleIds = previousRules.map((r) => r.id);
       await deps.updateDynamicRules({ removeRuleIds, addRules: compiled.rules });
-      await deps.setState({ threatRules: compiled.rules.length, threatHosts: compiled.accepted.length, threatRejected: compiled.rejected.length, threatError: "", threatUpdatedAt: now });
+      await deps.setState({ threatRules: compiled.rules.length, threatHosts: compiled.accepted.length, threatRejected: compiled.rejected.length, threatError: "", threatRejectedNew: 0, threatUpdatedAt: now });
       return { ok: true, rules: compiled.rules.length };
     } catch (e) {
       const reason = String(e && e.message || e);

@@ -2,6 +2,7 @@
 // per-site switches, the worker's derived state, and the stream-site safety net.
 import "../src/settings/features.js";
 import "../src/general/filter-options.js";
+import "../src/threat/psl.js";
 import "../src/threat/protected-hosts.js";
 import "../src/threat/compile.js";
 import manifest from "../manifest.json" with { type: "json" };

@@ -1,5 +1,5 @@
 {
-  "built_at_utc": "2026-11-03T01:17:14Z",
+  "built_at_utc": "2026-11-03T05:23:38Z",
   "lists_packed_at_utc": "2026-11-03T00:07:22Z",
   "priority": 2000010,
   "resource_types": [
@@ -36,14 +36,14 @@
     },
     "dandelion_antimalware": {
       "sha256_matches_meta": true,
-      "whole_domains": 11817,
+      "whole_domains": 11816,
       "scoped_entries": 309,
-      "threat_hosts": 12117,
+      "threat_hosts": 12116,
       "popup_only_hosts": 0,
-      "added": 12083
+      "added": 12082
     }
   },
-  "hosts_total": 15926,
+  "hosts_total": 15925,
   "popup_only_hosts_total": 0,
   "rule_count": 200,
   "rejected_total": 0,

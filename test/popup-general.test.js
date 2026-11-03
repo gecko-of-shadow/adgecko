@@ -66,8 +66,8 @@ Deno.test("storage key contract matches settings module", () => {
   assert(settingsSource.includes('listUpdateRequestAt: "generalListUpdateRequestAt"'), "manual update flag");
   assert(settingsSource.includes('RULESET_ID = "general"'), "ruleset id general");
   // general/filter-options.js (shared option table) must load before update.js.
-  // The threat tier (protected hosts + compiler) loads before update.js too.
+  // The threat tier (public-suffix data, protected hosts, compiler) loads before update.js too.
   // Then the signed-feed client (dormant until configured).
   // Block H: the feature registry loads first.
-  assert(backgroundSource.replace(/\s+/g, " ").includes("importScripts(\"settings/features.js\", \"general-settings.js\", \"general/filter-options.js\", \"threat/protected-hosts.js\", \"threat/compile.js\", \"general/update.js\", \"general/cosmetic-parse.js\", \"feed/config.js\", \"feed/keys.js\", \"feed/canonical.js\", \"feed/schema.js\", \"feed/verify.js\", \"feed/compile.js\", \"feed/client.js\")"), "worker loads shared settings");
+  assert(backgroundSource.replace(/\s+/g, " ").includes("importScripts(\"settings/features.js\", \"general-settings.js\", \"general/filter-options.js\", \"threat/psl.js\", \"threat/protected-hosts.js\", \"threat/compile.js\", \"general/update.js\", \"general/cosmetic-parse.js\", \"feed/config.js\", \"feed/keys.js\", \"feed/canonical.js\", \"feed/schema.js\", \"feed/verify.js\", \"feed/compile.js\", \"feed/client.js\")"), "worker loads shared settings");
 });

@@ -17,6 +17,9 @@ const arg = (k, d) => { const i = Deno.args.indexOf(k); return i >= 0 ? Deno.arg
 const cacheDir = arg("--cache", null);
 const CACHE = cacheDir ? new URL(cacheDir.replace(/\\/g, "/").replace(/\/?$/, "/"), "file:///") : new URL("scripts/.list-cache/", ROOT);
 
+// Public-suffix / platform data first: update.js (list parsing) and the
+// protected-host check use it (security review M-3, L-3).
+await import(new URL("src/threat/psl.js", ROOT).href);
 await import(new URL("src/general/filter-options.js", ROOT).href);
 await import(new URL("src/general/update.js", ROOT).href);
 await import(new URL("src/threat/protected-hosts.js", ROOT).href);

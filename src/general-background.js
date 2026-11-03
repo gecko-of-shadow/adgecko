@@ -4,7 +4,7 @@
  * Filter lists: refreshed from the "gecko-refresh" alarm (every 3 h, at most
  * one real run per 12 h, per-list expiry respected) and on popup Update.
  */
-importScripts("settings/features.js", "general-settings.js", "general/filter-options.js", "threat/protected-hosts.js", "threat/compile.js", "general/update.js", "general/cosmetic-parse.js",
+importScripts("settings/features.js", "general-settings.js", "general/filter-options.js", "threat/psl.js", "threat/protected-hosts.js", "threat/compile.js", "general/update.js", "general/cosmetic-parse.js",
   "feed/config.js", "feed/keys.js", "feed/canonical.js", "feed/schema.js", "feed/verify.js", "feed/compile.js", "feed/client.js");
 const TC = self.GeckoThreatCompile;
 const FC = self.GeckoFeedClient;
@@ -506,6 +506,8 @@ function listDeps() {
       const meta = await fetch(chrome.runtime.getURL("src/rules/dnr-merge-meta.json")).then((r) => r.json()).catch(() => ({}));
       return { rules: await res.json(), extraIds: meta.extra_tracker_rule_id ? [meta.extra_tracker_rule_id] : [] };
     },
+    // Baseline for the per-refresh cap on new threat hosts (first refresh only).
+    loadPackedThreatRules: async () => (await fetch(chrome.runtime.getURL("src/rules/threat-network.json"))).json(),
     enabled: () => currentEnabled,
     threatEnabled: () => threatOn !== false,
     cosmeticParse: CP,

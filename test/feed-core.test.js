@@ -1,5 +1,6 @@
 // Block F: signed-feed verification, strict schema and compiler. Every key
 // here is a throwaway pair generated in memory for the test run.
+import "../src/threat/psl.js";
 import "../src/threat/protected-hosts.js";
 import "../src/feed/canonical.js";
 import "../src/feed/schema.js";

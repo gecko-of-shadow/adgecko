@@ -151,9 +151,12 @@
     await load();
   });
   $("allow-add").addEventListener("click", async () => {
-    const d = TC.normalizeUserDomain($("allow-domain").value);
+    const checked = TC.userDomainReason($("allow-domain").value);
+    const d = checked.domain;
     if (!d) {
-      $("status").textContent = "That is not a domain name (example: example.com).";
+      $("status").textContent = checked.reason === "not a domain name"
+        ? "That is not a domain name (example: example.com)."
+        : "That name is shared by many sites (" + checked.reason + "). Allow the one site instead, for example name.github.io.";
       return;
     }
     const list = Array.isArray(stored.threatAllowDomains) ? stored.threatAllowDomains.slice() : [];

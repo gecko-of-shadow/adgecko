@@ -2,6 +2,7 @@
 // (size change bound, protected stream hosts, abnormal hide lists), and
 // "Revert lists" goes back to the packed rules.
 import "../src/general/filter-options.js";
+import "../src/threat/psl.js";
 import "../src/threat/protected-hosts.js";
 import "../src/threat/compile.js";
 import updateSource from "../src/general/update.js" with { type: "text" };
