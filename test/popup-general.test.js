@@ -62,5 +62,6 @@ Deno.test("storage key contract matches settings module", () => {
   assert(settingsSource.includes('RULESET_ID = "general"'), "ruleset id general");
   // general/filter-options.js (shared option table) must load before update.js.
   // The threat tier (protected hosts + compiler) loads before update.js too.
-  assert(backgroundSource.includes("importScripts(\"general-settings.js\", \"general/filter-options.js\", \"threat/protected-hosts.js\", \"threat/compile.js\", \"general/update.js\", \"general/cosmetic-parse.js\")"), "worker loads shared settings");
+  // Then the signed-feed client (dormant until configured).
+  assert(backgroundSource.replace(/\s+/g, " ").includes("importScripts(\"general-settings.js\", \"general/filter-options.js\", \"threat/protected-hosts.js\", \"threat/compile.js\", \"general/update.js\", \"general/cosmetic-parse.js\", \"feed/config.js\", \"feed/keys.js\", \"feed/canonical.js\", \"feed/schema.js\", \"feed/verify.js\", \"feed/compile.js\", \"feed/client.js\")"), "worker loads shared settings");
 });

@@ -12,12 +12,14 @@ export function loadWorker(opts = {}) {
   let onMessage = null;
   let lastError;
   const later = (fn, ms = 1) => setTimeout(fn, opts.jitter ? Math.floor(Math.random() * opts.jitter) : ms);
-  const dnr = { dynamic: [], staticOn: true, updates: 0, errors: [] , gets: 0};
+  const dnr = { dynamic: [], session: [], staticOn: true, updates: 0, errors: [] , gets: 0};
+  const fetched = [];
   let bytesRead = 0;
   const runtime = {
     id: EXT,
     get lastError() { return lastError; },
     getURL: (p) => "chrome-extension://" + EXT + "/" + p,
+    getManifest: () => JSON.parse(Deno.readTextFileSync(new URL("../../manifest.json", import.meta.url))),
     onMessage: { addListener(f) { onMessage = f; } },
     onInstalled: { addListener(f) { installListeners.push(f); } }, onStartup: { addListener() {} },
   };
@@ -77,6 +79,12 @@ export function loadWorker(opts = {}) {
         if (!err) { dnr.dynamic = next.concat(structuredClone(o.addRules || [])); dnr.updates++; } else dnr.errors.push(err.message);
         later(() => withErr(err, cb), opts.updateDelay || 5);
       },
+      getSessionRules(cb) { const snap = structuredClone(dnr.session); later(() => withErr(undefined, cb, snap)); },
+      updateSessionRules(o, cb) {
+        const rm = new Set(o.removeRuleIds || []);
+        dnr.session = dnr.session.filter((r) => !rm.has(r.id)).concat(structuredClone(o.addRules || []));
+        later(() => withErr(undefined, cb));
+      },
       updateEnabledRulesets(o, cb) {
         if ((o.enableRulesetIds || []).includes("general")) dnr.staticOn = true;
         if ((o.disableRulesetIds || []).includes("general")) dnr.staticOn = false;
@@ -106,9 +114,11 @@ export function loadWorker(opts = {}) {
     "src/rules/general-network.json": () => Deno.readTextFileSync(new URL("rules/general-network.json", SRC)),
     "src/rules/dnr-merge-meta.json": () => Deno.readTextFileSync(new URL("rules/dnr-merge-meta.json", SRC)),
     "src/rules/cosmetic-rules.json": () => Deno.readTextFileSync(new URL("rules/cosmetic-rules.json", SRC)),
+    "src/rules/threat-snapshot.json": () => Deno.readTextFileSync(new URL("rules/threat-snapshot.json", SRC)),
   };
   const fakeFetch = async (url, init) => {
     await tick(opts.fetchDelay || 2);
+    fetched.push(url);
     if (opts.onFetch) opts.onFetch(url);
     const prefix = "chrome-extension://" + EXT + "/";
     if (url.startsWith(prefix) && files[url.slice(prefix.length)]) return new Response(files[url.slice(prefix.length)]());
@@ -124,7 +134,7 @@ export function loadWorker(opts = {}) {
   const fireAlarm = (name) => { for (const f of alarmListeners) f({ name, scheduledTime: Date.now() }); };
   const install = (details = { reason: "update" }) => { for (const f of installListeners) f(details); };
   return {
-    chrome, store, dnr, send, alarms, alarmCreates, fireAlarm, install,
+    chrome, store, dnr, send, alarms, alarmCreates, fireAlarm, install, fetched,
     get alarmListenerCount() { return alarmListeners.length; },
     get bytesRead() { return bytesRead; }, resetBytes() { bytesRead = 0; },
     get peakBytes() { return peakBytes; }, totalBytes,

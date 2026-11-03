@@ -80,5 +80,19 @@ const out = {
   rejected: compiled.rejected.slice(0, 200),
 };
 await Deno.writeTextFile(new URL("src/rules/threat-network.json", ROOT), JSON.stringify(compiled.rules) + "\n");
+// Offline fallback for the signed feed client (src/feed/client.js): the same
+// hosts in feed-entry form. Used only when a feed is configured and its saved
+// copy is missing or expired.
+const snapshot = {
+  format: 1,
+  snapshot: true,
+  createdAt: out.built_at_utc,
+  dnr: compiled.rules.map((r, i) => ({ id: i + 1, requestDomains: r.condition.requestDomains })),
+};
+if (snapshot.dnr.length > 4500) {
+  console.error("threat snapshot has more than 4500 entries");
+  Deno.exit(4);
+}
+await Deno.writeTextFile(new URL("src/rules/threat-snapshot.json", ROOT), JSON.stringify(snapshot) + "\n");
 await Deno.writeTextFile(new URL("src/rules/threat-meta.json", ROOT), JSON.stringify(out, null, 2) + "\n");
 console.log(JSON.stringify({ hosts: out.hosts_total, rules: out.rule_count, rejected: out.rejected_total, sources }, null, 1));

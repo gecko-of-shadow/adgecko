@@ -102,12 +102,19 @@
       if (k in doc && (!Array.isArray(doc[k]) || doc[k].length)) fail(k + " is reserved and must be empty in format 1");
     }
     if (!Array.isArray(doc.dnr)) fail("dnr must be an array");
-    if (doc.dnr.length > MAX_RULE_ID) fail("too many dnr entries");
     if (doc.rollbackTo != null && doc.dnr.length) fail("a rollback document carries no dnr entries");
+    validateEntries(doc.dnr, c.protectedReason);
+    return Object.assign({ minExtension: null, maxExtension: null, killFeed: false, dropRuleIds: [], rollbackTo: null, cosmetic: [], tactics: [] }, doc);
+  }
+
+  // Block-only dnr entries (shared by the feed and the packaged snapshot).
+  function validateEntries(dnr, protectedReasonIn) {
+    if (!Array.isArray(dnr)) fail("dnr must be an array");
+    if (dnr.length > MAX_RULE_ID) fail("too many dnr entries");
     const ids = new Set();
-    const protectedReason = c.protectedReason || ((root.GeckoProtectedHosts && root.GeckoProtectedHosts.protectedReason) || null);
+    const protectedReason = protectedReasonIn || ((root.GeckoProtectedHosts && root.GeckoProtectedHosts.protectedReason) || null);
     if (!protectedReason) fail("protected host check not available");
-    for (const [i, e] of doc.dnr.entries()) {
+    for (const [i, e] of dnr.entries()) {
       const where = "dnr[" + i + "]";
       if (!isObj(e)) fail(where + " must be an object");
       onlyKeys(e, ENTRY_KEYS, where);
@@ -134,7 +141,19 @@
         }
       }
     }
-    return Object.assign({ minExtension: null, maxExtension: null, killFeed: false, dropRuleIds: [], rollbackTo: null, cosmetic: [], tactics: [] }, doc);
+  }
+
+  // The packaged offline fallback (src/rules/threat-snapshot.json, built from
+  // the packed threat set). Trusted as part of the extension package, so it is
+  // not signed and has no time window, but gets the same entry checks.
+  //   { format: 1, snapshot: true, createdAt, dnr: [...] }
+  function validateSnapshot(doc, ctx) {
+    if (!isObj(doc)) fail("snapshot must be a JSON object");
+    onlyKeys(doc, ["format", "snapshot", "createdAt", "dnr"], "snapshot");
+    if (doc.format !== FORMAT || doc.snapshot !== true) fail("not a format-1 snapshot");
+    parseTime(doc.createdAt, "createdAt");
+    validateEntries(doc.dnr, ctx && ctx.protectedReason);
+    return doc;
   }
 
   // ctx: { storedKillSerial }
@@ -152,6 +171,6 @@
 
   root.GeckoFeedSchema = Object.freeze({
     FORMAT, MAX_LIFETIME_MS, MAX_RULE_ID, MAX_HOSTS_PER_ENTRY, THREAT_TYPES,
-    validateFeed, validateKill, compareVersions,
+    validateFeed, validateKill, validateSnapshot, validateEntries, compareVersions,
   });
 })(typeof self !== "undefined" ? self : globalThis);

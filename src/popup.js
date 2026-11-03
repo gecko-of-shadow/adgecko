@@ -48,6 +48,28 @@
   const pageStatus = document.getElementById("page-status");
   const updateLists = document.getElementById("update-lists");
   const listsStatus = document.getElementById("lists-status");
+  const feedStatus = document.getElementById("feed-status");
+
+  // Threat feed status: the worker stores the sentence in feedState.text
+  // (src/feed/client.js statusText); the popup adds how long ago it checked.
+  // Small keys only: never the feed cache.
+  const FEED_STATE_KEY = "feedState";
+  const FEED_PAUSE_KEY = "feedPaused";
+  let feedState = null;
+  let feedPaused = false;
+  function feedStatusText(state, paused, now) {
+    if (paused) return "Threat feed: paused (packed threat list still on).";
+    const st = state || {};
+    const base = st.text || "Threat feed: not set up (packed threat list in use).";
+    if (st.status === "active" && st.source === "feed" && st.fetchedAt) {
+      const mins = Math.max(0, Math.round((now - st.fetchedAt) / 60000));
+      return base + (mins < 120 ? " Checked " + mins + " min ago." : " Checked " + Math.round(mins / 60) + " h ago.");
+    }
+    return base;
+  }
+  function renderFeed() {
+    if (feedStatus) feedStatus.textContent = feedStatusText(feedState, feedPaused, Date.now());
+  }
 
   let activeTab = null;
   let pageChecked = false;
@@ -135,14 +157,20 @@
     }
 
     listsStatus.textContent = formatListStatus(settings) + (saveError ? " " + saveError : "");
+    renderFeed();
   }
 
   function loadSettings() {
     return new Promise((resolve) => {
       try {
-        chrome.storage.local.get(Object.keys(DEFAULTS), (stored) => {
+        chrome.storage.local.get(Object.keys(DEFAULTS).concat([FEED_STATE_KEY, FEED_PAUSE_KEY]), (stored) => {
           void chrome.runtime.lastError;
-          settings = withDefaults(stored);
+          feedState = stored ? stored[FEED_STATE_KEY] || null : null;
+          feedPaused = !!(stored && stored[FEED_PAUSE_KEY] === true);
+          const own = Object.assign({}, stored || {});
+          delete own[FEED_STATE_KEY];
+          delete own[FEED_PAUSE_KEY];
+          settings = withDefaults(own);
           resolve(settings);
         });
       } catch {

@@ -56,12 +56,15 @@ function installGeneralAdblockUpdate(target) {
   // Dynamic allow rule so no block rule (ours or a stale one) can stop the
   // extension's own list downloads. Outside the list and user-allow id ranges.
   const LIST_ALLOW_RULE_ID = 990001;
-  function listAllowRule(extensionId) {
+  // extraHosts: the signed-feed host once it is configured (src/feed/config.js).
+  function listAllowRule(extensionId, extraHosts) {
+    const hosts = LIST_HOSTS.slice();
+    for (const h of extraHosts || []) if (h && !hosts.includes(h)) hosts.push(h);
     return {
       id: LIST_ALLOW_RULE_ID,
       priority: 3000000,
       action: { type: "allow" },
-      condition: { requestDomains: LIST_HOSTS.slice(), initiatorDomains: [extensionId], resourceTypes: ["xmlhttprequest", "other"] },
+      condition: { requestDomains: hosts, initiatorDomains: [extensionId], resourceTypes: ["xmlhttprequest", "other"] },
     };
   }
 

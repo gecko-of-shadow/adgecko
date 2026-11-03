@@ -4,8 +4,10 @@
  * Filter lists: refreshed from the "gecko-refresh" alarm (every 3 h, at most
  * one real run per 12 h, per-list expiry respected) and on popup Update.
  */
-importScripts("general-settings.js", "general/filter-options.js", "threat/protected-hosts.js", "threat/compile.js", "general/update.js", "general/cosmetic-parse.js");
+importScripts("general-settings.js", "general/filter-options.js", "threat/protected-hosts.js", "threat/compile.js", "general/update.js", "general/cosmetic-parse.js",
+  "feed/config.js", "feed/keys.js", "feed/canonical.js", "feed/schema.js", "feed/verify.js", "feed/compile.js", "feed/client.js");
 const TC = self.GeckoThreatCompile;
+const FC = self.GeckoFeedClient;
 const CP = self.GeneralCosmeticParse;
 const GU = self.GeneralAdblockUpdate;
 
@@ -162,9 +164,66 @@ function syncThreatAllowRules() {
   });
 }
 
+// ---- signed threat feed (dormant until configured; src/feed/) ----
+function feedDeps() {
+  const dnr = chrome.declarativeNetRequest;
+  const getKey = (key) => new Promise((resolve) => chrome.storage.local.get([key], (s) => {
+    void chrome.runtime.lastError;
+    resolve(s ? s[key] : undefined);
+  }));
+  const manifest = () => {
+    try {
+      return chrome.runtime.getManifest() || {};
+    } catch {
+      return {};
+    }
+  };
+  return {
+    config: self.GeckoFeedConfig,
+    keys: { feedKeys: self.GeckoFeedKeys.FEED_KEYS, killKeys: self.GeckoFeedKeys.KILL_KEYS },
+    manifest,
+    extensionVersion: manifest().version,
+    protectedReason: self.GeckoProtectedHosts.protectedReason,
+    fetch: (url, init) => {
+      const origin = self.GeckoFeedConfig.FEED_ORIGIN;
+      if (!origin || !url.startsWith(origin + "/")) return Promise.reject(new Error("not the feed host"));
+      return fetch(url, init);
+    },
+    now: () => Date.now(),
+    getState: async () => (await getKey(FC.STATE_KEY)) || {},
+    setState: async (patch) => {
+      const cur = (await getKey(FC.STATE_KEY)) || {};
+      const next = Object.assign({}, cur, patch);
+      next.text = FC.statusText(next, false);
+      await localSet({ [FC.STATE_KEY]: next });
+    },
+    getCache: async () => (await getKey(FC.CACHE_KEY)) || {},
+    setCache: (cache) => localSet({ [FC.CACHE_KEY]: cache }),
+    getPaused: async () => (await getKey(FC.PAUSE_KEY)) === true,
+    getSessionRules: () => new Promise((resolve) => dnr.getSessionRules((r) => {
+      void chrome.runtime.lastError;
+      resolve(r || []);
+    })),
+    updateSessionRules: (opts) => cb((done) => dnr.updateSessionRules(opts, done)),
+    loadSnapshot: async () => (await fetch(chrome.runtime.getURL("src/rules/threat-snapshot.json"))).json(),
+  };
+}
+
+// One feed operation at a time (alarm check, startup re-apply, pause switch).
+let feedQueue = Promise.resolve();
+function feedRun(op) {
+  if (!FC || !chrome.declarativeNetRequest || !chrome.declarativeNetRequest.updateSessionRules) return Promise.resolve({ ok: false, reason: "unavailable" });
+  const run = feedQueue.then(() => op(feedDeps())).catch((e) => ({ ok: false, reason: String(e && e.message || e) }));
+  feedQueue = run.catch(() => {});
+  return run;
+}
+const applyCachedFeed = () => feedRun((d) => FC.applyCached(d));
+const checkFeedNow = () => feedRun((d) => FC.checkFeed(d));
+
 function ensureListAllowRule() {
   try {
-    const rule = GU.listAllowRule(chrome.runtime.id);
+    const feed = FC && FC.configured(feedDeps());
+    const rule = GU.listAllowRule(chrome.runtime.id, feed && feed.ok ? [new URL(feed.origin).hostname] : []);
     chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [rule.id], addRules: [rule] }, () => {
       const err = chrome.runtime.lastError;
       if (err) console.warn("twitch-adblock: list allow rule:", err.message);
@@ -592,16 +651,21 @@ if (chrome.alarms && chrome.alarms.onAlarm) {
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (!alarm || alarm.name !== REFRESH_ALARM) return;
     refreshLists(false);
+    checkFeedNow();
   });
 }
 
 ensureRefreshAlarm();
 storageReady();
+// Session rules die with the browser and on extension update: put the feed
+// rules back (from the verified cache, else the packed snapshot) on every start.
+applyCachedFeed();
 
 chrome.runtime.onInstalled.addListener(() => {
   ensureCosmetic();
   ensureRefreshAlarm();
   syncThreatAllowRules();
+  applyCachedFeed();
   chrome.storage.local.get(Object.keys(GS.DEFAULTS), (stored) => {
     void chrome.runtime.lastError;
     const patch = {};
@@ -626,6 +690,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
     applyGeneralState();
   }
   if (changes[THREAT_ALLOW_KEY]) syncThreatAllowRules();
+  // "Pause threat feed": drop the feed rules (cache kept) / put them back.
+  if (FC && changes[FC.PAUSE_KEY]) applyCachedFeed();
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

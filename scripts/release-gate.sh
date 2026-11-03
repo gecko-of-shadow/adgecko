@@ -2,7 +2,8 @@
 # Release smoke for twitch-adblock: package, security, hosts, deno, light fuzz.
 # Local only — does not phone home. Requires deno, python3, and ripgrep (rg).
 #
-# General-adblock beta (Phase 0): allows declarativeNetRequest + storage, packs
+# General-adblock beta (Phase 0): allows declarativeNetRequest + storage + alarms
+# (one 3 h alarm) and, once configured, one signed-feed host; packs
 # src/rules/*, and refuses stronger host/read permissions, background workers,
 # and any chrome.* use in stream playback files.
 set -euo pipefail
@@ -21,7 +22,7 @@ Usage:
 
 Defaults: --dir is the repo root, --expect-version is read from that tree's manifest.
 
-Checks: shippable file allowlist, narrow permissions (DNR+storage only), Twitch/YouTube
+Checks: shippable file allowlist, narrow permissions (DNR+storage+alarms), Twitch/YouTube
 host coverage, stream-site DNR exclusions, no eval/innerHTML/identity/trackers outside
 rules, no chrome.* in playback files, deno test (when test/ is present), vendor parse.
 EOF
@@ -238,8 +239,20 @@ bad = []
 # DNR + storage, plus the popup UI worker. No host access and no auto-update.
 forbidden_keys = ("externally_connectable", "oauth2", "key")
 LIST_HOSTS = ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*", "https://ublockorigin.github.io/*", "https://easylist-downloads.adblockplus.org/*", "https://secure.fanboy.co.nz/*", "https://raw.githubusercontent.com/hagezi/dns-blocklists/*", "https://raw.githubusercontent.com/DandelionSprout/adfilt/*", "https://filters.adtidy.org/extension/ublock/*"]
-if (m.get("host_permissions") or []) not in ([], LIST_HOSTS):
-    bad.append(f"host_permissions must be only the filter-list hosts, got {m.get('host_permissions')!r}")
+# Signed threat feed: exactly one extra host, and only once src/feed/config.js
+# sets FEED_ORIGIN (a bare https origin). Dormant (empty) = list hosts only.
+import os, re as _re
+FEED_HOSTS = []
+_cfg = os.path.join(os.path.dirname(sys.argv[1]), "src", "feed", "config.js")
+if os.path.isfile(_cfg):
+    _m = _re.search(r'FEED_ORIGIN\s*=\s*"([^"]*)"', open(_cfg, encoding="utf-8").read())
+    if _m and _m.group(1):
+        if not _re.fullmatch(r"https://[a-z0-9.-]+", _m.group(1)):
+            bad.append(f"FEED_ORIGIN must be a bare https origin, got {_m.group(1)!r}")
+        else:
+            FEED_HOSTS = [_m.group(1) + "/*"]
+if (m.get("host_permissions") or []) not in ([], LIST_HOSTS, LIST_HOSTS + FEED_HOSTS):
+    bad.append(f"host_permissions must be only the filter-list hosts (plus the configured feed host), got {m.get('host_permissions')!r}")
 for key in forbidden_keys:
     if m.get(key):
         bad.append(f"{key}={m.get(key)!r}")
@@ -248,7 +261,7 @@ perms = m.get("permissions") or []
 if not isinstance(perms, list):
     bad.append(f"permissions must be a list, got {type(perms).__name__}")
     perms = []
-allowed_perms = {"declarativeNetRequest", "storage"}
+allowed_perms = {"declarativeNetRequest", "storage", "alarms"}  # alarms: the 3 h gecko-refresh alarm
 forbidden_perms = {
     "declarativeNetRequestWithHostAccess",
     "declarativeNetRequestFeedback",
@@ -309,7 +322,7 @@ if bg.get("service_worker") != "src/general-background.js":
 if bad:
     print("FAIL  privileged / permission fields:", "; ".join(bad))
     sys.exit(1)
-print("PASS  permissions are storage + declarativeNetRequest; UI worker only; no host access")
+print("PASS  permissions are storage + declarativeNetRequest + alarms; UI worker only; list hosts (+ configured feed host) only")
 
 scripts = m.get("content_scripts") or []
 twitch = next((s for s in scripts if "src/vendor/video-swap-new.user.js" in (s.get("js") or [])), None)
@@ -540,7 +553,7 @@ for rel in playback:
 allowed = {
     "src/popup.js": {"runtime", "tabs", "storage"},
     "src/general-settings.js": set(),
-    "src/general-background.js": {"runtime", "storage", "action", "declarativeNetRequest"},
+    "src/general-background.js": {"runtime", "storage", "action", "declarativeNetRequest", "alarms"},
     "src/cosmetic.js": {"runtime", "storage"},
 }
 for rel, ok_ns in allowed.items():
@@ -553,10 +566,15 @@ for rel, ok_ns in allowed.items():
     for match in re.finditer(r"\b(chrome|browser)\.([A-Za-z0-9_]+)", text):
         if match.group(1) != "chrome" or match.group(2) not in ok_ns:
             bad.append(f"{rel}: {match.group(0)}")
-# No auto-fetch timers in the UI worker.
+# No interval timers in the UI worker; exactly one alarm (gecko-refresh, the
+# 3 h list/feed check), created only through REFRESH_ALARM.
 bg = (root / "src/general-background.js").read_text(errors="replace")
-if re.search(r"\bchrome\.alarms\b|\bsetInterval\b", bg):
-    bad.append("src/general-background.js must not schedule list fetches")
+if re.search(r"\bsetInterval\b", bg):
+    bad.append("src/general-background.js must not use setInterval")
+if re.search(r"chrome\.alarms\.create\((?!REFRESH_ALARM,)", bg):
+    bad.append("src/general-background.js may only create the gecko-refresh alarm")
+if not re.search(r'REFRESH_ALARM\s*=\s*"gecko-refresh"', (root / "src/general/update.js").read_text(errors="replace")):
+    bad.append("src/general/update.js must name the one alarm gecko-refresh")
 if bad:
     print("FAIL  extension API scope:")
     print("\n".join(bad))
