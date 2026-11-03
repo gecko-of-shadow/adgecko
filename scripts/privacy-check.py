@@ -58,10 +58,12 @@ IP_EXEMPT_RE = re.compile(r"^src/rules/[^/]+\.json$")
 
 DOC_NETS = [ipaddress.ip_network(n) for n in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24", "2001:db8::/32")]
 # Not after "Name/" (version tokens such as "Chrome/155.0.0.0").
-IPV4_RE = re.compile(r"(?<![\w.])(?<![A-Za-z]/)(?:\d{1,3}\.){3}\d{1,3}(?![\w.])")
+# A full stop right after the value (end of a sentence) still counts.
+IPV4_RE = re.compile(r"(?<![\w.])(?<![A-Za-z]/)(?:\d{1,3}\.){3}\d{1,3}(?!\w|\.\w)")
 IPV6_CANDIDATE_RE = re.compile(r"(?<![\w:.])[0-9A-Fa-f:]*:[0-9A-Fa-f:]*:[0-9A-Fa-f:.]*(?![\w:])")
-EMAIL_RE = re.compile(r"(?<![\w.%+-])[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})(?![\w.-])")
-HOME_RE = re.compile(r"(?:(?<![\w])/home/|(?<![\w])/Users/|(?<![\w])[A-Za-z]:[\\/]+Users[\\/]+|(?<![\w])/[a-zA-Z]/Users/)([^\s/\\'\"`<>)\]|,;:]+)")
+EMAIL_RE = re.compile(r"(?<![\w.%+-])[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})(?![\w-]|\.[\w-])")
+# Any case (c:\users\...), Git Bash (/c/Users/...) and WSL (/mnt/c/Users/...).
+HOME_RE = re.compile(r"(?:(?<![\w])/home/|(?<![\w])/Users/|(?<![\w])[A-Za-z]:[\\/]+Users[\\/]+|(?<![\w])(?:/mnt)?/[a-zA-Z]/Users/)([^\s/\\'\"`<>)\]|,;:]+)", re.I)
 PLACEHOLDER_NAMES = {
     "user", "username", "name", "you", "me", "runner", "example", "public", "default", "shared", "all users",
     "someone", "your-name", "yourname", "your_name", "<user>", "<you>", "<name>", "%username%", "$user", "${user}", "*", "...",
@@ -80,7 +82,7 @@ def bad_ip(text):
         if ip.is_global and not any(ip in n for n in DOC_NETS):
             return True
     for m in IPV6_CANDIDATE_RE.finditer(text):
-        cand = m.group(0)
+        cand = m.group(0).rstrip(".")
         # Real addresses have at least three groups; "::add-mask::" or "a::b"
         # in code would otherwise parse as addresses.
         if len([g for g in cand.split(":") if g]) < 3:
@@ -163,10 +165,15 @@ def image_metadata(data, path):
                 return True
             if marker == 0xE1 and (body.startswith(b"Exif\0") or body.startswith(b"http://ns.adobe.com/xap/")):
                 return True
+            if marker == 0xED and body.startswith(b"Photoshop 3.0"):  # IPTC
+                return True
             i += 2 + length
         return False
     if low.endswith(".webp") and data[:4] == b"RIFF":
         return b"EXIF" in data[12:] or b"XMP " in data[12:]
+    if low.endswith(".gif") and data[:4] == b"GIF8":
+        # Comment extension (0x21 0xFE) or an XMP application extension.
+        return b"\x21\xfe" in data or b"XMP DataXMP" in data
     if low.endswith((".tif", ".tiff")):
         return True
     return False

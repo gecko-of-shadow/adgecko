@@ -39,6 +39,12 @@ Deno.test("privacy check: public IPs, e-mails, home paths and token shapes are f
     j("tok ", "xox", "b-", "1234567890-abcdefghij"),
     j("jwt ", "eyJ", "a".repeat(12), ".eyJ", "b".repeat(12), ".", "c".repeat(12)),
     j("gh ", "ghp", "_", "A".repeat(36)),
+    // Follow-up review: a value at the end of a sentence, any-case Windows and WSL paths.
+    j("write to ", "someone", "@", "gmail", ".com", "."),
+    j("the server is ", "93.184", ".216.34", "."),
+    j("addr ", "2606:4700", ":4700::", "1111", "."),
+    j("cd ", "c:\\", "users\\", "alice", "\\x"),
+    j("wsl ", "/mnt/c/", "Users/", "alice", "/x"),
   ];
   const clean = [
     j("doc ", "192.0", ".2.10", " and ", "198.51", ".100.7", " and ", "203.0", ".113.5"),
@@ -81,6 +87,9 @@ Deno.test("privacy check: image metadata (EXIF, XMP, comments, PNG text) is foun
     ["f.jpg", jpeg([seg(0xe1, [...ascii("Exif"), 0, 0, 1, 2])]), true],
     ["g.jpeg", jpeg([seg(0xfe, ascii("a comment"))]), true],
     ["h.jpg", jpeg([seg(0xe1, ascii("http://ns.adobe.com/xap/1.0/\0<x/>"))]), true],
+    ["i.jpg", jpeg([seg(0xed, ascii("Photoshop 3.0\0iptc"))]), true],
+    ["j.gif", [...ascii("GIF89a"), 0, 0, 0, 0, 0, 0, 0, 0x21, 0xfe, 3, ...ascii("hey"), 0, 0x3b], true],
+    ["k.gif", [...ascii("GIF89a"), 0, 0, 0, 0, 0, 0, 0, 0x3b], false],
   ];
   const got = await pyCall("[m.image_metadata(__import__('base64').b64decode(d), p) for p, d in data]", cases.map(([p, bytes]) => [p, b64(bytes)]));
   cases.forEach(([p, , want], i) => assert(got[i] === want, p + " -> " + got[i]));
