@@ -60,5 +60,6 @@ Deno.test("storage key contract matches settings module", () => {
   assert(settingsSource.includes('allowedOrigins: "generalAllowedOrigins"'), "allow key");
   assert(settingsSource.includes('listUpdateRequestAt: "generalListUpdateRequestAt"'), "manual update flag");
   assert(settingsSource.includes('RULESET_ID = "general"'), "ruleset id general");
-  assert(backgroundSource.includes("importScripts(\"general-settings.js\", \"general/update.js\", \"general/cosmetic-parse.js\")"), "worker loads shared settings");
+  // general/filter-options.js (shared option table) must load before update.js.
+  assert(backgroundSource.includes("importScripts(\"general-settings.js\", \"general/filter-options.js\", \"general/update.js\", \"general/cosmetic-parse.js\")"), "worker loads shared settings");
 });

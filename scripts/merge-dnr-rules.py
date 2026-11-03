@@ -122,11 +122,19 @@ def main() -> int:
         if rule.get("action", {}).get("type") != "block":
             # List-pack should be blocks only; skip stray allows from older stubs.
             continue
+        # Copy the whole condition: scoped list rules carry resourceTypes /
+        # excludedResourceTypes / domainType, and dropping them would widen the
+        # rule into a whole-domain block (H-2).
+        cond = {"requestDomains": list(rule["condition"]["requestDomains"])}
+        for key in ("resourceTypes", "excludedResourceTypes", "domainType"):
+            if key in rule["condition"]:
+                value = rule["condition"][key]
+                cond[key] = list(value) if isinstance(value, list) else value
         next_rule = {
             "id": rid,
             "priority": BLOCK_PRIORITY,
             "action": {"type": "block"},
-            "condition": {"requestDomains": list(rule["condition"]["requestDomains"])},
+            "condition": cond,
         }
         renumbered.append(next_rule)
         rid += 1

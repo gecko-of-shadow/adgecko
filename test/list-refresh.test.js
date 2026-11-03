@@ -1,3 +1,4 @@
+import "../src/general/filter-options.js";
 import source from "../src/general/update.js" with { type: "text" };
 import cosSource from "../src/general/cosmetic-parse.js" with { type: "text" };
 import bundled from "../src/rules/general-network.json" with { type: "json" };
@@ -13,7 +14,9 @@ Deno.test("parser keeps domain rules and skips exceptions, cosmetics, scoped and
     "||scoped.example.org^$domain=foo.com", "@@||ok.example.com^", "example.com##.ad", "/banner/*",
     "0.0.0.0 hosts.example.io", "127.0.0.1 localhost", "bare.example.co", "||bad*.example.com^", ""].join("\n");
   const d = U.parseList(text);
-  assert(JSON.stringify(d) === JSON.stringify(["ads.example.com", "track.example.net", "hosts.example.io", "bare.example.co"]), JSON.stringify(d));
+  // H-2: "$third-party" is kept as a third-party-only rule, not a whole-domain block.
+  assert(JSON.stringify(d) === JSON.stringify(["ads.example.com", "hosts.example.io", "bare.example.co"]), JSON.stringify(d));
+  assert(JSON.stringify(U.parseEntries(text).scoped) === JSON.stringify([["track.example.net", "p=thirdParty|t=|x="]]), "third-party scope kept");
   assert(U.parseExpires(text) === 4 * 86400000, "4 days");
   assert(U.parseExpires("! Expires: 1 hours") === U.MIN_INTERVAL_MS, "floored to 12h");
   assert(U.parseExpires("no header") === 86400000, "default 1 day");
@@ -176,9 +179,11 @@ Deno.test("parser skips non-blocking options; merge drops live-video.net", () =>
     "||ok.example.com^",
   ].join("\n");
   const parsed = U.parseList(text);
-  assert(JSON.stringify(parsed) === JSON.stringify(["stats.live-video.net", "both.example.com", "ok.example.com"]), JSON.stringify(parsed));
+  // H-2: "$script,popup" stays a script-only rule instead of a whole-domain block.
+  assert(JSON.stringify(parsed) === JSON.stringify(["stats.live-video.net", "ok.example.com"]), JSON.stringify(parsed));
+  assert(JSON.stringify(U.parseEntries(text).scoped) === JSON.stringify([["both.example.com", "p=|t=script|x="]]), "script scope kept");
   const merged = U.mergeDomains({ peter_lowe: parsed });
-  assert(JSON.stringify(merged) === JSON.stringify(["both.example.com", "ok.example.com"]), JSON.stringify(merged));
+  assert(JSON.stringify(merged) === JSON.stringify(["ok.example.com"]), JSON.stringify(merged));
   assert(U.isNeverBlock("stats.live-video.net") && U.isNeverBlock("edge.live-video.net"), "live-video family");
   assert(U.isNeverBlock("www.youtubekids.com") && U.isNeverBlock("www.youtube-nocookie.com"), "frame hosts");
   assert(!U.isNeverBlock("not-live-video.net") && !U.isNeverBlock("live-video.net.evil.test"), "lookalikes stay blockable");

@@ -3,7 +3,7 @@
 This directory ships **trimmed / converted** copies of public filter lists
 for Chrome MV3 `declarativeNetRequest`. Full upstream lists are not reproduced.
 
-Packed at: `2026-11-02T23:58:33Z` (UTC).
+Packed at: `2026-11-03T00:07:22Z` (UTC).
 
 ## Required credit
 
@@ -39,7 +39,7 @@ Additional credits: **Peter Lowe** (ad/tracking server list);
 
 - URL: `https://easylist.to/easylist/easyprivacy.txt`
 - Role: `privacy`
-- SHA-256 of downloaded bytes: `a528a9d9fc3f467edc9ec40be115ae6aab7aa1ecc25bba6858822a29a2b36706`
+- SHA-256 of downloaded bytes: `ddfe5d6f8c15df39b705baf823f8db44dbef90a48dff1c3a62309678df954a7d`
 - License / terms: EasyPrivacy ΓÇö same EasyList dual license (GPL-3.0-or-later OR CC BY-SA 3.0-or-later). Credit: ΓÇ£The EasyList authorsΓÇ¥.
 
 ### hagezi_pro_mini

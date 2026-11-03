@@ -4,7 +4,7 @@
  * Filter lists: refreshed from the "gecko-refresh" alarm (every 3 h, at most
  * one real run per 12 h, per-list expiry respected) and on popup Update.
  */
-importScripts("general-settings.js", "general/update.js", "general/cosmetic-parse.js");
+importScripts("general-settings.js", "general/filter-options.js", "general/update.js", "general/cosmetic-parse.js");
 const CP = self.GeneralCosmeticParse;
 const GU = self.GeneralAdblockUpdate;
 

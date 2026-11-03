@@ -47,5 +47,7 @@ Deno.test("packer never-blocks live-video and skips non-blocking options", async
   assert(out, "no usable Python 3 (" + tried.join("; ") + ")");
   const text = new TextDecoder().decode(out.stdout);
   assert(out.code === 0, new TextDecoder().decode(out.stderr));
-  assert(text.replace(/\r/g, "").trim() === "both.example.com\nok.example.com", JSON.stringify(text));
+  // H-2: "$script,popup" is no longer widened to a whole-domain block (it is a
+  // script-only scoped entry now; see test/filter-options.test.js).
+  assert(text.replace(/\r/g, "").trim() === "ok.example.com", JSON.stringify(text));
 });

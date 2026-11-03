@@ -146,61 +146,109 @@ BARE_DOMAIN_RE = re.compile(
     r"^([a-z0-9][a-z0-9.-]*[a-z0-9])$",
     re.IGNORECASE,
 )
-# Options this packer cannot represent as a whole-domain block. A hit means
-# "skip the rule" rather than blocking every request to that host.
-_NON_BLOCK_MARKERS = (
-    "removeparam",
-    "queryprune",
-    "redirect",
-    "csp",
-    "badfilter",
-    "cookie",
-    "header",
-    "replace",
-    "permissions",
-    "urltransform",
-    "uritransform",
-    "generichide",
-    "elemhide",
-    "specifichide",
-    "ehide",
-    "shide",
-    "ghide",
-    "rewrite",
-    "sitekey=",
-    "domain=",
-    "from=",
-    "to=",
-    "denyallow",
-    "method=",
-    "jsonprune",
-)
-_POPUP_TYPES = {"popup", "popunder"}
-_OPT_IGNORE = {
-    "important",
-    "match-case",
-    "third-party",
-    "3p",
-    "first-party",
-    "1p",
-    "strict1p",
-    "strict3p",
-    "all",
-}
+# Filter options -> DNR scope, from the ONE shared table in
+# src/general/filter-options.js (the runtime refresh uses the same file).
+# An option maps to a DNR field, narrows the rule, or drops the filter; a scoped
+# filter is never widened into a whole-domain block (H-2).
+# Same input, same output as the JS side: test/fixtures/filter-options-cases.json.
+FILTER_OPTIONS_JS = ROOT / "src" / "general" / "filter-options.js"
+
+
+def load_filter_option_table() -> dict:
+    text = FILTER_OPTIONS_JS.read_text(encoding="utf-8")
+    start = text.index("/*FILTER-OPTION-TABLE-START*/") + len("/*FILTER-OPTION-TABLE-START*/")
+    end = text.index("/*FILTER-OPTION-TABLE-END*/")
+    return json.loads(text[start:end])
+
+
+OPTION_TABLE = load_filter_option_table()
+
+
+def convert_options(opts: str):
+    """Options string -> (key, cancel) or None (drop). Mirrors convertOptions()."""
+    raw = (opts or "").strip()
+    if raw.startswith("$"):
+        raw = raw[1:]
+    raw = raw.strip()
+    if not raw:
+        return ("", False)
+    types: set[str] = set()
+    excluded: set[str] = set()
+    party = ""
+    narrowed = False
+    cancel = False
+    for part0 in raw.split(","):
+        part = part0.strip().lower()
+        if not part:
+            continue
+        if part in OPTION_TABLE["cancel"]:
+            cancel = True
+            continue
+        if part in OPTION_TABLE["ignore"]:
+            continue
+        if part in OPTION_TABLE["narrow"]:
+            narrowed = True
+            continue
+        if part in OPTION_TABLE["party"]:
+            p = OPTION_TABLE["party"][part]
+            if party and party != p:
+                return None
+            party = p
+            continue
+        neg = part.startswith("~")
+        name = part[1:] if neg else part
+        if name in OPTION_TABLE["types"]:
+            (excluded if neg else types).add(OPTION_TABLE["types"][name])
+            continue
+        return None
+    if narrowed and not types:
+        return None
+    t = sorted(types)
+    x = sorted(excluded)
+    if t:
+        t = [v for v in t if v not in excluded]
+        if not t:
+            return None
+        x = []
+    if not party and not t and not x:
+        return ("", cancel)
+    return ("p=" + party + "|t=" + ",".join(t) + "|x=" + ",".join(x), cancel)
+
+
+def key_to_condition(key: str) -> dict:
+    out: dict = {}
+    if not key:
+        return out
+    for seg in key.split("|"):
+        k, _, v = seg.partition("=")
+        if not v:
+            continue
+        if k == "p":
+            out["domainType"] = v
+        elif k == "t":
+            out["resourceTypes"] = v.split(",")
+        elif k == "x":
+            out["excludedResourceTypes"] = v.split(",")
+    return out
+
+
+def convert_line(line: str):
+    """One ||host^$opts line -> [domain, key, cancel] or None. Mirrors convertLine()."""
+    m = DOMAIN_RE.match((line or "").strip())
+    if not m:
+        return None
+    res = convert_options(m.group(2) or "")
+    if res is None:
+        return None
+    return [m.group(1).lower(), res[0], res[1]]
 
 
 def keeps_whole_domain(opts: str) -> bool:
-    """True when ||host^ options are a whole-domain block this packer can emit."""
+    """True only for options that keep a whole-domain block."""
     if not opts:
         return True
-    low = opts.lower()
-    if any(marker in low for marker in _NON_BLOCK_MARKERS):
-        return False
-    parts = [part.strip() for part in low.lstrip("$").split(",") if part.strip()]
-    meaningful = [part for part in parts if part not in _OPT_IGNORE and not part.startswith("~")]
-    if meaningful and all(part in _POPUP_TYPES for part in meaningful):
-        return False
-    return True
+    res = convert_options(opts)
+    return bool(res and res[0] == "" and not res[1])
 COSMETIC_RE = re.compile(r"^([^#\n]*?)(#@?#|#\$#)(.+)$")
 
 
@@ -239,11 +287,17 @@ def looks_like_domain(domain: str) -> bool:
     return False
 
 
-def extract_domains(text: str) -> list[str]:
-    out: list[str] = []
+def extract_entries(text: str) -> tuple[list[str], list[list[str]]]:
+    """(whole-domain blocks, [[domain, scope key], ...]). Mirrors parseEntries().
+
+    $badfilter cancels the filter with the same domain and scope key.
+    """
+    whole: list[str] = []
+    scoped: list[list[str]] = []
+    cancelled: set[str] = set()
     for raw in text.splitlines():
         line = raw.strip()
-        if not line or line.startswith("!"):
+        if not line or line.startswith("!") or line.startswith("["):
             continue
         if line.startswith("@@"):
             continue  # exceptions handled later by DNR allow rules / user allow
@@ -252,22 +306,35 @@ def extract_domains(text: str) -> list[str]:
         m = DOMAIN_RE.match(line)
         if m:
             domain = m.group(1).lower()
-            opts = m.group(2) or ""
-            if not keeps_whole_domain(opts):
+            res = convert_options(m.group(2) or "")
+            if res is None or not looks_like_domain(domain):
                 continue
-            if looks_like_domain(domain):
-                out.append(domain)
+            key, cancel = res
+            if cancel:
+                cancelled.add(domain + "\n" + key)
+            elif key == "":
+                whole.append(domain)
+            else:
+                scoped.append([domain, key])
             continue
         m = HOSTS_RE.match(line)
         if m:
             domain = m.group(1).lower()
             if domain not in ("localhost", "local") and looks_like_domain(domain):
-                out.append(domain)
+                whole.append(domain)
             continue
         # Some threat lists are bare domains.
         if BARE_DOMAIN_RE.match(line) and looks_like_domain(line):
-            out.append(line.lower())
-    return out
+            whole.append(line.lower())
+    if cancelled:
+        whole = [d for d in whole if d + "\n" not in cancelled]
+        scoped = [e for e in scoped if e[0] + "\n" + e[1] not in cancelled]
+    return whole, scoped
+
+
+def extract_domains(text: str) -> list[str]:
+    """Whole-domain blocks only (scoped filters are never widened into these)."""
+    return extract_entries(text)[0]
 
 
 def extract_cosmetic_sample(text: str, limit: int = 2_000) -> list[dict]:
@@ -322,22 +389,53 @@ def merge_domains(buckets: dict[str, list[str]]) -> tuple[list[str], dict]:
     return ordered, stats
 
 
-def domains_to_dnr_rules(domains: list[str]) -> list[dict]:
+def merge_scoped(buckets: dict[str, list[list[str]]], whole: list[str]) -> tuple[list[list[str]], dict]:
+    """Scoped entries in source order; deduped, never-block removed, and dropped
+    when the domain is already a whole-domain block. Mirrors mergeScoped()."""
+    whole_set = set(whole)
+    seen: set[str] = set()
+    out: list[list[str]] = []
+    stats = {name: {"raw": 0, "kept": 0} for name in buckets}
+    for name, entries in buckets.items():
+        cap = SOURCES[name].get("max_domains")
+        stats[name]["raw"] = len(entries)
+        kept_here = 0
+        for d, key in entries:
+            ident = d + "\n" + key
+            if d in whole_set or is_never_block(d) or ident in seen:
+                continue
+            seen.add(ident)
+            out.append([d, key])
+            kept_here += 1
+            stats[name]["kept"] += 1
+            if cap is not None and kept_here >= cap:
+                break
+    return out, stats
+
+
+def domains_to_dnr_rules(domains: list[str], scoped: list[list[str]] | None = None) -> list[dict]:
+    """Whole-domain batches first, then one batch series per scope key (sorted)."""
     rules: list[dict] = []
-    rid = 1
+
+    def push(chunk: list[str], extra: dict) -> None:
+        cond = {"requestDomains": chunk}
+        cond.update(extra)
+        rules.append({"id": len(rules) + 1, "priority": 1, "action": {"type": "block"}, "condition": cond})
+
     for i in range(0, len(domains), DOMAINS_PER_RULE):
-        chunk = domains[i : i + DOMAINS_PER_RULE]
-        rules.append(
-            {
-                "id": rid,
-                "priority": 1,
-                "action": {"type": "block"},
-                "condition": {"requestDomains": chunk},
-            }
-        )
-        rid += 1
-        if rid > MAX_DNR_RULES:
+        if len(rules) >= MAX_DNR_RULES:
             break
+        push(domains[i : i + DOMAINS_PER_RULE], {})
+    groups: dict[str, list[str]] = {}
+    for d, key in scoped or []:
+        groups.setdefault(key, []).append(d)
+    for key in sorted(groups):
+        extra = key_to_condition(key)
+        lst = groups[key]
+        for i in range(0, len(lst), DOMAINS_PER_RULE):
+            if len(rules) >= MAX_DNR_RULES:
+                break
+            push(lst[i : i + DOMAINS_PER_RULE], extra)
     return rules
 
 
@@ -392,6 +490,7 @@ def main() -> int:
     fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     digests: dict[str, str] = {}
     buckets: dict[str, list[str]] = {}
+    scoped_buckets: dict[str, list[list[str]]] = {}
     cosmetic_sample: list[dict] = []
 
     # Fetch highest-priority first for merge order.
@@ -401,14 +500,19 @@ def main() -> int:
     for name in ordered_names:
         text, digest = fetch(SOURCES[name]["url"], name)
         digests[name] = digest
-        buckets[name] = extract_domains(text)
+        buckets[name], scoped_buckets[name] = extract_entries(text)
         if name in ("easylist", "easyprivacy") and not cosmetic_sample:
             cosmetic_sample = extract_cosmetic_sample(text)
 
     # Rebuild buckets in priority order for merge_domains iteration.
     buckets = OrderedDict((n, buckets[n]) for n in ordered_names)
+    scoped_buckets = OrderedDict((n, scoped_buckets[n]) for n in ordered_names)
     domains, stats = merge_domains(buckets)
-    rules = domains_to_dnr_rules(domains)
+    scoped, scoped_stats = merge_scoped(scoped_buckets, domains)
+    for name in stats:
+        stats[name]["scoped_raw"] = scoped_stats[name]["raw"]
+        stats[name]["scoped_kept"] = scoped_stats[name]["kept"]
+    rules = domains_to_dnr_rules(domains, scoped)
 
     # Block batches only. merge-dnr-rules.py owns general-network.json so the
     # stream allows and the YouTube doubleclick rule are not wiped.
@@ -433,6 +537,7 @@ def main() -> int:
         "packed_at_utc": fetched_at,
         "format": "chrome_declarativeNetRequest_rules_array",
         "domains_total": len(domains),
+        "scoped_entries_total": len(scoped),
         "dnr_rules_total": len(rules),
         "domains_per_rule": DOMAINS_PER_RULE,
         "max_dnr_rules_budget": MAX_DNR_RULES,

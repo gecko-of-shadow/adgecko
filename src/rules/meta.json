@@ -1,8 +1,9 @@
 {
-  "packed_at_utc": "2026-11-02T23:58:33Z",
+  "packed_at_utc": "2026-11-03T00:07:22Z",
   "format": "chrome_declarativeNetRequest_rules_array",
-  "domains_total": 189845,
-  "dnr_rules_total": 2374,
+  "domains_total": 185816,
+  "scoped_entries_total": 4030,
+  "dnr_rules_total": 2406,
   "domains_per_rule": 80,
   "max_dnr_rules_budget": 28000,
   "headroom_note": "Reserve remaining static rule quota for stream-site allow rules (DNR agent).",
@@ -14,7 +15,9 @@
       "priority": 100,
       "raw": 3563,
       "kept": 3559,
-      "skipped_never": 4
+      "skipped_never": 4,
+      "scoped_raw": 0,
+      "scoped_kept": 0
     },
     "urlhaus_hosts": {
       "url": "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt",
@@ -23,25 +26,31 @@
       "priority": 90,
       "raw": 546,
       "kept": 546,
-      "skipped_never": 0
+      "skipped_never": 0,
+      "scoped_raw": 0,
+      "scoped_kept": 0
     },
     "easylist": {
       "url": "https://easylist.to/easylist/easylist.txt",
       "sha256": "a1288ac542b6881f67a21c6c973d95b4f058eb65b28fe7a07d9906ca7e877816",
       "role": "ads",
       "priority": 70,
-      "raw": 45596,
-      "kept": 44550,
-      "skipped_never": 3
+      "raw": 43387,
+      "kept": 43031,
+      "skipped_never": 3,
+      "scoped_raw": 2209,
+      "scoped_kept": 672
     },
     "easyprivacy": {
       "url": "https://easylist.to/easylist/easyprivacy.txt",
-      "sha256": "a528a9d9fc3f467edc9ec40be115ae6aab7aa1ecc25bba6858822a29a2b36706",
+      "sha256": "ddfe5d6f8c15df39b705baf823f8db44dbef90a48dff1c3a62309678df954a7d",
       "role": "privacy",
       "priority": 50,
-      "raw": 47275,
-      "kept": 46218,
-      "skipped_never": 6
+      "raw": 43334,
+      "kept": 42608,
+      "skipped_never": 6,
+      "scoped_raw": 3941,
+      "scoped_kept": 1597
     },
     "hagezi_pro_mini": {
       "url": "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt",
@@ -49,35 +58,43 @@
       "role": "ads_trackers",
       "priority": 40,
       "raw": 93657,
-      "kept": 69973,
-      "skipped_never": 27
+      "kept": 72834,
+      "skipped_never": 27,
+      "scoped_raw": 0,
+      "scoped_kept": 0
     },
     "ublock_badware": {
       "url": "https://ublockorigin.github.io/uAssets/filters/badware.txt",
       "sha256": "eeafc77b6eef9188fc01ffebb74f67c532bddc3367f92a27263fc71aa02ea33c",
       "role": "malware_threat",
       "priority": 35,
-      "raw": 3326,
-      "kept": 2189,
-      "skipped_never": 0
+      "raw": 1113,
+      "kept": 901,
+      "skipped_never": 0,
+      "scoped_raw": 2204,
+      "scoped_kept": 1273
     },
     "dandelion_antimalware": {
       "url": "https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt",
       "sha256": "1b0b456c66792d1cacf42274693d99c14355085c685df903c0f0841aee80773e",
       "role": "malware_threat",
       "priority": 30,
-      "raw": 12126,
-      "kept": 11602,
-      "skipped_never": 0
+      "raw": 11817,
+      "kept": 11326,
+      "skipped_never": 0,
+      "scoped_raw": 309,
+      "scoped_kept": 282
     },
     "adguard_base": {
       "url": "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt",
       "sha256": "607d881783544b06bff3d171acab04866876e97c0a587c58c48f6a17a87e4c71",
       "role": "ads",
       "priority": 20,
-      "raw": 12965,
-      "kept": 11208,
-      "skipped_never": 3
+      "raw": 12538,
+      "kept": 11011,
+      "skipped_never": 3,
+      "scoped_raw": 426,
+      "scoped_kept": 206
     }
   },
   "never_block_suffixes": [

@@ -68,18 +68,21 @@ function installGeneralAdblockUpdate(target) {
   const DOMAIN_RE = /^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])\^(\$[^#]*)?$/i;
   const HOSTS_RE = /^(?:0\.0\.0\.0|127\.0\.0\.1)\s+([a-z0-9][a-z0-9.-]*[a-z0-9])\s*$/i;
   const BARE_RE = /^([a-z0-9][a-z0-9.-]*[a-z0-9])$/i;
-  const NON_BLOCK_MARKERS = ["removeparam", "queryprune", "redirect", "csp", "badfilter", "cookie", "header", "replace", "permissions", "urltransform", "uritransform", "generichide", "elemhide", "specifichide", "ehide", "shide", "ghide", "rewrite", "sitekey=", "domain=", "from=", "to=", "denyallow", "method=", "jsonprune"];
-  const POPUP_TYPES = { popup: true, popunder: true };
-  const OPT_IGNORE = { important: true, "match-case": true, "third-party": true, "3p": true, "first-party": true, "1p": true, strict1p: true, strict3p: true, all: true };
+  // Payloads parsed before faithful option conversion (H-2) hold widened
+  // domains; they are refetched and, until then, replaced by the packed rules.
+  const PARSER_VERSION = 2;
 
+  // Shared with the packer: general/filter-options.js (loaded before this file).
+  function filterOptions() {
+    return (typeof globalThis !== "undefined" && globalThis.GeneralFilterOptions) || null;
+  }
+
+  // Back-compat helper: true only for options that keep a whole-domain block.
   function keepsWholeDomain(opts) {
     if (!opts) return true;
-    const low = String(opts).toLowerCase();
-    if (NON_BLOCK_MARKERS.some((marker) => low.includes(marker))) return false;
-    const parts = low.replace(/^\$/, "").split(",").map((part) => part.trim()).filter(Boolean);
-    const meaningful = parts.filter((part) => !OPT_IGNORE[part] && !part.startsWith("~"));
-    if (meaningful.length && meaningful.every((part) => POPUP_TYPES[part])) return false;
-    return true;
+    const FO = filterOptions();
+    const res = FO ? FO.convertOptions(opts) : null;
+    return !!(res && res.key === "" && !res.cancel);
   }
 
   function isNeverBlock(domain) {
@@ -93,29 +96,49 @@ function installGeneralAdblockUpdate(target) {
     return d.split(".").every(Boolean);
   }
 
-  // Same rules as scripts/pack-filter-lists.py extract_domains().
-  function parseList(text) {
-    const out = [];
+  // Same rules as scripts/pack-filter-lists.py extract_entries().
+  // Returns { domains: [whole-domain blocks], scoped: [[domain, key], ...] }
+  // where key is a general/filter-options.js scope key. $badfilter cancels the
+  // filter with the same domain and scope.
+  function parseEntries(text) {
+    const FO = filterOptions();
+    const whole = [];
+    const scoped = [];
+    const cancelled = new Set();
     for (const raw of String(text || "").split(/\r?\n/)) {
       const line = raw.trim();
       if (!line || line.startsWith("!") || line.startsWith("[") || line.startsWith("@@")) continue;
       if (line.includes("##") || line.includes("#@#") || line.includes("#$")) continue;
       let m = DOMAIN_RE.exec(line);
       if (m) {
-        if (!keepsWholeDomain(m[2] || "")) continue;
-        const d = m[1].toLowerCase();
-        if (looksLikeDomain(d)) out.push(d);
+        // Without the shared table, only option-less filters are safe to keep.
+        const conv = FO ? FO.convertLine(line) : (m[2] ? null : [m[1].toLowerCase(), "", false]);
+        if (!conv) continue;
+        const [d, key, cancel] = conv;
+        if (!looksLikeDomain(d)) continue;
+        if (cancel) cancelled.add(d + "\n" + key);
+        else if (key === "") whole.push(d);
+        else scoped.push([d, key]);
         continue;
       }
       m = HOSTS_RE.exec(line);
       if (m) {
         const d = m[1].toLowerCase();
-        if (d !== "localhost" && d !== "local" && looksLikeDomain(d)) out.push(d);
+        if (d !== "localhost" && d !== "local" && looksLikeDomain(d)) whole.push(d);
         continue;
       }
-      if (BARE_RE.test(line) && looksLikeDomain(line)) out.push(line.toLowerCase());
+      if (BARE_RE.test(line) && looksLikeDomain(line)) whole.push(line.toLowerCase());
     }
-    return out;
+    if (!cancelled.size) return { domains: whole, scoped };
+    return {
+      domains: whole.filter((d) => !cancelled.has(d + "\n")),
+      scoped: scoped.filter(([d, k]) => !cancelled.has(d + "\n" + k)),
+    };
+  }
+
+  // Whole-domain blocks only (scoped filters are not widened into these).
+  function parseList(text) {
+    return parseEntries(text).domains;
   }
 
   // "! Expires: 4 days" / "! Expires: 12 hours" in the header; default 1 day.
@@ -145,15 +168,54 @@ function installGeneralAdblockUpdate(target) {
     return ordered;
   }
 
-  function buildListRules(domains) {
+  // Scoped entries per list, in source order, deduped, never-block removed, and
+  // dropped when the same domain is already a whole-domain block.
+  function mergeScoped(perListScoped, wholeDomains) {
+    const whole = new Set(wholeDomains);
+    const seen = new Set();
+    const out = [];
+    for (const src of SOURCES) {
+      let kept = 0;
+      for (const [d, key] of perListScoped[src.name] || []) {
+        const id = d + "\n" + key;
+        if (whole.has(d) || isNeverBlock(d) || seen.has(id)) continue;
+        seen.add(id);
+        out.push([d, key]);
+        kept += 1;
+        if (src.maxDomains && kept >= src.maxDomains) break;
+      }
+    }
+    return out;
+  }
+
+  // Whole-domain batches first, then one batch series per scope key.
+  function buildListRules(domains, scoped) {
+    const FO = filterOptions();
     const rules = [];
-    for (let i = 0; i < domains.length && rules.length < MAX_LIST_RULES; i += DOMAINS_PER_RULE) {
+    const push = (chunk, extra) => {
       rules.push({
         id: LIST_RULE_ID_BASE + rules.length,
         priority: 1,
         action: { type: "block" },
-        condition: { requestDomains: domains.slice(i, i + DOMAINS_PER_RULE) },
+        condition: Object.assign({ requestDomains: chunk }, extra),
       });
+    };
+    for (let i = 0; i < domains.length && rules.length < MAX_LIST_RULES; i += DOMAINS_PER_RULE) {
+      push(domains.slice(i, i + DOMAINS_PER_RULE), {});
+    }
+    if (scoped && scoped.length && FO) {
+      const groups = new Map();
+      for (const [d, key] of scoped) {
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(d);
+      }
+      for (const key of Array.from(groups.keys()).sort()) {
+        const list = groups.get(key);
+        const extra = FO.keyToCondition(key);
+        for (let i = 0; i < list.length && rules.length < MAX_LIST_RULES; i += DOMAINS_PER_RULE) {
+          push(list.slice(i, i + DOMAINS_PER_RULE), extra);
+        }
+      }
     }
     return rules;
   }
@@ -201,8 +263,13 @@ function installGeneralAdblockUpdate(target) {
 
   function listMeta(m) {
     const out = {};
-    for (const k of ["url", "etag", "lastModified", "fetchedAt", "expiresMs", "count", "cosmetic"]) if (m && m[k] !== undefined) out[k] = m[k];
+    for (const k of ["url", "etag", "lastModified", "fetchedAt", "expiresMs", "count", "cosmetic", "parser"]) if (m && m[k] !== undefined) out[k] = m[k];
     return out;
+  }
+
+  // Lists whose stored payload came from the old (widening) parser.
+  function staleParserLists(state) {
+    return Object.entries((state && state.lists) || {}).filter(([, m]) => !m || m.parser !== PARSER_VERSION).map(([n]) => n);
   }
 
   // Lists that were removed from SOURCES (e.g. curben_phishing, dropped
@@ -272,8 +339,11 @@ function installGeneralAdblockUpdate(target) {
       const lists = {};
       for (const [k, v] of Object.entries(state.lists || {})) lists[k] = listMeta(v);
       const present = await payloadsPresent(deps, Object.keys(lists));
-      for (const k of Object.keys(lists)) if (!present.has(k)) delete lists[k];
-      let changed = !state.dynamicActive || retired.length > 0;
+      // Missing payloads, and payloads from the old widening parser, are refetched
+      // from scratch (no validators) and count as missing until then.
+      const stale = staleParserLists({ lists });
+      for (const k of Object.keys(lists)) if (!present.has(k) || stale.includes(k)) delete lists[k];
+      let changed = !state.dynamicActive || retired.length > 0 || stale.length > 0;
       let cosmeticChanged = false;
       const errors = {};
       const mirrorNotes = {};
@@ -316,10 +386,11 @@ function installGeneralAdblockUpdate(target) {
           }
           if (!res.ok) throw new Error("HTTP " + res.status);
           const text = await res.text();
-          const domains = parseList(text);
+          const parsed = parseEntries(text);
+          const total = parsed.domains.length + parsed.scoped.length;
           const floor = src.minDomains || 50;
-          if (domains.length < floor) throw new Error("parsed too few domains (" + domains.length + " < " + floor + ")");
-          const payload = { domains };
+          if (total < floor) throw new Error("parsed too few domains (" + total + " < " + floor + ")");
+          const payload = { domains: parsed.domains, scoped: parsed.scoped, parser: PARSER_VERSION };
           if (src.cosmetic && CP) {
             payload.cosmetic = CP.parseCosmetic(text);
             delete payload.cosmetic.stats;
@@ -333,8 +404,9 @@ function installGeneralAdblockUpdate(target) {
             lastModified: res.headers && res.headers.get ? res.headers.get("Last-Modified") || "" : "",
             fetchedAt: now,
             expiresMs: parseExpires(text),
-            count: domains.length,
+            count: total,
             cosmetic: !!payload.cosmetic,
+            parser: PARSER_VERSION,
           };
           if (payload.cosmetic) cosmeticChanged = true;
           changed = true;
@@ -424,45 +496,71 @@ function installGeneralAdblockUpdate(target) {
 
   // Payloads for the lists named in `lists` (small meta), newest first from
   // `fresh` (parsed this run), the rest from storage.
+  // Payloads (current parser only) for the lists named in `lists` (small
+  // meta), newest first from `fresh` (parsed this run), the rest from storage.
   async function readPayloads(deps, lists, fresh) {
-    const names = Object.keys(lists || {});
+    const names = Object.keys(lists || {}).filter((n) => (fresh && fresh[n]) || (lists[n] && lists[n].parser === PARSER_VERSION));
     const need = names.filter((n) => !(fresh && fresh[n]));
     const stored = need.length ? (await deps.getListData(need)) || {} : {};
     const out = {};
     for (const n of names) {
       const p = (fresh && fresh[n]) || stored[n];
-      if (p && Array.isArray(p.domains)) out[n] = p.domains;
+      if (p && Array.isArray(p.domains) && p.parser === PARSER_VERSION) out[n] = p;
     }
     return out;
   }
 
   async function swap(deps, lists, now, fresh) {
+    const FO = filterOptions();
     const bundled = await deps.loadBundled();
     const extra = new Set(bundled.extraIds || []);
     const packed = [];
+    const packedScoped = [];
     for (const r of bundled.rules || []) {
-      if (isPackedListRule(r, extra)) packed.push(...(r.condition.requestDomains || []));
+      if (!isPackedListRule(r, extra)) continue;
+      const key = FO ? FO.conditionKey(r.condition) : "";
+      for (const d of r.condition.requestDomains || []) {
+        if (key === "") packed.push(d);
+        else packedScoped.push([d, key]);
+      }
     }
-    const bundledDomains = packed.length;
-    const perList = await readPayloads(deps, lists, fresh);
+    const bundledDomains = packed.length + packedScoped.length;
+    const payloads = await readPayloads(deps, lists, fresh);
+    const perList = {};
+    const perListScoped = {};
+    for (const [n, p] of Object.entries(payloads)) {
+      perList[n] = p.domains;
+      perListScoped[n] = p.scoped || [];
+    }
     const missing = SOURCES.filter((x) => !perList[x.name]).map((x) => x.name);
     let domains = mergeDomains(perList);
+    let scoped = mergeScoped(perListScoped, domains);
     if (missing.length) {
-      // Lists that failed and have no saved copy: keep the packed domains so a
-      // partial refresh never shrinks protection.
+      // Lists that failed and have no saved copy: keep the packed rules (whole
+      // and scoped, each with its own scope) so a partial refresh never shrinks
+      // protection and never widens a packed scoped rule.
       const seen = new Set(domains);
       for (const d of packed) if (!seen.has(d) && !isNeverBlock(d)) { seen.add(d); domains.push(d); }
       domains = domains.slice(0, MAX_LIST_RULES * DOMAINS_PER_RULE);
+      const seenScoped = new Set(scoped.map(([d, k]) => d + "\n" + k));
+      const whole = new Set(domains);
+      for (const [d, k] of packedScoped) {
+        const id = d + "\n" + k;
+        if (whole.has(d) || seenScoped.has(id) || isNeverBlock(d)) continue;
+        seenScoped.add(id);
+        scoped.push([d, k]);
+      }
     }
+    const total = domains.length + scoped.length;
     // Sanity: a refreshed set much smaller than the bundle is a bad download.
-    if (domains.length < bundledDomains * 0.5) throw new Error("refreshed list too small");
-    const addRules = buildListRules(domains).concat(keptBundledRules(bundled.rules, bundled.extraIds));
+    if (total < bundledDomains * 0.5) throw new Error("refreshed list too small");
+    const addRules = buildListRules(domains, scoped).concat(keptBundledRules(bundled.rules, bundled.extraIds));
     const existing = (await deps.getDynamicRules()) || [];
     const removeRuleIds = existing.filter((r) => isOurRule(r.id)).map((r) => r.id);
     await deps.updateDynamicRules({ removeRuleIds, addRules });
     await deps.setStaticEnabled(false);
-    await deps.setState({ dynamicActive: true, updatedAt: now, ruleCount: addRules.length, domainCount: domains.length });
-    return { ok: true, ran: true, rules: addRules.length, domains: domains.length };
+    await deps.setState({ dynamicActive: true, updatedAt: now, ruleCount: addRules.length, domainCount: total, rebuiltForParser: PARSER_VERSION });
+    return { ok: true, ran: true, rules: addRules.length, domains: total };
   }
 
   async function fallback(deps) {
@@ -502,8 +600,11 @@ function installGeneralAdblockUpdate(target) {
     } catch {
       retired = [];
     }
+    // Rules built from old-parser payloads hold widened domains: rebuild once
+    // (stale lists come from the packed rules until they are refetched).
+    const staleRules = staleParserLists(state).length > 0 && state.rebuiltForParser !== PARSER_VERSION;
     if (state.dynamicActive && state.lists && Object.keys(state.lists).length) {
-      if (!retired.length && await dynamicLooksActive(deps, state)) {
+      if (!retired.length && !staleRules && await dynamicLooksActive(deps, state)) {
         await deps.setStaticEnabled(false);
         return { ok: true, mode: "dynamic" };
       }
@@ -529,7 +630,7 @@ function installGeneralAdblockUpdate(target) {
 
   Object.assign(target, {
     POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
-    RETIRED_LISTS, dropRetiredLists,
+    RETIRED_LISTS, dropRetiredLists, PARSER_VERSION, parseEntries, mergeScoped, staleParserLists,
     LIST_RULE_ID_BASE, KEPT_RULE_ID_BASE, ALLOW_RULE_ID_BASE, SOURCES, LIST_HOSTS,
     isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules, keepsWholeDomain,
     shouldRun, listDue, refresh, describeError, LIST_ALLOW_RULE_ID, listAllowRule, applyEnabled, isListUrl,

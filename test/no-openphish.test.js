@@ -69,8 +69,8 @@ Deno.test("stale Curben data on an existing install is dropped and its domains s
   const lists = {};
   const data = {};
   for (const s of U.SOURCES) {
-    lists[s.name] = { url: s.url, fetchedAt: 1, expiresMs: 86400000, count: 2 };
-    data[s.name] = { domains: [s.name.replace(/_/g, "-") + "-a.example", s.name.replace(/_/g, "-") + "-b.example"] };
+    lists[s.name] = { url: s.url, fetchedAt: 1, expiresMs: 86400000, count: 2, parser: U.PARSER_VERSION };
+    data[s.name] = { domains: [s.name.replace(/_/g, "-") + "-a.example", s.name.replace(/_/g, "-") + "-b.example"], scoped: [], parser: U.PARSER_VERSION };
   }
   lists.curben_phishing = { url: "https://malware-filter.gitlab.io/malware-filter/phishing-filter.txt", fetchedAt: 1, count: 1 };
   data.curben_phishing = { domains: ["stale-phish.example"] };
