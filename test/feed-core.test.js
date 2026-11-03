@@ -217,6 +217,9 @@ Deno.test("window and serial bounds: future createdAt, notBefore before createdA
   assert((await check(feed({ createdAt: iso(NOW + 30 * 60000), notBefore: iso(NOW + 30 * 60000 - 3600000), notAfter: iso(NOW + 10 * DAY) }))).ok, "createdAt 30 min ahead is fine");
   assert((await check(feed({ serial: 2026110201 }), { storedSerial: 0 })).ok, "date-like serial on a fresh install");
   assert((await check(feed({ serial: 1000005 }), { storedSerial: 5 })).ok, "a step of exactly 1,000,000");
+  // Once the stored document has expired, a larger step is allowed (no permanent lock-out).
+  assert((await check(feed({ serial: 2026111001 }), { storedSerial: 1, storedNotAfter: NOW - DAY })).ok, "big step after the stored file expired");
+  assert(!(await check(feed({ serial: 2026111001 }), { storedSerial: 1, storedNotAfter: NOW + DAY })).ok, "big step while the stored file is valid");
   // Kill documents: same serial bounds.
   const killBytes = enc({ format: 1, kill: true, serial: 2000001, createdAt: iso(NOW) });
   const kr = await V.verifyFeed(killBytes, await sign(killBytes, killKey.kp, "kill-test"), OPTS({ storedKillSerial: 1 }));

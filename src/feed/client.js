@@ -230,7 +230,8 @@
       await setState(deps, { lastError: "fetch: " + String(e && e.message || e), lastCheckAt: now });
       return { ok: false, ran: true, reason: String(e && e.message || e) };
     }
-    const r = await V().verifyFeed(bytes, sigText, verifyOpts(deps, { storedSerial: st.serial || 0, storedKillSerial: st.killSerial || 0 }));
+    const storedNotAfter = st.notAfter ? Date.parse(st.notAfter) : 0;
+    const r = await V().verifyFeed(bytes, sigText, verifyOpts(deps, { storedSerial: st.serial || 0, storedKillSerial: st.killSerial || 0, storedNotAfter: Number.isFinite(storedNotAfter) ? storedNotAfter : 0 }));
     if (!r.ok) {
       await setState(deps, { lastError: "rejected: " + r.error, lastCheckAt: now });
       return { ok: false, ran: true, reason: r.error };
@@ -238,6 +239,9 @@
     try {
       if (r.kind === "kill") {
         await removeFeedRules(deps);
+        // Forget the killed feed's saved files (follow-up review): after an
+        // update releases the latch, nothing signed before the kill comes back.
+        await deps.setCache({ current: null, previous: null });
         await setState(deps, { status: "killed", killed: true, killLatch: true, killedVersion: deps.extensionVersion || "", killSerial: r.doc.serial, ruleCount: 0, lastError: "", lastCheckAt: now, fetchedAt: now });
         return { ok: true, ran: true, mode: "killed" };
       }

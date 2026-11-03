@@ -52,7 +52,7 @@
       }
       if (doc && typeof doc === "object" && "kill" in doc) throw new Error("a kill document must be signed by a kill key");
       const valid = S().validateFeed(doc, {
-        now: o.now, storedSerial: o.storedSerial, extensionVersion: o.extensionVersion, protectedReason: o.protectedReason,
+        now: o.now, storedSerial: o.storedSerial, storedNotAfter: o.storedNotAfter, extensionVersion: o.extensionVersion, protectedReason: o.protectedReason,
       });
       return { ok: true, kind: "feed", keyId, doc: valid };
     } catch (e) {

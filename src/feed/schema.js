@@ -12,8 +12,9 @@
 //                AND after notBefore (required)
 //   (also: notBefore >= createdAt - 1 h, createdAt <= now + 1 h, so a future
 //    createdAt cannot stretch the window; security review M-5)
-//   (serial <= 2^31-1 and at most 1,000,000 above the stored serial, so one
-//    document cannot push the serial out of reach; L-7)
+//   (serial <= 2^31-1 and at most 1,000,000 above the stored serial while
+//    the stored document is still valid, so one document cannot push the
+//    serial out of reach; L-7)
 //   minExtension dotted version or null; maxExtension dotted version or null
 //   killFeed     boolean (default false): drop every feed rule
 //   dropRuleIds  integers 1..4500 to leave out of the compiled set
@@ -69,9 +70,12 @@
     return 0;
   }
 
-  function checkSerialBound(serial, stored, name) {
+  // storedExpired: the browser's stored document is past its notAfter. Then a
+  // large step is allowed (follow-up review: a publisher who changes the
+  // serial scheme must not lock browsers out for good; at most 14 days).
+  function checkSerialBound(serial, stored, name, storedExpired) {
     if (serial > MAX_SERIAL) fail(name + " " + serial + " is above " + MAX_SERIAL);
-    if ((stored || 0) > 0 && serial - stored > MAX_SERIAL_STEP) fail(name + " jumps from " + stored + " to " + serial + " (more than " + MAX_SERIAL_STEP + ")");
+    if (!storedExpired && (stored || 0) > 0 && serial - stored > MAX_SERIAL_STEP) fail(name + " jumps from " + stored + " to " + serial + " (more than " + MAX_SERIAL_STEP + ")");
   }
 
   function onlyKeys(obj, allowed, where) {
@@ -89,7 +93,8 @@
     if (doc.format !== FORMAT) fail("unsupported format " + JSON.stringify(doc.format));
     if (!isPosInt(doc.serial)) fail("serial must be a positive integer");
     if (doc.serial <= (c.storedSerial || 0)) fail("serial " + doc.serial + " is not newer than " + (c.storedSerial || 0) + " (replay or rollback attack)");
-    checkSerialBound(doc.serial, c.storedSerial, "serial");
+    const nowForBound = typeof c.now === "number" ? c.now : Date.now();
+    checkSerialBound(doc.serial, c.storedSerial, "serial", typeof c.storedNotAfter === "number" && c.storedNotAfter > 0 && nowForBound >= c.storedNotAfter);
     const created = parseTime(doc.createdAt, "createdAt");
     const notBefore = parseTime(doc.notBefore, "notBefore");
     const notAfter = parseTime(doc.notAfter, "notAfter");

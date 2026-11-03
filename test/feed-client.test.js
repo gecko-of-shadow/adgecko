@@ -147,9 +147,11 @@ Deno.test("kill: the kill-key document latches until the next extension version;
   const refused = await FC.checkFeed(w.deps);
   assert(refused.ran === false && /next extension version/.test(refused.reason) && w.calls.length === calls && w.session.length === 0, JSON.stringify(refused));
   // The extension is updated (new pinned keys would ship with it): the latch is released.
+  assert(!w.store.feedCache.current && !w.store.feedCache.previous, "the killed feed's saved files are dropped");
   w.deps.extensionVersion = "0.2.22";
   await FC.applyCached(w.deps);
   assert(w.store.feedState.killLatch === false && /released by an extension update/.test(w.store.feedState.lastError), JSON.stringify(w.store.feedState));
+  assert(!hostsOf(w).includes("evil.example") && w.store.feedState.source === "snapshot", "after the update only the packed snapshot applies, not the killed feed");
   await FC.checkFeed(w.deps);
   assert(hostsOf(w).join() === "back.example" && w.store.feedState.killed === false, "re-enabled after the update");
   // killFeed in a normal feed does the same.
