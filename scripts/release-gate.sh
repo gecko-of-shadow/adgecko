@@ -89,8 +89,36 @@ REQUIRED=(
   src/youtube.js
   src/kick.js
   src/rules/general-network.json
+  src/rules/ubo-youtube-network.json
+  src/rules/threat-network.json
+  src/rules/threat-snapshot.json
+  src/rules/cosmetic-rules.json
+  src/rules/dnr-merge-meta.json
   src/rules/CREDIT-EasyList.txt
   src/rules/LICENSES.md
+  src/vendor/ubo-youtube.js
+  src/vendor/ubo-youtube-isolated.js
+  src/vendor/ubo-youtube.css
+  src/vendor/LICENSE-uBlock.md
+  src/vendor/LICENSE-uBlock-GPLv3.txt
+  src/general/filter-options.js
+  src/general/update.js
+  src/general/cosmetic-parse.js
+  src/settings/features.js
+  src/settings/flags.js
+  src/settings.html
+  src/settings.js
+  src/guards/clipboard.js
+  src/guards/popups.js
+  src/threat/protected-hosts.js
+  src/threat/compile.js
+  src/feed/config.js
+  src/feed/keys.js
+  src/feed/canonical.js
+  src/feed/schema.js
+  src/feed/verify.js
+  src/feed/compile.js
+  src/feed/client.js
   src/general-exclude-hosts.js
   src/cosmetic.js
   src/cosmetic-hide.css
@@ -108,7 +136,9 @@ REQUIRED=(
   icons/icon128-off.png
 )
 # Shippable paths. Cosmetic hide, popup worker, list rules, and stream exclusion module.
-ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|cosmetic-parse|exclusions|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/vendor/ubo-youtube(-isolated)?\.js|src/vendor/ubo-youtube\.css|src/vendor/ubo-youtube-meta\.json|src/vendor/LICENSE-uBlock\.md|src/vendor/LICENSE-uBlock-GPLv3\.txt|src/rules/ubo-youtube-network\.json|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/rules/cosmetic-rules\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/youtube-ads\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
+# Must cover every path scripts/lib/package_files.py derives (test/packaging.test.js
+# checks that); settings page, guards, threat tier and signed-feed client added 2026-11-02.
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/settings\.html|src/settings\.js|src/settings/(features|flags)\.js|src/guards/(clipboard|popups)\.js|src/threat/(protected-hosts|compile)\.js|src/feed/(config|keys|canonical|schema|verify|compile|client)\.js|src/rules/threat-(network|snapshot|meta)\.json|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|cosmetic-parse|exclusions|filter-options|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/vendor/ubo-youtube(-isolated)?\.js|src/vendor/ubo-youtube\.css|src/vendor/ubo-youtube-meta\.json|src/vendor/LICENSE-uBlock\.md|src/vendor/LICENSE-uBlock-GPLv3\.txt|src/rules/ubo-youtube-network\.json|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/rules/cosmetic-rules\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/youtube-ads\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
 
 # YouTube is the beta script (spinner + search cards). The Twitch vendor stays at main.
 PLAYBACK_FILES=(
@@ -165,6 +195,15 @@ else
   pass "repo mode: allowlist checked on shippable paths only"
 fi
 if [[ "$ALLOW_OK" -eq 1 ]]; then pass "shippable file allowlist"; else fail "shippable file allowlist"; fi
+# Every file the manifest (worker, content scripts, rulesets, pages, icons), the
+# worker's importScripts(...) and the pages' <script>/<link> name must be in the
+# package; importScripts may take string literals only.
+if DERIVE_OUT="$(python3 "$ROOT/scripts/lib/package_files.py" --root "$PKG" 2>&1 | tr -d '\r')"; then
+  pass "every manifest / importScripts / page path is in the package ($(printf '%s\n' "$DERIVE_OUT" | wc -l | tr -d ' ') files)"
+else
+  printf '%s\n' "$DERIVE_OUT"
+  fail "manifest / importScripts paths missing from the package"
+fi
 if [[ -f "$PKG/src/popup.html" && -f "$PKG/src/popup.js" ]]; then
   pass "popup is packaged"
 else
@@ -275,6 +314,10 @@ forbidden_perms = {
     "management",
     "debugger",
     "proxy",
+    "downloads",
+    "unlimitedStorage",
+    "notifications",
+    "<all_urls>",
 }
 extra = [p for p in perms if p not in allowed_perms]
 missing = [p for p in ("declarativeNetRequest", "storage") if p not in perms]
@@ -286,17 +329,11 @@ if extra:
 if dangerous:
     bad.append("forbidden permissions: " + ", ".join(dangerous))
 
-opt = m.get("optional_permissions") or []
-if opt:
-    # Optional list-update hosts may appear later; still refuse broad page access.
-    for p in opt:
-        if p in forbidden_perms or p in ("<all_urls>", "*://*/*"):
-            bad.append(f"optional_permissions forbids {p!r}")
-
-opt_hosts = m.get("optional_host_permissions") or []
-for h in opt_hosts:
-    if h in ("<all_urls>", "*://*/*", "*://*/*/*"):
-        bad.append(f"optional_host_permissions forbids broad {h!r}")
+# Hard rule: no optional permissions of any kind (they could be requested
+# later without a new install-time warning).
+for key in ("optional_permissions", "optional_host_permissions"):
+    if key in m:
+        bad.append(f"{key} is not allowed, got {m.get(key)!r}")
 
 dnr = m.get("declarative_net_request") or {}
 resources = dnr.get("rule_resources") or []
@@ -471,13 +508,17 @@ SCAN_ROOT="$PKG/src"
 # video-swap-new (pixeltris) needs eval(workerString) to boot the player worker
 # blob and one innerHTML write for the in-player "Blocking ads" banner. Allow only
 # those two known lines in the vendored userscript; everything else still fails.
+# importScripts is allowed only in the service worker and only with string
+# literals (rg is line-based, so this matches the first line of the call; the
+# package check in section 1 parses the whole call and rejects anything but
+# literals).
 DANGER_PAT='\beval\s*\(|\.innerHTML\s*=|document\.write\s*\(|importScripts\s*\(|chrome\.identity|browser\.identity|navigator\.sendBeacon|geolocation|webkitRTCPeerConnection|\bRTCPeerConnection\b'
 # Scan JS under src/ but skip rules JSON (not JS). Cosmetic may use style injection.
 if rg -n --pcre2 "$DANGER_PAT" "$SCAN_ROOT" --glob '*.js' >/tmp/gate-danger-raw.txt 2>/dev/null; then
   set +e
   rg -v 'video-swap-new\.user\.js:[0-9]+:.*eval\(workerString\)' /tmp/gate-danger-raw.txt \
     | rg -v 'video-swap-new\.user\.js:[0-9]+:.*adBlockDiv\.innerHTML = ' \
-    | rg -v 'general-background\.js:[0-9]+:importScripts\("general-settings\.js", "general/update\.js", "general/cosmetic-parse\.js"\);$' \
+    | rg -v 'general-background\.js:[0-9]+:importScripts\("' \
     >/tmp/gate-danger.txt
   set -e
   if [[ -s /tmp/gate-danger.txt ]]; then

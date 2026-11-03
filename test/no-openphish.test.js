@@ -114,10 +114,8 @@ Deno.test("Curben rule: each forbidden case makes the checker fail", async () =>
     for (const [label, file, text] of cases) {
       assert(text !== orig[file], "case did not change the file: " + label);
       const r = await runCheck([], { [keyOf[file] || file]: text });
-      assert(r.code === 1, `checker passed a forbidden case: ${label}
-${r.text}`);
-      assert(!/not JSON|missing input|usage/.test(r.text), `failed for the wrong reason: ${label}
-${r.text}`);
+      assert(r.code === 1, `checker passed a forbidden case: ${label}\n${r.text}`);
+      assert(!/not JSON|missing input|usage/.test(r.text), `failed for the wrong reason: ${label}\n${r.text}`);
     }
     // Control: the same plumbing with unchanged contents passes.
     const same = await runCheck([], Object.fromEntries(Object.entries(orig).map(([f, x]) => [keyOf[f] || f, x])));
