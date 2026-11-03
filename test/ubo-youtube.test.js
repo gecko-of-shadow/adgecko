@@ -226,3 +226,25 @@ Deno.test("expire window post-processing: an unrecognised rule shape stops the g
   const write = gen.indexOf('src/rules/ubo-youtube-network.json", JSON.stringify(expireFix.rules');
   assert(call > 0 && write > call, "generator post-processes before it writes the rule file");
 });
+
+// Early warning (fix prompt, Block 2): fails from 180 days before the first
+// normal link the shipped expire rule would block, read from the rule itself,
+// so there is half a year to re-sync / widen and ship before videos break.
+Deno.test("uBO videoplayback expire window: more than 180 days left before its edge", () => {
+  const rule = shippedExpireRule();
+  if (!rule) return;
+  const re = new RegExp(rule.condition.regexFilter);
+  const today = Math.floor(Date.now() / 1000 / 86400) * 86400;
+  let edge = 0;
+  for (let day = today; day <= Date.UTC(2045, 0, 1) / 1000; day += 86400) {
+    if (re.test(expireUrl(day + 6 * 3600))) {
+      edge = day;
+      break;
+    }
+  }
+  assert(edge > 0, "no edge found before 2045");
+  const daysLeft = Math.floor((edge - today) / 86400);
+  assert(daysLeft > 180, `the YouTube expire window starts blocking normal links on ${new Date(edge * 1000).toISOString().slice(0, 10)} (${daysLeft} days left): widen it in scripts/lib/youtube-expire-window.mjs, re-sync and ship`);
+  // Today the edge is 2033-05-18 (expire=1999999999 is the last allowed second).
+  assert(edge >= Date.UTC(2033, 4, 18) / 1000 - 86400, "edge earlier than expected: " + new Date(edge * 1000).toISOString());
+});
