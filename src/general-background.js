@@ -794,6 +794,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // the page's URL; it must never trigger a refresh or a revert. The settings
   // page opens in a tab too, so it is recognised by its extension URL.
   if (!sender || sender.id !== chrome.runtime.id) return;
+  // Read-only, for our own cosmetic content script: the packed fallback hide
+  // sheet (no longer a web-accessible resource pages could probe).
+  if (message.type === "cosmeticCss") {
+    fetch(chrome.runtime.getURL("src/cosmetic-hide.css"))
+      .then((r) => r.text())
+      .then((css) => sendResponse({ css }), () => sendResponse({ css: null }));
+    return true;
+  }
   if (sender.tab) {
     let settingsPage = "";
     try {

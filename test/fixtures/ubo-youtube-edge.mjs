@@ -32,7 +32,7 @@ if (variant === "upstream") {
 }
 (0, eval)(src);
 if (variant === "double") {
-  (0, eval)(src.replace('if (globalThis[Symbol.for("twitch-adblock.ubo")]) { return; }', ""));
+  (0, eval)(src.replace('if (globalThis[Symbol.for("gk.u")]) { return; }', ""));
 }
 
 const s = (v, ...a) => {

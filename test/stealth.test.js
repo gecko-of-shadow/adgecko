@@ -19,7 +19,7 @@ Deno.test("hooks look native: toString, name, length, no own props, no string gl
   globalThis.document = { readyState: "complete", documentElement: {}, getElementById() { return null; }, createElement() { return { style: {}, appendChild() {} }; }, querySelector() { return null; }, querySelectorAll() { return []; }, addEventListener() {} };
   globalThis.location = { pathname: "/watch" };
   globalThis.window = globalThis;
-  delete globalThis[Symbol.for("twitch-adblock.yt")];
+  delete globalThis[Symbol.for("gk.y")];
   const keysBefore = new Set(Object.getOwnPropertyNames(globalThis));
   try {
     new Function(source)();
@@ -44,7 +44,7 @@ Deno.test("hooks look native: toString, name, length, no own props, no string gl
     assert(added.length === 0, "no new string-keyed globals: " + added);
     assert(!Object.keys(globalThis).some((k) => /adblock/i.test(k)), "nothing enumerable mentions adblock");
   } finally {
-    delete globalThis[Symbol.for("twitch-adblock.yt")];
+    delete globalThis[Symbol.for("gk.y")];
     Function.prototype.toString = saved.ts;
     JSON.parse = saved.parse;
     globalThis.fetch = saved.fetch;
@@ -68,8 +68,8 @@ Deno.test("uBO layer present: no fetch/XHR/JSON.parse/toString hooks (uBO-only s
   globalThis.document = { readyState: "complete", documentElement: {}, getElementById() { return null; }, createElement() { return { style: {}, appendChild() {} }; }, querySelector() { return null; }, querySelectorAll() { return []; }, addEventListener() {} };
   globalThis.location = { pathname: "/watch" };
   globalThis.window = globalThis;
-  delete globalThis[Symbol.for("twitch-adblock.yt")];
-  Object.defineProperty(globalThis, Symbol.for("twitch-adblock.ubo"), { value: true, configurable: true });
+  delete globalThis[Symbol.for("gk.y")];
+  Object.defineProperty(globalThis, Symbol.for("gk.u"), { value: true, configurable: true });
   try {
     new Function(source)();
     assert(globalThis.fetch === saved.fetch, "fetch untouched");
@@ -78,8 +78,8 @@ Deno.test("uBO layer present: no fetch/XHR/JSON.parse/toString hooks (uBO-only s
     assert(XMLHttpRequest.prototype.open === open && XMLHttpRequest.prototype.send === send, "XHR untouched");
     assert(Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, "responseText").get === rt.get, "getters untouched");
   } finally {
-    delete globalThis[Symbol.for("twitch-adblock.ubo")];
-    delete globalThis[Symbol.for("twitch-adblock.yt")];
+    delete globalThis[Symbol.for("gk.u")];
+    delete globalThis[Symbol.for("gk.y")];
     Function.prototype.toString = saved.ts; JSON.parse = saved.parse; globalThis.fetch = saved.fetch;
     globalThis.XMLHttpRequest = saved.XHR; globalThis.document = saved.document; globalThis.window = saved.window; globalThis.location = saved.location;
   }

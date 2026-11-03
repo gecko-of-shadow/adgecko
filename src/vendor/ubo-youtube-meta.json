@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-11-02T23:44:00Z",
+  "generated_at_utc": "2026-11-03T01:03:15Z",
   "uassets_commit": "205b2124e08665b31ba6f1020378fa2ebbc67a6b",
   "local_additions": [
     "! from: ||youtube.com/youtubei/v1/get_watch?$xhr,1p,replace=/\"adPlacements\"/\"no_ads\"/ (filters.txt, Firefox-only)",

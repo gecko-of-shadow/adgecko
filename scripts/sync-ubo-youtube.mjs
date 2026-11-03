@@ -119,8 +119,10 @@ for (const name of [...LISTS, "local"]) {
 
 // ---- scriptlets, assembled like uBO's scriptlet-filtering-core.js ----
 const WORLDS = ["MAIN", "ISOLATED"];
-// Every ported scriptlet is switchable per group from the page console:
-//   localStorage["twitch-adblock-ubo-opts"] = '{"rpnt":true}'  then reload.
+// Every ported scriptlet belongs to a group. Groups are switched here, at
+// generation time only: the bundle no longer reads a localStorage override,
+// which the page itself could write (Block I hardening). Test harnesses edit
+// the `defaults` line of the generated prelude instead.
 // Groups in OFF_BY_DEFAULT patch page-wide globals or rewrite YouTube's own
 // bootstrap/request code; they are off until proven safe in Chrome (0.2.17:
 // 9b82bf8 with them on left youtube.com blank).
@@ -182,11 +184,13 @@ const patchArg = (a) => ARG_PATCHES.reduce((s, [from, to], i) => {
 const OFF_BY_DEFAULT = ["rmnt", "domBypass"];
 const TOGGLE_PRELUDE = `const uboOn = (() => {
   const defaults = ${JSON.stringify(Object.fromEntries(OFF_BY_DEFAULT.map((k) => [k, false])))};
-  let saved = {};
-  try { saved = JSON.parse(self.localStorage.getItem("twitch-adblock-ubo-opts") || "{}") || {}; } catch (e) { saved = {}; }
-  return (key) => (typeof saved[key] === "boolean" ? saved[key] : defaults[key] !== false);
+  return (key) => defaults[key] !== false;
 })();
 `;
+// Neutral global ids (Symbol.for registry; no product name for the page to spot).
+// MARKER_MAIN also tells src/youtube.js that uBO's layer is present.
+const MARKER_MAIN = "gk.u";
+const MARKER_ISOLATED = "gk.ui";
 const fnCodeBy = { MAIN: new Map(), ISOLATED: new Map() };
 let fnCode;
 const addDeps = (names) => {
@@ -247,7 +251,7 @@ for (const h of HOSTS) {
   if (!groups.has(body)) groups.set(body, []);
   groups.get(body).push(h);
 }
-const GUARD = world === "MAIN" ? "twitch-adblock.ubo" : "twitch-adblock.ubo-isolated";
+const GUARD = world === "MAIN" ? MARKER_MAIN : MARKER_ISOLATED;
 // Install once per document: each filter is its own uBO proxy (that layering is
 // by design), but the bundle itself must never stack a second time.
 let js = banner + "(function() {\n// >>>> start of private namespace\n;\nif (globalThis[Symbol.for(" + JSON.stringify(GUARD) + ")]) { return; }\nif (" + JSON.stringify(world) + " !== \"MAIN\") { try { Object.defineProperty(globalThis, Symbol.for(" + JSON.stringify(GUARD) + "), { value: true }); } catch (e) {} }\nconst scriptletGlobals = {};\n" + TOGGLE_PRELUDE + "\n" + fnDefs.join("\n\n") + "\n\nconst hostname = location.hostname;\n";
@@ -255,7 +259,7 @@ for (const [body, hosts] of groups) {
   if (!body) continue;
   js += `\nif (${JSON.stringify(hosts)}.includes(hostname)) {\n${body}\n}\n`;
 }
-if (world === "MAIN") js += "\n// Tells src/youtube.js that uBO's filters own player-response pruning.\ntry { Object.defineProperty(globalThis, Symbol.for(\"twitch-adblock.ubo\"), { value: true }); } catch (e) {\n}\n";
+if (world === "MAIN") js += "\n// Tells src/youtube.js that uBO's filters own player-response pruning.\ntry { Object.defineProperty(globalThis, Symbol.for(" + JSON.stringify(MARKER_MAIN) + "), { value: true }); } catch (e) {\n}\n";
 js += "\n// <<<< end of private namespace\n})();\n";
 await Deno.writeTextFile(ROOT + (world === "MAIN" ? "src/vendor/ubo-youtube.js" : "src/vendor/ubo-youtube-isolated.js"), js);
 }

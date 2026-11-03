@@ -111,7 +111,7 @@ Deno.test("a reused player XHR returns the second response", async () => {
     if (mode === "clean" || url.includes("clean=1")) return new Response(cleanBody("videoB"), { status: 200 });
     return new Response(playerBody("videoA"), { status: 200 });
   };
-  delete globalThis[Symbol.for("twitch-adblock.yt")];
+  delete globalThis[Symbol.for("gk.y")];
   try {
     new Function(source)();
     player = element();
@@ -132,10 +132,10 @@ Deno.test("a reused player XHR returns the second response", async () => {
     assert(xhr.response === second, "the default response getter follows responseText");
 
     await globalThis.fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false");
-    assert(document.getElementById("twitch-adblock-notice"), "a stripped player response shows the label");
+    assert(document.getElementById("gk-n1"), "a stripped player response shows the label");
     mode = "clean";
     await globalThis.fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false");
-    assert(!document.getElementById("twitch-adblock-notice"), "a clean player response clears the label");
+    assert(!document.getElementById("gk-n1"), "a clean player response clears the label");
 
     mode = "ad";
     player = null;
@@ -144,9 +144,9 @@ Deno.test("a reused player XHR returns the second response", async () => {
     for (const fn of listeners["yt-navigate-start"] || []) fn();
     player = element();
     await new Promise((resolve) => setTimeout(resolve, 600));
-    assert(!document.getElementById("twitch-adblock-notice"), "navigation cancels a label retry");
+    assert(!document.getElementById("gk-n1"), "navigation cancels a label retry");
   } finally {
-    delete globalThis[Symbol.for("twitch-adblock.yt")];
+    delete globalThis[Symbol.for("gk.y")];
     JSON.parse = saved.JSON;
     globalThis.document = saved.document;
     globalThis.window = saved.window;
@@ -185,7 +185,7 @@ Deno.test("watch and shorts parsing keeps an ad-only player payload", () => {
   Object.defineProperty(XMLHttpRequest.prototype, "response", { configurable: true, get() { return ""; } });
   globalThis.XMLHttpRequest = XMLHttpRequest;
   globalThis.fetch = async () => new Response("{}");
-  delete globalThis[Symbol.for("twitch-adblock.yt")];
+  delete globalThis[Symbol.for("gk.y")];
   try {
     new Function(source)();
     const adOnly = '{"adPlacements":[{"adPlacementRenderer":{}}],"playerAds":[{"playerLegacyDesktopWatchAdsRenderer":{}}]}';

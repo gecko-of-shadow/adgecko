@@ -2,8 +2,9 @@
 // and prints what the ported prune paths did. Used by test/ubo-youtube.test.js.
 import "./memory-storage.mjs";
 globalThis.window = globalThis;
-if (Deno.env.get("UBO_OPTS") != null) localStorage.setItem("twitch-adblock-ubo-opts", Deno.env.get("UBO_OPTS"));
-else localStorage.removeItem("twitch-adblock-ubo-opts");
+import { withUboOpts } from "./source-opts.mjs";
+// Group switches go into the source (the bundle no longer reads localStorage).
+const UBO_OPTS = Deno.env.get("UBO_OPTS") != null ? JSON.parse(Deno.env.get("UBO_OPTS")) : {};
 class Node { appendChild(c) { return c; } }
 globalThis.Node = Node;
 const natives = { mapHas: Map.prototype.has, push: Array.prototype.push, then: Promise.prototype.then, append: Node.prototype.appendChild, setTimeout: globalThis.setTimeout, stringify: JSON.stringify };
@@ -25,7 +26,7 @@ globalThis.fetch = async (input) => {
   return new Response(JSON.stringify(served[url] || {}), { headers: { "content-type": "application/json" } });
 };
 const src = await Deno.readTextFile(new URL("../../src/vendor/ubo-youtube.js", import.meta.url));
-(0, eval)(src);
+(0, eval)(withUboOpts(src, UBO_OPTS));
 const out = {};
 out.globalsTouched = Object.entries({ mapHas: Map.prototype.has, push: Array.prototype.push, then: Promise.prototype.then, append: Node.prototype.appendChild, setTimeout: globalThis.setTimeout, stringify: JSON.stringify }).filter(([k, v]) => natives[k] !== v).map(([k]) => k);
 // Mock bootstrap: what YouTube's early scripts do with these globals must still work.
@@ -39,7 +40,7 @@ try {
   boot.push(new Node().appendChild({ nodeName: "DIV" }).nodeName === "DIV");
 } catch (e) { boot.push("THREW " + e.message); }
 out.boot = boot;
-out.marker = globalThis[Symbol.for("twitch-adblock.ubo")] === true;
+out.marker = globalThis[Symbol.for("gk.u")] === true;
 out.player = await (await fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", { method: "POST" })).json();
 out.reel = await (await fetch("https://www.youtube.com/youtubei/v1/reel/reel_watch_sequence?x=1")).json();
 out.next = await (await fetch("https://www.youtube.com/youtubei/v1/next")).json();

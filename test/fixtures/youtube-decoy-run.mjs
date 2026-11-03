@@ -9,7 +9,9 @@ globalThis.self = globalThis;
 const SCENARIO = Deno.env.get("SCENARIO") || "manifest";
 localStorage.removeItem("twitch-adblock-ubo-opts");
 localStorage.removeItem("twitch-adblock-yt-opts");
-if (SCENARIO === "late-hooks") localStorage.setItem("twitch-adblock-yt-opts", JSON.stringify({ hooksUnderUbo: true }));
+import { withYtOpts } from "./source-opts.mjs";
+// Options go into the source (youtube.js no longer reads localStorage).
+const YT_OPTS = SCENARIO === "late-hooks" ? { hooksUnderUbo: true } : {};
 class Node { appendChild(c) { return c; } }
 globalThis.Node = Node;
 function XMLHttpRequest() {}
@@ -52,7 +54,8 @@ const order = SCENARIO === "manifest" ? ["ubo", "yt"] : SCENARIO === "yt" ? ["yt
 const out = { scenario: SCENARIO };
 for (const name of order) {
   const before = globalThis.fetch;
-  (0, eval)(await Deno.readTextFile(new URL(files[name], import.meta.url)));
+  const text = await Deno.readTextFile(new URL(files[name], import.meta.url));
+  (0, eval)(name === "yt" ? withYtOpts(text, YT_OPTS) : text);
   if (name === "yt") out.ytHookedFetch = globalThis.fetch !== before;
 }
 out.observersAtLoad = perfObservers.length;

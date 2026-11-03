@@ -8,7 +8,8 @@
 // below, and player requests ask YouTube not to schedule the slot.
 function uboLayerPresent() {
   try {
-    return globalThis[Symbol.for("twitch-adblock.ubo")] === true;
+    // Set by the generated uBO bundle (scripts/sync-ubo-youtube.mjs); neutral id.
+    return globalThis[Symbol.for("gk.u")] === true;
   } catch {
     return false;
   }
@@ -1001,27 +1002,24 @@ function installYoutubeAdblock(target) {
 }
 
 function startYoutubeAdblock() {
-  // Non-enumerable symbol guard: no string-keyed global for the page to spot.
-  const GUARD = Symbol.for("twitch-adblock.yt");
+  // Non-enumerable symbol guard with a neutral id (no product name for the page to spot).
+  const GUARD = Symbol.for("gk.y");
   if (globalThis[GUARD]) return;
   try { Object.defineProperty(globalThis, GUARD, { value: true, configurable: true }); } catch { return; }
 
-  // Start switches. Defaults aim at a fast start; override for live A/B with
-  // localStorage["twitch-adblock-yt-opts"] = '{"noAdFlag":true}' and reload.
+  // Start switches: built-in defaults only. They used to be overridable from
+  // localStorage, which the page itself can write (Block I hardening); test
+  // harnesses now inject options into the source instead.
   //  noAdFlag:    send isInlinePlaybackNoAd on player requests (uBO keeps this disabled).
   //  assignHook:  wrap the global Object.assign to mark player requests (costly, page-wide).
   //  stallReload: reload the video (at most twice) if a stripped start sits at 0:00 with no data.
-  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, stallUnderUbo: "gentle", stallGentleMs: 15000, waitReplyHoldMs: 20000, decoyWaitHoldMs: 10000, decoyWaitCapMs: 8000, decoyGentleMs: 7000, decoyNavFloor: false, decoyBufGuard: true, umpBackoff: false, diag: true, domSweepMs: 400, decoyReloadMs: 150, decoyGapMs: 1500, errorFlash: "gated", errorFlashWindowMs: 5000, errorFlashRevealMs: 1500 };
-  try {
-    const saved = JSON.parse(localStorage.getItem("twitch-adblock-yt-opts") || "{}");
-    for (const key of Object.keys(OPTS)) if (typeof saved[key] === typeof OPTS[key]) OPTS[key] = saved[key];
-  } catch {
-    // Defaults stay.
-  }
+  const OPTS = { noAdFlag: false, assignHook: false, stallReload: true, stallMs: 2000, stallQuietMs: 1500, stallPollMs: 250, stallFailoverGraceMs: 1000, stallGiveUpMs: 30000, stallSecondGapMs: 5000, stallUboMs: 10000, hooksUnderUbo: false, nudgeUnderUbo: false, stallUnderUbo: "gentle", stallGentleMs: 15000, waitReplyHoldMs: 20000, decoyWaitHoldMs: 10000, decoyWaitCapMs: 8000, decoyGentleMs: 7000, decoyNavFloor: false, decoyBufGuard: true, umpBackoff: false, diag: false, domSweepMs: 400, decoyReloadMs: 150, decoyGapMs: 1500, errorFlash: "gated", errorFlashWindowMs: 5000, errorFlashRevealMs: 1500 };
 
 
+  // Page-console output only when OPTS.diag is on (off by default: no log
+  // lines naming the extension in the page's console).
   function logFailOpen(error) {
-    console.log("twitch-adblock youtube failed open", error);
+    if (OPTS.diag) console.log("twitch-adblock youtube failed open", error);
   }
 
   // Feature switches from the extension (src/settings/flags.js, ISOLATED world).
@@ -1211,7 +1209,7 @@ function startYoutubeAdblock() {
       if (!api.UBO_LAYER) armStall(undefined, "ads stripped");
     }
     if (blocking && noticeLatched) return;
-    const existing = document.getElementById("twitch-adblock-notice");
+    const existing = document.getElementById("gk-n1");
     if (!blocking) {
       noticeGeneration += 1;
       clearNoticeTimers();
@@ -1233,7 +1231,7 @@ function startYoutubeAdblock() {
       return;
     }
     const notice = existing || document.createElement("div");
-    notice.id = "twitch-adblock-notice";
+    notice.id = "gk-n1";
     notice.textContent = "Blocking ads";
     notice.style.cssText = "position:absolute;top:8px;left:8px;z-index:60;color:#fff;background:rgba(0,0,0,.75);padding:4px 8px;font:12px/1.2 sans-serif;pointer-events:none;";
     if (notice.parentElement !== player) player.appendChild(notice);
@@ -1469,7 +1467,7 @@ function startYoutubeAdblock() {
     if (typeof flagOn === "function" && !flagOn("youtubeWatchdog")) return;
     stalledReloaded += 1;
     lastReloadAt = now;
-    console.log("twitch-adblock: [+" + (now - navAt) + "ms] YouTube " + why + ", reloading the video (" + stalledReloaded + "/" + (api.UBO_LAYER && OPTS.stallUnderUbo === "gentle" ? 1 : 2) + ")");
+    if (OPTS.diag) console.log("twitch-adblock: [+" + (now - navAt) + "ms] YouTube " + why + ", reloading the video (" + stalledReloaded + "/" + (api.UBO_LAYER && OPTS.stallUnderUbo === "gentle" ? 1 : 2) + ")");
     mediaFailed = false;
     mediaExhaustedNow = false;
     try {
@@ -1573,10 +1571,10 @@ function startYoutubeAdblock() {
         const host = new URL(failure.url).hostname;
         if (loggedHosts.has(host + failure.reason)) continue;
         loggedHosts.add(host + failure.reason);
-        console.log("twitch-adblock: googlevideo " + host + " failed (" + failure.reason + ")");
+        if (OPTS.diag) console.log("twitch-adblock: googlevideo " + host + " failed (" + failure.reason + ")");
       }
       if (!result.exhausted && result.failures.length) {
-        console.log("twitch-adblock: media recovered on " + new URL(result.url).hostname + " in " + result.ms + "ms");
+        if (OPTS.diag) console.log("twitch-adblock: media recovered on " + new URL(result.url).hostname + " in " + result.ms + "ms");
       }
     } catch {
       // Logging is optional.
@@ -1592,7 +1590,7 @@ function startYoutubeAdblock() {
       if (startLogged) return;
       startLogged = true;
       const ms = Date.now() - navAt;
-      console.log("twitch-adblock: YouTube playback started " + ms + "ms after navigation" + (strippedThisVideo ? " (ads stripped)" : ""));
+      if (OPTS.diag) console.log("twitch-adblock: YouTube playback started " + ms + "ms after navigation" + (strippedThisVideo ? " (ads stripped)" : ""));
     } catch {
       // Timing is optional.
     }
@@ -1942,7 +1940,7 @@ function startYoutubeAdblock() {
         const next = api.googlevideoFallbacks(url)[0];
         api.rememberBadHost(url, next || "");
         logFallback({ failures: [{ url, reason: status ? "http " + status : "network" }], exhausted: !next });
-        if (next) console.log("twitch-adblock: next media requests use " + new URL(next).hostname);
+        if (next && OPTS.diag) console.log("twitch-adblock: next media requests use " + new URL(next).hostname);
         else onMediaExhausted();
       } catch {
         // Never break the player's own error handling.
@@ -2164,7 +2162,7 @@ function startYoutubeAdblock() {
     watchDom();
   }
 
-  console.log("twitch-adblock: watching YouTube");
+  if (OPTS.diag) console.log("twitch-adblock: watching YouTube");
 }
 
 if (typeof document !== "undefined" && typeof window !== "undefined") startYoutubeAdblock();

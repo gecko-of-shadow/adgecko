@@ -18,7 +18,9 @@ function sim({ opts = UBO, onTick = () => {}, steps = () => {}, preDecoy = false
   const loads = [];
   const player = { className: "", querySelector: () => video, loadVideoById: () => loads.push(now), getVideoData: () => ({ video_id: "x" }), getPlayerState: () => -1, getCurrentTime: () => 0 };
   const f = new Function("Date", "setTimeout", "clearTimeout", "document", "env", `
-    const OPTS = env.OPTS;
+    // Block I: page-console logs need OPTS.diag (now off in the shipped
+    // defaults); this harness reads them, so it turns diag on.
+    const OPTS = Object.assign({}, env.OPTS, { diag: true });
     let navAt = 0, stalledReloaded = 0, stallTimer = 0, startLogged = false, strippedThisVideo = true, mediaFailed = false;
     const onWatchSurface = () => true, playerRoot = env.playerRoot, logFailOpen = () => {}, diag = (m) => env.logs.push("diag " + m), api = { UBO_LAYER: !!env.ubo, lastWaitReplyAt: env.waitAt || 0 };
     let decoyThisNav = !!env.decoy, lastPlayerAt = 0;

@@ -3,6 +3,14 @@
 // or the player cannot take it, the ad plays. The live video is never hidden,
 // muted, or sped up. A separate post-roll cover can be paused.
 function installKickAdblock(target) {
+  // Neutral ids, no marker properties on page objects (wrapped objects are
+  // remembered in a WeakSet), and no page-console output unless DEBUG.
+  const DEBUG = false;
+  const KICK_CSS_ID = "gk-k1";
+  const wrapped = new WeakSet();
+  const debugLog = (...args) => {
+    if (DEBUG) console.log(...args);
+  };
   const AD_BREAK_STARTED = "PlayerAdBreakStarted";
   const AD_BREAK_ENDED = "PlayerAdBreakEnded";
   const TIME_UPDATE = "PlayerTimeUpdate";
@@ -237,7 +245,7 @@ function installKickAdblock(target) {
       video.muted = true;
       if (typeof video.pause === "function" && !video.paused) video.pause();
     } catch (error) {
-      console.log("twitch-adblock kick failed open", error);
+      debugLog("kick failed open", error);
     }
   }
 
@@ -249,7 +257,7 @@ function installKickAdblock(target) {
       controls = root.querySelectorAll('[data-testid="ima-ad-controls"]');
       frames = root.querySelectorAll('iframe[id^="google_ads_iframe"]');
     } catch (error) {
-      console.log("twitch-adblock kick failed open", error);
+      debugLog("kick failed open", error);
       return;
     }
     for (const node of controls) {
@@ -299,15 +307,15 @@ function installKickAdblock(target) {
   function injectChromeCss() {
     try {
       if (typeof document === "undefined" || !document.createElement) return;
-      if (document.getElementById && document.getElementById("twitch-adblock-kick-css")) return;
+      if (document.getElementById && document.getElementById(KICK_CSS_ID)) return;
       const style = document.createElement("style");
-      style.id = "twitch-adblock-kick-css";
+      style.id = KICK_CSS_ID;
       style.textContent = chromeCss();
       const parent = document.head || document.documentElement;
       if (!parent || typeof parent.appendChild !== "function") return;
       parent.appendChild(style);
     } catch (error) {
-      console.log("twitch-adblock kick failed open", error);
+      debugLog("kick failed open", error);
     }
   }
 
@@ -316,7 +324,7 @@ function installKickAdblock(target) {
     try {
       worker.postMessage({ id: command.id, funcName: command.funcName, args: command.args });
     } catch (error) {
-      console.log("twitch-adblock kick failed open", error);
+      debugLog("kick failed open", error);
     }
   }
 
@@ -325,34 +333,34 @@ function installKickAdblock(target) {
       try {
         postCommand(worker, bridge.onIvsMessage(event && event.data));
       } catch (error) {
-        console.log("twitch-adblock kick failed open", error);
+        debugLog("kick failed open", error);
       }
     });
   }
 
   function installWorkerHook(root, onIvsWorker) {
     const NativeWorker = root.Worker;
-    if (typeof NativeWorker !== "function" || NativeWorker.__kickAdblock) return;
+    if (typeof NativeWorker !== "function" || wrapped.has(NativeWorker)) return;
     function WrappedWorker(url, options) {
       const worker = arguments.length > 1 ? new NativeWorker(url, options) : new NativeWorker(url);
       try {
         if (isIvsWorkerUrl(url)) onIvsWorker(worker);
       } catch (error) {
-        console.log("twitch-adblock kick failed open", error);
+        debugLog("kick failed open", error);
       }
       return worker;
     }
     WrappedWorker.prototype = NativeWorker.prototype;
-    WrappedWorker.__kickAdblock = true;
+    wrapped.add(WrappedWorker);
     root.Worker = WrappedWorker;
   }
 
   function wrapMediaTailor(media, onDetail) {
-    if (!media || media.__kickAdblock || typeof media.createSession !== "function") return media;
+    if (!media || wrapped.has(media) || typeof media.createSession !== "function") return media;
     const nativeCreate = media.createSession.bind(media);
     media.createSession = function (options) {
       return Promise.resolve(nativeCreate(options)).then((session) => {
-        if (!session || session.__kickAdblock || typeof session.addEventListener !== "function") return session;
+        if (!session || wrapped.has(session) || typeof session.addEventListener !== "function") return session;
         const nativeAdd = session.addEventListener.bind(session);
         session.addEventListener = function (type, listener, listenerOptions) {
           return nativeAdd(type, function (event) {
@@ -360,24 +368,24 @@ function installKickAdblock(target) {
               const detail = event && typeof event === "object" ? event.detail : null;
               onDetail(detail);
             } catch (error) {
-              console.log("twitch-adblock kick failed open", error);
+              debugLog("kick failed open", error);
             }
             if (typeof listener === "function") return listener.call(this, event);
             if (listener && typeof listener.handleEvent === "function") return listener.handleEvent(event);
           }, listenerOptions);
         };
-        session.__kickAdblock = true;
+        wrapped.add(session);
         return session;
       });
     };
-    media.__kickAdblock = true;
+    wrapped.add(media);
     return media;
   }
 
   function installDatazoomHook(root, onDetail) {
     let sdk = root.datazoom;
     function wrapSdk(value) {
-      if (!value || value.__kickAdblockSdk) return value;
+      if (!value || wrapped.has(value)) return value;
       let media = value.mediatailor;
       try {
         Object.defineProperty(value, "mediatailor", {
@@ -392,10 +400,10 @@ function installKickAdblock(target) {
           },
         });
       } catch (error) {
-        console.log("twitch-adblock kick failed open", error);
+        debugLog("kick failed open", error);
         wrapMediaTailor(media, onDetail);
       }
-      value.__kickAdblockSdk = true;
+      wrapped.add(value);
       return value;
     }
     try {
@@ -410,7 +418,7 @@ function installKickAdblock(target) {
         },
       });
     } catch (error) {
-      console.log("twitch-adblock kick failed open", error);
+      debugLog("kick failed open", error);
       if (sdk) wrapSdk(sdk);
       return;
     }
@@ -438,7 +446,7 @@ function installKickAdblock(target) {
         kickOn = next.kick;
         if (!kickOn) {
           try {
-            const css = document.getElementById("twitch-adblock-kick-css");
+            const css = document.getElementById(KICK_CSS_ID);
             if (css) css.remove();
           } catch {
             // already gone
@@ -480,7 +488,7 @@ function installKickAdblock(target) {
     });
     injectChromeCss();
     watchCovers();
-    console.log("twitch-adblock: watching Kick");
+    debugLog("watching Kick");
   }
 
   target.startKickAdblock = startKickAdblock;

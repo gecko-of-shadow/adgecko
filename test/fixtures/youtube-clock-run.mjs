@@ -4,7 +4,9 @@
 // "own-reply" (the reply comes during video B), "no-reply". YT_SRC overrides the
 // youtube.js path. Used by test/youtube-decoy-nav.test.js. All urls are synthetic.
 const SCENARIO = Deno.env.get("SCENARIO") || "prev-reply";
-const source = await Deno.readTextFile(Deno.env.get("YT_SRC") || new URL("../../src/youtube.js", import.meta.url));
+import { withYtOpts } from "./source-opts.mjs";
+// Options go into the source (youtube.js no longer reads localStorage).
+const source = withYtOpts(await Deno.readTextFile(Deno.env.get("YT_SRC") || new URL("../../src/youtube.js", import.meta.url)), {});
 const RealDate = Date;
 const BASE = 1792548600000;
 let now = BASE;
@@ -40,7 +42,7 @@ for (const m of ["open", "send", "addEventListener", "setRequestHeader"]) XHR.pr
 const fetchStub = () => Promise.resolve(new Response("{}", { status: 200 }));
 const window = { fetch: fetchStub, addEventListener() {}, location, document };
 class MO { observe() {} disconnect() {} }
-globalThis[Symbol.for("twitch-adblock.ubo")] = true;
+globalThis[Symbol.for("gk.u")] = true;
 const run = new Function("window", "document", "location", "localStorage", "setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "performance", "console", "XMLHttpRequest", "MutationObserver", "PerformanceObserver", "requestAnimationFrame", "requestIdleCallback", "fetch", source);
 run(window, document, location, localStorage, setT, clearT, setI, clearT, FakeDate, performance, fakeConsole, XHR, MO, PO, (f) => setT(f, 16), (f) => setT(f, 1), fetchStub);
 

@@ -3,7 +3,7 @@
 function installTwitchDirectoryAds(target) {
   const BANNER_SELECTOR = '[data-a-target="browse-banner-ad-slot"]';
   const FEEDBACK_SELECTOR = 'button[aria-label="Leave feedback for this Ad"]';
-  const STYLE_ID = "twitch-adblock-directory-ads";
+  const STYLE_ID = "gk-t1"; // neutral id (no product name in the page)
   const CSS = [
     BANNER_SELECTOR,
     '[aria-label="Advertisement"]',

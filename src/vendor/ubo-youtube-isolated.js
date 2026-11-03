@@ -5,14 +5,12 @@
 (function() {
 // >>>> start of private namespace
 ;
-if (globalThis[Symbol.for("twitch-adblock.ubo-isolated")]) { return; }
-if ("ISOLATED" !== "MAIN") { try { Object.defineProperty(globalThis, Symbol.for("twitch-adblock.ubo-isolated"), { value: true }); } catch (e) {} }
+if (globalThis[Symbol.for("gk.ui")]) { return; }
+if ("ISOLATED" !== "MAIN") { try { Object.defineProperty(globalThis, Symbol.for("gk.ui"), { value: true }); } catch (e) {} }
 const scriptletGlobals = {};
 const uboOn = (() => {
   const defaults = {"rmnt":false,"domBypass":false};
-  let saved = {};
-  try { saved = JSON.parse(self.localStorage.getItem("twitch-adblock-ubo-opts") || "{}") || {}; } catch (e) { saved = {}; }
-  return (key) => (typeof saved[key] === "boolean" ? saved[key] : defaults[key] !== false);
+  return (key) => defaults[key] !== false;
 })();
 
 function getRandomTokenFn() {

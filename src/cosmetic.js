@@ -2,7 +2,7 @@
 // Never runs on Twitch / YouTube family / Kick (manifest exclude_matches + host check).
 // Master switch: chrome.storage.local.generalEnabled (default ON; shared with popup/DNR).
 function installCosmeticHide(api) {
-  const STYLE_ID = "twitch-adblock-cosmetic-hide";
+  const STYLE_ID = "gk-c1"; // neutral id (no product name in the page)
   // Same key as popup src/general-settings.js — do not rename without coordinating.
   const STORAGE_KEY = "generalEnabled";
   const ALLOWED_ORIGINS_KEY = "generalAllowedOrigins";
@@ -77,8 +77,31 @@ function installCosmeticHide(api) {
     styleEl.textContent = text;
   }
 
+  // The bundled fallback sheet comes from the service worker by message: it is
+  // no longer a web-accessible resource that any page could probe for (Block I).
+  // (A fetcher argument keeps the old path for unit tests.)
+  function askWorkerForCss() {
+    return new Promise((resolve, reject) => {
+      try {
+        chrome.runtime.sendMessage({ source: "twitch-adblock-general", type: "cosmeticCss" }, (r) => {
+          const err = chrome.runtime.lastError;
+          if (err || !r || typeof r.css !== "string") reject(new Error("cosmetic css unavailable"));
+          else resolve(r.css);
+        });
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
   function loadCss(fetcher) {
     if (cssText != null) return Promise.resolve(cssText);
+    if (!fetcher && !api.runtimeGetURL && typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+      return askWorkerForCss().then((text) => {
+        cssText = text;
+        return cssText;
+      });
+    }
     const getURL = (api.runtimeGetURL || (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getURL));
     const doFetch = fetcher || fetch;
     if (typeof getURL !== "function") {

@@ -23,17 +23,6 @@
   "background": {
     "service_worker": "src/general-background.js"
   },
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "src/cosmetic-hide.css"
-      ],
-      "matches": [
-        "http://*/*",
-        "https://*/*"
-      ]
-    }
-  ],
   "declarative_net_request": {
     "rule_resources": [
       {

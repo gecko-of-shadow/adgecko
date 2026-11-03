@@ -35,7 +35,7 @@ Deno.test("uBO bundle defaults: only uBO Lite's default globals (setTimeout, JSO
   assert(r.boot.every((x) => x === true), "bootstrap " + JSON.stringify(r.boot));
 });
 
-Deno.test("uBO risky groups are individually switchable via localStorage", async () => {
+Deno.test("uBO risky groups are individually switchable (generation-time defaults; tests inject them into the source)", async () => {
   const stb = await runBundle({ inboundEdit: false });
   assert(stb.boostedTimerMs > 0 && stb.boostedTimerMs < 200 && stb.globalsTouched.join() === "setTimeout", "nanoStb alone: " + JSON.stringify(stb.globalsTouched));
   const edit = await runBundle({ nanoStb: false });
@@ -46,7 +46,7 @@ Deno.test("uBO risky groups are individually switchable via localStorage", async
   assert(Array.isArray(off.player.adPlacements), "default-on groups can be switched off");
 });
 
-Deno.test("fixture runs at the same time keep their own uBO options (no shared localStorage)", async () => {
+Deno.test("fixture runs at the same time keep their own uBO options (no shared state)", async () => {
   // Deno shares --location localStorage between processes; fixtures/memory-storage.mjs
   // gives each run its own. Without it these runs read each other's options.
   const jobs = [];
@@ -73,7 +73,7 @@ Deno.test("uBO bundle carries the exact uAssets prune paths and is pinned", asyn
   assert(/^[0-9a-f]{40}$/.test(meta.uassets_commit) && js.includes(meta.uassets_commit), "uAssets commit recorded");
   assert(js.includes(meta.ublock_commit), "uBO commit recorded");
   assert(!/\bchrome\./.test(js), "no extension APIs in MAIN world");
-  assert(js.includes("if (globalThis[Symbol.for(\"twitch-adblock.ubo\")]) { return; }"), "install-once guard");
+  assert(js.includes("if (globalThis[Symbol.for(\"gk.u\")]) { return; }"), "install-once guard");
   for (const k of ["rmnt", "domBypass"]) assert(meta.off_by_default.includes(k), "off by default: " + k);
   for (const k of ["rpnt", "inboundEdit", "nanoStb"]) assert(!meta.off_by_default.includes(k), "on by default like uBO Lite: " + k);
   const iso = await Deno.readTextFile(new URL("../src/vendor/ubo-youtube-isolated.js", import.meta.url));
@@ -99,19 +99,19 @@ Deno.test("manifest: uBO layers load before youtube.js; ruleset enabled", () => 
 });
 
 Deno.test("youtube.js stands down on player ad fields when the uBO layer is present", () => {
-  assert(youtubeSource.includes('Symbol.for("twitch-adblock.ubo")'), "marker read");
+  assert(youtubeSource.includes('Symbol.for("gk.u")'), "marker read");
   const api = {};
   // Installed BEFORE the uBO marker exists (late MAIN-world injection): must still see it live.
   new Function(`${youtubeSource.slice(0, youtubeSource.indexOf("function startYoutubeAdblock"))}\nreturn installYoutubeAdblock;`)()(api);
   assert(api.UBO_LAYER === false, "no layer yet");
-  globalThis[Symbol.for("twitch-adblock.ubo")] = true;
+  globalThis[Symbol.for("gk.u")] = true;
   try {
     assert(api.UBO_LAYER === true, "flag read live");
     const v = { playabilityStatus: { status: "OK" }, streamingData: { formats: [] }, videoDetails: { videoId: "x" }, adPlacements: [{ x: 1 }] };
     const s = api.stripValue(v, "player");
     assert(!s.blocked && s.value.adPlacements, "homemade player strip disabled (uBO owns it)");
   } finally {
-    delete globalThis[Symbol.for("twitch-adblock.ubo")];
+    delete globalThis[Symbol.for("gk.u")];
   }
 });
 

@@ -1,6 +1,7 @@
 // Loads the real src/youtube.js (whole script) in-process with injected globals on a
 // virtual clock, like youtube-clock-run.mjs. Used by test/youtube-sim.test.js.
 const SRC = new URL("../../src/youtube.js", import.meta.url);
+import { withYtOpts } from "./source-opts.mjs";
 export const source = await Deno.readTextFile(SRC);
 
 export function load({ ubo = false, fetchImpl, XHR, pathname = "/watch", opts } = {}) {
@@ -35,7 +36,7 @@ export function load({ ubo = false, fetchImpl, XHR, pathname = "/watch", opts } 
   const fire = (type, detail, target = document) => { for (const fn of listeners[type] || []) fn({ type, target, detail }); };
   const location = { pathname, href: "https://www.youtube.com" + pathname, search: "" };
   const store = {};
-  if (opts) store["twitch-adblock-yt-opts"] = JSON.stringify(opts);
+  // Options go into the source (youtube.js no longer reads localStorage).
   const localStorage = { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: (k) => { delete store[k]; } };
   const perfObs = [];
   class PO { constructor(cb) { this.cb = cb; } observe() { perfObs.push(this); } disconnect() {} }
@@ -43,12 +44,12 @@ export function load({ ubo = false, fetchImpl, XHR, pathname = "/watch", opts } 
   const fetchStub = fetchImpl || (() => Promise.resolve(new Response("{}", { status: 200 })));
   const window = { fetch: fetchStub, addEventListener() {}, location, document };
   class MO { observe() {} disconnect() {} }
-  const UBO = Symbol.for("twitch-adblock.ubo");
-  const GUARD = Symbol.for("twitch-adblock.yt");
+  const UBO = Symbol.for("gk.u");
+  const GUARD = Symbol.for("gk.y");
   delete globalThis[GUARD];
   if (ubo) globalThis[UBO] = true; else delete globalThis[UBO];
   const saved = { parse: JSON.parse, toString: Function.prototype.toString };
-  const run = new Function("window", "document", "location", "localStorage", "setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "performance", "console", "XMLHttpRequest", "MutationObserver", "PerformanceObserver", "requestAnimationFrame", "requestIdleCallback", "fetch", source);
+  const run = new Function("window", "document", "location", "localStorage", "setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "performance", "console", "XMLHttpRequest", "MutationObserver", "PerformanceObserver", "requestAnimationFrame", "requestIdleCallback", "fetch", withYtOpts(source, opts));
   run(window, document, location, localStorage, setT, clearT, setI, clearI, FakeDate, performance, fakeConsole, XHR, MO, PO, (f) => setT(f, 16), (f) => setT(f, 1), fetchStub);
   const restore = () => { JSON.parse = saved.parse; Function.prototype.toString = saved.toString; delete globalThis[GUARD]; delete globalThis[UBO]; };
   async function advanceTo(t) {

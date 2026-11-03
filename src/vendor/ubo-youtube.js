@@ -5,14 +5,12 @@
 (function() {
 // >>>> start of private namespace
 ;
-if (globalThis[Symbol.for("twitch-adblock.ubo")]) { return; }
-if ("MAIN" !== "MAIN") { try { Object.defineProperty(globalThis, Symbol.for("twitch-adblock.ubo"), { value: true }); } catch (e) {} }
+if (globalThis[Symbol.for("gk.u")]) { return; }
+if ("MAIN" !== "MAIN") { try { Object.defineProperty(globalThis, Symbol.for("gk.u"), { value: true }); } catch (e) {} }
 const scriptletGlobals = {};
 const uboOn = (() => {
   const defaults = {"rmnt":false,"domBypass":false};
-  let saved = {};
-  try { saved = JSON.parse(self.localStorage.getItem("twitch-adblock-ubo-opts") || "{}") || {}; } catch (e) { saved = {}; }
-  return (key) => (typeof saved[key] === "boolean" ? saved[key] : defaults[key] !== false);
+  return (key) => defaults[key] !== false;
 })();
 
 class JSONPath {
@@ -2021,7 +2019,7 @@ if (uboOn("jsonPrune")) try {
 }
 
 // Tells src/youtube.js that uBO's filters own player-response pruning.
-try { Object.defineProperty(globalThis, Symbol.for("twitch-adblock.ubo"), { value: true }); } catch (e) {
+try { Object.defineProperty(globalThis, Symbol.for("gk.u"), { value: true }); } catch (e) {
 }
 
 // <<<< end of private namespace

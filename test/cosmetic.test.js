@@ -152,7 +152,7 @@ Deno.test("applyEnabled skips excluded hosts and respects master off", async () 
     text: () => Promise.resolve("/* test-css */"),
   }));
   assertEquals(appliedOn, true);
-  assertEquals(local.STYLE_ID, "twitch-adblock-cosmetic-hide");
+  assertEquals(local.STYLE_ID, "gk-c1");
 });
 
 Deno.test("playback files are untouched by cosmetic branch", () => {

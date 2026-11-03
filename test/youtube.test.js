@@ -223,12 +223,9 @@ Deno.test("the youtube script does not swap media or phone home", () => {
   assertEquals(manifest.declarative_net_request.rule_resources[0].id, "general");
   assertEquals(manifest.declarative_net_request.rule_resources[0].enabled, true);
   assertEquals(manifest.declarative_net_request.rule_resources[0].path, "src/rules/general-network.json");
-  assert(
-    (manifest.web_accessible_resources || []).some((entry) =>
-      (entry.resources || []).includes("src/cosmetic-hide.css")
-    ),
-    "leftover-box stylesheet is web accessible",
-  );
+  // Block I: no web-accessible resources (a page could probe them to detect the
+  // extension); the cosmetic fallback sheet comes from the worker by message.
+  assert(!manifest.web_accessible_resources || manifest.web_accessible_resources.length === 0, "no web-accessible resources");
   const youtube = manifest.content_scripts.find((script) => script.js.includes("src/youtube.js"));
   assert(youtube, "youtube has its own content script");
   assert(youtube.matches.includes("*://www.youtube.com/*"), "www.youtube.com");

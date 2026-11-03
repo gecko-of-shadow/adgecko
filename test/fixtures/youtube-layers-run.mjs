@@ -5,7 +5,7 @@ import "./memory-storage.mjs";
 globalThis.window = globalThis;
 globalThis.self = globalThis;
 localStorage.removeItem("twitch-adblock-ubo-opts");
-localStorage.removeItem("twitch-adblock-yt-opts");
+import { withYtOpts } from "./source-opts.mjs";
 class Node { appendChild(c) { return c; } }
 globalThis.Node = Node;
 function XMLHttpRequest() {}
@@ -39,13 +39,14 @@ const order = (Deno.env.get("LAYERS") || "ubo,yt").split(",");
 const out = { hookedByYoutube: [] };
 for (const name of order) {
   const before = natives();
-  (0, eval)(await Deno.readTextFile(new URL(files[name], import.meta.url)));
+  const text = await Deno.readTextFile(new URL(files[name], import.meta.url));
+  (0, eval)(name === "yt" ? withYtOpts(text, {}) : text);
   if (name === "yt") {
     const after = natives();
     out.hookedByYoutube = Object.keys(before).filter((k) => before[k] !== after[k]);
   }
 }
-const marker = Symbol.for("twitch-adblock.ubo");
+const marker = Symbol.for("gk.u");
 out.marker = globalThis[marker] === true;
 try {
   globalThis[marker] = false; // a page script trying to switch our layers back on
