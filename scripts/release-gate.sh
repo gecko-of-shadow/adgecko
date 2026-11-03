@@ -486,6 +486,34 @@ print("PASS  DNR hard-excludes Twitch + YouTube family + Kick (incl. video hosts
 # Kick read-only note: v0.2.4 beta content script is kick.com only; IVS worker is
 # same-origin; live-video.net is the Amazon IVS media host used beside Kick.
 print("PASS  Kick video host live-video.net included from beta/IVS read-only pass")
+
+# Security review M-9: every packed ruleset (not only general-network.json) is
+# a JSON array of well-formed rules with unique ids, and the enabled ones stay
+# under Chrome's guaranteed 30,000 static rules together.
+import os as _os
+ALLOWED_ACTIONS = {"block", "allow", "allowAllRequests", "upgradeScheme", "redirect", "modifyHeaders"}
+total_enabled = 0
+for res in resources:
+    rpath = _os.path.join(_os.path.dirname(sys.argv[1]), res.get("path") or "")
+    try:
+        rs = json.load(open(rpath, encoding="utf-8"))
+    except Exception as e:
+        print("FAIL  ruleset", res.get("id"), "is not readable JSON:", e); sys.exit(1)
+    if not isinstance(rs, list):
+        print("FAIL  ruleset", res.get("id"), "is not a JSON array"); sys.exit(1)
+    rids = [r.get("id") for r in rs if isinstance(r, dict)]
+    if len(rids) != len(rs) or len(set(rids)) != len(rids) or not all(isinstance(i, int) and i >= 1 for i in rids):
+        print("FAIL  ruleset", res.get("id"), "has missing, non-integer or duplicate rule ids"); sys.exit(1)
+    for r in rs:
+        if not isinstance(r.get("condition"), dict) or (r.get("action") or {}).get("type") not in ALLOWED_ACTIONS:
+            print("FAIL  ruleset", res.get("id"), "rule", r.get("id"), "has a bad action or condition"); sys.exit(1)
+        if (r.get("action") or {}).get("type") in ("redirect", "modifyHeaders"):
+            print("FAIL  ruleset", res.get("id"), "rule", r.get("id"), "redirects or edits headers (not allowed)"); sys.exit(1)
+    if res.get("enabled"):
+        total_enabled += len(rs)
+if total_enabled > 30000:
+    print("FAIL  enabled static rules", total_enabled, "> 30000"); sys.exit(1)
+print("PASS  every ruleset well formed;", total_enabled, "enabled static rules")
 PY
 
 section "2c. Curben / phishing-feed sources (owner decisions #13, #18b)"
@@ -592,7 +620,16 @@ for path, url in urls:
     if ("malware-filter" in host or "curben" in host) and url != CURBEN_URL:
         bad.append(f"{path}: {url} (only the urlhaus-filter list may come from Curben's project)")
         continue
-    if not any(bit in host for bit in allowed_host_bits):
+    # Security review M-9: whole host labels, not substrings ("evil-kick.com.example"
+    # used to pass because it contains "kick.com"). Entries ending in "." are
+    # host prefixes (yt3., youtubei.); "twitchcdn" covers twitchcdn.net/.com.
+    def host_ok(h, bit):
+        if bit.endswith("."):
+            return h.startswith(bit)
+        if "." not in bit:
+            return any(h == bit + "." + tld or h.endswith("." + bit + "." + tld) for tld in ("net", "com"))
+        return h == bit or h.endswith("." + bit)
+    if not any(host_ok(host, bit) for bit in allowed_host_bits):
         bad.append(f"{path}: {url}")
 if bad:
     print("FAIL  unexpected outbound URL hosts:")
@@ -613,11 +650,28 @@ for rel in playback:
     text = (root / rel).read_text(errors="replace")
     if re.search(r"\bchrome\.|\bbrowser\.", text):
         bad.append(rel + " uses chrome/browser")
+# Security review M-9: the page-world guards and Kick script, and the worker
+# libraries (threat, feed, lists), use no extension API at all.
+for rel in ["src/kick.js", "src/guards/clipboard.js", "src/guards/popups.js"] + sorted(
+        str(p.relative_to(root)).replace("\\", "/") for d in ("src/threat", "src/feed") for p in (root / d).glob("*.js")) + [
+        "src/general/update.js", "src/general/filter-options.js"]:
+    path = root / rel
+    if not path.is_file():
+        continue
+    code = re.sub(r"/\*.*?\*/", "", path.read_text(errors="replace"), flags=re.S)
+    code = "\n".join(l for l in code.splitlines() if not l.lstrip().startswith("//"))
+    if re.search(r"\b(chrome|browser)\.[A-Za-z_]", code):
+        bad.append(rel + " uses chrome/browser")
 allowed = {
     "src/popup.js": {"runtime", "tabs", "storage"},
     "src/general-settings.js": set(),
     "src/general-background.js": {"runtime", "storage", "action", "declarativeNetRequest", "alarms"},
     "src/cosmetic.js": {"runtime", "storage"},
+    "src/settings.js": {"runtime", "storage"},
+    "src/settings/features.js": set(),
+    "src/settings/flags.js": {"runtime", "storage"},
+    "src/twitch-directory-ads.js": {"runtime", "storage"},
+    "src/general/cosmetic-parse.js": set(),
 }
 for rel, ok_ns in allowed.items():
     path = root / rel
@@ -625,7 +679,9 @@ for rel, ok_ns in allowed.items():
         if rel == "src/popup.js":
             bad.append("missing " + rel)
         continue
-    text = path.read_text(errors="replace")
+    # Comments do not call APIs (they may name them).
+    text = re.sub(r"/\*.*?\*/", "", path.read_text(errors="replace"), flags=re.S)
+    text = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("//"))
     for match in re.finditer(r"\b(chrome|browser)\.([A-Za-z0-9_]+)", text):
         if match.group(1) != "chrome" or match.group(2) not in ok_ns:
             bad.append(f"{rel}: {match.group(0)}")
