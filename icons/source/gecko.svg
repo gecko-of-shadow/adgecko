@@ -1,78 +1,87 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" data-state="normal">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="128" height="128" data-state="normal">
   <!--
-    twitch-adblock gecko, original artwork. Source for icons/icon48*.png and icons/icon128*.png
-    (the 16px icons come from gecko-16.svg). Rebuild with: node scripts/build-icons.mjs
-    data-state on the root picks the variant: "normal", "working" (glowing eyes) or "off" (greyed out).
+    Gecko Adblock icon, concept E (picked by the owner 2026-11-02, docs/design/icon-E-gecko-snap.jpg):
+    a neon purple gecko head in line art, tongue snapping a glitchy pixel "ad".
+    Hand-written vector recreation (no embedded picture). Source for icons/icon48*.png and
+    icons/icon128*.png; the 16 px icons come from gecko-16.svg. Rebuild: node scripts/build-icons.mjs
+    data-state on the root picks the variant:
+      normal  = full purple art, pixel "ad" in the same purple
+      working = same art, pixel "ad" lit brighter (the toolbar icon while blocking is on)
+      off     = grey art, dimmer tongue, unlit pixels
   -->
   <defs>
-    <radialGradient id="bg" cx="0.38" cy="0.32" r="0.75">
-      <stop offset="0" stop-color="#2cc0bd"/>
-      <stop offset="1" stop-color="#0b8a8d"/>
-    </radialGradient>
-    <linearGradient id="shield" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0" stop-color="#3a96f2"/>
-      <stop offset="1" stop-color="#1663d1"/>
-    </linearGradient>
-    <radialGradient id="glow">
-      <stop offset="0.4" stop-color="#ffe066"/>
-      <stop offset="0.6" stop-color="#ffc23a" stop-opacity="0.7"/>
-      <stop offset="1" stop-color="#ffb02e" stop-opacity="0"/>
-    </radialGradient>
+    <filter id="glow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b"/>
+      <feComponentTransfer in="b" result="bd"><feFuncA type="linear" slope="0.55"/></feComponentTransfer>
+      <feMerge><feMergeNode in="bd"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
     <filter id="grey" color-interpolation-filters="sRGB">
-      <feColorMatrix type="matrix" values="0.25 0.55 0.1 0 0.06  0.25 0.55 0.1 0 0.06  0.25 0.55 0.1 0 0.06  0 0 0 1 0"/>
+      <feColorMatrix type="matrix" values="0.3 0.55 0.15 0 0  0.3 0.55 0.15 0 0  0.3 0.55 0.15 0 0  0 0 0 1 0"/>
     </filter>
   </defs>
   <style>
-    .ink { stroke: #11221d; stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
-    .skin { fill: #7fd327; }
-    .belly { fill: #b4ec6a; }
-    .glow, .lid { display: none; }
-    .eye-white { fill: #ffffff; }
-    svg[data-state="working"] .glow { display: inline; }
-    svg[data-state="working"] .eye-white { fill: #ffc93c; }
-    svg[data-state="off"] .lid { display: inline; }
+    .tile { fill: #1c1b21; }
+    .ln { fill: none; stroke: #9d5cff; stroke-linecap: round; stroke-linejoin: miter; stroke-miterlimit: 12; }
+    .fill { fill: #9d5cff; }
+    .iris { fill: #a96dff; }
+    .dark { fill: #1c1b21; }
+    .px { fill: #8f52f5; }
+    .px2 { fill: #a46bff; }
+    .px3 { fill: #6c3fc0; }
+    svg[data-state="working"] .px { fill: #eadbff; }
+    svg[data-state="working"] .px2 { fill: #ffffff; }
+    svg[data-state="working"] .px3 { fill: #d4b4ff; }
     svg[data-state="off"] #art { filter: url(#grey); }
+    svg[data-state="off"] .tongue { opacity: 0.55; }
+    svg[data-state="off"] .pixels { opacity: 0.35; }
+    svg[data-state="off"] #ink { filter: none; }
   </style>
   <g id="art">
-    <circle cx="64" cy="64" r="61" fill="url(#bg)" stroke="#0a6266" stroke-width="3"/>
-
-    <!-- tail: sweeps behind the shield, drawn first so everything sits on top -->
-    <path class="ink skin" d="M48 92 C 47 108, 58 119, 74 119 C 87 119, 95 112, 99 104 C 100.5 100.5, 96.5 98, 94.5 101 C 90 107.5, 84 111, 76 111 C 66 111, 60.5 103, 62 92 Z"/>
-
-    <!-- back leg -->
-    <path class="ink skin" d="M44 84 C 36 86, 32 92, 34 100 L 27 101 C 23 101, 23 107, 27 107 L 40 107 C 43 107, 43 103, 41 101 C 40 96, 42 93, 48 92 Z"/>
-
-    <!-- head and body -->
-    <path class="ink skin" d="M23 41 C 22 33, 34 22, 48 19 C 62 16, 72 24, 72 38 C 72 47, 68 52, 67 60 C 66 70, 68 80, 64 90 C 61 97, 53 99, 47 96 C 40 92, 38 84, 41 74 C 43 66, 50 61, 50 56 C 50 53, 46 52, 40 51 C 32 50, 24 48, 23 41 Z"/>
-    <path class="belly" d="M46 92 C 41 88, 41 80, 44 73 C 47 67, 52 64, 54 60 C 56 70, 55 84, 52 92 C 50 94, 48 94, 46 92 Z" opacity="0.8"/>
-    <!-- mouth and nostril -->
-    <path d="M26 44 C 32 46, 38 46, 44 45" fill="none" stroke="#11221d" stroke-width="2.6" stroke-linecap="round"/>
-    <circle cx="28" cy="36" r="1.6" fill="#11221d"/>
-
-    <!-- eye: white normally, glowing amber when blocking is working, half shut when off -->
-    <circle class="glow" cx="54" cy="33" r="22" fill="url(#glow)"/>
-    <circle class="ink eye-white" cx="54" cy="33" r="9" stroke-width="3"/>
-    <ellipse cx="55" cy="33" rx="2.4" ry="6" fill="#11221d"/>
-    <circle cx="51.5" cy="29.5" r="1.6" fill="#ffffff"/>
-    <path class="lid ink skin" stroke-width="3" d="M44.5 33 A 9.5 9.5 0 0 1 63.5 33 Z"/>
-
-
-    <!-- shield with the "no" sign -->
-    <path class="ink" fill="url(#shield)" d="M86 46 C 94 52, 102 54, 110 54 C 111 72, 108 92, 86 106 C 64 92, 61 72, 62 54 C 70 54, 78 52, 86 46 Z"/>
-    <path d="M86 52 C 92 56, 98 58, 104 58 C 104 64, 103 70, 101 75 C 95 66, 82 58, 68 58 C 74 58, 80 56, 86 52 Z" fill="#ffffff" opacity="0.18"/>
-    <g fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round">
-      <circle cx="88" cy="76" r="11"/>
-      <path d="M80.2 68.2 L 95.8 83.8"/>
+    <rect class="tile" x="40" y="36" width="944" height="948" rx="150"/>
+    <g id="ink" filter="url(#glow)">
+      <!-- head outline: snout, forehead, spiky crest down the back of the head -->
+      <path class="ln" stroke-width="30" d="M196 566 C180 552 174 530 177 506 L186 488 L243 412 L262 336 L330 304 C380 272 430 254 472 246 L556 232 L524 262 C570 262 620 268 662 276 L614 300 L734 360 L672 372 L716 430 L760 446 L702 448 L728 512 L746 556 L712 532 L692 612"/>
+      <!-- back of the neck with its small spike -->
+      <path class="fill" d="M664 654 L690 668 C664 714 620 754 556 782 C604 744 640 704 664 654 Z"/>
+      <path class="fill" d="M622 722 L664 708 L628 740 Z"/>
+      <!-- front of the neck -->
+      <path class="fill" d="M402 594 C458 606 494 644 488 688 C480 728 440 762 386 792 C424 752 456 718 462 686 C466 652 442 630 400 618 Z"/>
+      <path class="fill" d="M458 640 L486 624 L470 660 Z"/>
+      <!-- lower jaw -->
+      <path class="ln" stroke-width="28" d="M214 578 C236 604 262 622 292 624 L404 606 L486 592"/>
+      <!-- mouth and cheek -->
+      <path class="ln" stroke-width="28" d="M196 566 C230 578 270 578 312 562 C382 536 452 504 520 482"/>
+      <path class="ln" stroke-width="20" d="M486 474 C508 468 532 470 562 490"/>
+      <path class="ln" stroke-width="20" d="M642 478 C650 512 636 540 610 556"/>
+      <path class="ln" stroke-width="16" d="M238 590 C300 584 380 566 440 548"/>
+      <!-- nostril -->
+      <path class="ln" stroke-width="18" d="M228 534 L242 512 L258 500"/>
+      <!-- forehead ridges -->
+      <path class="ln" stroke-width="18" d="M322 312 L300 350"/>
+      <path class="ln" stroke-width="18" d="M280 384 L254 408"/>
+      <!-- brow / upper lid -->
+      <path class="ln" stroke-width="24" d="M342 386 L326 424 L336 440 C384 398 444 344 522 326"/>
+      <!-- eye: almond, purple iris, slit pupil, lower lid -->
+      <path class="iris" d="M410 438 C440 404 466 374 492 356 C500 386 490 412 464 428 C448 436 430 438 410 438 Z"/>
+      <path class="dark" d="M430 390 C421 404 421 418 428 432 C436 420 438 404 430 390 Z"/>
+      <path class="ln" stroke-width="16" d="M338 454 C392 454 452 448 506 400"/>
     </g>
-
-    <!-- arm gripping the shield rim -->
-    <path d="M51 64 C 52 74, 57 78, 66 77" fill="none" stroke="#11221d" stroke-width="12" stroke-linecap="round"/>
-    <path d="M51 64 C 52 74, 57 78, 66 77" fill="none" stroke="#7fd327" stroke-width="5" stroke-linecap="round"/>
-    <g class="ink skin" stroke-width="2.4">
-      <circle cx="69" cy="72.5" r="3"/>
-      <circle cx="71.5" cy="77.5" r="3"/>
-      <circle cx="69" cy="82.5" r="3"/>
+    <!-- tongue flicking out to the right, curling up into the pixel "ad" -->
+    <path class="ln tongue" stroke-width="36" filter="url(#glow)" d="M420 528 C480 514 540 536 590 580 C640 626 690 660 760 662 C812 662 846 640 846 604 C846 588 838 578 822 574"/>
+    <!-- the glitchy pixel "ad" being snapped -->
+    <g class="pixels" transform="translate(826 536) scale(1.6) translate(-818 -535)">
+      <rect class="px" x="804" y="485" width="10" height="10"/>
+      <rect class="px" x="833" y="495" width="12" height="12"/>
+      <rect class="px" x="785" y="504" width="14" height="14"/>
+      <rect class="px2" x="815" y="515" width="15" height="15"/>
+      <rect class="px" x="846" y="516" width="14" height="14"/>
+      <rect class="px" x="771" y="531" width="14" height="13"/>
+      <rect class="px2" x="799" y="529" width="16" height="16"/>
+      <rect class="px3" x="831" y="529" width="15" height="15"/>
+      <rect class="px" x="799" y="545" width="16" height="14"/>
+      <rect class="px" x="854" y="544" width="13" height="13"/>
+      <rect class="px" x="784" y="558" width="15" height="15"/>
+      <rect class="px3" x="858" y="580" width="8" height="7"/>
     </g>
-    <path d="M51 64 C 52 74, 57 78, 66 77" fill="none" stroke="#7fd327" stroke-width="5" stroke-linecap="round"/>
   </g>
 </svg>

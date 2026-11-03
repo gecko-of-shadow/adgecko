@@ -1,7 +1,10 @@
+// Icon contract for the concept E art (docs/design/README.md): a gecko on a dark
+// rounded-square tile; "working" lights the pixel "ad" at the tongue tip; "off" is grey.
 import manifest from "../manifest.json" with { type: "json" };
 import popupHtml from "../src/popup.html" with { type: "text" };
 import popupSource from "../src/popup.js" with { type: "text" };
 import backgroundSource from "../src/general-background.js" with { type: "text" };
+import { adRegion, maxSpread, readPng } from "./fixtures/png-reader.js";
 
 function assert(condition, label) {
   if (!condition) throw new Error(label || "assert failed");
@@ -10,64 +13,22 @@ function assert(condition, label) {
 const ROOT = new URL("../", import.meta.url);
 const STATES = ["", "-working", "-off"];
 const SIZES = [16, 48, 128];
+const png = (rel) => readPng(new URL(rel, ROOT), rel);
 
-// Minimal PNG reader: 8-bit RGBA, non-interlaced (what scripts/build-icons.mjs writes).
-async function readPng(rel) {
-  const bytes = await Deno.readFile(new URL(rel, ROOT));
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  assert(view.getUint32(0) === 0x89504e47, `${rel} is not a PNG`);
-  let off = 8, width = 0, height = 0, depth = 0, color = 0, interlace = 0;
-  const idat = [];
-  while (off < bytes.length) {
-    const len = view.getUint32(off);
-    const type = new TextDecoder().decode(bytes.subarray(off + 4, off + 8));
-    const data = bytes.subarray(off + 8, off + 8 + len);
-    if (type === "IHDR") {
-      const d = new DataView(data.buffer, data.byteOffset, data.byteLength);
-      width = d.getUint32(0);
-      height = d.getUint32(4);
-      depth = data[8];
-      color = data[9];
-      interlace = data[12];
-    } else if (type === "IDAT") idat.push(data);
-    off += 12 + len;
-  }
-  assert(depth === 8 && color === 6 && interlace === 0, `${rel} must be 8-bit RGBA, not interlaced`);
-  const raw = new Uint8Array(await new Response(
-    new Blob(idat).stream().pipeThrough(new DecompressionStream("deflate")),
-  ).arrayBuffer());
-  const stride = width * 4;
-  const px = new Uint8Array(height * stride);
-  for (let y = 0; y < height; y++) {
-    const filter = raw[y * (stride + 1)];
-    const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
-    for (let x = 0; x < stride; x++) {
-      const a = x >= 4 ? px[y * stride + x - 4] : 0;
-      const b = y > 0 ? px[(y - 1) * stride + x] : 0;
-      const c = x >= 4 && y > 0 ? px[(y - 1) * stride + x - 4] : 0;
-      let v = line[x];
-      if (filter === 1) v += a;
-      else if (filter === 2) v += b;
-      else if (filter === 3) v += (a + b) >> 1;
-      else if (filter === 4) {
-        const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
-        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
-      }
-      px[y * stride + x] = v & 255;
+// Brightest "light" pixel in the pixel-"ad" area: the smallest channel of the
+// lightest pixel (white / pale lilac score high, saturated purple scores low).
+function regionStats(img, size) {
+  const r = adRegion(size);
+  let sum = 0, light = 0;
+  for (let y = r.y0; y < r.y1; y++) {
+    for (let x = r.x0; x < r.x1; x++) {
+      const [R, G, B, A] = img.at(x, y);
+      if (A <= 200) continue;
+      sum += (R + G + B) / 3;
+      light = Math.max(light, Math.min(R, G, B));
     }
   }
-  return { width, height, px };
-}
-
-function* opaque({ px }) {
-  for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 200) yield [px[i], px[i + 1], px[i + 2]];
-}
-
-// Bright amber: the glowing-eye colour.
-function amberCount(img) {
-  let n = 0;
-  for (const [r, g, b] of opaque(img)) if (r > 220 && g > 150 && g < 225 && b < 110) n++;
-  return n;
+  return { sum, light };
 }
 
 Deno.test("every icon path the extension references exists at its declared size", async () => {
@@ -78,38 +39,83 @@ Deno.test("every icon path the extension references exists at its declared size"
   for (const m of (popupHtml + popupSource).matchAll(/\.\.\/(icons\/icon(\d+)[^"]*\.png)/g)) refs.set(m[1], Number(m[2]));
   assert(refs.size === 9, `expected the 9 icon files to be referenced, got ${[...refs.keys()]}`);
   for (const [path, size] of refs) {
-    const img = await readPng(path);
+    const img = await png(path);
     assert(img.width === size && img.height === size, `${path} is ${img.width}x${img.height}, want ${size}x${size}`);
   }
 });
 
-Deno.test("icons are round: corners are transparent and the centre is opaque", async () => {
+Deno.test("icons are 8-bit RGBA, not interlaced (the reader refuses anything else)", async () => {
+  for (const size of SIZES) for (const s of STATES) await png(`icons/icon${size}${s}.png`);
+});
+
+Deno.test("icons are a rounded square: corners transparent, centre, edges and near-corner opaque", async () => {
   for (const size of SIZES) {
     for (const s of STATES) {
-      const img = await readPng(`icons/icon${size}${s}.png`);
-      const alpha = (x, y) => img.px[(y * size + x) * 4 + 3];
+      const img = await png(`icons/icon${size}${s}.png`);
+      const alpha = (x, y) => img.at(x, y)[3];
       for (const [x, y] of [[0, 0], [size - 1, 0], [0, size - 1], [size - 1, size - 1]]) {
         assert(alpha(x, y) === 0, `icon${size}${s} corner ${x},${y} should be transparent`);
       }
       assert(alpha(size >> 1, size >> 1) === 255, `icon${size}${s} centre should be opaque`);
+      // A circle would leave these transparent; the tile is a rounded square.
+      const n = Math.round(size * 0.11), t = Math.round(size * 0.06);
+      for (const [x, y] of [[n, n], [size - 1 - n, n], [n, size - 1 - n], [size - 1 - n, size - 1 - n]]) {
+        assert(alpha(x, y) === 255, `icon${size}${s} near-corner ${x},${y} should be opaque (rounded square, not a circle)`);
+      }
+      for (const [x, y] of [[size >> 1, t], [t, size >> 1], [size >> 1, size - 1 - t], [size - 1 - t, size >> 1]]) {
+        assert(alpha(x, y) === 255, `icon${size}${s} edge ${x},${y} should be opaque`);
+      }
     }
   }
 });
 
-Deno.test("off icons are greyed out at every size", async () => {
+Deno.test("the tile is dark and the art is purple (normal and working)", async () => {
   for (const size of SIZES) {
-    const img = await readPng(`icons/icon${size}-off.png`);
-    let worst = 0;
-    for (const [r, g, b] of opaque(img)) worst = Math.max(worst, Math.max(r, g, b) - Math.min(r, g, b));
-    assert(worst <= 6, `icon${size}-off has colour (max channel spread ${worst})`);
+    for (const s of ["", "-working"]) {
+      const img = await png(`icons/icon${size}${s}.png`);
+      const [r, g, b] = img.at(Math.round(size * 0.2), Math.round(size * 0.85));
+      assert(Math.max(r, g, b) < 60, `icon${size}${s} tile should be near-black, got ${r},${g},${b}`);
+      let purple = 0;
+      for (let i = 0; i < img.px.length; i += 4) {
+        const [R, G, B, A] = img.px.subarray(i, i + 4);
+        if (A > 200 && B > 200 && R > 120 && R < 200 && G < 140) purple++;
+      }
+      assert(purple >= size * size * 0.04, `icon${size}${s} should be mostly purple line art (${purple} purple px)`);
+    }
   }
 });
 
-Deno.test("working icons have glowing eyes the normal icons lack", async () => {
+// Spread <= 4: the grey filter makes R = G = B; 4 allows rounding at antialiased edges.
+Deno.test("off icons are greyed out and their pixel 'ad' is not lit", async () => {
   for (const size of SIZES) {
-    const normal = amberCount(await readPng(`icons/icon${size}.png`));
-    const working = amberCount(await readPng(`icons/icon${size}-working.png`));
-    assert(normal === 0, `icon${size} should not glow (amber px ${normal})`);
-    assert(working >= 6, `icon${size}-working eye glow too small (amber px ${working})`);
+    const img = await png(`icons/icon${size}-off.png`);
+    const spread = maxSpread(img);
+    assert(spread <= 4, `icon${size}-off has colour (max channel spread ${spread})`);
+    const { light } = regionStats(img, size);
+    assert(light < 150, `icon${size}-off pixel "ad" is lit (lightest ${light})`);
   }
+});
+
+// Measured on the built art (2026-11-03): normal lightest 92-110, working 187-255;
+// working brighter by 110-297 (per 16x16-equivalent area). Old green gecko: delta 0.
+Deno.test("working icons light the pixel 'ad' the normal icons keep unlit", async () => {
+  for (const size of SIZES) {
+    const normal = regionStats(await png(`icons/icon${size}.png`), size);
+    const working = regionStats(await png(`icons/icon${size}-working.png`), size);
+    assert(normal.light < 150, `icon${size} pixel "ad" should not be lit (lightest ${normal.light})`);
+    assert(working.light >= 180, `icon${size}-working pixel "ad" not lit (lightest ${working.light})`);
+    const delta = (working.sum - normal.sum) / (size * size / 256);
+    assert(delta >= 60, `icon${size}-working should be clearly brighter in the "ad" area (delta ${delta.toFixed(0)})`);
+  }
+});
+
+Deno.test("the icon sources are hand-written vectors with the three states", async () => {
+  for (const file of ["gecko.svg", "gecko-16.svg"]) {
+    const src = await Deno.readTextFile(new URL(`icons/source/${file}`, ROOT));
+    assert(/<svg\b[^>]*\sdata-state="normal"/.test(src), `${file}: root needs data-state="normal"`);
+    assert(!/<image\b|data:image|href="[^#"]/.test(src), `${file}: no embedded or linked pictures`);
+    assert(/data-state="working"\]/.test(src) && /data-state="off"\]/.test(src), `${file}: working and off styles`);
+  }
+  const small = await Deno.readTextFile(new URL("icons/source/gecko-16.svg", ROOT));
+  assert(/shape-rendering="crispEdges"/.test(small) && !/feGaussianBlur|stroke-width/.test(small), "gecko-16.svg: whole pixels, no blur, no strokes");
 });
