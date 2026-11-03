@@ -141,11 +141,28 @@ States (the `data-state` attribute the build script sets on the SVG root):
 
 | State | Used when | Look |
 |---|---|---|
-| `normal` | blocking is on | full purple art; the pixel "ad" in the same purple |
-| `working` | the popup header and the "busy" toolbar icon | same art, the pixel "ad" lit brighter (light lilac / magenta squares) |
-| `off` | the extension or the site is switched off | grey art, dimmer tongue, no lit pixels |
+| `normal` | the extension's own icon (`manifest.json` `icons`: extensions page, store) | full purple art; the pixel "ad" in the same purple |
+| `working` | the toolbar icon and the popup header while ordinary-site blocking is on | same art, the pixel "ad" lit up (white / pale lilac squares) |
+| `off` | the toolbar icon and the popup header while ordinary-site blocking is off | grey art, dimmer tongue, unlit pixels |
+
+The working icon is the one people see most (the toolbar default), so the lit
+"ad" says "it is snapping ads right now"; grey says "not blocking".
 
 Glow: the picture's soft glow muddies tiny sizes and blurs on white toolbars,
 so the 48 / 128 px art has at most a subtle glow and the 16 px cut has none.
-See `icon-E-compare.png` and the build notes for how close the redraw is and
-what was simplified.
+
+How close it is (see `icon-E-compare.png`): at 128 px the silhouette, crest,
+eye, mouth, neck and tongue sit on the picture's own lines (checked by laying
+the SVG outline over the JPEG). Simplified on purpose:
+- lines are about 25 % thicker than in the picture and mostly even in width
+  (the picture's brush strokes taper), so 48 px is not hairline;
+- the dark shading under the brow and around the eye is left out; the iris is
+  one flat purple;
+- the pixel "ad" is about 1.6 times larger than in the picture so the lit
+  squares still show at 48 px;
+- the 16 px cut keeps only the outline with three crest spikes, a two-pixel
+  eye, the mouth and jaw lines, two neck strokes, the tongue and four "ad"
+  pixels.
+
+Rebuild the PNGs with `node scripts/build-icons.mjs` (set `CHROME_PATH` to a
+local Chrome / Chrome for Testing, or install Playwright).

@@ -2,14 +2,14 @@
 
 # 🦎 twitch-adblock
 
-<img src="docs/gecko-avatar.jpg" width="168" alt="Green gecko holding a blue shield with a white prohibition symbol">
+<img src="icons/icon128-working.png" width="128" height="128" alt="Gecko Adblock icon: a neon purple gecko head on a dark rounded square, its tongue snapping a cluster of pixel squares (an ad)">
 
 **A Chrome extension (Manifest V3, version 0.2.21) that blocks ads on Twitch, YouTube, Kick, and other websites.**<br>
 It works inside Chrome: no separate program, no account.
 
-<img src="icons/icon48-working.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is on: green gecko with an amber glowing eye"> &nbsp; <img src="icons/icon48-off.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is off: grey gecko with a half-shut eye">
+<img src="icons/icon48-working.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is on: purple gecko, the pixel ad at its tongue lit up bright"> &nbsp; <img src="icons/icon48-off.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is off: the same gecko in grey, pixel ad not lit">
 
-<sub>The toolbar gecko is green with an amber glowing eye while blocking on ordinary sites is on, and grey with a half-shut eye when it is off. Twitch, YouTube, and Kick filters keep running either way.</sub>
+<sub>The toolbar gecko is purple with the pixel "ad" at its tongue lit up while blocking on ordinary sites is on, and grey when it is off. Twitch, YouTube, and Kick filters keep running either way. How the art was chosen: <a href="docs/design/README.md">docs/design</a>.</sub>
 
 [Install](#install) · [How to use](#how-to-use) · [Privacy](#privacy) · [Troubleshooting](#troubleshooting) · [Docs](#links)
 
