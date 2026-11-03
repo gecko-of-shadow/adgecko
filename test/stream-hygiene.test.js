@@ -141,7 +141,8 @@ function kickWithCovers(covers) {
   let observerCb = null;
   const document = {
     documentElement: {},
-    querySelectorAll: (sel) => sel.includes("ima-ad-controls") ? covers.map((c) => c.controls) : [],
+    // cover.gone: its ad controls left the page.
+    querySelectorAll: (sel) => sel.includes("ima-ad-controls") ? covers.filter((c) => !c.gone).map((c) => c.controls) : [],
   };
   class MO { constructor(cb) { observerCb = cb; } observe() {} }
   const api = {};
@@ -274,6 +275,15 @@ Deno.test("kick covers: a quieted clip element reused for the live stream gets i
   video.setSource("blob:https://kick.com/0003");
   video.fire("loadstart");
   assert(!hidden(cover) && !video.muted, "reused element still hidden or muted");
+  // Already playing when its new source loads (the player called play()):
+  // left muted, since Chrome would pause it on an unmute without a gesture.
+  const playing = fakeVideo({ src: "https://ads.example/clip3.mp4", duration: 15 });
+  const cover3 = fakeCover([playing]);
+  kickWithCovers([cover3]);
+  playing.setSource("blob:https://kick.com/0007");
+  playing.paused = false;
+  playing.fire("loadstart");
+  assert(!hidden(cover3) && playing.muted && !playing.paused, "a playing reused element was unmuted or paused");
   // A clip that was muted before we touched it stays muted.
   const muted = fakeVideo({ src: "https://ads.example/clip2.mp4", duration: 15 });
   muted.muted = true;
@@ -296,18 +306,47 @@ Deno.test("kick covers: undoing our hide keeps a display value the page set afte
   assert(cover.overlay.style.getPropertyValue("display") === "block", "page's newer display overwritten: " + JSON.stringify(cover.overlay.style.props));
 });
 
-Deno.test("kick covers: the kick switch going off shows every cover we hid", () => {
+Deno.test("kick covers: the kick switch going off shows every cover we hid and gives sound back; on hides again", () => {
   const clip = fakeVideo({ src: "https://ads.example/clip.mp4", duration: 15 });
   const cover = fakeCover([clip]);
   cover.overlay.style.setProperty("display", "grid");
   const kick = kickWithCovers([cover]);
-  assert(hidden(cover), "precondition: hidden");
+  assert(hidden(cover) && clip.muted, "precondition: hidden and quieted");
   kick.sw.on = false;
-  kick.api.releaseCovers();
+  kick.api.coversSwitched(false);
   assert(cover.overlay.style.getPropertyValue("display") === "grid", "cover still hidden after the switch went off");
+  assert(!clip.muted, "paused clip still muted after the switch went off");
   clip.fire("durationchange");
   assert(!hidden(cover), "a media event re-hid a cover while the switch is off");
-  assert(/removeChromeCss\(\);\s*releaseCovers\(\);/.test(kickSource), "the switch's off branch releases the covers");
+  kick.sw.on = true;
+  kick.api.coversSwitched(true);
+  assert(hidden(cover) && clip.muted, "switch back on: the clip cover is not hidden again at once");
+  assert(/coversSwitched\(kickOn\)/.test(kickSource), "the switch's port handler calls coversSwitched");
+});
+
+Deno.test("kick covers: a hidden cover whose ad controls are gone is shown again (the stream may be in it now)", () => {
+  const clip = fakeVideo({ src: "https://ads.example/clip.mp4", duration: 15 });
+  const cover = fakeCover([clip]);
+  const kick = kickWithCovers([cover]);
+  assert(hidden(cover), "precondition: hidden");
+  cover.gone = true; // the ad ended; IMA removed its controls
+  clip.setSource("blob:https://kick.com/0008");
+  clip.fire("loadstart");
+  assert(!hidden(cover) && !clip.muted, "cover without controls still hidden or muted");
+  assert(kick, "harness");
+});
+
+Deno.test("kick covers: a hidden cover moved out of the page and back keeps its old display for the undo", () => {
+  const clip = fakeVideo({ src: "https://ads.example/clip.mp4", duration: 15 });
+  const cover = fakeCover([clip]);
+  cover.overlay.style.setProperty("display", "flex");
+  const kick = kickWithCovers([cover]);
+  cover.overlay.isConnected = false;
+  kick.pass(); // drops it from the hidden set while it is out of the page
+  cover.overlay.isConnected = true;
+  addVideo(cover, fakeVideo({ src: "blob:https://kick.com/0009" }));
+  kick.pass();
+  assert(cover.overlay.style.getPropertyValue("display") === "flex", "old display lost: " + JSON.stringify(cover.overlay.style.props));
 });
 
 Deno.test("kick covers: added ad controls trigger a pass; a video in an open shadow root is seen", () => {
@@ -328,5 +367,10 @@ Deno.test("kick covers: added ad controls trigger a pass; a video in an open sha
   const before = ran;
   cb([{ addedNodes: [{ nodeType: 1, tagName: "DIV", matches: (s) => s.includes("ima-ad-controls"), querySelector: () => null }] }]);
   assert(ran > before, "an added ad-controls node did not trigger a pass");
+  // A wrapper holding a <video> (exact "video" selector, not "video-player").
+  const has = (s, tag) => s.split(",").map((x) => x.trim()).includes(tag);
+  const mid = ran;
+  cb([{ addedNodes: [{ nodeType: 1, tagName: "DIV", matches: () => false, querySelector: (s) => has(s, "video") ? {} : null }] }]);
+  assert(ran > mid, "a wrapper holding a <video> did not trigger a pass");
   assert(kick, "harness");
 });

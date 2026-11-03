@@ -41,7 +41,8 @@ function installKickAdblock(target) {
   // settleCovers() only, never by the stylesheet: a CSS rule cannot see
   // srcObject or a video's duration, so it could hide a cover that holds the
   // live player. Elements that mark a cover (or hold one) for coverMutation:
-  const COVER_NODES = '[data-testid="ima-ad-controls"], iframe[id^="google_ads_iframe"], video-player';
+  // ("video": a player may mount its <video> inside a wrapper element.)
+  const COVER_NODES = '[data-testid="ima-ad-controls"], iframe[id^="google_ads_iframe"], video-player, video';
 
   function onKickHost(host) {
     const value = String(host || "").toLowerCase();
@@ -271,13 +272,16 @@ function installKickAdblock(target) {
     }
   }
 
-  // Play state is left to the player (a new source resets it anyway).
+  // Sound is given back only while the element is paused: Chrome pauses a
+  // playing element that is unmuted without a user gesture, and a playing
+  // element may have been muted again by the page or the visitor. Play state
+  // is left to the player (a new source resets it anyway).
   function unquiet(video) {
     try {
       if (!quieted.has(video)) return;
       const wasMuted = quieted.get(video);
       quieted.delete(video);
-      if (video.muted && !wasMuted) video.muted = false;
+      if (video.paused && video.muted && !wasMuted) video.muted = false;
     } catch (error) {
       debugLog("kick failed open", error);
     }
@@ -332,42 +336,50 @@ function installKickAdblock(target) {
     return content;
   }
 
-  // Covers hidden by settleCovers -> the inline display they had before our
-  // hide. A Map, so the kick switch can show them all again; covers that
-  // left the page are dropped on every pass.
-  const hiddenCovers = new Map();
+  // Covers hidden by settleCovers: the inline display each had before our
+  // hide (WeakMap: kept while the element lives, also if it is moved), and
+  // the set of covers hidden now (so they can be shown again; covers that
+  // left the page are dropped from it on every pass).
+  const hiddenBefore = new WeakMap();
+  const hiddenCovers = new Set();
   const isOurHide = (style) => style.getPropertyValue("display") === "none" && style.getPropertyPriority("display") === "important";
 
   function hideCover(overlay) {
     const style = overlay.style;
     // Snapshot again when the page changed display since our last write.
-    if (!hiddenCovers.has(overlay) || !isOurHide(style)) {
-      hiddenCovers.set(overlay, { value: style.getPropertyValue("display"), priority: style.getPropertyPriority("display") });
+    if (!hiddenBefore.has(overlay) || !isOurHide(style)) {
+      hiddenBefore.set(overlay, { value: style.getPropertyValue("display"), priority: style.getPropertyPriority("display") });
     }
     style.setProperty("display", "none", "important");
+    hiddenCovers.add(overlay);
   }
 
   // Undo our own hide only: a newer display value set by the page is kept.
   function showCover(overlay) {
-    const before = hiddenCovers.get(overlay);
-    if (!before) return;
     hiddenCovers.delete(overlay);
+    const before = hiddenBefore.get(overlay);
+    if (!before) return;
+    hiddenBefore.delete(overlay);
     const style = overlay.style;
     if (!isOurHide(style)) return;
     if (before.value) style.setProperty("display", before.value, before.priority);
     else style.removeProperty("display");
   }
 
+  // Show a cover again and give its paused clips their sound back.
+  function releaseCover(overlay) {
+    try {
+      showCover(overlay);
+      for (const video of videosInside(overlay)) unquiet(video);
+    } catch (error) {
+      hiddenCovers.delete(overlay);
+      debugLog("kick failed open", error);
+    }
+  }
+
   // Kick switch off: every cover we hid is shown again.
   function releaseCovers() {
-    for (const overlay of Array.from(hiddenCovers.keys())) {
-      try {
-        showCover(overlay);
-      } catch (error) {
-        hiddenCovers.delete(overlay);
-        debugLog("kick failed open", error);
-      }
-    }
+    for (const overlay of Array.from(hiddenCovers)) releaseCover(overlay);
   }
 
   // A new source or new metadata on a <video> is not a DOM mutation, so each
@@ -402,12 +414,14 @@ function installKickAdblock(target) {
       debugLog("kick failed open", error);
       return;
     }
-    for (const overlay of Array.from(hiddenCovers.keys())) {
+    for (const overlay of Array.from(hiddenCovers)) {
       if (overlay.isConnected === false) hiddenCovers.delete(overlay);
     }
+    const seen = new Set();
     for (const node of controls) {
       const overlay = postRollOverlay(node);
       if (!overlay || !overlay.style) continue;
+      seen.add(overlay);
       try {
         const content = coverContent(overlay);
         for (const video of content.videos) watchMedia(video);
@@ -431,6 +445,11 @@ function installKickAdblock(target) {
         debugLog("kick failed open", error);
       }
     }
+    // A cover we hid whose ad controls are gone: the ad is over and the cover
+    // may hold the stream now, so it is shown again.
+    for (const overlay of Array.from(hiddenCovers)) {
+      if (!seen.has(overlay)) releaseCover(overlay);
+    }
     for (const frame of frames) {
       try {
         const targetNode = bannerCollapseTarget(frame);
@@ -438,6 +457,17 @@ function installKickAdblock(target) {
       } catch (error) {
         debugLog("kick failed open", error);
       }
+    }
+  }
+
+  // The kick switch changed: off shows our covers again (and gives their
+  // paused clips sound back); on runs a pass at once.
+  function coversSwitched(on) {
+    try {
+      if (on) settleCovers(document);
+      else releaseCovers();
+    } catch (error) {
+      debugLog("kick failed open", error);
     }
   }
 
@@ -678,10 +708,10 @@ function installKickAdblock(target) {
           kickOn = f.kick;
           if (!kickOn) {
             removeChromeCss();
-            releaseCovers();
           } else {
             injectChromeCss();
           }
+          coversSwitched(kickOn);
         });
         p.start();
       };
@@ -726,6 +756,7 @@ function installKickAdblock(target) {
   target.videoKind = videoKind;
   target.coverContent = coverContent;
   target.releaseCovers = releaseCovers;
+  target.coversSwitched = coversSwitched;
   target.startKickAdblock = startKickAdblock;
   target.wrapMediaTailor = wrapMediaTailor;
 }
