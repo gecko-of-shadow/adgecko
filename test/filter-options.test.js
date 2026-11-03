@@ -66,6 +66,30 @@ Deno.test("shared table: Python packer gives identical output for every fixture 
   });
 });
 
+// Bug 2 (2026-11-03): a key with only excluded types must turn into a DNR
+// condition that also excludes main_frame, on both sides; keys round-trip.
+const canon = (o) => JSON.stringify(Object.fromEntries(Object.keys(o || {}).sort().map((k) => [k, o[k]])));
+Deno.test("shared cases: scope keys turn into the expected DNR conditions in JS and in Python", async () => {
+  const withCond = cases.lines.filter((c) => c.condition && c.expect);
+  assert(withCond.length >= 12, "condition cases present");
+  for (const c of withCond) {
+    const got = FO.keyToCondition(c.expect[1]);
+    assert(canon(got) === canon(c.condition), "js " + c.line + " -> " + canon(got) + " expected " + canon(c.condition));
+    assert(FO.conditionKey(got) === c.expect[1], "js round trip " + c.line + " -> " + FO.conditionKey(got));
+  }
+  const out = await runPython(PY_LOAD + "\nprint(json.dumps([mod.key_to_condition(c['expect'][1]) for c in cases['lines'] if c.get('condition') is not None and c['expect']]))");
+  const py = JSON.parse(out);
+  withCond.forEach((c, i) => assert(canon(py[i]) === canon(c.condition), "python " + c.line + " -> " + canon(py[i]) + " expected " + canon(c.condition)));
+});
+
+Deno.test("conditionKey: packed excluded-only rules from before and after the main_frame fix give the same key", () => {
+  assert(FO.conditionKey({ requestDomains: ["a.example"], excludedResourceTypes: ["script"] }) === "p=|t=|x=script", "old packed shape");
+  assert(FO.conditionKey({ requestDomains: ["a.example"], excludedResourceTypes: ["main_frame", "script"] }) === "p=|t=|x=script", "new packed shape");
+  assert(FO.conditionKey({ domainType: "thirdParty", excludedResourceTypes: ["main_frame", "stylesheet"] }) === "p=thirdParty|t=|x=stylesheet", "party + excluded");
+  assert(FO.conditionKey({ excludedResourceTypes: ["main_frame"] }) === "", "only main_frame excluded = whole domain");
+  assert(FO.conditionKey({ resourceTypes: ["main_frame"] }) === "p=|t=main_frame|x=", "explicit $doc key untouched");
+});
+
 Deno.test("Python reads the same option table as the runtime", async () => {
   const out = await runPython(PY_LOAD + "\nprint(json.dumps(mod.OPTION_TABLE, sort_keys=True))");
   const sorted = (v) => (Array.isArray(v) ? v.map(sorted) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted(v[k])])) : v);

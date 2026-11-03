@@ -88,6 +88,11 @@
       if (!t.length) return null;
       x = [];
     }
+    // `$~document`: navigations are never blocked unless a filter asks for
+    // them, so a negated main_frame adds nothing (keyToCondition puts it back
+    // into every excluded-only condition). With nothing else left the filter is
+    // the plain whole-domain (or party-only) block it means.
+    x = x.filter((v) => v !== "main_frame");
     t.sort();
     x.sort();
     if (!party && !t.length && !x.length) return { key: "", cancel };
@@ -95,6 +100,13 @@
   }
 
   // Key -> DNR condition fields (merged into { requestDomains }).
+  // Chrome: a rule without resourceTypes matches every type except main_frame,
+  // but a rule with only excludedResourceTypes matches every type it does not
+  // exclude, main_frame included (checked in Chrome for Testing 155,
+  // 2026-11-03: `excludedResourceTypes: ["script"]` blocked typed and clicked
+  // navigations). `$~script` means "everything but scripts" in a page, never
+  // "block opening the site", so an excluded-only key always excludes
+  // main_frame too. The key itself is unchanged (conditionKey strips it).
   function keyToCondition(key) {
     const out = {};
     if (!key) return out;
@@ -107,15 +119,22 @@
       if (k === "t") out.resourceTypes = v.split(",");
       if (k === "x") out.excludedResourceTypes = v.split(",");
     }
+    if (out.excludedResourceTypes && !out.resourceTypes) {
+      out.excludedResourceTypes = Array.from(new Set(out.excludedResourceTypes.concat("main_frame"))).sort();
+    }
     return out;
   }
 
   // DNR condition -> key (inverse of keyToCondition; requestDomains ignored).
+  // The main_frame that keyToCondition adds to an excluded-only condition is
+  // dropped again, so packed rules from before and after that change give the
+  // same key.
   function conditionKey(cond) {
     const c = cond || {};
     const p = c.domainType || "";
     const t = (c.resourceTypes || []).slice().sort();
-    const x = (c.excludedResourceTypes || []).slice().sort();
+    let x = (c.excludedResourceTypes || []).slice().sort();
+    if (!t.length) x = x.filter((v) => v !== "main_frame");
     if (!p && !t.length && !x.length) return "";
     return "p=" + p + "|t=" + t.join(",") + "|x=" + x.join(",");
   }

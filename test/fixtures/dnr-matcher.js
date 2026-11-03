@@ -7,9 +7,16 @@
 //     and its child frames, at that rule's priority.
 // Conditions: requestDomains / excludedRequestDomains and initiatorDomains /
 // excludedInitiatorDomains (each also matches subdomains), resourceTypes
-// (omitted = every type except main_frame), excludedResourceTypes,
-// domainType (site = last two labels), requestMethods (omitted = all),
-// regexFilter, simple urlFilter (||, ^, *, |).
+// (omitted = every type except main_frame, UNLESS excludedResourceTypes is
+// given: then every type it does not list, main_frame included),
+// excludedResourceTypes, domainType (site = last two labels; a request with no
+// initiator, e.g. a typed URL, counts as third-party), requestMethods (omitted
+// = all), regexFilter, simple urlFilter (||, ^, *, |).
+// The two Chrome behaviours above were checked in Chrome for Testing 155
+// (2026-11-03, throwaway probe extension, BUILD-PROGRESS "NEXT BUILD 2"):
+// `excludedResourceTypes: ["script"]` alone blocked typed and clicked
+// navigations; `domainType: "thirdParty"` + `resourceTypes: ["main_frame"]`
+// blocked a typed URL.
 const under = (h, d) => h === d || h.endsWith("." + d);
 const anyUnder = (h, list) => (list || []).some((d) => under(h, d));
 const site = (h) => String(h || "").split(".").slice(-2).join(".");
@@ -34,10 +41,11 @@ export function ruleMatches(rule, req) {
   if (c.excludedRequestDomains && anyUnder(host, c.excludedRequestDomains)) return false;
   if (c.initiatorDomains && !(req.initiator && anyUnder(req.initiator, c.initiatorDomains))) return false;
   if (c.excludedInitiatorDomains && req.initiator && anyUnder(req.initiator, c.excludedInitiatorDomains)) return false;
-  if (c.resourceTypes ? !c.resourceTypes.includes(type) : type === "main_frame") return false;
-  if (c.excludedResourceTypes && c.excludedResourceTypes.includes(type)) return false;
+  const hasExcluded = !!(c.excludedResourceTypes && c.excludedResourceTypes.length);
+  if (c.resourceTypes ? !c.resourceTypes.includes(type) : type === "main_frame" && !hasExcluded) return false;
+  if (hasExcluded && c.excludedResourceTypes.includes(type)) return false;
   if (c.domainType) {
-    const third = !!req.initiator && site(req.initiator) !== site(host);
+    const third = !req.initiator || site(req.initiator) !== site(host);
     if ((c.domainType === "thirdParty") !== third) return false;
   }
   if (c.requestMethods && !c.requestMethods.includes(req.method || "get")) return false;

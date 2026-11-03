@@ -214,12 +214,23 @@ def convert_options(opts: str):
         if not t:
             return None
         x = []
+    # `$~document` adds nothing: navigations are not blocked by default and
+    # key_to_condition excludes main_frame in every excluded-only condition.
+    # Mirrors convertOptions().
+    x = [v for v in x if v != "main_frame"]
     if not party and not t and not x:
         return ("", cancel)
     return ("p=" + party + "|t=" + ",".join(t) + "|x=" + ",".join(x), cancel)
 
 
 def key_to_condition(key: str) -> dict:
+    """Scope key -> DNR condition fields. Mirrors keyToCondition().
+
+    Chrome matches a rule that has only excludedResourceTypes against every
+    other type, main_frame included (checked in Chrome for Testing 155,
+    2026-11-03), so an excluded-only key always excludes main_frame too:
+    `$~script` must never block opening the site.
+    """
     out: dict = {}
     if not key:
         return out
@@ -233,6 +244,8 @@ def key_to_condition(key: str) -> dict:
             out["resourceTypes"] = v.split(",")
         elif k == "x":
             out["excludedResourceTypes"] = v.split(",")
+    if "excludedResourceTypes" in out and "resourceTypes" not in out:
+        out["excludedResourceTypes"] = sorted(set(out["excludedResourceTypes"]) | {"main_frame"})
     return out
 
 
