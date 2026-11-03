@@ -32,6 +32,38 @@ function installGeneralAdblockUpdate(target) {
   const THREAT_RULE_ID_END = 610000;
   const DYNAMIC_RULE_LIMIT = 30000; // Chrome's dynamic (+session) "safe" rule cap
   const FETCH_TIMEOUT_MS = 90000;
+  // Largest list body read (the biggest list today is about 4.4 MB).
+  const MAX_LIST_BYTES = 16 * 1024 * 1024;
+
+  // Response body as text, stopping (and cancelling) past `cap` bytes.
+  async function readListText(res, cap) {
+    const len = Number(res.headers && res.headers.get && res.headers.get("Content-Length"));
+    if (len > cap) throw new Error("list larger than " + cap + " bytes");
+    const reader = res.body && typeof res.body.getReader === "function" ? res.body.getReader() : null;
+    if (!reader) {
+      const whole = await res.text();
+      if (whole.length > cap) throw new Error("list larger than " + cap + " bytes");
+      return whole;
+    }
+    const decoder = new TextDecoder();
+    let total = 0;
+    let out = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > cap) {
+        try {
+          await reader.cancel();
+        } catch {
+          // already closed
+        }
+        throw new Error("list larger than " + cap + " bytes");
+      }
+      out += decoder.decode(value, { stream: true });
+    }
+    return out + decoder.decode();
+  }
 
   // Primary URL first, then mirrors of the same list (tried in order).
   const SOURCES = [
@@ -523,6 +555,7 @@ function installGeneralAdblockUpdate(target) {
         try {
           let res = null;
           let usedUrl = "";
+          let bodyText = "";
           const tried = [];
           for (const url of [src.url].concat(src.mirrors || [])) {
             const headers = {};
@@ -532,10 +565,14 @@ function installGeneralAdblockUpdate(target) {
               if (meta.lastModified) headers["If-Modified-Since"] = meta.lastModified;
             }
             const ctrl = typeof AbortController === "function" ? new AbortController() : null;
-            const timer = ctrl ? setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS) : 0;
+            const timer = ctrl ? setTimeout(() => ctrl.abort(), deps.fetchTimeoutMs || FETCH_TIMEOUT_MS) : 0;
             try {
               const r = await deps.fetch(url, { headers, cache: "no-cache", credentials: "omit", signal: ctrl ? ctrl.signal : undefined });
               if (r.ok || (r.status === 304 && headers["If-None-Match"] !== undefined) || (r.status === 304 && headers["If-Modified-Since"] !== undefined)) {
+                // Security review L-2: the body is read while the timeout still
+                // runs, and cut at MAX_LIST_BYTES, so a slow or huge answer
+                // cannot hold the refresh or fill the worker's memory.
+                if (r.ok) bodyText = await readListText(r, deps.maxListBytes || MAX_LIST_BYTES);
                 res = r;
                 usedUrl = url;
                 break;
@@ -554,7 +591,7 @@ function installGeneralAdblockUpdate(target) {
             continue;
           }
           if (!res.ok) throw new Error("HTTP " + res.status);
-          const text = await res.text();
+          const text = bodyText;
           const parsed = parseEntries(text);
           const total = parsed.domains.length + parsed.scoped.length;
           const floor = src.minDomains || 50;
@@ -879,7 +916,7 @@ function installGeneralAdblockUpdate(target) {
   }
 
   Object.assign(target, {
-    POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
+    POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, FETCH_TIMEOUT_MS, MAX_LIST_BYTES, readListText, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
     RETIRED_LISTS, dropRetiredLists, PARSER_VERSION, parseEntries, mergeScoped, staleParserLists,
     THREAT_RULE_ID_BASE, THREAT_RULE_ID_END, DYNAMIC_RULE_LIMIT, isThreatRule, isOurRule, applyThreatRules,
     MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, protectedHits, revertLists,

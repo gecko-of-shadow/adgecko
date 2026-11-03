@@ -218,3 +218,27 @@ Deno.test("offline, garbage, and empty lists keep the last good copy", async () 
     assert(st.lastErrors[name], name + " recorded " + JSON.stringify(st.lastErrors));
   }
 });
+
+// Security review L-2: the download timeout covers the body, and a body over
+// the cap is cut off; the next mirror (or the last good copy) is used.
+Deno.test("list download: a stalled body times out and an oversized body is refused; reading stops early", async () => {
+  const stalled = (signal) => new ReadableStream({
+    start(c) {
+      c.enqueue(new TextEncoder().encode("||slow.example^\n"));
+      signal.addEventListener("abort", () => c.error(new DOMException("aborted", "AbortError")));
+    },
+  });
+  const d = fakeDeps({ responses: (_url, init) => new Response(stalled(init.signal), { status: 200 }) });
+  d.fetchTimeoutMs = 30;
+  const r = await U.refresh(d, { manual: true });
+  assert(r.ok === false || (r.errors && Object.keys(r.errors).length), "stalled bodies fail: " + JSON.stringify(r).slice(0, 200));
+  const st = await d.getState();
+  assert(Object.values(st.lastErrors || {}).some((e) => /abort|timeout/i.test(String(e))), "error recorded: " + JSON.stringify(st.lastErrors).slice(0, 300));
+  let pulled = 0;
+  const huge = () => new ReadableStream({ pull(c) { pulled++; if (pulled > 100) { c.close(); return; } c.enqueue(new Uint8Array(4096).fill(97)); } });
+  assert(await U.readListText(new Response(huge()), 10000).then(() => false, (e) => /larger than 10000/.test(e.message)), "oversize refused");
+  assert(pulled < 10, "stopped early: " + pulled);
+  assert(await U.readListText(new Response("||a.example^\n||b.example^"), 1000) === "||a.example^\n||b.example^", "normal body");
+  assert(await U.readListText(new Response("x".repeat(20), { headers: { "Content-Length": "20" } }), 10).then(() => false, () => true), "Content-Length over the cap");
+  assert(U.MAX_LIST_BYTES >= 8 * 1024 * 1024, "cap leaves room for the biggest list");
+});
