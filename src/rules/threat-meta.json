@@ -1,6 +1,6 @@
 {
-  "built_at_utc": "2026-11-03T06:23:46Z",
-  "lists_packed_at_utc": "2026-11-03T00:07:22Z",
+  "built_at_utc": "2026-11-03T16:31:31Z",
+  "lists_packed_at_utc": "2026-11-03T16:31:25Z",
   "priority": 2000010,
   "resource_types": [
     "main_frame",
@@ -20,11 +20,11 @@
   "sources": {
     "urlhaus_hosts": {
       "sha256_matches_meta": true,
-      "whole_domains": 546,
+      "whole_domains": 539,
       "scoped_entries": 0,
-      "threat_hosts": 546,
+      "threat_hosts": 539,
       "popup_only_hosts": 0,
-      "added": 546
+      "added": 539
     },
     "ublock_badware": {
       "sha256_matches_meta": true,
@@ -43,7 +43,7 @@
       "added": 12082
     }
   },
-  "hosts_total": 15920,
+  "hosts_total": 15913,
   "popup_only_hosts_total": 0,
   "rule_count": 199,
   "rejected_total": 5,

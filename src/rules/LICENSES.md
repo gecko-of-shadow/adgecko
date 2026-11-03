@@ -3,7 +3,7 @@
 This directory ships **trimmed / converted** copies of public filter lists
 for Chrome MV3 `declarativeNetRequest`. Full upstream lists are not reproduced.
 
-Packed at: `2026-11-03T00:07:22Z` (UTC).
+Packed at: `2026-11-03T16:31:25Z` (UTC).
 
 ## Required credit
 
@@ -36,28 +36,28 @@ release gate and the tests.
 
 - URL: `https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt`
 - Role: `malware_threat`
-- SHA-256 of downloaded bytes: `9a72012249c3876b3e3838b8f9345cd2fff67d5cf6ff6fd4cd657e10bb378adc`
+- SHA-256 of downloaded bytes: `c9b96653c47dc63233ade9162c0b2f2197e963b294d6b8757ed5a3e050fa3874`
 - License / terms: urlhaus-filter by curbengh (malware-filter project) - repository CC0 1.0 and MIT License; URLhaus data by abuse.ch - CC0 1.0 (not endorsed by abuse.ch). The one Curben list we use (owner decision #18b): URLhaus malware data only. https://gitlab.com/malware-filter/urlhaus-filter
 
 ### easylist
 
 - URL: `https://easylist.to/easylist/easylist.txt`
 - Role: `ads`
-- SHA-256 of downloaded bytes: `a1288ac542b6881f67a21c6c973d95b4f058eb65b28fe7a07d9906ca7e877816`
+- SHA-256 of downloaded bytes: `d912796ac23f0c7853d403e6310d8c475ea09506999238ee04fe4fa09d266a87`
 - License / terms: EasyList - dual-licensed GNU GPL-3.0-or-later OR CC BY-SA 3.0-or-later. Credit: "The EasyList authors". https://easylist.to/pages/licence.html
 
 ### easyprivacy
 
 - URL: `https://easylist.to/easylist/easyprivacy.txt`
 - Role: `privacy`
-- SHA-256 of downloaded bytes: `ddfe5d6f8c15df39b705baf823f8db44dbef90a48dff1c3a62309678df954a7d`
+- SHA-256 of downloaded bytes: `37f707f0256710cfcbb182bd062c181bd4179b78ef6db7ba6d60f045291ce676`
 - License / terms: EasyPrivacy - same EasyList dual license (GPL-3.0-or-later OR CC BY-SA 3.0-or-later). Credit: "The EasyList authors".
 
 ### hagezi_pro_mini
 
 - URL: `https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt`
 - Role: `ads_trackers`
-- SHA-256 of downloaded bytes: `78c9ff1c5df4ce2ff20334393228a215beee0f7ed4874eb9c9030313a27649d0`
+- SHA-256 of downloaded bytes: `f89f7c45d08b84724bae9eb16923d600df60dbe0a76bbfe680049035336d9421`
 - License / terms: HaGeZi DNS Blocklists (Pro mini) - GPL-3.0 (repository LICENSE, checked 2026-11-02). Credit: HaGeZi. https://github.com/hagezi/dns-blocklists
 
 ### ublock_badware
@@ -78,7 +78,7 @@ release gate and the tests.
 
 - URL: `https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt`
 - Role: `ads`
-- SHA-256 of downloaded bytes: `607d881783544b06bff3d171acab04866876e97c0a587c58c48f6a17a87e4c71`
+- SHA-256 of downloaded bytes: `8c86453e82f03cf2ec26e8c406c6fa3fb8115bc8e8ce5eefba44c6bd503f9875`
 - License / terms: AdGuard Base filter (EasyList already removed) - GPL-3.0 (AdguardFilters repository LICENSE, checked 2026-11-02). Credit: AdGuard. https://github.com/AdguardTeam/AdguardFilters
 
 ## How we use them
