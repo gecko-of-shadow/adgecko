@@ -314,3 +314,29 @@ Deno.test("settings text: the allow box covers ordinary-list navigation blocks t
   assert(!/\(threat tier\)<\/h2>/.test(box), "heading no longer limited to the threat tier");
   assert(/blocked page/i.test(box) && /filter lists/i.test(box), "explains it also opens pages the filter lists block");
 });
+
+// The shipped static ruleset (BLOCK 6 repack, 2026-11-03).
+Deno.test("packed general rules: only deliberate $document rules block opening a page; exempt and stream hosts never", () => {
+  let nav = 0;
+  const navHosts = new Set();
+  for (const r of bundled) {
+    if (r.action.type !== "block") continue;
+    const c = r.condition;
+    const deliberate = (c.resourceTypes || []).includes("main_frame");
+    if (c.excludedResourceTypes && !c.resourceTypes) assert(c.excludedResourceTypes.includes("main_frame"), "excluded-only rule without main_frame: " + r.id);
+    const d = c.requestDomains[0];
+    const hits = ruleMatches(r, typed(d)) || ruleMatches(r, clicked(d));
+    assert(hits === deliberate, `rule ${r.id} ${FO.conditionKey(c)} navigation=${hits}`);
+    if (!deliberate) continue;
+    nav++;
+    for (const h of c.requestDomains) {
+      navHosts.add(h);
+      assert(!FO.isNavExempt(h) && !FO.isNavProtected(h), "navigation block on an exempt / stream host: " + h);
+    }
+  }
+  assert(nav > 0 && navHosts.size > 2500, "the $document rules are there: " + navHosts.size);
+  // bug 1 sample from the review: whole-domain AND navigation-blocked now
+  const whole = new Set(bundled.filter((r) => r.action.type === "block" && r.priority === 1 && !FO.conditionKey(r.condition)).flatMap((r) => r.condition.requestDomains));
+  for (const h of ["a-ads.com", "popcash.net", "adblock-360.com"]) assert(whole.has(h) && navHosts.has(h), "bug 1 host " + h);
+  for (const h of ["prime.rambler.ru", "eloqua.com", "exacttarget.com"]) assert(opensPage(bundled, h), "bug 2 host opens: " + h);
+});

@@ -1,9 +1,9 @@
 {
-  "packed_at_utc": "2026-11-03T16:31:25Z",
+  "packed_at_utc": "2026-11-03T20:37:57Z",
   "format": "chrome_declarativeNetRequest_rules_array",
-  "domains_total": 186987,
-  "scoped_entries_total": 4035,
-  "dnr_rules_total": 2421,
+  "domains_total": 187014,
+  "scoped_entries_total": 5481,
+  "dnr_rules_total": 2439,
   "domains_per_rule": 80,
   "max_dnr_rules_budget": 28000,
   "headroom_note": "Reserve remaining static rule quota for stream-site allow rules (DNR agent).",
@@ -32,18 +32,18 @@
     },
     "easylist": {
       "url": "https://easylist.to/easylist/easylist.txt",
-      "sha256": "d912796ac23f0c7853d403e6310d8c475ea09506999238ee04fe4fa09d266a87",
+      "sha256": "5d7ec22b96660c95c1eb40be9b3161e06b17ec65d6ba1ebfe895cdc488f48b3a",
       "role": "ads",
       "priority": 70,
-      "raw": 43554,
-      "kept": 43198,
+      "raw": 43581,
+      "kept": 43225,
       "skipped_never": 3,
       "scoped_raw": 2209,
-      "scoped_kept": 673
+      "scoped_kept": 1176
     },
     "easyprivacy": {
       "url": "https://easylist.to/easylist/easyprivacy.txt",
-      "sha256": "37f707f0256710cfcbb182bd062c181bd4179b78ef6db7ba6d60f045291ce676",
+      "sha256": "72efde722c7a45f8a04f4ced004b5ced679ea0da59633422d4cd10a8143e5171",
       "role": "privacy",
       "priority": 50,
       "raw": 43334,
@@ -72,7 +72,7 @@
       "kept": 901,
       "skipped_never": 0,
       "scoped_raw": 2204,
-      "scoped_kept": 1278
+      "scoped_kept": 2196
     },
     "dandelion_antimalware": {
       "url": "https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt",
@@ -83,18 +83,18 @@
       "kept": 11324,
       "skipped_never": 0,
       "scoped_raw": 309,
-      "scoped_kept": 282
+      "scoped_kept": 306
     },
     "adguard_base": {
       "url": "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt",
-      "sha256": "8c86453e82f03cf2ec26e8c406c6fa3fb8115bc8e8ce5eefba44c6bd503f9875",
+      "sha256": "5a61c6c7d572bf7ff2ea569051472b71fb0e37011512d9b868e642f43b0c9257",
       "role": "ads",
       "priority": 20,
       "raw": 12542,
       "kept": 10990,
       "skipped_never": 3,
       "scoped_raw": 426,
-      "scoped_kept": 206
+      "scoped_kept": 207
     }
   },
   "never_block_suffixes": [
