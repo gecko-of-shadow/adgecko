@@ -108,7 +108,7 @@ Deno.test("hooks recover fast and reload at most twice", () => {
   assert(!/\.currentTime\s*=/.test(source), "no seeking");
 });
 
-// Replays the owner's log (video IjkLmNo_QrS): progressive itag=18, mn holds opaque
+// Replays a field log (video IjkLmNo_QrS): progressive itag=18, mn holds opaque
 // ids (no sn- servers), fvip=3; rr5 does not resolve, the redirector says 403.
 const LOG_URL = "https://rr5---sn-2cde6gh9.googlevideo.com/videoplayback?expire=1&id=o-x&itag=18&mn=WXYza%2CBC0e2%2CGHijk&fvip=3&source=youtube";
 

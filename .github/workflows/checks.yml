@@ -9,16 +9,25 @@ on:
 permissions:
   contents: read
 
+# Actions are pinned to full commit SHAs (security review L-13), resolved on
+# 2026-11-02 with `git ls-remote` against each action's own repository:
+#   actions/checkout v4 / v4.4.0 -> 11d5960a326750d5838078e36cf38b85af677262
+#   denoland/setup-deno v2 / v2.0.5 -> 22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+# To update: `git ls-remote https://github.com/<owner>/<action> refs/tags/<tag>`
+# (use the `^{}` line for an annotated tag) and replace the SHA and comment.
+
 jobs:
   tests:
     name: tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Install Deno
-        uses: denoland/setup-deno@v2
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.9.8
 
@@ -30,15 +39,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Scan diff and changed files
+      # Security review M-6: a pull request must not run its own copy of the
+      # checker while the PRIVACY_PATTERNS secret is in the environment, so on
+      # pull requests the checker comes from the base commit. On pushes to main
+      # the pushed checker is the reviewed one.
+      - name: Take the checker from the base commit on pull requests
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git show "$PR_BASE_SHA:scripts/privacy-check.py" > "$RUNNER_TEMP/privacy-check.py"
+          else
+            cp scripts/privacy-check.py "$RUNNER_TEMP/privacy-check.py"
+          fi
+
+      # REQUIRE_PATTERNS: a push to main fails (not warns) when the secret is
+      # missing. Fork pull requests get no secrets; they still run the generic
+      # checks (IPs, e-mails, home paths, tokens, image metadata, commits).
+      - name: Scan diff, changed files and commits
         env:
           PRIVACY_PATTERNS: ${{ secrets.PRIVACY_PATTERNS }}
+          REQUIRE_PATTERNS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
-          PYTHONDONTWRITEBYTECODE: "1"
-          PYTHONUNBUFFERED: "1"
-        run: python3 -u scripts/privacy-check.py
+        # -I: isolated mode (no PYTHON* variables, no script-dir imports).
+        run: python3 -u -I "$RUNNER_TEMP/privacy-check.py"

@@ -1,4 +1,4 @@
-// Pinned public keys for the signed threat feed. EMPTY until the owner adds their
+// Pinned public keys for the signed threat feed. EMPTY until the owner adds the
 // production public key (see docs/feed-setup.md). While FEED_KEYS is empty the
 // feed client stays dormant.
 //

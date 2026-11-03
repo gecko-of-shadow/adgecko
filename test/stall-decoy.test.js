@@ -46,16 +46,16 @@ function sim({ opts = UBO, onTick = () => {}, steps = () => {}, preDecoy = false
   loads.pending = timers.length;
   return loads;
 }
-// the owner's 2026-10-20 log: decoys blocked at ~1.4s, last <video> progress event at 1947ms.
+// A 2026-10-20 field log: decoys blocked at ~1.4s, last <video> progress event at 1947ms.
 const ownerLog = (t, api) => { if (t === 1500) api.uboDecoy(); if (t === 1900) api.mediaEvent(1947); };
 const staticBuffer = (from, seconds) => (t, v) => { if (t >= from) v.buffered = { length: 1, end: () => seconds }; };
 // The 250ms poll fires on this sim's 100ms ticks, so polls land every 300ms.
 const POLL = 300;
-// the owner's log as base saw it in late order: no observer, so no decoy path and no wait-reply hold.
+// The field log as base saw it in late order: no observer, so no decoy path and no wait-reply hold.
 const BASE_LOG = sim({ onTick: (t, api) => { if (t === 1900) api.mediaEvent(1947); } })[0];
-// First decoy-path poll on the owner's log (last progress counted at the 2100 poll, + decoyGentleMs).
+// First decoy-path poll on the field log (last progress counted at the 2100 poll, + decoyGentleMs).
 const LOG_GATE = 2100 + SRC_OPTS.decoyGentleMs;
-// the owner's log + a wait reply every `every` ms from 3.4s.
+// The field log + a wait reply every `every` ms from 3.4s.
 const ownerLogWaits = (every) => (t, api) => { ownerLog(t, api); if (t >= 3400 && (t - 3400) % every === 0) api.waitReply(t); };
 const near = (got, want, slack = 600) => got >= want && got <= want + slack;
 
@@ -71,7 +71,7 @@ Deno.test("uBO gentle, decoys seen, nothing buffered: one reload ~7s after the l
   const dead = sim({ onTick: (t, api) => { if (t === 1500) api.uboDecoy(); } });
   assert(dead.length === 1 && dead[0] >= 7000 && dead[0] <= 7600, "dead start: ~7s, got " + dead);
   const log = sim({ onTick: ownerLog });
-  assert(log.length === 1 && log[0] >= 8947 && log[0] <= 9600 && log[0] < SRC_OPTS.stallUboMs, "the owner's log replay: ~9s (was ~17s), got " + log);
+  assert(log.length === 1 && log[0] >= 8947 && log[0] <= 9600 && log[0] < SRC_OPTS.stallUboMs, "field log replay: ~9s (was ~17s), got " + log);
 });
 
 Deno.test("uBO gentle, decoys seen but media buffered: keeps the full 15s wait", () => {
@@ -85,7 +85,7 @@ Deno.test("uBO gentle, no decoys: timing unchanged (15s gentle wait, one reload)
   const dead = sim({});
   assert(dead.length === 1 && dead[0] >= 15000 && dead[0] <= 15700, "dead start: ~15s, got " + dead);
   const log = sim({ onTick: (t, api) => { if (t === 1900) api.mediaEvent(1947); } });
-  assert(log.length === 1 && log[0] >= 16947 && log[0] <= 17600, "the owner's log without decoys: ~17s as before, got " + log);
+  assert(log.length === 1 && log[0] >= 16947 && log[0] <= 17600, "field log without decoys: ~17s as before, got " + log);
 });
 
 Deno.test("decoy evidence that arrives after 7s of quiet fires at the next poll", () => {
@@ -111,7 +111,7 @@ Deno.test("decoy path does not touch stallUnderUbo:true or stallUnderUbo:false",
 
 Deno.test("decoys + nothing buffered: a SABR wait reply holds only decoyWaitHoldMs, still before base", () => {
   // Live runs saw a 105-byte wait reply ~1.5-3.4s into most uBO starts. The full
-  // 20s hold made a stall like the owner's reload at ~21.7s (H1); the decoy hold ends at ~11.7s.
+  // 20s hold made a stall like the field log's reload at ~21.7s (H1); the decoy hold ends at ~11.7s.
   const held = sim({ opts: { ...UBO, waitAt: 1700 }, onTick: ownerLog });
   assert(held.length === 1 && near(held[0], 1700 + SRC_OPTS.decoyWaitHoldMs) && held[0] < BASE_LOG, "held to ~11.7s, base " + BASE_LOG + ": " + held);
   const later = sim({ opts: { ...UBO, waitAt: 3400 }, onTick: ownerLog });

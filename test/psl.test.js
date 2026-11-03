@@ -41,10 +41,11 @@ Deno.test("psl: public suffixes, shared platforms, big sites and their parents a
 });
 
 Deno.test("threat check: non-public IPv4 literals are refused, public ones allowed; without the PSL data nothing is accepted", () => {
-  for (const ip of ["0.0.0.0", "10.0.0.1", "127.0.0.1", "169.254.1.1", "172.16.0.1", "172.31.255.255", "192.168.1.1", "100.64.0.1", "224.0.0.1", "255.255.255.255"]) {
+  for (const ip of ["0.0.0.0", "10.0.0.1", "127.0.0.1", "169.254.1.1", "172.16.0.1", "172.31.255.255", "192.168.1.1", "100.64.0.1", "224.0.0.1", "255.255.255.255"]) { // privacy-check: allow (multicast)
     assert(PH.protectedReason(ip), "refuse " + ip);
   }
-  for (const ip of ["8.8.8.8", "172.32.0.1", "100.128.0.1", "192.0.2.10"]) assert(PH.protectedReason(ip) === null, "allow " + ip);
+  // Just outside the 172.16/12 and 100.64/10 ranges.
+  for (const ip of ["198.51.100.8", "172.32.0.1", "100.128.0.1", "192.0.2.10"]) assert(PH.protectedReason(ip) === null, "allow " + ip); // privacy-check: allow
   const saved = globalThis.GeckoPublicSuffix;
   try {
     delete globalThis.GeckoPublicSuffix;
@@ -83,16 +84,16 @@ Deno.test("allow box: same validator (platforms and suffixes refused, one site u
 });
 
 Deno.test("ordinary list tier: public suffixes and non-public IPs never become rules (parse and stored payloads); JS and the packer agree", async () => {
-  const text = ["||co.uk^", "||phish.co.uk^", "||192.168.0.1^", "||8.8.4.4^", "0.0.0.0 10.0.0.5", "0.0.0.0 ads.example", "||github.io^$third-party", "||0.0.0.1^", "duckdns.org", "||t.co^"].join("\n");
+  const text = ["||co.uk^", "||phish.co.uk^", "||192.168.0.1^", "||203.0.113.44^", "0.0.0.0 10.0.0.5", "0.0.0.0 ads.example", "||github.io^$third-party", "||0.0.0.1^", "duckdns.org", "||t.co^"].join("\n");
   const p = U.parseEntries(text);
   const all = [...p.domains, ...p.scoped.map((e) => e[0])].sort();
-  assert(JSON.stringify(all) === JSON.stringify(["8.8.4.4", "ads.example", "phish.co.uk", "t.co"]), JSON.stringify(all));
+  assert(JSON.stringify(all) === JSON.stringify(["203.0.113.44", "ads.example", "phish.co.uk", "t.co"]), JSON.stringify(all));
   // A payload stored by an older version still holding them: filtered when rules are built.
   const rules = U.buildListRules(["co.uk", "ok.example", "127.0.0.1"], [["github.io", "p=3p|t=|x="]]);
   const domains = rules.flatMap((r) => r.condition.requestDomains);
   assert(JSON.stringify(domains) === JSON.stringify(["ok.example"]), JSON.stringify(domains));
   // Packer parity on the same hosts.
-  const hosts = ["co.uk", "phish.co.uk", "192.168.0.1", "8.8.4.4", "10.0.0.5", "ads.example", "github.io", "0.0.0.1", "duckdns.org", "t.co", "a.se", "x.ck", "pisz.pl", "evil.github.io", "com.au", "blogspot.com", "s3.amazonaws.com", "amazonaws.com"];
+  const hosts = ["co.uk", "phish.co.uk", "192.168.0.1", "203.0.113.44", "10.0.0.5", "ads.example", "github.io", "0.0.0.1", "duckdns.org", "t.co", "a.se", "x.ck", "pisz.pl", "evil.github.io", "com.au", "blogspot.com", "s3.amazonaws.com", "amazonaws.com"];
   const script = [
     "import importlib.util, json, sys",
     "s = importlib.util.spec_from_file_location('p', 'scripts/pack-filter-lists.py')",

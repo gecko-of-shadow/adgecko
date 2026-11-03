@@ -4,13 +4,33 @@
 Personal-string regexes come from the PRIVACY_PATTERNS environment variable,
 one case-insensitive expression per line. If that variable is missing or
 empty, personal-string checks are skipped and the job stays green with a
-warning annotation. Obvious secrets are always checked.
+warning annotation, except when REQUIRE_PATTERNS is "true" (CI sets it on
+pushes to main): then a missing secret fails the job.
+
+Always checked, without any secret (security review M-7):
+  * obvious secrets: private-key blocks, GitHub/OpenAI/Anthropic/AWS/Google
+    API/Slack token shapes, JSON web tokens;
+  * IPv4 / IPv6 literals outside the documentation ranges (192.0.2.0/24,
+    198.51.100.0/24, 203.0.113.0/24, 2001:db8::/32), loopback, 0.0.0.0 and
+    broadcast;
+  * e-mail addresses, except noreply addresses and example/test/invalid
+    domains;
+  * home-directory paths (/home/<name>, /Users/<name>, C:/Users/<name> with
+    either slash, /c/Users/<name>) with a real-looking name;
+  * metadata in changed images (EXIF, XMP, comments, PNG text chunks other
+    than "Software");
+  * commit author/committer names and e-mails and commit messages in range.
+Data files whose job is to list hosts (src/rules/*.json) skip the IP check.
+A line that must keep such a value for a good reason can carry the marker
+"privacy-check: allow" (never honoured for secrets or personal strings).
+--all scans every tracked file (maintainers; not used by CI).
 
 Prints file paths and line numbers only. Does not print patterns, matches,
 or the environment block. Each non-empty pattern line is registered with
 ::add-mask:: before any other output.
 """
 
+import ipaddress
 import os
 import re
 import subprocess
@@ -23,7 +43,133 @@ GENERIC_SECRET_PATTERNS = [
     re.compile(r"(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}(?![A-Za-z0-9])"),
     re.compile(r"(?<![A-Za-z0-9])sk-(?:proj-|ant-|live-|test-)?[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
     re.compile(r"(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}(?![A-Za-z0-9])"),
+    re.compile(r"(?<![A-Za-z0-9_-])AIza[0-9A-Za-z_-]{35}(?![A-Za-z0-9_-])"),
+    re.compile(r"(?<![A-Za-z0-9])xox[abposr]-[A-Za-z0-9-]{10,}"),
+    re.compile(r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
 ]
+
+IP_KIND = "IP address"
+EMAIL_KIND = "e-mail address"
+HOME_KIND = "home-directory path"
+IMAGE_KIND = "image metadata"
+ALLOW_MARKER = "privacy-check: allow"
+# Paths whose content is host data by design (blocklists): no IP check.
+IP_EXEMPT_RE = re.compile(r"^src/rules/[^/]+\.json$")
+
+DOC_NETS = [ipaddress.ip_network(n) for n in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24", "2001:db8::/32")]
+# Not after "Name/" (version tokens such as "Chrome/155.0.0.0").
+IPV4_RE = re.compile(r"(?<![\w.])(?<![A-Za-z]/)(?:\d{1,3}\.){3}\d{1,3}(?![\w.])")
+IPV6_CANDIDATE_RE = re.compile(r"(?<![\w:.])[0-9A-Fa-f:]*:[0-9A-Fa-f:]*:[0-9A-Fa-f:.]*(?![\w:])")
+EMAIL_RE = re.compile(r"(?<![\w.%+-])[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})(?![\w.-])")
+HOME_RE = re.compile(r"(?:(?<![\w])/home/|(?<![\w])/Users/|(?<![\w])[A-Za-z]:[\\/]+Users[\\/]+|(?<![\w])/[a-zA-Z]/Users/)([^\s/\\'\"`<>)\]|,;:]+)")
+PLACEHOLDER_NAMES = {
+    "user", "username", "name", "you", "me", "runner", "example", "public", "default", "shared", "all users",
+    "someone", "your-name", "yourname", "your_name", "<user>", "<you>", "<name>", "%username%", "$user", "${user}", "*", "...",
+}
+
+
+def bad_ip(text):
+    """True if text holds a literal public (globally routable) IP address.
+    Documentation, loopback, private, link-local and other reserved ranges
+    are not someone's address on the internet and are not reported."""
+    for m in IPV4_RE.finditer(text):
+        try:
+            ip = ipaddress.ip_address(m.group(0))
+        except ValueError:
+            continue
+        if ip.is_global and not any(ip in n for n in DOC_NETS):
+            return True
+    for m in IPV6_CANDIDATE_RE.finditer(text):
+        cand = m.group(0)
+        # Real addresses have at least three groups; "::add-mask::" or "a::b"
+        # in code would otherwise parse as addresses.
+        if len([g for g in cand.split(":") if g]) < 3:
+            continue
+        try:
+            ip = ipaddress.IPv6Address(cand)
+        except ValueError:
+            continue
+        if ip.is_global and not any(ip in n for n in DOC_NETS):
+            return True
+    return False
+
+
+def bad_email(text):
+    for m in EMAIL_RE.finditer(text):
+        address = m.group(0).lower()
+        local, domain = address.rsplit("@", 1)
+        if local in ("noreply", "no-reply", "git") or domain.endswith("users.noreply.github.com"):
+            continue
+        if domain in ("example.com", "example.org", "example.net") or domain.endswith((".example", ".test", ".invalid", ".localhost", ".local")):
+            continue
+        return True
+    return False
+
+
+def bad_home(text):
+    for m in HOME_RE.finditer(text):
+        name = m.group(1).strip().lower()
+        if not name or set(name) <= {"."} or name in PLACEHOLDER_NAMES or name.startswith(("<", "$", "%", "{")):
+            continue
+        return True
+    return False
+
+
+def generic_kinds(line, path=None):
+    """Checks that need no secret. path=None for commit metadata."""
+    if ALLOW_MARKER in line:
+        return []
+    found = []
+    if not (path and IP_EXEMPT_RE.match(path)) and bad_ip(line):
+        found.append(IP_KIND)
+    if bad_email(line):
+        found.append(EMAIL_KIND)
+    if bad_home(line):
+        found.append(HOME_KIND)
+    return found
+
+
+IMAGE_EXT = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".tif", ".tiff")
+
+
+def image_metadata(data, path):
+    """True when an image carries metadata beyond a PNG "Software" note."""
+    low = path.lower()
+    if low.endswith(".png") and data.startswith(b"\x89PNG\r\n\x1a\n"):
+        i = 8
+        while i + 8 <= len(data):
+            length = int.from_bytes(data[i:i + 4], "big")
+            ctype = data[i + 4:i + 8]
+            body = data[i + 8:i + 8 + length]
+            if ctype == b"eXIf":
+                return True
+            if ctype in (b"tEXt", b"zTXt", b"iTXt"):
+                key = body.split(b"\0", 1)[0]
+                if key != b"Software":
+                    return True
+            if ctype == b"IEND":
+                break
+            i += 12 + length
+        return False
+    if low.endswith((".jpg", ".jpeg")) and data.startswith(b"\xff\xd8"):
+        i = 2
+        while i + 4 <= len(data) and data[i] == 0xFF:
+            marker = data[i + 1]
+            if marker in (0xD9, 0xDA):
+                break
+            length = int.from_bytes(data[i + 2:i + 4], "big")
+            body = data[i + 4:i + 2 + length]
+            if marker == 0xFE:
+                return True
+            if marker == 0xE1 and (body.startswith(b"Exif\0") or body.startswith(b"http://ns.adobe.com/xap/")):
+                return True
+            i += 2 + length
+        return False
+    if low.endswith(".webp") and data[:4] == b"RIFF":
+        return b"EXIF" in data[12:] or b"XMP " in data[12:]
+    if low.endswith((".tif", ".tiff")):
+        return True
+    return False
 
 PERSONAL_KIND = "forbidden personal string"
 SECRET_KIND = "obvious secret"
@@ -120,6 +266,10 @@ def publish_masks(raw):
 
 def load_personal_patterns(raw):
     if raw.strip() == "":
+        if os.environ.get("REQUIRE_PATTERNS", "").lower() == "true":
+            emit("error", "PRIVACY_PATTERNS secret is not set (required on pushes to main)")
+            write_summary("PRIVACY_PATTERNS secret is not set. It is required on pushes to main.\n")
+            return None
         emit("warning", "PRIVACY_PATTERNS secret is not set")
         write_summary("PRIVACY_PATTERNS secret is not set. Personal-string checks were skipped.\n")
         return []
@@ -153,12 +303,13 @@ def write_summary(text):
         handle.write(text)
 
 
-def kinds_for(line, personal):
+def kinds_for(line, personal, path=None):
     found = []
     if any(pattern.search(line) for pattern in personal):
         found.append(PERSONAL_KIND)
     if any(pattern.search(line) for pattern in GENERIC_SECRET_PATTERNS):
         found.append(SECRET_KIND)
+    found.extend(generic_kinds(line, path))
     return found
 
 
@@ -184,11 +335,15 @@ def scan_file(path, personal, findings):
     except OSError:
         emit("error", "Could not read a changed file")
         return False
+    if path.lower().endswith(IMAGE_EXT):
+        if image_metadata(data, path) and not remember(findings, path, 1, [IMAGE_KIND]):
+            return False
+        return True
     if b"\0" in data:
         return True
     text = data.decode("utf-8", errors="replace")
     for lineno, line in enumerate(text.splitlines(), start=1):
-        kinds = kinds_for(line, personal)
+        kinds = kinds_for(line, personal, path)
         if kinds and not remember(findings, path, lineno, kinds):
             emit("error", "A changed file matched but its path could not be reported")
             return False
@@ -254,12 +409,38 @@ def scan_diff(diff, personal, findings):
             new_line += 1
         else:
             continue
-        kinds = kinds_for(text, personal)
+        kinds = kinds_for(text, personal, path)
         if not kinds:
             continue
         if not remember(findings, path, max(line, 1), kinds):
             emit("error", "A diff line matched but its file path could not be determined")
             return False
+    return True
+
+
+def scan_commits(base, head, personal, findings):
+    """Author/committer names and e-mails and the messages of commits in range."""
+    spec = head if base is None else base + ".." + head
+    args = ["log", "--format=%h%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x1e", spec]
+    if base is None:
+        args.insert(1, "-1")
+    out = git_text(args)
+    if out is None:
+        emit("error", "Could not read commit metadata")
+        return False
+    for record in out.split("\x1e"):
+        record = record.strip("\n")
+        if not record:
+            continue
+        parts = record.split("\x00")
+        if len(parts) < 6:
+            continue
+        sha = parts[0]
+        lines = parts[1:5] + parts[5].splitlines()
+        for index, text in enumerate(lines, start=1):
+            kinds = kinds_for(text, personal)
+            if kinds and not remember(findings, "commit " + sha, index, kinds):
+                return False
     return True
 
 
@@ -291,12 +472,21 @@ def main():
         return 1
 
     findings = set()
+    if "--all" in sys.argv[1:]:
+        tracked = git_text(["ls-files", "-z"])
+        if tracked is None:
+            emit("error", "Could not list tracked files")
+            return 1
+        files = [("M", f) for f in tracked.split("\0") if f]
+        diff = ""
     for status, path in files:
         if status == "D" or not in_repo(path) or os.path.islink(path) or not os.path.isfile(path):
             continue
         if not scan_file(path, personal, findings):
             return 1
     if not scan_diff(diff, personal, findings):
+        return 1
+    if "--all" not in sys.argv[1:] and not scan_commits(base, head, personal, findings):
         return 1
 
     if findings:

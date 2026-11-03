@@ -1070,7 +1070,7 @@ function startYoutubeAdblock() {
 
   const api = {};
   installYoutubeAdblock(api);
-  // SABR backoff zeroing stays off: on the owner's PC (2026-10-16, 5e24b4f) it made
+  // SABR backoff zeroing stays off: on a test PC (2026-10-16, 5e24b4f) it made
   // the player busy-poll videoplayback and starts got slower (5-9s). The wait
   // is server-side; see the get_watch adPlacements rule in the uBO layer.
   // Opt in with {"umpBackoff":true}.
@@ -1093,7 +1093,7 @@ function startYoutubeAdblock() {
   cloaked.set(toStringProxy, baseToString);
   // uBO layer present: it owns pruning, decoys (DNR) and the 105-byte wait
   // reload (rpnt). Our fetch/XHR/JSON.parse hooks on top of it cost ~2-3s per
-  // start (the owner's PC 2026-10-16: uBO-only 0.8-2.2s vs 3.7-4.5s with hooks), so
+  // start (test PC 2026-10-16: uBO-only 0.8-2.2s vs 3.7-4.5s with hooks), so
   // they stay out unless {"hooksUnderUbo":true}.
   const HOOKS = !uboLayerPresent() || OPTS.hooksUnderUbo === true;
   let hooksStoodDown = false;
@@ -1494,7 +1494,7 @@ function startYoutubeAdblock() {
 
   function armStall(minMs, why) {
     // uBO layer: rpnt's own reload handles the wait; our 10s reload made full
-    // loads ~10-11s vs uBO-only 5.3s (the owner's PC, 8b4ba14). {"stallUnderUbo":true} re-enables.
+    // loads ~10-11s vs uBO-only 5.3s (test PC, 8b4ba14). {"stallUnderUbo":true} re-enables.
     // "gentle" (default): one reload, only after OPTS.stallGentleMs with zero
     // progress, never while a SABR wait reply (104/105-byte UMP) is recent.
     if (api.UBO_LAYER && OPTS.stallUnderUbo !== true && (OPTS.stallUnderUbo !== "gentle" || stalledReloaded >= 1)) return;
