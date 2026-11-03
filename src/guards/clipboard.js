@@ -213,17 +213,27 @@ function clipboardGuardNotice(doc) {
 
 if (typeof window !== "undefined" && typeof document !== "undefined" && typeof navigator !== "undefined") {
   try {
-    const FLAG_CHANNEL = "gk-f1";
+    // Switch "guardClipboard" over the private flag port (src/settings/flags.js;
+    // never window messages, which the page can forge). On until told otherwise.
     let on = true;
-    window.addEventListener("message", (event) => {
-      const data = event && event.source === window && event.data;
-      const next = data && data[FLAG_CHANNEL];
-      if (next && typeof next === "object" && typeof next.guardClipboard === "boolean") on = next.guardClipboard;
-    });
+    const PORT_EVENT = "gk-p1";
+    let port = null;
+    const take = (event) => {
+      const p = event && event.ports && event.ports[0];
+      if (port || !p) return;
+      port = p;
+      window.removeEventListener(PORT_EVENT, take, true);
+      p.addEventListener("message", (m) => {
+        const f = m && m.data && m.data.f;
+        if (f && typeof f === "object" && typeof f.guardClipboard === "boolean") on = f.guardClipboard;
+      });
+      p.start();
+    };
+    window.addEventListener(PORT_EVENT, take, true);
+    window.dispatchEvent(new Event("gk-r1"));
     const api = {};
     installClipboardGuard(api);
     api.install({ window, document, navigator, location, notify: clipboardGuardNotice(document), flagOn: () => on });
-    window.postMessage({ [FLAG_CHANNEL]: "?" }, location.origin);
   } catch {
     // guard not installed; the page works as before
   }

@@ -96,17 +96,27 @@ function installPopupGuard(target) {
 
 if (typeof window !== "undefined" && typeof document !== "undefined") {
   try {
-    const FLAG_CHANNEL = "gk-f1";
-    let on = false; // default off until the extension says otherwise
-    window.addEventListener("message", (event) => {
-      const data = event && event.source === window && event.data;
-      const next = data && data[FLAG_CHANNEL];
-      if (next && typeof next === "object" && typeof next.guardPopups === "boolean") on = next.guardPopups;
-    });
+    // Switch "guardPopups" over the private flag port (src/settings/flags.js;
+    // never window messages, which the page can forge). Off until told otherwise.
+    let on = false;
+    const PORT_EVENT = "gk-p1";
+    let port = null;
+    const take = (event) => {
+      const p = event && event.ports && event.ports[0];
+      if (port || !p) return;
+      port = p;
+      window.removeEventListener(PORT_EVENT, take, true);
+      p.addEventListener("message", (m) => {
+        const f = m && m.data && m.data.f;
+        if (f && typeof f === "object" && typeof f.guardPopups === "boolean") on = f.guardPopups;
+      });
+      p.start();
+    };
+    window.addEventListener(PORT_EVENT, take, true);
+    window.dispatchEvent(new Event("gk-r1"));
     const api = {};
     installPopupGuard(api);
     api.install({ window, document, navigator: typeof navigator !== "undefined" ? navigator : null, location, flagOn: () => on });
-    window.postMessage({ [FLAG_CHANNEL]: "?" }, location.origin);
   } catch {
     // guard not installed
   }

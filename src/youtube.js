@@ -1025,23 +1025,33 @@ function startYoutubeAdblock() {
   // Feature switches from the extension (src/settings/flags.js, ISOLATED world).
   // Read at use time; a feature stays ON until a flag says otherwise (fail-open).
   // Never unpatches anything: an "off" flag only stops the next action.
-  const FLAG_CHANNEL = "gk-f1";
+  // Flags come only over the private port flags.js hands over at
+  // document_start, never as window messages (the page can forge those).
   const FLAGS = {};
   function flagOn(id) {
     return FLAGS[id] !== false;
   }
   try {
-    window.addEventListener("message", (event) => {
-      const data = event && event.source === window && event.data;
-      const next = data && data[FLAG_CHANNEL];
-      if (!next || typeof next !== "object") return;
-      for (const key of ["youtubeWatchdog", "youtubeCosmetic"]) if (typeof next[key] === "boolean") FLAGS[key] = next[key];
-      if (FLAGS.youtubeCosmetic === false && homeCssEl) {
-        try { homeCssEl.remove(); } catch { /* already gone */ }
-        homeCssEl = null;
-      }
-    });
-    window.postMessage({ [FLAG_CHANNEL]: "?" }, location.origin);
+    const PORT_EVENT = "gk-p1";
+    let port = null;
+    const take = (event) => {
+      const p = event && event.ports && event.ports[0];
+      if (port || !p) return;
+      port = p;
+      window.removeEventListener(PORT_EVENT, take, true);
+      p.addEventListener("message", (m) => {
+        const next = m && m.data && m.data.f;
+        if (!next || typeof next !== "object") return;
+        for (const key of ["youtubeWatchdog", "youtubeCosmetic"]) if (typeof next[key] === "boolean") FLAGS[key] = next[key];
+        if (FLAGS.youtubeCosmetic === false && homeCssEl) {
+          try { homeCssEl.remove(); } catch { /* already gone */ }
+          homeCssEl = null;
+        }
+      });
+      p.start();
+    };
+    window.addEventListener(PORT_EVENT, take, true);
+    window.dispatchEvent(new Event("gk-r1"));
   } catch {
     // no flags: everything stays on
   }

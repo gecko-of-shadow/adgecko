@@ -173,36 +173,93 @@ Deno.test("safety net: no switch state removes a stream site's allows or blocks 
   }
 });
 
-Deno.test("flags.js hands the page-world scripts their switches (fail-open until it does)", async () => {
-  const src = read("settings/flags.js");
-  const posted = [];
-  const listeners = {};
-  const store = { settings: { v: 1, enabled: true, features: { youtubeWatchdog: false } }, siteOverrides: { "www.youtube.com": { enabled: false } } };
-  const changed = [];
-  const chrome = {
-    runtime: { lastError: undefined, onMessage: { addListener(f) { listeners.msg = f; } } },
-    storage: { local: { get(_k, cb) { cb(structuredClone(store)); } }, onChanged: { addListener(f) { changed.push(f); } } },
-  };
-  const window = { postMessage: (m, o) => posted.push([m, o]), addEventListener: (t, f) => { listeners[t] = f; } };
-  window.top = window;
-  new Function("chrome", "window", "location", "globalThis", src)(chrome, window, { hostname: "www.youtube.com", origin: "https://www.youtube.com" }, globalThis);
-  // Block J added the two page-guard flags. The site switch for www.youtube.com
-  // is off, so every per-site helper is off there (youtubeCosmetic included:
-  // the stream-site helpers became per-site switchable so the popup's site
-  // switch, one of the D-3 off switches, really turns them off).
-  assert(posted.length === 1 && eq(posted[0][0], { "gk-f1": { youtubeWatchdog: false, youtubeCosmetic: false, kick: false, guardClipboard: false, guardPopups: false } }) && posted[0][1] === "https://www.youtube.com", JSON.stringify(posted));
-  listeners.message({ source: window, data: { "gk-f1": "?" } });
-  assert(posted.length === 2, "answers a request");
-  let origin = null;
-  listeners.msg({ type: "pageOrigin" }, {}, (r) => { origin = r.origin; });
-  assert(origin === "https://www.youtube.com", "answers the popup on stream sites");
-  for (const f of ["youtube.js", "kick.js"]) {
-    const s = read(f);
-    assert(s.includes('const FLAG_CHANNEL = "gk-f1"'), f + " listens for flags");
-  }
-  const yt = read("youtube.js");
-  assert(/FLAGS\[id\] !== false/.test(yt), "youtube.js fails open");
-  for (const v of ["src/vendor/video-swap-new.user.js", "src/vendor/ubo-youtube.js", "src/vendor/ubo-youtube-isolated.js"]) {
-    assert(!Deno.readTextFileSync(new URL("../" + v, import.meta.url)).includes("gk-f1"), "no flag checks in vendored " + v);
-  }
+// Security review M-1: flags travel over a private MessagePort that flags.js
+// hands each page-world script at document_start (synchronous events), never
+// over window.postMessage. Real EventTarget / MessageChannel / MessageEvent.
+Deno.test({
+  name: "flag port: flags.js hands each page-world script its own private port; no window channel, no late probe",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const src = read("settings/flags.js");
+    const listeners = {};
+    const store = { settings: { v: 1, enabled: true, features: { youtubeWatchdog: false } }, siteOverrides: { "www.youtube.com": { enabled: false } } };
+    const changed = [];
+    const chrome = {
+      runtime: { lastError: undefined, onMessage: { addListener(f) { listeners.msg = f; } } },
+      storage: { local: { get(_k, cb) { cb(structuredClone(store)); } }, onChanged: { addListener(f) { changed.push(f); } } },
+    };
+    const win = new EventTarget();
+    win.top = win;
+    const posted = [];
+    win.postMessage = (...a) => posted.push(a);
+    const tick = () => new Promise((r) => setTimeout(r, 5));
+    const open = [];
+    const watch = (port, into) => { open.push(port); port.onmessage = (m) => into.push(m.data); };
+
+    // A page-world script injected BEFORE flags.js (youtube.js / kick.js come
+    // first in the manifest): it listens, flags.js hands it a port at once.
+    let earlyPort = null;
+    win.addEventListener("gk-p1", (e) => { if (!earlyPort) earlyPort = e.ports[0]; }, true);
+    new Function("chrome", "window", "location", "globalThis", src)(chrome, win, { hostname: "www.youtube.com", origin: "https://www.youtube.com" }, globalThis);
+    assert(earlyPort instanceof MessagePort, "early script got a port synchronously");
+    // A page-world script injected AFTER flags.js (the guards) asks synchronously.
+    let latePort = null;
+    win.addEventListener("gk-p1", (e) => { if (!latePort) latePort = e.ports[0]; }, true);
+    win.dispatchEvent(new Event("gk-r1"));
+    assert(latePort instanceof MessagePort && latePort !== earlyPort, "late script got its own port synchronously");
+    const early = [], late = [];
+    watch(earlyPort, early);
+    watch(latePort, late);
+    await tick();
+    // Site switch for www.youtube.com is off: every per-site helper is off there.
+    const off = { f: { youtubeWatchdog: false, youtubeCosmetic: false, kick: false, guardClipboard: false, guardPopups: false } };
+    assert(eq(early[0], off) && eq(late[0], off), JSON.stringify([early, late]));
+
+    // After document_start (first task) a page script asking gets no port.
+    let pagePort = null;
+    win.addEventListener("gk-p1", (e) => { pagePort = e.ports[0]; });
+    win.dispatchEvent(new Event("gk-r1"));
+    assert(pagePort === null, "late request answered: the page could read the settings");
+    // The old window channel is gone: a "?" probe or forged flags do nothing.
+    win.dispatchEvent(new MessageEvent("message", { data: { "gk-f1": "?" }, source: win }));
+    win.dispatchEvent(new MessageEvent("message", { data: { "gk-f1": { guardClipboard: false } }, source: win }));
+    assert(posted.length === 0, "flags.js never uses window.postMessage");
+
+    // Live update over the same ports.
+    store.siteOverrides = {};
+    changed[0]({ siteOverrides: { newValue: {} } }, "local");
+    await tick();
+    const on = { f: { youtubeWatchdog: false, youtubeCosmetic: true, kick: true, guardClipboard: true, guardPopups: false } };
+    assert(eq(early.at(-1), on) && eq(late.at(-1), on), JSON.stringify([early, late]));
+
+    let origin = null;
+    listeners.msg({ type: "pageOrigin" }, {}, (r) => { origin = r.origin; });
+    assert(origin === "https://www.youtube.com", "answers the popup on stream sites");
+    for (const p of open) p.close();
+
+    // Every page-world consumer takes the port and never listens to window
+    // messages or posts the old probe.
+    for (const f of ["youtube.js", "kick.js", "guards/clipboard.js", "guards/popups.js"]) {
+      const s = read(f);
+      assert(s.includes('const PORT_EVENT = "gk-p1"') && s.includes('new Event("gk-r1")'), f + " takes the flag port");
+      assert(/window\.removeEventListener\(PORT_EVENT, take, true\)/.test(s), f + " stops listening after the first port");
+      assert(!s.includes("gk-f1") && !/window\.postMessage\(/.test(s), f + " still uses the window channel");
+    }
+    assert(!/window\.postMessage\(|addEventListener\("message"/.test(src), "flags.js window channel");
+    const yt = read("youtube.js");
+    assert(/FLAGS\[id\] !== false/.test(yt), "youtube.js fails open");
+    for (const v of ["src/vendor/video-swap-new.user.js", "src/vendor/ubo-youtube.js", "src/vendor/ubo-youtube-isolated.js"]) {
+      const t = Deno.readTextFileSync(new URL("../" + v, import.meta.url));
+      assert(!t.includes("gk-p1") && !t.includes("gk-f1"), "no flag checks in vendored " + v);
+    }
+    // Every frame a page-world consumer runs in also gets flags.js.
+    const flagFrames = manifest.content_scripts.filter((c) => c.js.includes("src/settings/flags.js"));
+    for (const cs of manifest.content_scripts.filter((c) => c.world === "MAIN" && c.js.some((j) => !j.startsWith("src/vendor/")))) {
+      const covering = flagFrames.filter((fl) => cs.matches.every((m) => fl.matches.includes(m)));
+      assert(covering.length && covering.every((fl) => !cs.all_frames || fl.all_frames) &&
+        covering.every((fl) => JSON.stringify((fl.exclude_matches || []).slice().sort()) === JSON.stringify((cs.exclude_matches || []).slice().sort())),
+        "flags.js does not run in every frame of " + cs.js.join());
+    }
+  },
 });

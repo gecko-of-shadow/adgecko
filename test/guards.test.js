@@ -189,3 +189,47 @@ Deno.test("threat lists' $popup-only hosts become main_frame-only threat rules (
   // Plain lists never see them (the ordinary tier drops $popup-only filters).
   assert(!parsed.domains.includes("popfraud.example") && !parsed.scoped.some(([d]) => d === "popfraud.example"), "not an ordinary block");
 });
+
+// Security review M-1: the page cannot switch the clipboard guard off. Real
+// flags.js (ISOLATED) and clipboard.js (MAIN) share one fake window; flags
+// come over the private port only, a forged window message changes nothing.
+import flagsSource from "../src/settings/flags.js" with { type: "text" };
+Deno.test({
+  name: "flag port: the clipboard guard takes its switch only from flags.js, not from forged window messages",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const DANGER = DANGEROUS[0];
+    const store = { settings: { v: 1, enabled: true, features: {} }, siteOverrides: {} };
+    const changed = [];
+    const chrome = {
+      runtime: { lastError: undefined, onMessage: { addListener() {} } },
+      storage: { local: { get(_k, cb) { cb(structuredClone(store)); } }, onChanged: { addListener(f) { changed.push(f); } } },
+    };
+    const win = new EventTarget();
+    win.top = win;
+    win.getSelection = () => "";
+    const written = [];
+    class Clip { writeText(t) { written.push(t); return Promise.resolve(); } }
+    const nav = { clipboard: new Clip() };
+    const doc = { addEventListener() {}, createElement() { throw new Error("no DOM"); } };
+    const loc = { hostname: "news.example", origin: "https://news.example" };
+    const tick = () => new Promise((r) => setTimeout(r, 5));
+    // Manifest order on ordinary sites: flags.js (ISOLATED) first, then the guards.
+    new Function("chrome", "window", "location", "globalThis", flagsSource)(chrome, win, loc, globalThis);
+    new Function("window", "document", "navigator", "location", clipboardSource)(win, doc, nav, loc);
+    const tryWrite = async (t) => { try { await nav.clipboard.writeText(t); return true; } catch { return false; } };
+    await tick();
+    assert(!(await tryWrite(DANGER)) && written.length === 0, "guard on by default");
+    assert(await tryWrite("npm install typescript"), "ordinary text still copies");
+    // A page forges the old flag message: ignored.
+    win.dispatchEvent(new MessageEvent("message", { data: { "gk-f1": { guardClipboard: false } }, source: win }));
+    await tick();
+    assert(!(await tryWrite(DANGER)), "forged window message switched the guard off");
+    // The user switches the guard off for this site: arrives over the port.
+    store.siteOverrides = { "news.example": { features: { guardClipboard: false } } };
+    changed[0]({ siteOverrides: { newValue: store.siteOverrides } }, "local");
+    await tick();
+    assert(await tryWrite(DANGER), "user switch did not reach the guard");
+  },
+});

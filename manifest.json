@@ -181,8 +181,6 @@
         "*://www.youtube.com/*",
         "*://m.youtube.com/*",
         "*://youtube.com/*",
-        "*://kick.com/*",
-        "*://*.kick.com/*",
         "*://twitch.tv/*",
         "*://*.twitch.tv/*"
       ],
@@ -192,6 +190,18 @@
       ],
       "run_at": "document_start",
       "all_frames": false
+    },
+    {
+      "matches": [
+        "*://kick.com/*",
+        "*://*.kick.com/*"
+      ],
+      "js": [
+        "src/settings/features.js",
+        "src/settings/flags.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
     },
     {
       "matches": [

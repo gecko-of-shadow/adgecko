@@ -458,26 +458,36 @@ function installKickAdblock(target) {
     // Feature switch "kick" (src/settings/flags.js, ISOLATED world): read at
     // use time, ON until a flag says otherwise (fail-open). Off stops the next
     // skip command and drops the chrome CSS; hooks stay installed (inert).
-    const FLAG_CHANNEL = "gk-f1";
+    // Flags come only over the private port flags.js hands over at
+    // document_start, never as window messages (the page can forge those).
     let kickOn = true;
     try {
-      window.addEventListener("message", (event) => {
-        const data = event && event.source === window && event.data;
-        const next = data && data[FLAG_CHANNEL];
-        if (!next || typeof next !== "object" || typeof next.kick !== "boolean") return;
-        kickOn = next.kick;
-        if (!kickOn) {
-          try {
-            const css = document.getElementById(KICK_CSS_ID);
-            if (css) css.remove();
-          } catch {
-            // already gone
+      const PORT_EVENT = "gk-p1";
+      let port = null;
+      const take = (event) => {
+        const p = event && event.ports && event.ports[0];
+        if (port || !p) return;
+        port = p;
+        window.removeEventListener(PORT_EVENT, take, true);
+        p.addEventListener("message", (m) => {
+          const f = m && m.data && m.data.f;
+          if (!f || typeof f !== "object" || typeof f.kick !== "boolean") return;
+          kickOn = f.kick;
+          if (!kickOn) {
+            try {
+              const css = document.getElementById(KICK_CSS_ID);
+              if (css) css.remove();
+            } catch {
+              // already gone
+            }
+          } else {
+            injectChromeCss();
           }
-        } else {
-          injectChromeCss();
-        }
-      });
-      window.postMessage({ [FLAG_CHANNEL]: "?" }, location.origin);
+        });
+        p.start();
+      };
+      window.addEventListener(PORT_EVENT, take, true);
+      window.dispatchEvent(new Event("gk-r1"));
     } catch {
       // no flags: stays on
     }
