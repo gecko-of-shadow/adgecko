@@ -221,7 +221,9 @@ echo "  package bytes: $SIZE"
 # 0.2.20 packed five more network lists: general-network.json grew from 2.3MB to
 # 5.2MB. Repo mode sums only REQUIRED (~5.5MB); --zip counts every shipped file
 # (~6.7MB, ~0.3MB under this limit). 7MB still catches a runaway list pack.
-if [[ "$SIZE" -gt 7000000 ]]; then fail "package unexpectedly large (>7MB)"; else pass "package size sane"; fi
+# 2026-11-03: the threat ruleset + snapshot (~0.7MB) and src/threat/psl.js
+# (82KB) brought the zip to ~6.96MB; 7.5MB keeps the runaway-pack check.
+if [[ "$SIZE" -gt 7500000 ]]; then fail "package unexpectedly large (>7.5MB)"; else pass "package size sane"; fi
 
 section "1b. Playback files untouched"
 PLAYBACK_OK=1
