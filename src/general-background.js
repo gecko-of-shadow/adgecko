@@ -463,6 +463,13 @@ function listStatusText(state, result, writeError) {
 async function refreshLists(manual) {
   if (refreshing) return refreshing;
   refreshing = (async () => {
+    if (reverting) {
+      try {
+        await reverting;
+      } catch {
+        // refresh anyway
+      }
+    }
     await ensureCosmetic();
     const settings = await getSettings();
     currentEnabled = settings.generalEnabled !== false;
@@ -499,6 +506,50 @@ async function refreshLists(manual) {
 async function updateLists() {
   const result = await refreshLists(true);
   return { ok: !!result.ok, result };
+}
+
+// "Revert lists" (settings page): back to the packed lists and hide rules.
+// Waits for a running refresh so the two never interleave.
+let reverting = null;
+async function revertLists() {
+  if (reverting) return reverting;
+  reverting = (async () => {
+    if (refreshing) {
+      try {
+        await refreshing;
+      } catch {
+        // reverting anyway
+      }
+    }
+    const deps = Object.assign(listDeps(), {
+      revertCosmetic: async () => {
+        const bundled = await loadBundledCosmetic();
+        bundledExtras = bundled.extras || [];
+        await writeCosmetic(bundled, { source: "bundled", packedAt: bundled.packed_at_utc });
+      },
+    });
+    let result;
+    try {
+      result = await GU.revertLists(deps);
+    } catch (e) {
+      result = { ok: false, reason: String(e && e.message || e) };
+    }
+    await applyGeneralState();
+    try {
+      await localSet({
+        [KEYS.listStatus]: result.ok ? "Reverted to the packed lists. Automatic updates resume in 12 hours; Update lists fetches now." : "Revert failed: " + result.reason,
+        [KEYS.listUpdatedAt]: null,
+      });
+    } catch {
+      // recorded by localSet
+    }
+    return result;
+  })();
+  try {
+    return await reverting;
+  } finally {
+    reverting = null;
+  }
 }
 
 // Background refresh: the "gecko-refresh" alarm fires every 3 h (first one 5 to
@@ -587,6 +638,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === "updateLists") {
     updateLists(message.requestedAt).then(sendResponse);
+    return true;
+  }
+  if (message.type === "revertLists") {
+    revertLists().then(sendResponse);
     return true;
   }
 });

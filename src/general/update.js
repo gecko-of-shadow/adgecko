@@ -304,8 +304,54 @@ function installGeneralAdblockUpdate(target) {
 
   function listMeta(m) {
     const out = {};
-    for (const k of ["url", "etag", "lastModified", "fetchedAt", "expiresMs", "count", "cosmetic", "parser"]) if (m && m[k] !== undefined) out[k] = m[k];
+    for (const k of ["url", "etag", "lastModified", "fetchedAt", "expiresMs", "count", "cosmetic", "parser", "genericCount"]) if (m && m[k] !== undefined) out[k] = m[k];
     return out;
+  }
+
+  // ---- self-protection for downloaded lists (Block E) ----
+  // A list that changes too much in one refresh, names many protected stream
+  // hosts, or carries an abnormal hide list is rejected as a whole: its last
+  // known good copy (the payload already stored) stays in use and the reason
+  // is recorded in state.lastRejected[name].
+  const MAX_CHANGE_RATIO = 0.25;
+  const PROTECTED_HITS_MAX = 25; // real lists name at most ~6 (2026-11-02)
+  const MAX_GENERIC_SELECTORS = 30000; // EasyList ~13,600
+  const MAX_PAGE_ROOT_SITE_RULES = 100; // EasyList ~17 ("aads.com##HTML")
+
+  function protectedHits(parsed) {
+    const PH = typeof globalThis !== "undefined" && globalThis.GeckoProtectedHosts;
+    const hits = [];
+    const hosts = (parsed.domains || []).concat((parsed.scoped || []).map((e) => e[0]));
+    for (const h of hosts) {
+      const why = PH ? PH.protectedReason(h) : (isNeverBlock(h) ? "protected" : null);
+      if (why && (why.startsWith("protected") || why.startsWith("ancestor")) || isNeverBlock(h)) hits.push(h);
+    }
+    return hits;
+  }
+
+  // null when acceptable, else the rejection reason. `prev` is the stored
+  // list meta (count, genericCount) of the last good copy, if any.
+  function checkListChange(prev, parsed, cosmetic) {
+    const total = parsed.domains.length + parsed.scoped.length;
+    if (prev && prev.parser === PARSER_VERSION && prev.count > 0) {
+      const ratio = Math.abs(total - prev.count) / prev.count;
+      if (ratio > MAX_CHANGE_RATIO) {
+        return "size changed by " + Math.round(ratio * 100) + "% in one refresh (" + prev.count + " -> " + total + ")";
+      }
+    }
+    const hits = protectedHits(parsed);
+    if (hits.length > PROTECTED_HITS_MAX) return "names " + hits.length + " protected stream hosts (e.g. " + hits.slice(0, 3).join(", ") + ")";
+    if (cosmetic) {
+      const g = (cosmetic.generic || []).length;
+      if (g > MAX_GENERIC_SELECTORS) return "too many generic hide rules (" + g + ")";
+      if (prev && prev.parser === PARSER_VERSION && prev.genericCount > 0) {
+        const ratio = Math.abs(g - prev.genericCount) / prev.genericCount;
+        if (ratio > MAX_CHANGE_RATIO) return "hide list changed by " + Math.round(ratio * 100) + "% (" + prev.genericCount + " -> " + g + ")";
+      }
+      const roots = cosmetic.stats ? cosmetic.stats.pageRootSite : 0;
+      if (roots > MAX_PAGE_ROOT_SITE_RULES) return "too many whole-page hide rules (" + roots + ")";
+    }
+    return null;
   }
 
   // Lists whose stored payload came from the old (widening) parser.
@@ -369,6 +415,7 @@ function installGeneralAdblockUpdate(target) {
     const now = deps.now();
     if (!shouldRun(state, now, manual)) return { ok: true, ran: false, reason: "throttled" };
     const fresh = {};
+    const rejections = {};
     let retired = [];
     try {
       retired = await dropRetiredLists(deps, state);
@@ -432,10 +479,13 @@ function installGeneralAdblockUpdate(target) {
           const floor = src.minDomains || 50;
           if (total < floor) throw new Error("parsed too few domains (" + total + " < " + floor + ")");
           const payload = { domains: parsed.domains, scoped: parsed.scoped, parser: PARSER_VERSION };
-          if (src.cosmetic && CP) {
-            payload.cosmetic = CP.parseCosmetic(text);
-            delete payload.cosmetic.stats;
+          if (src.cosmetic && CP) payload.cosmetic = CP.parseCosmetic(text);
+          const rejected = checkListChange(meta, parsed, payload.cosmetic);
+          if (rejected) {
+            rejections[src.name] = { reason: rejected, at: now };
+            throw new Error("rejected, kept the last good copy: " + rejected);
           }
+          if (payload.cosmetic) delete payload.cosmetic.stats;
           // Payload first; the validators go into state only once it is stored.
           await deps.setListData(src.name, payload);
           fresh[src.name] = payload;
@@ -449,6 +499,7 @@ function installGeneralAdblockUpdate(target) {
             cosmetic: !!payload.cosmetic,
             parser: PARSER_VERSION,
           };
+          if (payload.cosmetic) lists[src.name].genericCount = (payload.cosmetic.generic || []).length;
           if (payload.cosmetic) cosmeticChanged = true;
           changed = true;
         } catch (e) {
@@ -459,7 +510,7 @@ function installGeneralAdblockUpdate(target) {
       }
       const usable = SOURCES.filter((x) => lists[x.name]);
       if (!usable.length) throw new Error(Object.values(errors).join("; ") || "no lists");
-      await deps.setState({ lists, lastErrors: errors, lastNotes: mirrorNotes, lastErrorAt: Object.keys(errors).length ? now : 0 });
+      await deps.setState({ lists, lastErrors: errors, lastRejected: rejections, lastNotes: mirrorNotes, lastErrorAt: Object.keys(errors).length ? now : 0 });
       // Write the hide list only when every cosmetic source has a parsed copy:
       // EasyPrivacy alone would replace the whole EasyList sheet with a couple
       // of selectors, and the bundled sheet is never restored over a refresh.
@@ -488,7 +539,7 @@ function installGeneralAdblockUpdate(target) {
       // or the bundled ruleset) stays. Make sure something is active.
       if (!(await dynamicLooksActive(deps, state))) await fallback(deps);
       try {
-        await deps.setState({ lastErrors: { all: String(e && e.message || e) }, lastErrorAt: now });
+        await deps.setState({ lastErrors: { all: String(e && e.message || e) }, lastRejected: rejections, lastErrorAt: now });
       } catch {
         // silent
       }
@@ -667,6 +718,34 @@ function installGeneralAdblockUpdate(target) {
     return { ok: true, mode: "static" };
   }
 
+  // "Revert lists": forget every refreshed list (payloads, dynamic list and
+  // threat rules) and go back to the packed rules shipped with the extension.
+  // Automatic refreshes then wait the usual 12 h; Update refetches at once.
+  async function revertLists(deps) {
+    const now = deps.now();
+    let state = {};
+    try {
+      state = (await deps.getState()) || {};
+    } catch {
+      state = {};
+    }
+    const names = Array.from(new Set(SOURCES.map((s) => s.name).concat(RETIRED_LISTS, Object.keys(state.lists || {}))));
+    if (deps.removeListData) await deps.removeListData(names);
+    const existing = (await deps.getDynamicRules()) || [];
+    const removeRuleIds = existing.filter((r) => isOurRule(r.id) || isThreatRule(r.id)).map((r) => r.id);
+    if (removeRuleIds.length) await deps.updateDynamicRules({ removeRuleIds, addRules: [] });
+    if (deps.enabled()) await deps.setStaticEnabled(true);
+    await deps.setState({ lists: {}, dynamicActive: false, revertedAt: now, lastRunAt: now, lastRejected: {}, lastErrors: {}, threatRules: 0, threatHosts: 0, threatError: "" });
+    if (deps.revertCosmetic) {
+      try {
+        await deps.revertCosmetic();
+      } catch {
+        // the content script falls back to the bundled sheet
+      }
+    }
+    return { ok: true, reverted: names.length, removedRules: removeRuleIds.length };
+  }
+
   function isListUrl(url) {
     try {
       const parsed = new URL(url);
@@ -680,6 +759,7 @@ function installGeneralAdblockUpdate(target) {
     POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
     RETIRED_LISTS, dropRetiredLists, PARSER_VERSION, parseEntries, mergeScoped, staleParserLists,
     THREAT_RULE_ID_BASE, THREAT_RULE_ID_END, DYNAMIC_RULE_LIMIT, isThreatRule, isOurRule, applyThreatRules,
+    MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, protectedHits, revertLists,
     LIST_RULE_ID_BASE, KEPT_RULE_ID_BASE, ALLOW_RULE_ID_BASE, SOURCES, LIST_HOSTS,
     isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules, keepsWholeDomain,
     shouldRun, listDue, refresh, describeError, LIST_ALLOW_RULE_ID, listAllowRule, applyEnabled, isListUrl,

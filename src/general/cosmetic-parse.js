@@ -48,6 +48,22 @@
     return sel;
   }
 
+  // A generic (all-sites) selector that names no class, id, attribute or custom
+  // element anywhere ("*", "body", "div", "html *", "*:not(.x)") would hide
+  // whole pages everywhere: a poisoned or broken list. Such generic rules are
+  // dropped. (Site-specific rules may hide a whole page on purpose, e.g.
+  // EasyList's "aads.com##HTML"; those are only counted, see pageRootSelector.)
+  function isUnscopedSelector(sel) {
+    const s = String(sel || "").replace(/:not\((?:[^()]|\([^()]*\))*\)/gi, "");
+    if (/[.#[]/.test(s)) return false;
+    if (/(?:^|[\s>+~(,])[a-z][a-z0-9]*-[a-z0-9-]*/i.test(s)) return false; // custom element
+    return true;
+  }
+
+  function isPageRootSelector(sel) {
+    return /^\s*(?:\*|html|body|:root)\s*$/i.test(String(sel || ""));
+  }
+
   function normalizeHost(h) {
     const host = String(h || "").trim().toLowerCase().replace(/\.$/, "");
     if (!host || host.length > 253) return "";
@@ -65,7 +81,7 @@
     const sites = new Map();
     const exceptions = new Map();
     const genericExceptions = new Set();
-    const stats = { lines: 0, kept: 0, skipped: 0 };
+    const stats = { lines: 0, kept: 0, skipped: 0, unscopedGeneric: 0, pageRootSite: 0 };
     const add = (map, host, sel) => {
       let set = map.get(host);
       if (!set) map.set(host, (set = new Set()));
@@ -106,12 +122,18 @@
         stats.skipped += 1;
         continue;
       }
+      if (!isException && !included.length && isUnscopedSelector(sel)) {
+        stats.unscopedGeneric += 1;
+        stats.skipped += 1;
+        continue;
+      }
       stats.kept += 1;
       if (isException) {
         if (!included.length) genericExceptions.add(sel);
         for (const h of included) add(exceptions, h, sel);
         continue;
       }
+      if (included.length && isPageRootSelector(sel)) stats.pageRootSite += included.length;
       if (!included.length) genericSet.add(sel);
       for (const h of included) add(sites, h, sel);
       // "~a.com##x" / "b.com,~a.b.com##x": the excluded host gets an exception.
@@ -222,7 +244,7 @@
 
   root.GeneralCosmeticParse = {
     MAX_SELECTOR_LEN, KEY_GENERIC, KEY_META, PREFIX_SITE, PREFIX_EXC, HIDE,
-    sanitizeSelector, normalizeHost, parseCosmetic, mergeCosmetic, candidateHosts,
+    sanitizeSelector, normalizeHost, isUnscopedSelector, isPageRootSelector, parseCosmetic, mergeCosmetic, candidateHosts,
     cssForSelectors, toStorage, keysForHost, buildPageCss,
   };
 })(typeof self !== "undefined" ? self : globalThis);
