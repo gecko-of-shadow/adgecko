@@ -138,8 +138,54 @@ Deno.test("L-5: the queue is not held while lists download (a click during a ref
   const res = await w.send({ source: "twitch-adblock-general", type: "updateLists" });
   await drain(w);
   assert(clickResult === "done", "the lists switch waited for the download: " + clickResult);
-  // The swap re-checks the switch inside its section: no list rules added.
+  // The click finished during the downloads, so the refresh's check before
+  // its swap already sees the switch off (the in-section re-check is the
+  // next test).
   assert(res && res.result && res.result.reason === "lists off; cached", "refresh: " + JSON.stringify(res && res.result));
+  assert(listRules(w) === 0 && !w.dnr.staticOn, `lists still blocking: listRules=${listRules(w)} staticOn=${w.dnr.staticOn}`);
+  assert(w.dnr.errors.length === 0, "DNR errors: " + w.dnr.errors.join("; "));
+});
+
+Deno.test("L-5: a lists switch that lands after the refresh's own check is honoured inside its swap section", async () => {
+  const w = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [] }, listFetch: async (url) => listResponse(url) });
+  const local = w.chrome.storage.local;
+  const realSet = local.set;
+  const dnr = w.chrome.declarativeNetRequest;
+  const realGet = dnr.getDynamicRules;
+  const realUpdate = dnr.updateDynamicRules;
+  let triggered = false;
+  let slowNextGet = false;
+  let listAddsAfter = 0;
+  dnr.getDynamicRules = (cb) => {
+    if (!slowNextGet) return realGet(cb);
+    slowNextGet = false;
+    return realGet((rules) => setTimeout(() => cb(rules), 300));
+  };
+  dnr.updateDynamicRules = (o, cb) => {
+    if (triggered && (o.addRules || []).some((r) => r.id >= U.LIST_RULE_ID_BASE && r.id < U.KEPT_RULE_ID_BASE)) listAddsAfter++;
+    return realUpdate(o, cb);
+  };
+  // The downloads are done (the refresh stores the list metadata). A slow
+  // section ("Allow this domain" sync) holds the queue and the lists switch
+  // goes off behind it: the refresh's check before its swap still sees the
+  // switch on; only the check inside the swap section can see it off.
+  local.set = (items, cb) => {
+    const st = items.listState;
+    if (!triggered && st && st.lists && Object.keys(st.lists).length && "lastRejected" in st) {
+      triggered = true;
+      slowNextGet = true;
+      realSet({ threatAllowDomains: ["a.example.com"] }, () => {});
+      realSet({ generalEnabled: false }, () => {});
+      setTimeout(() => realSet(items, cb), 20);
+      return;
+    }
+    return realSet(items, cb);
+  };
+  const res = await w.send({ source: "twitch-adblock-general", type: "updateLists" });
+  await drain(w);
+  assert(triggered, "precondition: the refresh stored its list metadata");
+  assert(res && res.result && res.result.reason === "lists off; cached", "refresh: " + JSON.stringify(res && res.result));
+  assert(listAddsAfter === 0, "list rules added after the switch went off: " + listAddsAfter + " update(s)");
   assert(listRules(w) === 0 && !w.dnr.staticOn, `lists still blocking: listRules=${listRules(w)} staticOn=${w.dnr.staticOn}`);
   assert(w.dnr.errors.length === 0, "DNR errors: " + w.dnr.errors.join("; "));
 });
