@@ -192,6 +192,87 @@
       ],
       "run_at": "document_start",
       "all_frames": false
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "exclude_matches": [
+        "*://twitch.tv/*",
+        "*://*.twitch.tv/*",
+        "*://ttvnw.net/*",
+        "*://*.ttvnw.net/*",
+        "*://jtvnw.net/*",
+        "*://*.jtvnw.net/*",
+        "*://twitchcdn.net/*",
+        "*://*.twitchcdn.net/*",
+        "*://youtube.com/*",
+        "*://*.youtube.com/*",
+        "*://youtu.be/*",
+        "*://*.youtu.be/*",
+        "*://youtube-nocookie.com/*",
+        "*://*.youtube-nocookie.com/*",
+        "*://youtubekids.com/*",
+        "*://*.youtubekids.com/*",
+        "*://googlevideo.com/*",
+        "*://*.googlevideo.com/*",
+        "*://ytimg.com/*",
+        "*://*.ytimg.com/*",
+        "*://ggpht.com/*",
+        "*://*.ggpht.com/*",
+        "*://kick.com/*",
+        "*://*.kick.com/*",
+        "*://kickusercontent.com/*",
+        "*://*.kickusercontent.com/*"
+      ],
+      "js": [
+        "src/settings/features.js",
+        "src/settings/flags.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "exclude_matches": [
+        "*://twitch.tv/*",
+        "*://*.twitch.tv/*",
+        "*://ttvnw.net/*",
+        "*://*.ttvnw.net/*",
+        "*://jtvnw.net/*",
+        "*://*.jtvnw.net/*",
+        "*://twitchcdn.net/*",
+        "*://*.twitchcdn.net/*",
+        "*://youtube.com/*",
+        "*://*.youtube.com/*",
+        "*://youtu.be/*",
+        "*://*.youtu.be/*",
+        "*://youtube-nocookie.com/*",
+        "*://*.youtube-nocookie.com/*",
+        "*://youtubekids.com/*",
+        "*://*.youtubekids.com/*",
+        "*://googlevideo.com/*",
+        "*://*.googlevideo.com/*",
+        "*://ytimg.com/*",
+        "*://*.ytimg.com/*",
+        "*://ggpht.com/*",
+        "*://*.ggpht.com/*",
+        "*://kick.com/*",
+        "*://*.kick.com/*",
+        "*://kickusercontent.com/*",
+        "*://*.kickusercontent.com/*"
+      ],
+      "js": [
+        "src/guards/clipboard.js",
+        "src/guards/popups.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
     }
   ],
   "options_ui": {

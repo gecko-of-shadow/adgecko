@@ -129,5 +129,20 @@
     return [m[1].toLowerCase(), res.key, res.cancel];
   }
 
-  root.GeneralFilterOptions = { TABLE, DOMAIN_RE, convertOptions, keyToCondition, conditionKey, convertLine };
+  // `$popup` / `$popunder` with nothing else that scopes it (ignored options
+  // allowed). Such filters are dropped from the ordinary lists, but threat
+  // lists use them for known-bad pop-up destinations: the threat tier turns
+  // them into main_frame-only rules (a pop-up is a new top-level page).
+  function isPopupOnly(opts) {
+    const parts = String(opts || "").replace(/^\$/, "").split(",").map((p) => p.trim().toLowerCase()).filter(Boolean);
+    if (!parts.length) return false;
+    let popup = false;
+    for (const p of parts) {
+      if (TABLE.narrow.includes(p)) popup = true;
+      else if (!TABLE.ignore.includes(p)) return false;
+    }
+    return popup;
+  }
+
+  root.GeneralFilterOptions = { TABLE, DOMAIN_RE, convertOptions, keyToCondition, conditionKey, convertLine, isPopupOnly };
 })(typeof self !== "undefined" ? self : globalThis);

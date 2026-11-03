@@ -114,6 +114,7 @@ function installGeneralAdblockUpdate(target) {
     const FO = filterOptions();
     const whole = [];
     const scoped = [];
+    const popup = [];
     const cancelled = new Set();
     for (const raw of String(text || "").split(/\r?\n/)) {
       const line = raw.trim();
@@ -123,7 +124,11 @@ function installGeneralAdblockUpdate(target) {
       if (m) {
         // Without the shared table, only option-less filters are safe to keep.
         const conv = FO ? FO.convertLine(line) : (m[2] ? null : [m[1].toLowerCase(), "", false]);
-        if (!conv) continue;
+        if (!conv) {
+          // Popup-only filters: kept apart for the threat tier (main_frame).
+          if (FO && m[2] && FO.isPopupOnly(m[2]) && looksLikeDomain(m[1].toLowerCase())) popup.push(m[1].toLowerCase());
+          continue;
+        }
         const [d, key, cancel] = conv;
         if (!looksLikeDomain(d)) continue;
         if (cancel) cancelled.add(d + "\n" + key);
@@ -139,11 +144,12 @@ function installGeneralAdblockUpdate(target) {
       }
       if (BARE_RE.test(line) && looksLikeDomain(line)) whole.push(line.toLowerCase());
     }
-    if (!cancelled.size) return { domains: whole, scoped };
-    return {
+    const out = !cancelled.size ? { domains: whole, scoped } : {
       domains: whole.filter((d) => !cancelled.has(d + "\n")),
       scoped: scoped.filter(([d, k]) => !cancelled.has(d + "\n" + k)),
     };
+    if (popup.length) out.popup = popup;
+    return out;
   }
 
   // Whole-domain blocks only (scoped filters are not widened into these).
@@ -264,14 +270,18 @@ function installGeneralAdblockUpdate(target) {
     if (deps.threatEnabled && !deps.threatEnabled()) return removeThreatRules(deps);
     try {
       const hosts = [];
+      const popupHosts = [];
       for (const name of TC.THREAT_LISTS) {
         const p = payloads[name];
-        if (p) hosts.push(...TC.threatHostsFromEntries(p));
+        if (p) {
+          hosts.push(...TC.threatHostsFromEntries(p));
+          popupHosts.push(...(p.popup || []));
+        }
       }
       const existing = (await deps.getDynamicRules()) || [];
       const others = existing.filter((r) => !isThreatRule(r.id)).length;
       const budget = Math.max(0, Math.min(THREAT_RULE_ID_END - THREAT_RULE_ID_BASE, DYNAMIC_RULE_LIMIT - others - 100));
-      const compiled = TC.compileThreatRules(hosts, { idBase: THREAT_RULE_ID_BASE, maxRules: budget });
+      const compiled = TC.compileThreatRules(hosts, { idBase: THREAT_RULE_ID_BASE, maxRules: budget, popupHosts });
       const removeRuleIds = existing.filter((r) => isThreatRule(r.id)).map((r) => r.id);
       await deps.updateDynamicRules({ removeRuleIds, addRules: compiled.rules });
       await deps.setState({ threatRules: compiled.rules.length, threatHosts: compiled.accepted.length, threatRejected: compiled.rejected.length, threatError: "", threatUpdatedAt: now });
@@ -484,6 +494,7 @@ function installGeneralAdblockUpdate(target) {
           const floor = src.minDomains || 50;
           if (total < floor) throw new Error("parsed too few domains (" + total + " < " + floor + ")");
           const payload = { domains: parsed.domains, scoped: parsed.scoped, parser: PARSER_VERSION };
+          if (parsed.popup) payload.popup = parsed.popup;
           if (src.cosmetic && CP) payload.cosmetic = CP.parseCosmetic(text);
           const rejected = checkListChange(meta, parsed, payload.cosmetic);
           if (rejected) {

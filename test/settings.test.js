@@ -173,7 +173,8 @@ Deno.test("flags.js hands the page-world scripts their switches (fail-open until
   const window = { postMessage: (m, o) => posted.push([m, o]), addEventListener: (t, f) => { listeners[t] = f; } };
   window.top = window;
   new Function("chrome", "window", "location", "globalThis", src)(chrome, window, { hostname: "www.youtube.com", origin: "https://www.youtube.com" }, globalThis);
-  assert(posted.length === 1 && eq(posted[0][0], { "gk-f1": { youtubeWatchdog: false, youtubeCosmetic: true, kick: true } }) && posted[0][1] === "https://www.youtube.com", JSON.stringify(posted));
+  // Block J added the two page-guard flags (off here: the site switch is off and the popup guard defaults off).
+  assert(posted.length === 1 && eq(posted[0][0], { "gk-f1": { youtubeWatchdog: false, youtubeCosmetic: true, kick: true, guardClipboard: false, guardPopups: false } }) && posted[0][1] === "https://www.youtube.com", JSON.stringify(posted));
   listeners.message({ source: window, data: { "gk-f1": "?" } });
   assert(posted.length === 2, "answers a request");
   let origin = null;

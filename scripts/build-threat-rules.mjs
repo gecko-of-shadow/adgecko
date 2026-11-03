@@ -32,6 +32,7 @@ async function sha256Hex(text) {
 
 const sources = {};
 const hosts = [];
+const popupHosts = [];
 const seen = new Set();
 for (const name of TC.THREAT_LISTS) {
   let text;
@@ -49,11 +50,15 @@ for (const name of TC.THREAT_LISTS) {
   const candidates = TC.threatHostsFromEntries(parsed);
   let added = 0;
   for (const h of candidates) if (!seen.has(h)) { seen.add(h); hosts.push(h); added++; }
+  // $popup-only filters: main_frame-only threat rules (Block J).
+  const popups = (parsed.popup || []).filter((h) => !seen.has(h));
+  popupHosts.push(...popups);
   sources[name] = {
     sha256_matches_meta: packed ? (await sha256Hex(norm)) === packed : null,
     whole_domains: parsed.domains.length,
     scoped_entries: parsed.scoped.length,
     threat_hosts: candidates.length,
+    popup_only_hosts: (parsed.popup || []).length,
     added,
   };
   if (!candidates.length) {
@@ -62,7 +67,7 @@ for (const name of TC.THREAT_LISTS) {
   }
 }
 
-const compiled = TC.compileThreatRules(hosts, { idBase: 1 });
+const compiled = TC.compileThreatRules(hosts, { idBase: 1, popupHosts });
 const reasons = {};
 for (const r of compiled.rejected) reasons[r.reason] = (reasons[r.reason] || 0) + 1;
 const out = {
@@ -74,6 +79,7 @@ const out = {
   scopes_used: TC.THREAT_SCOPES,
   sources,
   hosts_total: compiled.accepted.length,
+  popup_only_hosts_total: compiled.popupAccepted.length,
   rule_count: compiled.rules.length,
   rejected_total: compiled.rejected.length,
   rejected_by_reason: reasons,
@@ -87,7 +93,9 @@ const snapshot = {
   format: 1,
   snapshot: true,
   createdAt: out.built_at_utc,
-  dnr: compiled.rules.map((r, i) => ({ id: i + 1, requestDomains: r.condition.requestDomains })),
+  dnr: compiled.rules.map((r, i) => (r.condition.resourceTypes.length === TC.THREAT_TYPES.length
+    ? { id: i + 1, requestDomains: r.condition.requestDomains }
+    : { id: i + 1, requestDomains: r.condition.requestDomains, resourceTypes: r.condition.resourceTypes })),
 };
 if (snapshot.dnr.length > 4500) {
   console.error("threat snapshot has more than 4500 entries");

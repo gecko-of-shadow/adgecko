@@ -38,8 +38,11 @@
     return out;
   }
 
-  // hosts -> { rules, accepted, rejected: [{host, reason}] }.
-  // opts: { idBase (first rule id), maxRules }
+  // hosts -> { rules, accepted, rejected: [{host, reason}], popupAccepted }.
+  // opts: { idBase (first rule id), maxRules, popupHosts }
+  // popupHosts: hosts the threat lists name only for pop-ups ($popup); they
+  // get main_frame-only rules (after the full-type rules, skipping any host
+  // already blocked for every type).
   function compileThreatRules(hosts, opts) {
     const ph = PH();
     const idBase = (opts && opts.idBase) || 1;
@@ -47,25 +50,38 @@
     const accepted = [];
     const rejected = [];
     const seen = new Set();
-    for (const raw of hosts || []) {
+    const take = (raw, into) => {
       const h = ph.normalizeHost(raw);
-      if (seen.has(h)) continue;
+      if (seen.has(h)) return;
       seen.add(h);
       const why = ph.protectedReason(h);
       if (why) rejected.push({ host: h, reason: why });
-      else accepted.push(h);
-    }
+      else into.push(h);
+    };
+    for (const raw of hosts || []) take(raw, accepted);
+    const popupAccepted = [];
+    for (const raw of (opts && opts.popupHosts) || []) take(raw, popupAccepted);
     const rules = [];
-    for (let i = 0; i < accepted.length && rules.length < maxRules; i += HOSTS_PER_RULE) {
-      rules.push({
-        id: idBase + rules.length,
-        priority: THREAT_PRIORITY,
-        action: { type: "block" },
-        condition: { requestDomains: accepted.slice(i, i + HOSTS_PER_RULE), resourceTypes: THREAT_TYPES.slice() },
-      });
-    }
-    const used = Math.min(accepted.length, rules.length * HOSTS_PER_RULE);
-    return { rules, accepted: accepted.slice(0, used), rejected, dropped: accepted.length - used };
+    const push = (list, types) => {
+      let used = 0;
+      for (let i = 0; i < list.length && rules.length < maxRules; i += HOSTS_PER_RULE) {
+        const chunk = list.slice(i, i + HOSTS_PER_RULE);
+        rules.push({
+          id: idBase + rules.length,
+          priority: THREAT_PRIORITY,
+          action: { type: "block" },
+          condition: { requestDomains: chunk, resourceTypes: types.slice() },
+        });
+        used += chunk.length;
+      }
+      return used;
+    };
+    const used = push(accepted, THREAT_TYPES);
+    const popupUsed = push(popupAccepted, ["main_frame"]);
+    return {
+      rules, accepted: accepted.slice(0, used), rejected, popupAccepted: popupAccepted.slice(0, popupUsed),
+      dropped: accepted.length - used + popupAccepted.length - popupUsed,
+    };
   }
 
   // User "Allow this domain" override: one allow rule per domain at 2,000,020,

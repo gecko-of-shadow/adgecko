@@ -7,7 +7,7 @@ const read = (p) => Deno.readTextFileSync(new URL("../" + p, import.meta.url));
 const code = (src) => src.split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
 
 // Project-owned scripts that run in pages (MAIN or ISOLATED world).
-const OWNED_PAGE = ["src/youtube.js", "src/kick.js", "src/cosmetic.js", "src/twitch-directory-ads.js", "src/settings/flags.js", "src/settings/features.js", "src/general/cosmetic-parse.js"];
+const OWNED_PAGE = ["src/youtube.js", "src/kick.js", "src/cosmetic.js", "src/twitch-directory-ads.js", "src/settings/flags.js", "src/settings/features.js", "src/general/cosmetic-parse.js", "src/guards/clipboard.js", "src/guards/popups.js"];
 // Generated from uBO by scripts/sync-ubo-youtube.mjs (never hand-edited).
 const GENERATED = ["src/vendor/ubo-youtube.js", "src/vendor/ubo-youtube-isolated.js"];
 

@@ -1,6 +1,7 @@
-// ISOLATED world, document_start, on YouTube, Kick and Twitch (top frame).
+// ISOLATED world, document_start: on YouTube, Kick and Twitch (top frame) and
+// on every ordinary site (all frames, for the page guards).
 // Hands the page-world scripts the extension owns (src/youtube.js,
-// src/kick.js) their feature switches, read from storage (settings,
+// src/kick.js, src/guards/*.js) their feature switches, read from storage (settings,
 // siteOverrides) through src/settings/features.js (listed first in the manifest).
 //
 // Hook-time flags: the page-world script reads a flag each time it is about
@@ -13,7 +14,7 @@
 (function () {
   const CHANNEL = "gk-f1"; // same id in src/youtube.js and src/kick.js
   const KEYS = ["settings", "siteOverrides"];
-  const PAGE_FLAGS = ["youtubeWatchdog", "youtubeCosmetic", "kick"];
+  const PAGE_FLAGS = ["youtubeWatchdog", "youtubeCosmetic", "kick", "guardClipboard", "guardPopups"];
   const F = typeof globalThis !== "undefined" ? globalThis.GeckoFeatures : null;
   if (!F || typeof chrome === "undefined" || !chrome.storage) return;
   let flags = null;
@@ -61,9 +62,10 @@
   } catch {
     // the first post still goes out
   }
-  // The popup cannot read tab URLs (no "tabs" permission): the top frame tells it.
+  // The popup cannot read tab URLs (no "tabs" permission): the top frame tells
+  // it. On ordinary sites src/cosmetic.js already answers, so only stream sites.
   try {
-    if (window.top === window && chrome.runtime && chrome.runtime.onMessage) {
+    if (window.top === window && F.isStreamHost(location.hostname) && chrome.runtime && chrome.runtime.onMessage) {
       chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         if (!msg || msg.type !== "pageOrigin") return;
         sendResponse({ origin: location.origin });

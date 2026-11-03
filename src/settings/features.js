@@ -36,8 +36,8 @@
     { id: "youtubeWatchdog", label: "YouTube: reload a stuck video start", layer: "main", default: true, apply: "live", perSite: false, sites: ["youtube.com"], scripts: ["src/youtube.js"] },
     { id: "youtubeCosmetic", label: "YouTube: remove sponsored feed tiles (script part)", layer: "main", default: true, apply: "live", perSite: false, sites: ["youtube.com"], scripts: ["src/youtube.js"] },
     { id: "kick", label: "Kick: skip in-stream ads", layer: "main", default: true, apply: "live", perSite: false, sites: ["kick.com"], scripts: ["src/kick.js"] },
-    { id: "guardClipboard", label: "Stop pages from copying shell commands (ClickFix)", layer: "main", default: true, apply: "live", perSite: true, sites: ["ordinary"], available: false },
-    { id: "guardPopups", label: "Block pop-ups opened without a click", layer: "main", default: false, apply: "live", perSite: true, sites: ["ordinary"], available: false },
+    { id: "guardClipboard", label: "Stop pages from copying shell commands (ClickFix)", layer: "main", default: true, apply: "live", perSite: true, sites: ["ordinary"], scripts: ["src/guards/clipboard.js"] },
+    { id: "guardPopups", label: "Block pop-ups opened without a click", layer: "main", default: false, apply: "live", perSite: true, sites: ["ordinary"], scripts: ["src/guards/popups.js"] },
     { id: "guardMiners", label: "Block crypto-miner scripts", layer: "dnr", default: true, apply: "live", perSite: false, sites: ["ordinary"], available: false },
   ]);
   const IDS = Object.freeze(FEATURES.map((f) => f.id));
