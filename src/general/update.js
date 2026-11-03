@@ -521,7 +521,8 @@ function installGeneralAdblockUpdate(target) {
    * deps: { fetch, now(), getState(), setState(patch), getListData(names),
    *         setListData(name, payload), listDataPresent?(names), getDynamicRules(),
    *         updateDynamicRules({removeRuleIds, addRules}), setStaticEnabled(bool),
-   *         loadBundled() -> {rules, extraIds}, enabled() -> bool }
+   *         loadBundled() -> {rules, extraIds}, enabled() -> bool,
+   *         exclusive?(fn) -> the DNR queue section around the rule writes }
    * Never throws. Returns { ok, ran, reason?, rules? }.
    */
   async function refresh(deps, opts) {
@@ -670,7 +671,13 @@ function installGeneralAdblockUpdate(target) {
     } catch (e) {
       // Download/parse failed: whatever is active now (a previous good swap
       // or the bundled ruleset) stays. Make sure something is active.
-      if (!(await dynamicLooksActive(deps, state))) await fallback(deps);
+      try {
+        await exclusive(deps)(async () => {
+          if (!(await dynamicLooksActive(deps, state))) await fallback(deps);
+        });
+      } catch {
+        // fallback() never throws; a broken queue must not hide the error below
+      }
       try {
         await deps.setState({ lastErrors: { all: String(e && e.message || e) }, lastRejected: rejections, lastErrorAt: now });
       } catch {
@@ -678,21 +685,46 @@ function installGeneralAdblockUpdate(target) {
       }
       return { ok: false, ran: true, reason: String(e && e.message || e) };
     }
+    // Security review L-5: the swap and its fallback are one section of the
+    // worker's DNR queue, so no other writer (lists switch, Allow, threat
+    // switch, revert) reads or writes rules in between. The downloads above
+    // run outside it, so a click never waits for the network.
     try {
-      const result = await swap(deps, (await deps.getState()).lists, now, fresh);
-      await deps.setState({ lastRunAt: now });
-      return result;
+      return await exclusive(deps)(async () => {
+        // The lists switch went off during the downloads (its own run already
+        // removed the list rules): keep the cache, add no rules.
+        if (!deps.enabled()) {
+          await deps.setState({ lastRunAt: now });
+          return { ok: true, ran: true, reason: "lists off; cached" };
+        }
+        try {
+          const result = await swap(deps, (await deps.getState()).lists, now, fresh);
+          await deps.setState({ lastRunAt: now });
+          return result;
+        } catch (e) {
+          await fallback(deps);
+          const reason = "rules swap: " + String(e && e.message || e);
+          try {
+            const st = (await deps.getState()) || {};
+            await deps.setState({ lastErrors: Object.assign({}, st.lastErrors, { swap: reason }), lastErrorAt: now });
+          } catch {
+            // silent
+          }
+          return { ok: false, ran: true, reason };
+        }
+      });
     } catch (e) {
-      await fallback(deps);
-      const reason = "rules swap: " + String(e && e.message || e);
-      try {
-        const st = (await deps.getState()) || {};
-        await deps.setState({ lastErrors: Object.assign({}, st.lastErrors, { swap: reason }), lastErrorAt: now });
-      } catch {
-        // silent
-      }
-      return { ok: false, ran: true, reason };
+      return { ok: false, ran: true, reason: String(e && e.message || e) };
     }
+  }
+
+  // deps.exclusive(fn): run fn as one section of the caller's DNR queue
+  // (security review L-5). Only refresh() uses it, around its rule writes;
+  // every other entry point (applyEnabled, revertLists, rebuildThreatRules,
+  // removeThreatRules) is wrapped whole by the caller and must not call it
+  // (the worker's queue is not reentrant). Without it, fn runs directly.
+  function exclusive(deps) {
+    return deps && typeof deps.exclusive === "function" ? deps.exclusive : (fn) => fn();
   }
 
   function describeError(src, e) {

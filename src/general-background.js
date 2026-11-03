@@ -25,6 +25,38 @@ const ICON_OFF = {
   128: "icons/icon128-off.png",
 };
 
+// Security review L-5: every DNR write (dynamic rules, enabled rulesets,
+// session rules) goes through this one queue, one section at a time. Two
+// writers that read the rules and then write the same id range (a list
+// rebuild and the lists switch, two threat rebuilds, two "Allow this domain"
+// syncs) used to interleave; the second write failed on duplicate ids and the
+// refreshed lists fell back to the packed ones. Sections are short and local:
+// list downloads and feed fetches run outside them.
+// Not reentrant: code inside a section must never wait for another
+// dnrExclusive() call (it would wait for itself). Engine calls made inside a
+// section get listDeps() without `exclusive`; only refreshLists() passes it.
+// Backstop: a section that has not settled after DNR_SECTION_MAX_MS (a lost
+// callback) stops holding the queue, so one stuck run cannot block every
+// later DNR write until the worker restarts. Real sections take seconds.
+const DNR_SECTION_MAX_MS = 120000;
+let dnrQueue = Promise.resolve();
+function dnrExclusive(op) {
+  const run = dnrQueue.then(() => op());
+  dnrQueue = new Promise((resolve) => {
+    let timer = 0;
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    timer = setTimeout(() => {
+      console.warn("twitch-adblock: a DNR update took over " + DNR_SECTION_MAX_MS / 1000 + " s; not waiting for it any longer");
+      resolve();
+    }, DNR_SECTION_MAX_MS);
+    run.then(done, done);
+  });
+  return run;
+}
+
 function getSettings() {
   return new Promise((resolve) => {
     chrome.storage.local.get(Object.keys(GS.DEFAULTS), (stored) => {
@@ -50,6 +82,7 @@ function setIcon(enabled) {
   }
 }
 
+// Called inside a DNR queue section only (applyGeneralStateNow).
 function enableRuleset(enabled) {
   if (!chrome.declarativeNetRequest || !chrome.declarativeNetRequest.updateEnabledRulesets) {
     return Promise.resolve({ ok: false, error: "dnr-missing" });
@@ -108,29 +141,37 @@ function buildAllowRules(origins) {
   return rules;
 }
 
+// Called inside a DNR queue section only (applyGeneralStateNow).
 function syncAllowRules(origins) {
   if (!chrome.declarativeNetRequest || !chrome.declarativeNetRequest.updateDynamicRules) {
     return Promise.resolve({ ok: false, error: "dnr-missing" });
   }
   return new Promise((resolve) => {
+    // Every path resolves (also a throw inside a callback): this runs in a
+    // DNR queue section, and a promise that never settles would hold it.
+    const fail = (e) => resolve({ ok: false, error: String(e && e.message || e) });
     try {
       chrome.declarativeNetRequest.getDynamicRules((existing) => {
-        void chrome.runtime.lastError;
-        const removeRuleIds = (existing || [])
-          .filter((r) => r.id >= GS.ALLOW_RULE_ID_BASE && r.id < GS.ALLOW_RULE_ID_BASE + 10000)
-          .map((r) => r.id);
-        const addRules = buildAllowRules(origins);
-        chrome.declarativeNetRequest.updateDynamicRules(
-          { removeRuleIds, addRules },
-          () => {
-            const err = chrome.runtime.lastError;
-            if (err) resolve({ ok: false, error: err.message || String(err) });
-            else resolve({ ok: true, count: addRules.length });
-          },
-        );
+        try {
+          void chrome.runtime.lastError;
+          const removeRuleIds = (existing || [])
+            .filter((r) => r.id >= GS.ALLOW_RULE_ID_BASE && r.id < GS.ALLOW_RULE_ID_BASE + 10000)
+            .map((r) => r.id);
+          const addRules = buildAllowRules(origins);
+          chrome.declarativeNetRequest.updateDynamicRules(
+            { removeRuleIds, addRules },
+            () => {
+              const err = chrome.runtime.lastError;
+              if (err) resolve({ ok: false, error: err.message || String(err) });
+              else resolve({ ok: true, count: addRules.length });
+            },
+          );
+        } catch (e) {
+          fail(e);
+        }
       });
     } catch (e) {
-      resolve({ ok: false, error: String(e && e.message || e) });
+      fail(e);
     }
   });
 }
@@ -141,26 +182,47 @@ function syncAllowRules(origins) {
 const THREAT_ALLOW_KEY = "threatAllowDomains";
 const THREAT_ALLOW_ID_BASE = 950000;
 const THREAT_ALLOW_MAX = 1000;
+// Install, startup and every change of the key each start one: queued, so
+// two quick changes never both add the same ids. Each run reads the key when
+// its turn comes, so the last run always writes the newest list.
 function syncThreatAllowRules() {
+  return dnrExclusive(syncThreatAllowRulesNow);
+}
+
+function syncThreatAllowRulesNow() {
   if (!TC || !chrome.declarativeNetRequest || !chrome.declarativeNetRequest.updateDynamicRules) {
     return Promise.resolve({ ok: false, error: "dnr-missing" });
   }
   return new Promise((resolve) => {
-    chrome.storage.local.get([THREAT_ALLOW_KEY], (s) => {
-      void chrome.runtime.lastError;
-      const domains = Array.isArray(s && s[THREAT_ALLOW_KEY]) ? s[THREAT_ALLOW_KEY] : [];
-      chrome.declarativeNetRequest.getDynamicRules((existing) => {
-        void chrome.runtime.lastError;
-        const removeRuleIds = (existing || [])
-          .filter((r) => r.id >= THREAT_ALLOW_ID_BASE && r.id < THREAT_ALLOW_ID_BASE + THREAT_ALLOW_MAX)
-          .map((r) => r.id);
-        const addRules = TC.buildUserAllowRules(domains, THREAT_ALLOW_ID_BASE, THREAT_ALLOW_MAX);
-        chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules }, () => {
-          const err = chrome.runtime.lastError;
-          resolve(err ? { ok: false, error: err.message || String(err) } : { ok: true, count: addRules.length });
-        });
+    // Every path resolves (see syncAllowRules).
+    const fail = (e) => resolve({ ok: false, error: String(e && e.message || e) });
+    try {
+      chrome.storage.local.get([THREAT_ALLOW_KEY], (s) => {
+        try {
+          void chrome.runtime.lastError;
+          const domains = Array.isArray(s && s[THREAT_ALLOW_KEY]) ? s[THREAT_ALLOW_KEY] : [];
+          chrome.declarativeNetRequest.getDynamicRules((existing) => {
+            try {
+              void chrome.runtime.lastError;
+              const removeRuleIds = (existing || [])
+                .filter((r) => r.id >= THREAT_ALLOW_ID_BASE && r.id < THREAT_ALLOW_ID_BASE + THREAT_ALLOW_MAX)
+                .map((r) => r.id);
+              const addRules = TC.buildUserAllowRules(domains, THREAT_ALLOW_ID_BASE, THREAT_ALLOW_MAX);
+              chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules }, () => {
+                const err = chrome.runtime.lastError;
+                resolve(err ? { ok: false, error: err.message || String(err) } : { ok: true, count: addRules.length });
+              });
+            } catch (e) {
+              fail(e);
+            }
+          });
+        } catch (e) {
+          fail(e);
+        }
       });
-    });
+    } catch (e) {
+      fail(e);
+    }
   });
 }
 
@@ -178,6 +240,7 @@ async function migrateSettings() {
   if (migrated) await localSet({ settings: migrated.settings, siteOverrides: migrated.siteOverrides }).catch(() => {});
 }
 
+// Called inside a DNR queue section only (syncFromSettings).
 function setThreatRuleset(on) {
   return new Promise((resolve) => {
     try {
@@ -207,13 +270,18 @@ function syncFromSettings() {
     if (Object.keys(patch).length) await localSet(patch).catch(() => {});
     const nextThreat = s.enabled && s.features.threatTier;
     if (nextThreat !== threatOn) {
-      const firstSync = threatOn === null;
-      threatOn = nextThreat;
-      await setThreatRuleset(nextThreat);
-      // At worker start only the ruleset state is lined up (the refreshed
-      // rules are already in place); a real switch rebuilds or removes them.
-      if (!nextThreat) await GU.removeThreatRules(listDeps()).catch(() => {});
-      else if (!firstSync) await GU.rebuildThreatRules(listDeps()).catch(() => {});
+      // One DNR queue section: a list swap running now finishes first (and
+      // used the old value); the next one sees the new value. The storage
+      // patch above stays outside: it starts applyGeneralState, which queues.
+      await dnrExclusive(async () => {
+        const firstSync = threatOn === null;
+        threatOn = nextThreat;
+        await setThreatRuleset(nextThreat);
+        // At worker start only the ruleset state is lined up (the refreshed
+        // rules are already in place); a real switch rebuilds or removes them.
+        if (!nextThreat) await GU.removeThreatRules(listDeps()).catch(() => {});
+        else if (!firstSync) await GU.rebuildThreatRules(listDeps()).catch(() => {});
+      });
     }
   });
   settingsQueue = run.catch(() => {});
@@ -264,7 +332,10 @@ function feedDeps() {
       void chrome.runtime.lastError;
       resolve(r || []);
     })),
-    updateSessionRules: (opts) => cb((done) => dnr.updateSessionRules(opts, done)),
+    // The write goes through the DNR queue like every other DNR write. The
+    // read before it (feed rule ids) needs no lock: the feed is the only
+    // writer of session rules and feedRun() runs one feed operation at a time.
+    updateSessionRules: (opts) => dnrExclusive(() => cb((done) => dnr.updateSessionRules(opts, done))),
     loadSnapshot: async () => (await fetch(chrome.runtime.getURL("src/rules/threat-snapshot.json"))).json(),
   };
 }
@@ -280,32 +351,35 @@ function feedRun(op) {
 const applyCachedFeed = () => feedRun((d) => FC.applyCached(d));
 const checkFeedNow = () => feedRun((d) => FC.checkFeed(d));
 
+// Called inside a DNR queue section only (applyGeneralStateNow). Never rejects.
 function ensureListAllowRule() {
-  try {
-    const feed = FC && FC.configured(feedDeps());
-    const rule = GU.listAllowRule(chrome.runtime.id, feed && feed.ok ? [new URL(feed.origin).hostname] : []);
-    chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [rule.id], addRules: [rule] }, () => {
-      const err = chrome.runtime.lastError;
-      if (err) console.warn("twitch-adblock: list allow rule:", err.message);
-    });
-  } catch (e) {
-    console.warn("twitch-adblock: list allow rule:", e && e.message);
-  }
+  return new Promise((resolve) => {
+    try {
+      const feed = FC && FC.configured(feedDeps());
+      const rule = GU.listAllowRule(chrome.runtime.id, feed && feed.ok ? [new URL(feed.origin).hostname] : []);
+      chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [rule.id], addRules: [rule] }, () => {
+        const err = chrome.runtime.lastError;
+        if (err) console.warn("twitch-adblock: list allow rule:", err.message);
+        resolve();
+      });
+    } catch (e) {
+      console.warn("twitch-adblock: list allow rule:", e && e.message);
+      resolve();
+    }
+  });
 }
 
 // The popup's switch and "Allow this page" both write storage (storage.onChanged)
-// and message the worker, so each click starts two runs. Run them one at a time:
-// two overlapping runs read the same rules and the second rebuild failed on
-// duplicate rule ids, dropping refreshed lists back to the packed ones.
-let applyQueue = Promise.resolve();
+// and message the worker, so each click starts two runs. Each run is one DNR
+// queue section: two overlapping runs read the same rules and the second
+// rebuild failed on duplicate rule ids, dropping refreshed lists back to the
+// packed ones.
 function applyGeneralState() {
-  const run = applyQueue.then(applyGeneralStateNow, applyGeneralStateNow);
-  applyQueue = run.catch(() => {});
-  return run;
+  return dnrExclusive(applyGeneralStateNow);
 }
 
 async function applyGeneralStateNow() {
-  ensureListAllowRule();
+  await ensureListAllowRule();
   const settings = await getSettings();
   const enabled = settings.generalEnabled !== false;
   currentEnabled = enabled;
@@ -593,14 +667,22 @@ async function refreshLists(manual) {
       }
     }
     await ensureCosmetic();
-    const settings = await getSettings();
-    currentEnabled = settings.generalEnabled !== false;
+    // Read the lists switch inside a DNR queue section: every other write of
+    // currentEnabled is in one too (applyGeneralStateNow), so a slow read here
+    // cannot overwrite a newer value. The refresh checks it again right
+    // before its swap.
+    await dnrExclusive(async () => {
+      const settings = await getSettings();
+      currentEnabled = settings.generalEnabled !== false;
+    });
     let result;
     try {
       // A new attempt starts with a clean storage-error slate.
       lastWriteError = null;
       await setListState({ lastError: null }).catch(() => {});
-      result = await GU.refresh(listDeps(), { manual });
+      // Only the rule swap runs inside the DNR queue (deps.exclusive); the
+      // downloads do not hold it.
+      result = await GU.refresh(Object.assign(listDeps(), { exclusive: dnrExclusive }), { manual });
     } catch (e) {
       result = { ok: false, reason: String(e && e.message || e) };
     }
@@ -652,7 +734,9 @@ async function revertLists() {
     });
     let result;
     try {
-      result = await GU.revertLists(deps);
+      // One DNR queue section (local work only: storage, rules, the packed
+      // hide sheet), so an apply run cannot rebuild from half-removed lists.
+      result = await dnrExclusive(() => GU.revertLists(deps));
     } catch (e) {
       result = { ok: false, reason: String(e && e.message || e) };
     }

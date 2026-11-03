@@ -67,10 +67,12 @@ Deno.test("switching lists off while a list refresh swaps rules in leaves lists 
   let off = null;
   dnr.getDynamicRules = (cb) => {
     if (!swapping || off) return realGet(cb);
-    // The swap's read is answered only after the off click's runs have finished
-    // (the swap parses ~5 MB of bundled rules; the off runs are quick).
+    // The off click lands while the swap is reading the rules. Since L-5 the
+    // swap is one DNR queue section, so the click's runs wait for it and run
+    // after it (before L-5 this hook held the swap's read until the off runs
+    // had finished; with the queue that would wait for itself).
     off = popupWrite(w, { generalEnabled: false });
-    return realGet((rules) => off.then(() => cb(rules)));
+    return realGet(cb);
   };
   await w.send({ source: "twitch-adblock-general", type: "updateLists" });
   assert(off, "precondition: the refresh swapped list rules in");
