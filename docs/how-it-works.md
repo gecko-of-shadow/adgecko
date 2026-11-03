@@ -30,14 +30,14 @@ Covers `kick.com` and subdomains.
 
 - An in-player ad is skipped only when the IVS player can seek back to the stream without a long rewind, at most twice in 60 seconds. Otherwise the ad plays.
 - The live video is left visible, audible, and at normal speed.
-- A post-roll cover can be paused, and some ad chrome and page banners are hidden.
+- A post-roll ad cover is hidden and its clip paused, but only when nothing in it could be the live player: a video with a stream source (`blob:` or a stream object), an endless length, or a source or length not known yet keeps the cover visible. Some ad chrome and page banners are hidden too.
 
 ## Other websites
 
 Covers other http and https sites. The README and the popup call these "ordinary sites".
 
 - `declarativeNetRequest` blocks domains from the packed lists, and `src/cosmetic.js` hides leftover ad boxes.
-- The packed snapshot in `src/rules/meta.json` is 185,816 whole-domain and 4,030 scoped entries in 2,406 rules (packed 2026-11-03).
+- The packed snapshot in `src/rules/meta.json` is 186,987 whole-domain and 4,035 scoped entries in 2,421 rules (packed 2026-11-03 16:31 UTC).
 - Twitch, YouTube (including `youtu.be`, nocookie, Kids, and the video CDNs), and Kick are excluded from this general pass.
 - Ordinary-site blocking starts **on**.
 

@@ -95,7 +95,8 @@ Without the data file loaded, nothing is accepted. Rules with four or more
 labels are left out (UNVERIFIED blast radius, small). The packed threat
 ruleset was rebuilt with this check: 15,920 hosts (`pisz.pl`, `ru.com`,
 `webhop.me`, `3utilities.com`, `cprapid.com` and `fastvps-server.com` are
-public suffixes and are no longer blocked as a whole).
+public suffixes and are no longer blocked as a whole). After the list repack
+of 2026-11-03 it holds 15,913 hosts in 199 rules.
 
 **Per-refresh cap.** One list refresh may add at most 2,500 new threat hosts
 and at most 20% of the previous set (the last refreshed set, or the packed
@@ -106,10 +107,12 @@ accepted as real.
 The ordinary list tier skips ICANN public suffixes (`co.uk`) and non-public
 IPv4 addresses too (security review L-3), at refresh time and in the packer;
 private suffixes and shared-platform parents (`github.io`, dynamic-DNS
-parents) stay up to the lists there (that tier is priority 1, never blocks
-page navigations, and "Allow this page" overrides it). The packed
-`general-network.json` still holds two such entries (`pisz.pl`, `0.0.0.1`)
-until the next `scripts/pack-filter-lists.py` run.
+parents) stay up to the lists there (that tier is priority 1, blocks page
+navigations only for `$doc` list entries, and "Allow this page" overrides
+it; known gap, not fixed yet: a filter with only negated types such as
+`$~script` becomes a rule that also blocks navigations to its host). The
+packed `general-network.json` was repacked on 2026-11-03 and no longer holds
+`pisz.pl` or `0.0.0.1`.
 
 `youtubekids.com` and `kickusercontent.com` were added to the build prompt's
 list (fail-open): they are in the manifest's stream-site exclusions.
