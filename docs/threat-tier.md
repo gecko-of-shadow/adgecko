@@ -23,7 +23,20 @@ whole-domain filters and `$doc` (navigation) filters count as "this host is
 bad"; party- or type-limited filters stay in the ordinary list tier with their
 own scope.
 
-**Smaller phishing coverage (owner decision, 2026-11-02):** Curben's
+**The one Curben list we use: URLhaus data, no OpenPhish (owner decision
+#18b, 2026-11-02).** `urlhaus_hosts` is curbengh's urlhaus-filter: abuse.ch
+URLhaus malware hosts (data CC0 1.0; the urlhaus-filter repository is CC0 1.0
+and MIT). It is the only list from Curben's malware-filter project in this
+extension, fetched only from
+`https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt`.
+It is kept because it adds about 546 malware hosts that the other lists do not
+have (about 2 of 548 overlap with uBO badware / Dandelion, checked
+2026-11-02), and direct abuse.ch exports now need an Auth-Key, so there is no
+keyless replacement. `scripts/lib/curben_check.py` enforces the exception: the
+release gate and `test/no-openphish.test.js` fail on any other Curben list or
+mirror, Curben's phishing list, or any OpenPhish source.
+
+**Smaller phishing coverage (owner decision #13, 2026-11-02):** Curben's
 phishing-filter is not used anywhere, because it is curated from OpenPhish. That
 list was about 30,000 of the roughly 45,000 packed malware/phishing domains.
 Chrome Safe Browsing remains the backstop for phishing pages. The repo ships

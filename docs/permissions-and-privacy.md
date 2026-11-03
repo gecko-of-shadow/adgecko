@@ -20,7 +20,7 @@ Host permissions, all for downloading public filter lists:
 
 - `https://easylist.to/*` — EasyList and EasyPrivacy
 - `https://pgl.yoyo.org/*` — Peter Lowe’s list
-- `https://malware-filter.gitlab.io/*` — URLhaus hosts (curbengh's urlhaus-filter)
+- `https://malware-filter.gitlab.io/*` — URLhaus hosts (curbengh's urlhaus-filter; the one Curben list we use, URLhaus data only, no OpenPhish; owner decision #18b)
 - `https://ublockorigin.github.io/*` — EasyList mirrors and uBlock Origin badware
 - `https://easylist-downloads.adblockplus.org/*` — EasyList mirrors
 - `https://secure.fanboy.co.nz/*` — EasyList mirrors

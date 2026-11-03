@@ -34,7 +34,7 @@ SOURCES = OrderedDict(
             "peter_lowe",
             {
                 "url": "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext",
-                "license": "Peter LoweΓÇÖs list ΓÇö free for personal/non-commercial use; credit required. See https://pgl.yoyo.org/as/ (check page for current terms).",
+                "license": "Peter Lowe's list - free for personal/non-commercial use; credit required. See https://pgl.yoyo.org/as/ (check page for current terms).",
                 "role": "ads_trackers",
                 "priority": 100,
             },
@@ -43,7 +43,7 @@ SOURCES = OrderedDict(
             "urlhaus_hosts",
             {
                 "url": "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt",
-                "license": "urlhaus-filter (curbengh / malware-filter) ΓÇö CC BY-NC-SA 4.0 for the filter packaging; URLhaus data from abuse.ch. Attribution required. https://gitlab.com/malware-filter/urlhaus-filter",
+                "license": "urlhaus-filter by curbengh (malware-filter project) - repository CC0 1.0 and MIT License; URLhaus data by abuse.ch - CC0 1.0 (not endorsed by abuse.ch). The one Curben list we use (owner decision #18b): URLhaus malware data only. https://gitlab.com/malware-filter/urlhaus-filter",
                 "role": "malware_threat",
                 "priority": 90,
                 "max_domains": 8_000,
@@ -53,7 +53,7 @@ SOURCES = OrderedDict(
             "easylist",
             {
                 "url": "https://easylist.to/easylist/easylist.txt",
-                "license": "EasyList ΓÇö dual-licensed GNU GPL-3.0-or-later OR CC BY-SA 3.0-or-later. Credit: ΓÇ£The EasyList authorsΓÇ¥. https://easylist.to/pages/licence.html",
+                "license": "EasyList - dual-licensed GNU GPL-3.0-or-later OR CC BY-SA 3.0-or-later. Credit: \"The EasyList authors\". https://easylist.to/pages/licence.html",
                 "role": "ads",
                 "priority": 70,
             },
@@ -62,7 +62,7 @@ SOURCES = OrderedDict(
             "easyprivacy",
             {
                 "url": "https://easylist.to/easylist/easyprivacy.txt",
-                "license": "EasyPrivacy ΓÇö same EasyList dual license (GPL-3.0-or-later OR CC BY-SA 3.0-or-later). Credit: ΓÇ£The EasyList authorsΓÇ¥.",
+                "license": "EasyPrivacy - same EasyList dual license (GPL-3.0-or-later OR CC BY-SA 3.0-or-later). Credit: \"The EasyList authors\".",
                 "role": "privacy",
                 "priority": 50,
             },
@@ -71,7 +71,7 @@ SOURCES = OrderedDict(
             "hagezi_pro_mini",
             {
                 "url": "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt",
-                "license": "HaGeZi Pro mini — see https://github.com/hagezi/dns-blocklists for the current license. Credit: HaGeZi.",
+                "license": "HaGeZi Pro mini - see https://github.com/hagezi/dns-blocklists for the current license. Credit: HaGeZi.",
                 "role": "ads_trackers",
                 "priority": 40,
             },
@@ -80,7 +80,7 @@ SOURCES = OrderedDict(
             "ublock_badware",
             {
                 "url": "https://ublockorigin.github.io/uAssets/filters/badware.txt",
-                "license": "uBlock Origin badware filters — GPL-3.0. Credit: Raymond Hill and uBlock Origin contributors.",
+                "license": "uBlock Origin badware filters - GPL-3.0. Credit: Raymond Hill and uBlock Origin contributors.",
                 "role": "malware_threat",
                 "priority": 35,
             },
@@ -89,19 +89,21 @@ SOURCES = OrderedDict(
             "dandelion_antimalware",
             {
                 "url": "https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt",
-                "license": "Dandelion Sprout's Anti-Malware List — see https://github.com/DandelionSprout/adfilt for the current license. Credit: Dandelion Sprout.",
+                "license": "Dandelion Sprout's Anti-Malware List - see https://github.com/DandelionSprout/adfilt for the current license. Credit: Dandelion Sprout.",
                 "role": "malware_threat",
                 "priority": 30,
             },
         ),
-        # Curben's phishing-filter was removed on 2026-11-02 (owner decision: no
+        # Curben's phishing-filter was removed on 2026-11-02 (owner decision #13: no
         # OpenPhish data at all; that list is curated from OpenPhish, IPThreat and
-        # PhishTank). curbengh's urlhaus-filter above is URLhaus data and stays.
+        # PhishTank). curbengh's urlhaus-filter above (URLhaus data, CC0) is the one
+        # documented Curben exception (owner decision #18b); scripts/lib/curben_check.py
+        # enforces that nothing else from that project is used.
         (
             "adguard_base",
             {
                 "url": "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt",
-                "license": "AdGuard Base filter (EasyList already removed) — GPL-3.0. Credit: AdGuard.",
+                "license": "AdGuard Base filter (EasyList already removed) - GPL-3.0. Credit: AdGuard.",
                 "role": "ads",
                 "priority": 20,
             },
@@ -455,6 +457,17 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
         "Additional credits: **Peter Lowe** (ad/tracking server list);",
         "**abuse.ch URLhaus** data via **urlhaus-filter** / malware-filter packaging.",
         "",
+        "## The one Curben list (owner decision #18b)",
+        "",
+        "`urlhaus_hosts` is curbengh's urlhaus-filter (malware-filter project):",
+        "URLhaus malware-host data from abuse.ch (CC0 1.0); the urlhaus-filter",
+        "repository is CC0 1.0 and MIT. It is the only list from that project that",
+        "Gecko Adblock uses, fetched only from",
+        "`https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt`.",
+        "No phishing-feed data: the project's phishing list stays dropped (owner",
+        "decisions #13 and #18b). `scripts/lib/curben_check.py` enforces this in the",
+        "release gate and the tests.",
+        "",
         "## Sources",
         "",
     ]
@@ -470,8 +483,8 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
         [
             "## How we use them",
             "",
-            "- Network blocking only in `general-network.json` (domain ΓåÆ DNR `requestDomains`).",
-            "- Cosmetic sample (generic `##` only) in `cosmetic-sample.json` for the cosmetic agent ΓÇö not applied by DNR.",
+            "- Network blocking only in `general-network.json` (domain -> DNR `requestDomains`).",
+            "- Cosmetic sample (generic `##` only) in `cosmetic-sample.json` for the cosmetic agent - not applied by DNR.",
             "- Twitch / YouTube / Kick (and related player hosts) are stripped from block targets here;",
             "  the DNR agent still must add higher-priority allow rules for those sites.",
             "",

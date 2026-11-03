@@ -50,6 +50,7 @@ An allow counts for the whole website address and stays until you undo it. Detai
 - No tracking: it does not send your browsing history anywhere.
 - No account, and no analytics call of its own. Settings stay in Chrome's storage on this browser.
 - It downloads eight public filter lists (EasyList, EasyPrivacy, AdGuard Base, and others) from the [list sites](docs/permissions-and-privacy.md#host-permissions), over HTTPS without cookies. Those sites see the list address and your IP address. The page you are visiting is not part of that address.
+- The one Curben list we use: URLhaus data, no OpenPhish. curbengh's urlhaus-filter (abuse.ch URLhaus malware hosts, CC0) is the only list from Curben's malware-filter project, kept by owner decision #18b; his phishing list and every OpenPhish source stay out. [Details](docs/threat-tier.md#where-the-hosts-come-from)
 - On Twitch, it asks Twitch for ad-free copies of the stream. Those requests go to Twitch.
 
 Full details, permissions, and the list sites: [docs/permissions-and-privacy.md](docs/permissions-and-privacy.md)

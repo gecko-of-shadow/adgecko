@@ -450,6 +450,22 @@ print("PASS  DNR hard-excludes Twitch + YouTube family + Kick (incl. video hosts
 print("PASS  Kick video host live-video.net included from beta/IVS read-only pass")
 PY
 
+section "2c. Curben / phishing-feed sources (owner decisions #13, #18b)"
+# The one Curben (curbengh / malware-filter) list allowed is urlhaus-filter
+# (URLhaus data, CC0), source urlhaus_hosts, fetched only from
+# https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt
+# Any other list or mirror of that project, its phishing list, or any phishing
+# feed source fails here. The same checker runs in the deno suite.
+CURBEN_ARGS=(--root "$PKG" --gate "$ROOT/scripts/release-gate.sh")
+if [[ -f "$ROOT/scripts/pack-filter-lists.py" ]]; then
+  CURBEN_ARGS+=(--packer "$ROOT/scripts/pack-filter-lists.py")
+fi
+if python3 "$ROOT/scripts/lib/curben_check.py" "${CURBEN_ARGS[@]}"; then
+  :
+else
+  fail "Curben/phishing-feed source rule (only urlhaus-filter from malware-filter.gitlab.io)"
+fi
+
 section "3. Dangerous APIs + identity / phone-home"
 SCAN_ROOT="$PKG/src"
 # video-swap-new (pixeltris) needs eval(workerString) to boot the player worker
@@ -525,10 +541,15 @@ for path in root.rglob("*.js"):
         for m in re.finditer(r"https?://[^\s\"'`]+", line):
             urls.append((str(path), m.group(0)))
 bad = []
+# malware-filter.gitlab.io serves exactly one allowed list (owner decision #18b).
+CURBEN_URL = "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt"
 for path, url in urls:
     host = re.sub(r"^https?://", "", url).split("/")[0].lower()
     if host == "example.invalid":
         continue  # relative-URL base in the exclusion helper, not a request
+    if ("malware-filter" in host or "curben" in host) and url != CURBEN_URL:
+        bad.append(f"{path}: {url} (only the urlhaus-filter list may come from Curben's project)")
+        continue
     if not any(bit in host for bit in allowed_host_bits):
         bad.append(f"{path}: {url}")
 if bad:

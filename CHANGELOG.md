@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Curben's urlhaus-filter (abuse.ch URLhaus malware hosts) is kept as the one documented Curben exception (owner decision #18b): only source `urlhaus_hosts`, only from `malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt`; his phishing list and every OpenPhish source stay out. New `scripts/lib/curben_check.py` enforces it in the release gate (new section 2c, edited, not run) and in `test/no-openphish.test.js` (with a negative case for each forbidden source). Its licence line is corrected to upstream's terms (URLhaus data CC0 1.0; urlhaus-filter repository CC0 1.0 + MIT; it was wrongly listed as CC BY-NC-SA 4.0), and the garbled characters in the licence file are gone.
 - New gecko icon: a green gecko with a blue "no ads" shield on a round teal badge. The eye glows amber while list blocking is on and the icon goes grey with a sleepy eye when it is off. Sources in `icons/source/`, rebuilt with `node scripts/build-icons.mjs`. The popup icon glow is round to match.
 - Ordinary sites: switching lists off and on again (or a quick "Allow this page" and undo) no longer drops the refreshed lists back to the packed ones. Switching lists off while a list refresh is running now leaves them off.
 - YouTube: going back to a video that already played (A, then B or the home page, then A) and getting stuck at 0:00 now gets the same automatic reload as any other stuck start.
