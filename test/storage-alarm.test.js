@@ -196,15 +196,18 @@ Deno.test("popup shows a failed settings write instead of dropping it", () => {
 
 // ---- who reads what ----
 
-Deno.test("content scripts and the popup never read the list state or payload keys", () => {
-  const pageSide = { popupSource, cosmeticSource, cosmeticParseSource, youtubeSource, kickSource, directorySource };
+Deno.test("content scripts and the popup never read the list state or payload keys", async () => {
+  const featuresSource = await Deno.readTextFile(new URL("../src/settings/features.js", import.meta.url));
+  const flagsSource = await Deno.readTextFile(new URL("../src/settings/flags.js", import.meta.url));
+  const pageSide = { popupSource, cosmeticSource, cosmeticParseSource, youtubeSource, kickSource, directorySource, featuresSource, flagsSource };
   for (const [name, src] of Object.entries(pageSide)) {
     for (const key of ["generalListRefresh", "listData:", "listState"]) assert(!src.includes(key), name + " mentions " + key);
   }
   // Every content script file in the manifest is one of the checked ones or vendored.
   for (const cs of manifest.content_scripts) for (const f of cs.js) {
-    assert(f.startsWith("src/vendor/") || ["src/cosmetic.js", "src/general/cosmetic-parse.js", "src/youtube.js", "src/kick.js", "src/twitch-directory-ads.js"].includes(f), "unchecked content script " + f);
+    assert(f.startsWith("src/vendor/") || ["src/cosmetic.js", "src/general/cosmetic-parse.js", "src/youtube.js", "src/kick.js", "src/twitch-directory-ads.js", "src/settings/features.js", "src/settings/flags.js"].includes(f), "unchecked content script " + f);
   }
-  // The cosmetic content script reacts only to its own keys.
-  assert(/if \(!changes \|\| \(!changes\[STORAGE_KEY\] && !changes\[ALLOWED_ORIGINS_KEY\] && !changes\.cosMeta\)\) return;/.test(cosmeticSource), "onChanged filtered by key");
+  // The cosmetic content script reacts only to its own small keys (Block H
+  // added the settings / siteOverrides switches).
+  assert(/if \(!changes \|\| \(!changes\[STORAGE_KEY\] && !changes\[ALLOWED_ORIGINS_KEY\] && !changes\.cosMeta && !changes\[SETTINGS_KEY\] && !changes\[OVERRIDES_KEY\]\)\) return;/.test(cosmeticSource), "onChanged filtered by key");
 });

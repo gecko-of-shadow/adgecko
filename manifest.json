@@ -140,6 +140,7 @@
         "*://*.twitch.tv/*"
       ],
       "js": [
+        "src/settings/features.js",
         "src/twitch-directory-ads.js"
       ],
       "run_at": "document_start",
@@ -153,6 +154,12 @@
       "exclude_matches": [
         "*://twitch.tv/*",
         "*://*.twitch.tv/*",
+        "*://ttvnw.net/*",
+        "*://*.ttvnw.net/*",
+        "*://jtvnw.net/*",
+        "*://*.jtvnw.net/*",
+        "*://twitchcdn.net/*",
+        "*://*.twitchcdn.net/*",
         "*://youtube.com/*",
         "*://*.youtube.com/*",
         "*://youtu.be/*",
@@ -173,11 +180,33 @@
         "*://*.kickusercontent.com/*"
       ],
       "js": [
+        "src/settings/features.js",
         "src/general/cosmetic-parse.js",
         "src/cosmetic.js"
       ],
       "run_at": "document_start",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*",
+        "*://youtube.com/*",
+        "*://kick.com/*",
+        "*://*.kick.com/*",
+        "*://twitch.tv/*",
+        "*://*.twitch.tv/*"
+      ],
+      "js": [
+        "src/settings/features.js",
+        "src/settings/flags.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
     }
-  ]
+  ],
+  "options_ui": {
+    "page": "src/settings.html",
+    "open_in_tab": true
+  }
 }

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gecko Adblock settings</title>
+  <style>
+    :root { --bg: #0e0e10; --panel: #18181b; --text: #efeff1; --muted: #adadb8; --line: #2d2d35; --glow: #f0a33a; }
+    body { margin: 0; color: var(--text); background: var(--bg); font: 14px/1.5 sans-serif; }
+    main { max-width: 720px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 18px; margin: 8px 0 12px; }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 8px; }
+    label { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
+    .note, .fixed { color: var(--muted); font-size: 12px; margin: 4px 0; }
+    button { border: 0; border-radius: 4px; padding: 7px 10px; background: #2d2d35; color: var(--text); font: inherit; cursor: pointer; }
+    button:hover { filter: brightness(1.1); }
+    input[type="text"] { background: #0e0e10; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; min-width: 0; flex: 1; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    ul { margin: 6px 0; padding-left: 18px; }
+    li { margin: 3px 0; word-break: break-all; }
+    #status { min-height: 1.2em; color: var(--glow); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Gecko Adblock settings</h1>
+    <p id="status" role="status"></p>
+
+    <section aria-labelledby="h-master">
+      <h2 id="h-master">Everything</h2>
+      <label><input id="master" type="checkbox" checked> <span>Gecko Adblock is on (turns every switchable feature off when unchecked)</span></label>
+      <p class="note">The Twitch ad-free stream swap and the uBlock Origin YouTube scriptlets are always on while the extension is enabled: they are vendored, unmodified code that this extension cannot switch off without extra permissions. To stop them, turn the extension off in chrome://extensions. A site's own switch in the popup turns off this extension's other helpers on that site.</p>
+    </section>
+
+    <section aria-labelledby="h-features">
+      <h2 id="h-features">Features</h2>
+      <div id="features"></div>
+      <p class="note">"Live" switches apply at once. Switches for page scripts (YouTube, Kick) apply to the next action the script takes; nothing already running is undone and no tab is reloaded for you.</p>
+    </section>
+
+    <section aria-labelledby="h-feed">
+      <h2 id="h-feed">Threat feed and lists</h2>
+      <p id="feed-status"></p>
+      <label><input id="pause-feed" type="checkbox"> <span>Pause threat feed (removes the feed's rules, keeps the saved copy; the packed threat list stays on)</span></label>
+      <p id="lists-status"></p>
+      <div class="row">
+        <button id="update-lists" type="button">Update lists</button>
+        <button id="revert-lists" type="button">Revert lists</button>
+      </div>
+      <p class="note">Revert lists drops every downloaded list and goes back to the lists packed with this version.</p>
+    </section>
+
+    <section aria-labelledby="h-allow">
+      <h2 id="h-allow">Allow this domain (threat tier)</h2>
+      <p class="note">A domain added here is never blocked by the threat tier (also its subdomains). Use it only for a site you trust that the malware lists flag by mistake.</p>
+      <div class="row">
+        <input id="allow-domain" type="text" placeholder="example.com" autocomplete="off" spellcheck="false" aria-label="Domain to allow">
+        <button id="allow-add" type="button">Allow this domain</button>
+      </div>
+      <ul id="allow-list"></ul>
+    </section>
+
+    <section aria-labelledby="h-sites">
+      <h2 id="h-sites">Per-site switches</h2>
+      <ul id="site-list"></ul>
+    </section>
+  </main>
+  <script src="settings/features.js"></script>
+  <script src="threat/compile.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

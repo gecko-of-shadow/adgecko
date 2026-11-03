@@ -28,11 +28,16 @@ Deno.test("general popup defaults on and never auto-fetches lists", () => {
   assert(backgroundSource.includes("manual"), "update path is manual");
 });
 
-Deno.test("allow-this-page skips Twitch YouTube Kick hosts", () => {
-  assert(settingsSource.includes("twitch\\.tv") || settingsSource.includes("twitch.tv"), "settings know twitch");
-  assert(settingsSource.includes("youtube\\.com") || settingsSource.includes("youtube.com"), "settings know youtube");
-  assert(settingsSource.includes("kick\\.com") || settingsSource.includes("kick.com"), "settings know kick");
-  assert(popupSource.includes("HARD_EXCLUDE_HOST_RE"), "popup hard-excludes streams");
+// Block H: the stream-site list lives only in src/settings/features.js. The
+// worker's settings module asks it (no allow rule for a stream host), and the
+// popup asks the worker ("siteInfo") because popup.html loads only popup.js.
+Deno.test("allow-this-page skips Twitch YouTube Kick hosts", async () => {
+  await import("../src/settings/features.js");
+  const GS = new Function("self", `${settingsSource}\nreturn self.GeneralSettings;`)(globalThis);
+  for (const host of ["twitch.tv", "www.youtube.com", "kick.com", "cdn.kickusercontent.com"]) assert(GS.isHardExcludedHost(host), "excluded " + host);
+  assert(!GS.isHardExcludedHost("news.example.com"), "ordinary host");
+  assert(settingsSource.includes("isStreamHost") && !/twitch\\?\.tv/.test(settingsSource), "settings module uses the registry, no own list");
+  assert(popupSource.includes('notifyBackground("siteInfo"') && !/twitch\\?\.tv/.test(popupSource), "popup asks the worker, no own list");
   assert(popupHtml.includes("Allow this page"), "allow control labeled");
 });
 
@@ -63,5 +68,6 @@ Deno.test("storage key contract matches settings module", () => {
   // general/filter-options.js (shared option table) must load before update.js.
   // The threat tier (protected hosts + compiler) loads before update.js too.
   // Then the signed-feed client (dormant until configured).
-  assert(backgroundSource.replace(/\s+/g, " ").includes("importScripts(\"general-settings.js\", \"general/filter-options.js\", \"threat/protected-hosts.js\", \"threat/compile.js\", \"general/update.js\", \"general/cosmetic-parse.js\", \"feed/config.js\", \"feed/keys.js\", \"feed/canonical.js\", \"feed/schema.js\", \"feed/verify.js\", \"feed/compile.js\", \"feed/client.js\")"), "worker loads shared settings");
+  // Block H: the feature registry loads first.
+  assert(backgroundSource.replace(/\s+/g, " ").includes("importScripts(\"settings/features.js\", \"general-settings.js\", \"general/filter-options.js\", \"threat/protected-hosts.js\", \"threat/compile.js\", \"general/update.js\", \"general/cosmetic-parse.js\", \"feed/config.js\", \"feed/keys.js\", \"feed/canonical.js\", \"feed/schema.js\", \"feed/verify.js\", \"feed/compile.js\", \"feed/client.js\")"), "worker loads shared settings");
 });

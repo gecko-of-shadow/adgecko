@@ -1,20 +1,25 @@
 (function () {
-  // Mirrored in general-settings.js for the service worker (popup.html may only load popup.js).
+  // popup.html may only load this file, so the feature registry
+  // (src/settings/features.js) is reached through the worker ("siteInfo").
+  // Writes go to the small `settings` / `siteOverrides` keys; the worker turns
+  // them into DNR rules and the legacy generalEnabled / generalAllowedOrigins
+  // mirrors.
   const KEYS = {
     enabled: "generalEnabled",
     allowedOrigins: "generalAllowedOrigins",
     listUpdatedAt: "generalListUpdatedAt",
     listStatus: "generalListStatus",
     listUpdateRequestAt: "generalListUpdateRequestAt",
+    settings: "settings",
+    overrides: "siteOverrides",
   };
   const DEFAULTS = {
     generalEnabled: true,
     generalAllowedOrigins: [],
     generalListUpdatedAt: null,
-    generalListStatus: "Packed lists (auto refresh after startup).",
+    generalListStatus: "Packed lists (checked every 3 hours).",
     generalListUpdateRequestAt: null,
   };
-  const HARD_EXCLUDE_HOST_RE = /(?:^|\.)((?:twitch\.tv)|(youtube\.com)|(youtu\.be)|(youtube-nocookie\.com)|(youtubekids\.com)|(googlevideo\.com)|(kick\.com)|(kickusercontent\.com))$/i;
 
   function withDefaults(stored) {
     return Object.assign({}, DEFAULTS, stored || {});
@@ -30,14 +35,10 @@
   }
   function hostOfOrigin(origin) {
     try {
-      return new URL(origin).hostname.toLowerCase();
+      return new URL(origin).hostname.toLowerCase().replace(/\.$/, "");
     } catch {
       return "";
     }
-  }
-  function isHardExcludedOrigin(origin) {
-    const h = hostOfOrigin(origin).replace(/\.$/, "");
-    return !!h && HARD_EXCLUDE_HOST_RE.test(h);
   }
 
   const brandIcon = document.getElementById("brand-icon");
@@ -46,6 +47,9 @@
   const generalStatus = document.getElementById("general-status");
   const allowPage = document.getElementById("allow-page");
   const pageStatus = document.getElementById("page-status");
+  const siteHost = document.getElementById("site-host");
+  const featureList = document.getElementById("feature-list");
+  const openSettings = document.getElementById("open-settings");
   const updateLists = document.getElementById("update-lists");
   const listsStatus = document.getElementById("lists-status");
   const feedStatus = document.getElementById("feed-status");
@@ -74,6 +78,8 @@
   let activeTab = null;
   let pageChecked = false;
   let settings = withDefaults(null);
+  let stored = {}; // raw settings / siteOverrides
+  let info = null; // worker's siteInfo answer for this page
 
   function packagedVersion() {
     try {
@@ -111,12 +117,77 @@
   function currentOrigin() {
     if (!activeTab) return null;
     // Without the "tabs" permission Chrome leaves tab.url out, so the page's
-    // own content script (cosmetic.js) reports its origin instead.
+    // own content script (cosmetic.js, or settings/flags.js on stream sites)
+    // reports its origin instead.
     return normalizeOrigin(activeTab.url || activeTab.pageOrigin || "");
   }
 
+  // Lists on everywhere: the network feature (stored settings win over the
+  // legacy mirror, which the worker derives from them).
+  function networkOn() {
+    const s = stored[KEYS.settings];
+    if (s && typeof s === "object") return s.enabled !== false && !(s.features && s.features.network === false);
+    return settings.generalEnabled !== false;
+  }
+
+  function overridesCopy() {
+    const o = stored[KEYS.overrides];
+    return o && typeof o === "object" ? JSON.parse(JSON.stringify(o)) : {};
+  }
+
+  // The site switch: this host's override says enabled:false. Before the
+  // worker migrated, the legacy allowed-origins list still counts.
+  function siteOff(origin) {
+    const host = hostOfOrigin(origin);
+    const o = stored[KEYS.overrides];
+    if (o && typeof o === "object" && o[host] && o[host].enabled === false) return true;
+    if (info && info.host === host && info.siteEnabled === false) return true;
+    const legacy = Array.isArray(settings.generalAllowedOrigins) ? settings.generalAllowedOrigins : [];
+    return !stored[KEYS.settings] && legacy.includes(origin);
+  }
+
+  function renderFeatures() {
+    if (!featureList) return;
+    const list = info && Array.isArray(info.features) ? info.features : null;
+    try {
+      while (featureList.firstChild) featureList.removeChild(featureList.firstChild);
+    } catch {
+      // fake DOM in tests
+    }
+    if (!list || typeof document.createElement !== "function") {
+      featureList.textContent = list ? list.map((f) => f.label + ": " + (f.on ? "on" : "off")).join(" · ") : "";
+      return;
+    }
+    for (const f of list) {
+      if (!f.available) continue;
+      if (f.apply === "always") {
+        const p = document.createElement("p");
+        p.className = "fixed";
+        p.textContent = f.label + ": always on";
+        featureList.appendChild(p);
+        continue;
+      }
+      if (!f.perSite) {
+        const p = document.createElement("p");
+        p.className = "fixed";
+        p.textContent = f.label + ": " + (f.on ? "on" : "off") + " (change in All settings)";
+        featureList.appendChild(p);
+        continue;
+      }
+      const label = document.createElement("label");
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = !!f.on;
+      box.disabled = !(info && info.siteEnabled) || !(info && info.enabled);
+      box.addEventListener("change", () => setSiteFeature(f.id, box.checked));
+      label.appendChild(box);
+      label.appendChild(document.createTextNode(f.label));
+      featureList.appendChild(label);
+    }
+  }
+
   function renderGeneral() {
-    const on = settings.generalEnabled !== false;
+    const on = networkOn();
     generalEnabled.checked = on;
     setGlow(on);
     generalStatus.textContent = on
@@ -124,9 +195,9 @@
       : "List blocking is off. Stream filters still run.";
 
     const origin = currentOrigin();
-    const allowed = Array.isArray(settings.generalAllowedOrigins)
-      ? settings.generalAllowedOrigins
-      : [];
+    const host = origin ? hostOfOrigin(origin) : "";
+    const stream = !!(info && info.host === host && info.stream);
+    if (siteHost) siteHost.textContent = host || (pageChecked ? "No web page" : "Checking this page…");
 
     if (!origin) {
       allowPage.disabled = true;
@@ -136,26 +207,25 @@
       pageStatus.textContent = pageChecked
         ? "Open a normal http(s) page to allow it. Already on one? Reload it."
         : "Checking this page…";
-    } else if (isHardExcludedOrigin(origin)) {
-      allowPage.disabled = true;
-      allowPage.setAttribute("aria-pressed", "false");
-      allowPage.textContent = "Allow this page";
-      pageStatus.textContent = "Twitch / YouTube / Kick stay on their own filters (lists never touch them).";
-    } else if (!on) {
-      allowPage.disabled = true;
-      allowPage.setAttribute("aria-pressed", allowed.includes(origin) ? "true" : "false");
-      allowPage.textContent = allowed.includes(origin) ? "Blocking this page" : "Allow this page";
-      pageStatus.textContent = "Turn general blocking on to change page allows.";
     } else {
-      const isAllowed = allowed.includes(origin);
+      const off = siteOff(origin);
       allowPage.disabled = false;
-      allowPage.setAttribute("aria-pressed", isAllowed ? "true" : "false");
-      allowPage.textContent = isAllowed ? "Blocking this page" : "Allow this page";
-      pageStatus.textContent = isAllowed
-        ? "Allowed for this site: " + origin
-        : "Lists apply on this page.";
+      allowPage.setAttribute("aria-pressed", off ? "true" : "false");
+      allowPage.textContent = off ? "Blocking this page" : "Allow this page";
+      if (stream) {
+        pageStatus.textContent = off
+          ? "Our own helpers are off on " + host + ". The vendored Twitch/YouTube blockers and the threat tier stay on."
+          : "Twitch / YouTube / Kick keep their own filters (lists never touch them).";
+      } else if (!on) {
+        pageStatus.textContent = off ? "Allowed for this site: " + origin : "List blocking is off everywhere; this switch still turns hide rules and page helpers off here.";
+      } else {
+        pageStatus.textContent = off
+          ? "Allowed for this site: " + origin
+          : "Lists apply on this page.";
+      }
     }
 
+    renderFeatures();
     listsStatus.textContent = formatListStatus(settings) + (saveError ? " " + saveError : "");
     renderFeed();
   }
@@ -163,13 +233,14 @@
   function loadSettings() {
     return new Promise((resolve) => {
       try {
-        chrome.storage.local.get(Object.keys(DEFAULTS).concat([FEED_STATE_KEY, FEED_PAUSE_KEY]), (stored) => {
+        chrome.storage.local.get(Object.keys(DEFAULTS).concat([FEED_STATE_KEY, FEED_PAUSE_KEY, KEYS.settings, KEYS.overrides]), (got) => {
           void chrome.runtime.lastError;
-          feedState = stored ? stored[FEED_STATE_KEY] || null : null;
-          feedPaused = !!(stored && stored[FEED_PAUSE_KEY] === true);
-          const own = Object.assign({}, stored || {});
-          delete own[FEED_STATE_KEY];
-          delete own[FEED_PAUSE_KEY];
+          const all = got || {};
+          feedState = all[FEED_STATE_KEY] || null;
+          feedPaused = all[FEED_PAUSE_KEY] === true;
+          stored = { [KEYS.settings]: all[KEYS.settings], [KEYS.overrides]: all[KEYS.overrides] };
+          const own = {};
+          for (const k of Object.keys(DEFAULTS)) if (k in all) own[k] = all[k];
           settings = withDefaults(own);
           resolve(settings);
         });
@@ -190,11 +261,13 @@
           const err = chrome.runtime.lastError;
           saveError = err ? "Could not save setting: " + (err.message || String(err)) + "." : "";
           Object.assign(settings, patch);
+          for (const k of [KEYS.settings, KEYS.overrides]) if (k in patch) stored[k] = patch[k];
           resolve();
         });
       } catch (e) {
         saveError = "Could not save setting: " + String(e && e.message || e) + ".";
         Object.assign(settings, patch);
+        for (const k of [KEYS.settings, KEYS.overrides]) if (k in patch) stored[k] = patch[k];
         resolve();
       }
     });
@@ -216,6 +289,12 @@
     });
   }
 
+  async function refreshInfo() {
+    const origin = currentOrigin();
+    const res = await notifyBackground("siteInfo", { origin: origin || "" });
+    info = res && res.ok ? res : null;
+  }
+
   function queryActiveTab() {
     return new Promise((resolve) => {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -226,7 +305,7 @@
     }).then(askPageOrigin);
   }
 
-  // Stream sites and browser pages have no cosmetic script: no answer, no origin.
+  // Browser pages have no content script: no answer, no origin.
   function askPageOrigin(tab) {
     if (!tab || tab.url || typeof tab.id !== "number") return tab;
     return new Promise((resolve) => {
@@ -242,9 +321,31 @@
     });
   }
 
+  function settingsCopy() {
+    const s = stored[KEYS.settings];
+    const out = s && typeof s === "object" ? JSON.parse(JSON.stringify(s)) : { v: 1, enabled: true, features: {} };
+    if (!out.features || typeof out.features !== "object") out.features = {};
+    return out;
+  }
+
+  async function setSiteFeature(id, on) {
+    const host = hostOfOrigin(currentOrigin() || "");
+    if (!host) return;
+    const o = overridesCopy();
+    const key = info && info.overrideHost ? info.overrideHost : host;
+    const entry = o[key] || {};
+    entry.features = Object.assign({}, entry.features, { [id]: on });
+    o[key] = entry;
+    await savePartial({ [KEYS.overrides]: o });
+    await refreshInfo();
+    renderGeneral();
+  }
+
   generalEnabled.addEventListener("change", async () => {
     const on = generalEnabled.checked === true;
-    await savePartial({ [KEYS.enabled]: on });
+    const s = settingsCopy();
+    s.features.network = on;
+    await savePartial({ [KEYS.settings]: s });
     renderGeneral();
     const res = await notifyBackground("applyGeneralState");
     if (res && res.error) {
@@ -252,19 +353,36 @@
     }
   });
 
+  // The site switch ("Allow this page"): turns every per-site feature off for
+  // this host (lists, hide rules, page helpers). Never touches stream-site
+  // allow rules, the threat tier or the vendored players.
   allowPage.addEventListener("click", async () => {
     const origin = currentOrigin();
-    if (!origin || isHardExcludedOrigin(origin)) return;
-    const allowed = Array.isArray(settings.generalAllowedOrigins)
-      ? settings.generalAllowedOrigins.slice()
-      : [];
-    const idx = allowed.indexOf(origin);
-    if (idx >= 0) allowed.splice(idx, 1);
-    else allowed.push(origin);
-    await savePartial({ [KEYS.allowedOrigins]: allowed });
+    if (!origin) return;
+    const host = hostOfOrigin(origin);
+    if (!host) return;
+    const o = overridesCopy();
+    const key = info && info.overrideHost && info.host === host ? info.overrideHost : host;
+    const entry = Object.assign({}, o[key]);
+    if (siteOff(origin)) delete entry.enabled;
+    else entry.enabled = false;
+    if (Object.keys(entry).length) o[key] = entry;
+    else delete o[key];
+    await savePartial({ [KEYS.overrides]: o });
+    await refreshInfo();
     renderGeneral();
     await notifyBackground("applyGeneralState");
   });
+
+  if (openSettings) {
+    openSettings.addEventListener("click", () => {
+      try {
+        chrome.runtime.openOptionsPage();
+      } catch {
+        // settings page unavailable
+      }
+    });
+  }
 
   updateLists.addEventListener("click", async () => {
     updateLists.disabled = true;
@@ -291,6 +409,7 @@
     renderGeneral();
     await queryActiveTab();
     pageChecked = true;
+    await refreshInfo();
     renderGeneral();
     await notifyBackground("applyGeneralState");
   })();

@@ -1,5 +1,7 @@
 // Runs the real popup.js against the real cosmetic.js content script, with a fake
 // Chrome that behaves like ours: no "tabs" permission, so tabs.query leaves tab.url out.
+// cosmetic.js asks the registry (listed before it in the manifest) which hosts are stream sites.
+import "../src/settings/features.js";
 import popupSource from "../src/popup.js" with { type: "text" };
 import popupHtml from "../src/popup.html" with { type: "text" };
 import cosmeticSource from "../src/cosmetic.js" with { type: "text" };
@@ -188,7 +190,10 @@ Deno.test("Allow this page works on a normal https page without the tabs permiss
   assertEquals(p.status.textContent, "Lists apply on this page.");
 
   await p.button.fire("click");
-  assertEquals(p.storage.generalAllowedOrigins, ["https://news.example.com"], "origin saved, path dropped");
+  // Block H: the popup writes the site switch to siteOverrides (keyed by host);
+  // the worker derives generalAllowedOrigins from it.
+  assertEquals(p.storage.siteOverrides, { "news.example.com": { enabled: false } }, "host saved, path dropped");
+  assertEquals(p.storage.generalAllowedOrigins, undefined, "legacy key left to the worker");
   assertEquals(p.button.textContent, "Blocking this page");
   assertEquals(p.button.attrs["aria-pressed"], "true");
   assertEquals(p.status.textContent, "Allowed for this site: https://news.example.com");
@@ -198,16 +203,23 @@ Deno.test("Allow this page works on a normal https page without the tabs permiss
 Deno.test("an allowed page can be un-allowed, http pages work, and the off state explains itself", async () => {
   const allowed = await openPopup({
     pageHref: "http://shop.example.org:8080/cart",
-    stored: { generalAllowedOrigins: ["http://shop.example.org:8080", "https://other.example"] },
+    stored: { settings: { v: 1, enabled: true, features: {} }, siteOverrides: { "shop.example.org": { enabled: false }, "other.example": { enabled: false } } },
   });
   assertEquals(allowed.button.disabled, false, "allowed page still answers");
   assertEquals(allowed.button.textContent, "Blocking this page");
   await allowed.button.fire("click");
-  assertEquals(allowed.storage.generalAllowedOrigins, ["https://other.example"], "only this origin removed");
+  assertEquals(allowed.storage.siteOverrides, { "other.example": { enabled: false } }, "only this host removed");
 
-  const off = await openPopup({ pageHref: "https://news.example.com/", stored: { generalEnabled: false } });
-  assertEquals(off.button.disabled, true);
-  assertEquals(off.status.textContent, "Turn general blocking on to change page allows.");
+  // Not migrated yet (worker not run): the old allowed-origins list still shows.
+  const legacy = await openPopup({ pageHref: "https://other.example/x", stored: { generalAllowedOrigins: ["https://other.example"] } });
+  assertEquals(legacy.button.textContent, "Blocking this page");
+
+  // Lists off everywhere: the site switch still works (it also covers the
+  // hide rules and page helpers) and the status says so.
+  const off = await openPopup({ pageHref: "https://news.example.com/", stored: { settings: { v: 1, enabled: true, features: { network: false } } } });
+  assertEquals(off.button.disabled, false);
+  assertEquals(off.toggle.checked, false);
+  assertEquals(off.status.textContent, "List blocking is off everywhere; this switch still turns hide rules and page helpers off here.");
 });
 
 Deno.test("a page with no content script stays greyed out and says why", async () => {
@@ -236,7 +248,7 @@ Deno.test("a slow page doesn't hold up the rest of the popup", async () => {
 
   p.toggle.checked = true;
   await p.toggle.fire("change");
-  assertEquals(p.storage.generalEnabled, true, "the switch works while waiting");
+  assertEquals(p.storage.settings && p.storage.settings.features.network, true, "the switch works while waiting (settings.features.network)");
   assertEquals(p.status.textContent, "Checking this page…");
   await p.answer();
   assertEquals(p.button.disabled, false, "button turns on once the page answers");

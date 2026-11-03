@@ -4,7 +4,7 @@
  * Filter lists: refreshed from the "gecko-refresh" alarm (every 3 h, at most
  * one real run per 12 h, per-list expiry respected) and on popup Update.
  */
-importScripts("general-settings.js", "general/filter-options.js", "threat/protected-hosts.js", "threat/compile.js", "general/update.js", "general/cosmetic-parse.js",
+importScripts("settings/features.js", "general-settings.js", "general/filter-options.js", "threat/protected-hosts.js", "threat/compile.js", "general/update.js", "general/cosmetic-parse.js",
   "feed/config.js", "feed/keys.js", "feed/canonical.js", "feed/schema.js", "feed/verify.js", "feed/compile.js", "feed/client.js");
 const TC = self.GeckoThreatCompile;
 const FC = self.GeckoFeedClient;
@@ -163,6 +163,66 @@ function syncThreatAllowRules() {
     });
   });
 }
+
+// ---- feature switches (src/settings/features.js) ----
+// `settings` / `siteOverrides` are the source of truth (popup, settings page).
+// The worker migrates the old keys once and keeps generalEnabled /
+// generalAllowedOrigins as derived mirrors (the DNR list code and older
+// content scripts read those), the `threat` ruleset on/off, and feedPaused.
+const FEAT = self.GeckoFeatures;
+let threatOn = null; // unknown until the first sync at worker start
+
+async function migrateSettings() {
+  const stored = await localGet(["settings", "siteOverrides", "generalEnabled", "generalAllowedOrigins"]).catch(() => ({}));
+  const migrated = FEAT.migrateLegacy(stored);
+  if (migrated) await localSet({ settings: migrated.settings, siteOverrides: migrated.siteOverrides }).catch(() => {});
+}
+
+function setThreatRuleset(on) {
+  return new Promise((resolve) => {
+    try {
+      chrome.declarativeNetRequest.updateEnabledRulesets(on ? { enableRulesetIds: ["threat"], disableRulesetIds: [] } : { enableRulesetIds: [], disableRulesetIds: ["threat"] }, () => {
+        void chrome.runtime.lastError;
+        resolve();
+      });
+    } catch {
+      resolve();
+    }
+  });
+}
+
+let settingsQueue = Promise.resolve();
+function syncFromSettings() {
+  const run = settingsQueue.then(async () => {
+    await settingsReady;
+    const stored = await localGet(["settings", "siteOverrides", "generalEnabled", "generalAllowedOrigins", "feedPaused"]).catch(() => ({}));
+    if (!stored.settings) return;
+    const s = FEAT.normalizeSettings(stored.settings);
+    const mirror = FEAT.legacyMirror(stored.settings, stored.siteOverrides);
+    const patch = {};
+    if (stored.generalEnabled !== mirror.generalEnabled) patch.generalEnabled = mirror.generalEnabled;
+    if (JSON.stringify(stored.generalAllowedOrigins || []) !== JSON.stringify(mirror.generalAllowedOrigins)) patch.generalAllowedOrigins = mirror.generalAllowedOrigins;
+    const paused = !(s.enabled && s.features.threatFeed);
+    if ((stored.feedPaused === true) !== paused) patch.feedPaused = paused;
+    if (Object.keys(patch).length) await localSet(patch).catch(() => {});
+    const nextThreat = s.enabled && s.features.threatTier;
+    if (nextThreat !== threatOn) {
+      const firstSync = threatOn === null;
+      threatOn = nextThreat;
+      await setThreatRuleset(nextThreat);
+      // At worker start only the ruleset state is lined up (the refreshed
+      // rules are already in place); a real switch rebuilds or removes them.
+      if (!nextThreat) await GU.removeThreatRules(listDeps()).catch(() => {});
+      else if (!firstSync) await GU.rebuildThreatRules(listDeps()).catch(() => {});
+    }
+  });
+  settingsQueue = run.catch(() => {});
+  return run;
+}
+
+// Every worker start: migrate once, then line the derived state up.
+const settingsReady = migrateSettings().catch(() => {});
+syncFromSettings();
 
 // ---- signed threat feed (dormant until configured; src/feed/) ----
 function feedDeps() {
@@ -447,6 +507,7 @@ function listDeps() {
       return { rules: await res.json(), extraIds: meta.extra_tracker_rule_id ? [meta.extra_tracker_rule_id] : [] };
     },
     enabled: () => currentEnabled,
+    threatEnabled: () => threatOn !== false,
     cosmeticParse: CP,
     writeCosmetic,
   };
@@ -692,12 +753,56 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes[THREAT_ALLOW_KEY]) syncThreatAllowRules();
   // "Pause threat feed": drop the feed rules (cache kept) / put them back.
   if (FC && changes[FC.PAUSE_KEY]) applyCachedFeed();
+  if (changes.settings || changes.siteOverrides) syncFromSettings();
 });
+
+// Popup: what applies on this page. The popup cannot load the registry
+// (popup.html loads only popup.js), so the worker answers.
+async function siteInfo(origin) {
+  let host = "";
+  try {
+    host = origin ? FEAT.normalizeHost(new URL(origin).hostname) : "";
+  } catch {
+    host = "";
+  }
+  await settingsReady;
+  const stored = await localGet(["settings", "siteOverrides"]).catch(() => ({}));
+  const s = FEAT.normalizeSettings(stored.settings);
+  const overrides = FEAT.normalizeOverrides(stored.siteOverrides);
+  const effective = FEAT.resolve(stored.settings, stored.siteOverrides, host);
+  const stream = !!host && FEAT.isStreamHost(host);
+  const own = host ? FEAT.overrideFor(overrides, host) : null;
+  const applies = (f) => f.sites.includes("all") || (f.sites.includes("ordinary") ? !stream : f.sites.some((d) => host === d || host.endsWith("." + d)));
+  return {
+    ok: true,
+    host,
+    stream,
+    enabled: s.enabled,
+    siteEnabled: !(own && own.entry.enabled === false),
+    overrideHost: own ? own.host : host,
+    features: FEAT.FEATURES.filter((f) => !host || applies(f)).map((f) => ({
+      id: f.id, label: f.label, apply: f.apply, perSite: f.perSite, available: f.available !== false,
+      global: f.apply === "always" ? true : s.features[f.id], on: effective[f.id],
+      site: own && own.entry.features && typeof own.entry.features[f.id] === "boolean" ? own.entry.features[f.id] : null,
+    })),
+  };
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.source !== "twitch-adblock-general") return;
-  // Popup only. A content-script sender carries a tab; it must never trigger a manual refresh.
-  if (!sender || sender.id !== chrome.runtime.id || sender.tab) return;
+  // Popup and settings page only. A content-script sender carries a tab and
+  // the page's URL; it must never trigger a refresh or a revert. The settings
+  // page opens in a tab too, so it is recognised by its extension URL.
+  if (!sender || sender.id !== chrome.runtime.id) return;
+  if (sender.tab) {
+    let settingsPage = "";
+    try {
+      settingsPage = chrome.runtime.getURL("src/settings.html");
+    } catch {
+      settingsPage = "";
+    }
+    if (!settingsPage || typeof sender.url !== "string" || sender.url.split(/[?#]/)[0] !== settingsPage) return;
+  }
   if (message.type === "applyGeneralState") {
     applyGeneralState().then(sendResponse);
     return true;
@@ -708,6 +813,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === "revertLists") {
     revertLists().then(sendResponse);
+    return true;
+  }
+  if (message.type === "siteInfo") {
+    siteInfo(typeof message.origin === "string" ? message.origin : "").then(sendResponse, (e) => sendResponse({ ok: false, error: String(e && e.message || e) }));
     return true;
   }
 });

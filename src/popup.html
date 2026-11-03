@@ -148,6 +148,10 @@
       color: #6f6f78;
       font-size: 10px;
     }
+    .host { margin: 0 0 4px; font-weight: 650; word-break: break-all; }
+    .features { margin-top: 8px; }
+    .features label { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 12px; }
+    .features .fixed { color: var(--muted); font-size: 11px; margin: 3px 0; }
   </style>
 </head>
 <body>
@@ -160,11 +164,21 @@
       </div>
     </header>
 
+    <section aria-labelledby="site-heading">
+      <h2 id="site-heading">This site</h2>
+      <p id="site-host" class="host">Checking this page…</p>
+      <div class="btns">
+        <button id="allow-page" type="button" class="primary" aria-pressed="false">Allow this page</button>
+      </div>
+      <p id="page-status"></p>
+      <div id="feature-list" class="features" aria-label="Features on this site"></div>
+    </section>
+
     <section aria-labelledby="general-heading">
-      <h2 id="general-heading">General sites</h2>
+      <h2 id="general-heading">Everywhere</h2>
       <div class="row">
         <div class="label">Block ads on ordinary sites</div>
-        <label class="switch" title="Master on/off for list blocking only">
+        <label class="switch" title="Filter lists on all ordinary sites">
           <input id="general-enabled" type="checkbox" checked>
           <span class="slider"></span>
         </label>
@@ -172,9 +186,8 @@
       <p class="hint">Default on. Does not turn off Twitch, YouTube, or Kick playback filters.</p>
       <p id="general-status"></p>
       <div class="btns">
-        <button id="allow-page" type="button" class="primary" aria-pressed="false">Allow this page</button>
+        <button id="open-settings" type="button">All settings</button>
       </div>
-      <p id="page-status"></p>
     </section>
 
     <section aria-labelledby="lists-heading">

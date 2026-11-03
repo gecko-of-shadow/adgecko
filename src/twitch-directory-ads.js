@@ -71,9 +71,47 @@ function startTwitchDirectoryAds() {
   style.textContent = api.CSS;
   (document.documentElement || document.head || document).appendChild(style);
   api.hideDirectoryAds(document);
+  // Feature switch "twitchDisplay" (src/settings/features.js): on until
+  // storage says otherwise; live (storage.onChanged). Hidden cards stay hidden
+  // until the next load; the sheet and the observer stop at once.
+  let on = true;
+  watchSwitch((next) => {
+    on = next;
+    if (!on && style.isConnected) style.remove();
+    if (on && !style.isConnected) (document.documentElement || document.head || document).appendChild(style);
+  });
   if (typeof MutationObserver !== "function") return;
-  const observer = new MutationObserver(() => api.hideDirectoryAds(document));
+  const observer = new MutationObserver(() => {
+    if (on) api.hideDirectoryAds(document);
+  });
   observer.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+function watchSwitch(onChange) {
+  const F = typeof globalThis !== "undefined" ? globalThis.GeckoFeatures : null;
+  if (!F || typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) return;
+  const read = () => {
+    try {
+      chrome.storage.local.get(["settings", "siteOverrides"], (s) => {
+        void chrome.runtime.lastError;
+        try {
+          onChange(F.resolve(s && s.settings, s && s.siteOverrides, location.hostname).twitchDisplay !== false);
+        } catch {
+          // stays on
+        }
+      });
+    } catch {
+      // stays on
+    }
+  };
+  read();
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local" && changes && (changes.settings || changes.siteOverrides)) read();
+    });
+  } catch {
+    // no live updates
+  }
 }
 
 if (typeof document !== "undefined" && typeof location !== "undefined") {

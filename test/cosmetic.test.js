@@ -1,3 +1,5 @@
+// The stream-site list lives in src/settings/features.js (loaded first, as in the manifest).
+import "../src/settings/features.js";
 import source from "../src/cosmetic.js" with { type: "text" };
 import css from "../src/cosmetic-hide.css" with { type: "text" };
 import license from "../src/LICENSE-EasyList.txt" with { type: "text" };

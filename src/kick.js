@@ -425,6 +425,32 @@ function installKickAdblock(target) {
       return;
     }
     if (!onKickHost(host) || typeof window === "undefined") return;
+    // Feature switch "kick" (src/settings/flags.js, ISOLATED world): read at
+    // use time, ON until a flag says otherwise (fail-open). Off stops the next
+    // skip command and drops the chrome CSS; hooks stay installed (inert).
+    const FLAG_CHANNEL = "gk-f1";
+    let kickOn = true;
+    try {
+      window.addEventListener("message", (event) => {
+        const data = event && event.source === window && event.data;
+        const next = data && data[FLAG_CHANNEL];
+        if (!next || typeof next !== "object" || typeof next.kick !== "boolean") return;
+        kickOn = next.kick;
+        if (!kickOn) {
+          try {
+            const css = document.getElementById("twitch-adblock-kick-css");
+            if (css) css.remove();
+          } catch {
+            // already gone
+          }
+        } else {
+          injectChromeCss();
+        }
+      });
+      window.postMessage({ [FLAG_CHANNEL]: "?" }, location.origin);
+    } catch {
+      // no flags: stays on
+    }
     const bridge = {
       state: emptyState(),
       onIvsMessage(data) {
@@ -441,10 +467,16 @@ function installKickAdblock(target) {
     let ivsWorker = null;
     installWorkerHook(window, (worker) => {
       ivsWorker = worker;
-      watchIvsWorker(worker, bridge);
+      watchIvsWorker(worker, {
+        onIvsMessage: (data) => {
+          const command = bridge.onIvsMessage(data);
+          return kickOn ? command : null;
+        },
+      });
     });
     installDatazoomHook(window, (detail) => {
-      postCommand(ivsWorker, bridge.onSessionDetail(detail));
+      const command = bridge.onSessionDetail(detail);
+      if (kickOn) postCommand(ivsWorker, command);
     });
     injectChromeCss();
     watchCovers();

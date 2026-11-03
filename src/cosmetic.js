@@ -7,32 +7,22 @@ function installCosmeticHide(api) {
   const STORAGE_KEY = "generalEnabled";
   const ALLOWED_ORIGINS_KEY = "generalAllowedOrigins";
   const CSS_PATH = "src/cosmetic-hide.css";
+  const SETTINGS_KEY = "settings";
+  const OVERRIDES_KEY = "siteOverrides";
 
-  // Hostname suffixes hard-excluded from general cosmetic hide.
-  // Keep in sync with manifest exclude_matches and popup HARD_EXCLUDE_HOST_RE.
-  const EXCLUDED_HOST_SUFFIXES = [
-    "twitch.tv",
-    "ttvnw.net",
-    "jtvnw.net",
-    "youtube.com",
-    "youtu.be",
-    "youtube-nocookie.com",
-    "youtubekids.com",
-    "googlevideo.com",
-    "ytimg.com",
-    "ggpht.com",
-    "kick.com",
-    "kickusercontent.com",
-  ];
+  // Stream hosts are hard-excluded from the cosmetic hide (second guard after
+  // the manifest exclude_matches). The one list: src/settings/features.js,
+  // listed before this file in the manifest.
+  const features = () => (typeof globalThis !== "undefined" && globalThis.GeckoFeatures) || null;
+  const EXCLUDED_HOST_SUFFIXES = (features() && features().STREAM_SITES) || [];
 
   function hostExcluded(hostname) {
     const host = String(hostname || "").toLowerCase().replace(/\.$/, "");
     if (!host) return true;
     if (host.includes("twitchcdn")) return true;
-    for (const bit of EXCLUDED_HOST_SUFFIXES) {
-      if (host === bit || host.endsWith("." + bit)) return true;
-    }
-    return false;
+    const F = features();
+    // Fail open (hide nothing) if the registry did not load.
+    return F ? F.isStreamHost(host) : true;
   }
 
   // Phase 0 decision 6: default ON for every site except the stream excludes.
@@ -124,10 +114,17 @@ function installCosmeticHide(api) {
       removeStyle();
       return Promise.resolve(false);
     }
+    const stored = state && typeof state === "object" ? state.stored : null;
+    // Feature switches (src/settings/features.js): the "cosmetic" feature, the
+    // extension master and this site's override. Live: storage.onChanged re-runs.
+    const F = features();
+    if (F && stored && stored[SETTINGS_KEY] && !F.resolve(stored[SETTINGS_KEY], stored[OVERRIDES_KEY], hostname).cosmetic) {
+      removeStyle();
+      return Promise.resolve(false);
+    }
     // Refreshed / installed rules in storage: generic sheet (top frame only)
     // plus this host's site rules, minus its #@# exceptions. One <style>.
     const P = api.parse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
-    const stored = state && typeof state === "object" ? state.stored : null;
     if (P && stored && stored[P.KEY_META]) {
       try {
         const top = api.isTop != null ? api.isTop : (typeof window !== "undefined" && window.top === window);
@@ -167,7 +164,7 @@ function installCosmeticHide(api) {
         const top = api.isTop != null ? api.isTop : (typeof window !== "undefined" && window.top === window);
         // Subframes only need their host's site rules, not the generic sheet.
         const extra = P ? P.keysForHost(host, top) : [];
-        getter([STORAGE_KEY, ALLOWED_ORIGINS_KEY].concat(extra), (result) => {
+        getter([STORAGE_KEY, ALLOWED_ORIGINS_KEY, SETTINGS_KEY, OVERRIDES_KEY].concat(extra), (result) => {
           if (typeof chrome !== "undefined") void chrome.runtime.lastError;
           resolve({
             stored: result || {},
@@ -215,7 +212,7 @@ function installCosmeticHide(api) {
       if (onChanged && onChanged.addListener) {
         onChanged.addListener((changes, area) => {
           if (area && area !== "local") return;
-          if (!changes || (!changes[STORAGE_KEY] && !changes[ALLOWED_ORIGINS_KEY] && !changes.cosMeta)) return;
+          if (!changes || (!changes[STORAGE_KEY] && !changes[ALLOWED_ORIGINS_KEY] && !changes.cosMeta && !changes[SETTINGS_KEY] && !changes[OVERRIDES_KEY])) return;
           sync();
         });
       }

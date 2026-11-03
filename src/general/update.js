@@ -260,6 +260,8 @@ function installGeneralAdblockUpdate(target) {
   async function applyThreatRules(deps, payloads, now) {
     const TC = typeof globalThis !== "undefined" && globalThis.GeckoThreatCompile;
     if (!TC) return { ok: false, reason: "threat compiler not loaded" };
+    // Feature "threatTier" switched off: no refreshed threat rules either.
+    if (deps.threatEnabled && !deps.threatEnabled()) return removeThreatRules(deps);
     try {
       const hosts = [];
       for (const name of TC.THREAT_LISTS) {
@@ -721,6 +723,40 @@ function installGeneralAdblockUpdate(target) {
     return { ok: true, mode: "static" };
   }
 
+  async function removeThreatRules(deps) {
+    const existing = (await deps.getDynamicRules()) || [];
+    const removeRuleIds = existing.filter((r) => isThreatRule(r.id)).map((r) => r.id);
+    if (removeRuleIds.length) await deps.updateDynamicRules({ removeRuleIds, addRules: [] });
+    return { ok: true, removed: removeRuleIds.length };
+  }
+
+  // Threat tier switched back on: rebuild the refreshed threat rules from the
+  // stored threat-list payloads (the packed `threat` ruleset is the floor).
+  async function rebuildThreatRules(deps) {
+    const TC = typeof globalThis !== "undefined" && globalThis.GeckoThreatCompile;
+    if (!TC) return { ok: false, reason: "threat compiler not loaded" };
+    let state = {};
+    try {
+      state = (await deps.getState()) || {};
+    } catch {
+      state = {};
+    }
+    const lists = {};
+    for (const n of TC.THREAT_LISTS) if (state.lists && state.lists[n]) lists[n] = state.lists[n];
+    const payloads = {};
+    for (const [n, p] of Object.entries(await readPayloadsFull(deps, lists))) payloads[n] = p;
+    return applyThreatRules(deps, payloads, deps.now());
+  }
+
+  async function readPayloadsFull(deps, lists) {
+    const names = Object.keys(lists || {}).filter((n) => lists[n] && lists[n].parser === PARSER_VERSION);
+    if (!names.length) return {};
+    const stored = (await deps.getListData(names)) || {};
+    const out = {};
+    for (const n of names) if (stored[n] && Array.isArray(stored[n].domains) && stored[n].parser === PARSER_VERSION) out[n] = stored[n];
+    return out;
+  }
+
   // "Revert lists": forget every refreshed list (payloads, dynamic list and
   // threat rules) and go back to the packed rules shipped with the extension.
   // Automatic refreshes then wait the usual 12 h; Update refetches at once.
@@ -763,6 +799,7 @@ function installGeneralAdblockUpdate(target) {
     RETIRED_LISTS, dropRetiredLists, PARSER_VERSION, parseEntries, mergeScoped, staleParserLists,
     THREAT_RULE_ID_BASE, THREAT_RULE_ID_END, DYNAMIC_RULE_LIMIT, isThreatRule, isOurRule, applyThreatRules,
     MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, protectedHits, revertLists,
+    removeThreatRules, rebuildThreatRules,
     LIST_RULE_ID_BASE, KEPT_RULE_ID_BASE, ALLOW_RULE_ID_BASE, SOURCES, LIST_HOSTS,
     isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules, keepsWholeDomain,
     shouldRun, listDue, refresh, describeError, LIST_ALLOW_RULE_ID, listAllowRule, applyEnabled, isListUrl,

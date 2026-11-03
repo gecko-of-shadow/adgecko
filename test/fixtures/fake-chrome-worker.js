@@ -12,7 +12,7 @@ export function loadWorker(opts = {}) {
   let onMessage = null;
   let lastError;
   const later = (fn, ms = 1) => setTimeout(fn, opts.jitter ? Math.floor(Math.random() * opts.jitter) : ms);
-  const dnr = { dynamic: [], session: [], staticOn: true, updates: 0, errors: [] , gets: 0};
+  const dnr = { dynamic: [], session: [], staticOn: true, threatOn: true, updates: 0, errors: [] , gets: 0};
   const fetched = [];
   let bytesRead = 0;
   const runtime = {
@@ -88,6 +88,8 @@ export function loadWorker(opts = {}) {
       updateEnabledRulesets(o, cb) {
         if ((o.enableRulesetIds || []).includes("general")) dnr.staticOn = true;
         if ((o.disableRulesetIds || []).includes("general")) dnr.staticOn = false;
+        if ((o.enableRulesetIds || []).includes("threat")) dnr.threatOn = true;
+        if ((o.disableRulesetIds || []).includes("threat")) dnr.threatOn = false;
         later(() => withErr(undefined, cb));
       },
     },
@@ -127,8 +129,8 @@ export function loadWorker(opts = {}) {
   };
   // Startup timer suppressed like the repo tests.
   new Function("chrome", "importScripts", "setTimeout", "fetch", backgroundSource)(chrome, importScripts, opts.setTimeout || (() => 0), fakeFetch);
-  const send = (message) => new Promise((resolve) => {
-    const keep = onMessage(message, { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" }, resolve);
+  const send = (message, sender) => new Promise((resolve) => {
+    const keep = onMessage(message, sender || { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" }, resolve);
     if (keep !== true) resolve(undefined);
   });
   const fireAlarm = (name) => { for (const f of alarmListeners) f({ name, scheduledTime: Date.now() }); };

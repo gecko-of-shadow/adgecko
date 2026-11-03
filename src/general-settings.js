@@ -20,8 +20,9 @@
     generalListUpdateRequestAt: null,
   };
 
-  /** Hard-excluded stream families — general lists never apply here. */
-  const HARD_EXCLUDE_HOST_RE = /(?:^|\.)((?:twitch\.tv)|(youtube\.com)|(youtu\.be)|(youtube-nocookie\.com)|(youtubekids\.com)|(googlevideo\.com)|(kick\.com)|(kickusercontent\.com))$/i;
+  // Hard-excluded stream families (general lists never apply there): the one
+  // list lives in src/settings/features.js (STREAM_SITES), loaded first.
+  const features = () => root.GeckoFeatures || (typeof globalThis !== "undefined" && globalThis.GeckoFeatures) || null;
 
   const RULESET_ID = "general";
   const ALLOW_RULE_ID_BASE = 900000;
@@ -47,7 +48,9 @@
   function isHardExcludedHost(hostname) {
     const h = String(hostname || "").toLowerCase().replace(/\.$/, "");
     if (!h) return false;
-    return HARD_EXCLUDE_HOST_RE.test(h);
+    const F = features();
+    // Without the registry treat every host as excluded: no allow rule is made.
+    return F ? F.isStreamHost(h) : true;
   }
 
   function isHardExcludedOrigin(origin) {

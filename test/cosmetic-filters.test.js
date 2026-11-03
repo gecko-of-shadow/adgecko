@@ -1,3 +1,5 @@
+// The stream-site list lives in src/settings/features.js (loaded first, as in the manifest).
+import "../src/settings/features.js";
 import cosSource from "../src/general/cosmetic-parse.js" with { type: "text" };
 import contentSource from "../src/cosmetic.js" with { type: "text" };
 import bundle from "../src/rules/cosmetic-rules.json" with { type: "json" };

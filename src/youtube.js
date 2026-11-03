@@ -1024,6 +1024,30 @@ function startYoutubeAdblock() {
     console.log("twitch-adblock youtube failed open", error);
   }
 
+  // Feature switches from the extension (src/settings/flags.js, ISOLATED world).
+  // Read at use time; a feature stays ON until a flag says otherwise (fail-open).
+  // Never unpatches anything: an "off" flag only stops the next action.
+  const FLAG_CHANNEL = "gk-f1";
+  const FLAGS = {};
+  function flagOn(id) {
+    return FLAGS[id] !== false;
+  }
+  try {
+    window.addEventListener("message", (event) => {
+      const data = event && event.source === window && event.data;
+      const next = data && data[FLAG_CHANNEL];
+      if (!next || typeof next !== "object") return;
+      for (const key of ["youtubeWatchdog", "youtubeCosmetic"]) if (typeof next[key] === "boolean") FLAGS[key] = next[key];
+      if (FLAGS.youtubeCosmetic === false && homeCssEl) {
+        try { homeCssEl.remove(); } catch { /* already gone */ }
+        homeCssEl = null;
+      }
+    });
+    window.postMessage({ [FLAG_CHANNEL]: "?" }, location.origin);
+  } catch {
+    // no flags: everything stays on
+  }
+
   // Timing breadcrumbs relative to the last navigation, for start-delay logs.
   function diag(msg) {
     if (!OPTS.diag) return;
@@ -1237,7 +1261,7 @@ function startYoutubeAdblock() {
   }
 
   function nudgeStart() {
-    if (!NUDGE || !onWatchSurface()) return;
+    if (!NUDGE || (typeof flagOn === "function" && !flagOn("youtubeWatchdog")) || !onWatchSurface()) return;
     let video;
     let player;
     try {
@@ -1357,7 +1381,7 @@ function startYoutubeAdblock() {
 
   function checkStall() {
     stallTimer = 0;
-    if (!OPTS.stallReload || stalledReloaded >= 2 || startLogged || playbackSeen.any || (!strippedThisVideo && !mediaFailed && !uboLayerPresent()) || !onWatchSurface()) return stopStall();
+    if (!OPTS.stallReload || (typeof flagOn === "function" && !flagOn("youtubeWatchdog")) || stalledReloaded >= 2 || startLogged || playbackSeen.any || (!strippedThisVideo && !mediaFailed && !uboLayerPresent()) || !onWatchSurface()) return stopStall();
     const now = Date.now();
     if (now - navAt > OPTS.stallGiveUpMs) return stopStall();
     const again = () => { stallTimer = setTimeout(checkStall, OPTS.stallPollMs); };
@@ -1442,6 +1466,7 @@ function startYoutubeAdblock() {
   }
 
   function reloadVideo(player, id, now, why) {
+    if (typeof flagOn === "function" && !flagOn("youtubeWatchdog")) return;
     stalledReloaded += 1;
     lastReloadAt = now;
     console.log("twitch-adblock: [+" + (now - navAt) + "ms] YouTube " + why + ", reloading the video (" + stalledReloaded + "/" + (api.UBO_LAYER && OPTS.stallUnderUbo === "gentle" ? 1 : 2) + ")");
@@ -1463,7 +1488,7 @@ function startYoutubeAdblock() {
     // "gentle" (default): one reload, only after OPTS.stallGentleMs with zero
     // progress, never while a SABR wait reply (104/105-byte UMP) is recent.
     if (api.UBO_LAYER && OPTS.stallUnderUbo !== true && (OPTS.stallUnderUbo !== "gentle" || stalledReloaded >= 1)) return;
-    if (!OPTS.stallReload || stalledReloaded >= 2 || startLogged || playbackSeen.any) return;
+    if (!OPTS.stallReload || (typeof flagOn === "function" && !flagOn("youtubeWatchdog")) || stalledReloaded >= 2 || startLogged || playbackSeen.any) return;
     diag("stall watchdog armed" + (why ? " (" + why + ")" : "") + (api.UBO_LAYER ? (OPTS.stallUnderUbo === "gentle" ? ", uBO gentle " + (uboDecoyThisNav && OPTS.decoyGentleMs > 0 ? OPTS.decoyGentleMs + "ms (decoys)" : OPTS.stallGentleMs + "ms") + ", 1 reload max" : ", uBO floor " + OPTS.stallUboMs + "ms") : ""));
     clearTimeout(stallTimer);
     const now = Date.now();
@@ -1996,7 +2021,7 @@ function startYoutubeAdblock() {
   function injectHomeFeedCss() {
     // With the uBO layer, src/youtube-ads.css (manifest CSS) already applies these
     // rules; a second copy only doubles the :has() invalidation work.
-    if (uboLayerPresent()) return;
+    if (uboLayerPresent() || (typeof flagOn === "function" && !flagOn("youtubeCosmetic"))) return;
     try {
       if (typeof document === "undefined" || !document.createElement) return;
       if (homeCssEl && homeCssEl.isConnected) return;
@@ -2025,8 +2050,10 @@ function startYoutubeAdblock() {
     const sweep = () => {
       scheduled = false;
       lastSweep = Date.now();
-      removeDomAds();
-      api.removeInterruptionsToast();
+      if (typeof flagOn !== "function" || flagOn("youtubeCosmetic")) {
+        removeDomAds();
+        api.removeInterruptionsToast();
+      }
       nudgeStart();
     };
     const observer = new MutationObserver(() => {

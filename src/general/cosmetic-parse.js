@@ -10,8 +10,12 @@
 (function (root) {
   const MAX_SELECTOR_LEN = 600;
   const PROCEDURAL_RE = /:(?:-abp-[a-z-]+|has-text|xpath|upward|remove|remove-attr|remove-class|style|matches-css(?:-before|-after)?|matches-attr|matches-path|matches-media|matches-prop|min-text-length|watch-attr|others|if|if-not|contains|nth-ancestor|properties|shadow)\(/i;
-  // Stream sites keep their own handlers; never store rules for them.
-  const SKIP_HOST_RE = /(?:^|\.)(?:twitch\.tv|youtube\.com|youtu\.be|youtube-nocookie\.com|youtubekids\.com|kick\.com)$/i;
+  // Stream sites keep their own handlers; never store rules for them. The one
+  // list is src/settings/features.js (loaded first wherever this file runs).
+  const SKIP_HOST_RE = { test: (h) => {
+    const F = root.GeckoFeatures || (typeof globalThis !== "undefined" && globalThis.GeckoFeatures);
+    return !!(F && F.isStreamHost(h));
+  } };
 
   // Structural check: a selector can never close or open a rule block, start a
   // comment, or carry unbalanced quotes/brackets/parens. Anything that could
