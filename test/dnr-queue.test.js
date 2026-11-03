@@ -168,6 +168,58 @@ Deno.test("L-5: a DNR call that throws inside a callback does not hold the queue
   assert(JSON.stringify(threatAllowHosts(w)) === '["b.example.com"]', "threat allow rules: " + JSON.stringify(threatAllowHosts(w)));
 });
 
+// The queue's backstop, lifted from the worker source with a short limit.
+import backgroundSource from "../src/general-background.js" with { type: "text" };
+function loadQueue(maxMs) {
+  const m = /const DNR_SECTION_MAX_MS = \d+;\r?\n[\s\S]*?\nfunction dnrExclusive\(op\) \{[\s\S]*?\n\}\r?\n/.exec(backgroundSource);
+  assert(m, "dnrExclusive block not found in src/general-background.js");
+  const block = m[0].replace(/const DNR_SECTION_MAX_MS = \d+;/, "const DNR_SECTION_MAX_MS = " + maxMs + ";");
+  const warnings = [];
+  const dnrExclusive = new Function("setTimeout", "clearTimeout", "console", `${block}\nreturn dnrExclusive;`)(setTimeout, clearTimeout, { warn: (...a) => warnings.push(a.join(" ")) });
+  return { dnrExclusive, warnings };
+}
+// A section that records how many sections run at once.
+function tracked(log, name, ms) {
+  return async () => {
+    log.active++;
+    log.maxActive = Math.max(log.maxActive, log.active);
+    log.order.push(name + "+");
+    await tick(ms);
+    log.order.push(name + "-");
+    log.active--;
+  };
+}
+
+Deno.test("L-5: the backstop timer starts with each section, so sections queued together still run one at a time", async () => {
+  const { dnrExclusive, warnings } = loadQueue(100);
+  // No stall: together longer than the limit, each well under it.
+  const log = { active: 0, maxActive: 0, order: [] };
+  await Promise.all([dnrExclusive(tracked(log, "a", 60)), dnrExclusive(tracked(log, "b", 50)), dnrExclusive(tracked(log, "c", 40))]);
+  assert(log.maxActive === 1 && log.order.join(" ") === "a+ a- b+ b- c+ c-", "overlap without a stall: " + log.order.join(" "));
+  assert(warnings.length === 0, "backstop fired without a stall: " + warnings.join("; "));
+
+  // A stuck head: after the limit the next section runs, and the one after it
+  // still waits for that one (only the stuck head may overlap).
+  const log2 = { active: 0, maxActive: 0, order: [] };
+  dnrExclusive(() => new Promise(() => {})); // never settles
+  const b = dnrExclusive(tracked(log2, "b", 40));
+  const c = dnrExclusive(tracked(log2, "c", 40));
+  assert((await within(Promise.all([b, c]), 2000)) === "done", "queue held by a stuck section");
+  assert(log2.maxActive === 1 && log2.order.join(" ") === "b+ b- c+ c-", "sections overlapped after the backstop: " + log2.order.join(" "));
+  assert(warnings.length === 1, "one backstop warning: " + warnings.length);
+});
+
+Deno.test("L-5: a section that throws or rejects does not hold the queue, and its caller sees the error", async () => {
+  const { dnrExclusive } = loadQueue(1000);
+  const sync = dnrExclusive(() => { throw new Error("sync"); });
+  const rejected = dnrExclusive(() => Promise.reject(new Error("async")));
+  const after = dnrExclusive(async () => "ran");
+  const got = await Promise.allSettled([sync, rejected, after]);
+  assert(got[0].status === "rejected" && got[0].reason.message === "sync", "sync throw reaches the caller");
+  assert(got[1].status === "rejected" && got[1].reason.message === "async", "rejection reaches the caller");
+  assert(got[2].status === "fulfilled" && got[2].value === "ran", "the next section still runs");
+});
+
 // Engine side: refresh() takes the section only around its rule writes.
 function engineDeps({ fetchFails = false, offInside = false } = {}) {
   const state = {};

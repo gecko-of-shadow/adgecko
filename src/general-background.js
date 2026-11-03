@@ -35,26 +35,40 @@ const ICON_OFF = {
 // Not reentrant: code inside a section must never wait for another
 // dnrExclusive() call (it would wait for itself). Engine calls made inside a
 // section get listDeps() without `exclusive`; only refreshLists() passes it.
-// Backstop: a section that has not settled after DNR_SECTION_MAX_MS (a lost
-// callback) stops holding the queue, so one stuck run cannot block every
-// later DNR write until the worker restarts. Real sections take seconds.
+// Backstop: a section that has not settled DNR_SECTION_MAX_MS after it
+// STARTED (a lost callback) stops holding the queue, so one stuck run cannot
+// block every later DNR write until the worker restarts. The timer starts
+// with the section, not when it is queued: sections queued together must
+// still run one after another. Real sections take seconds. A stuck section
+// that wakes up after the backstop can still write next to the next one;
+// no backstop can prevent that.
 const DNR_SECTION_MAX_MS = 120000;
 let dnrQueue = Promise.resolve();
 function dnrExclusive(op) {
-  const run = dnrQueue.then(() => op());
-  dnrQueue = new Promise((resolve) => {
-    let timer = 0;
+  let release;
+  const slot = new Promise((resolve) => {
+    release = resolve;
+  });
+  const prev = dnrQueue;
+  dnrQueue = slot;
+  return prev.then(() => {
+    const timer = setTimeout(() => {
+      console.warn("twitch-adblock: a DNR update took over " + DNR_SECTION_MAX_MS / 1000 + " s; not waiting for it any longer");
+      release();
+    }, DNR_SECTION_MAX_MS);
+    let run;
+    try {
+      run = Promise.resolve(op());
+    } catch (e) {
+      run = Promise.reject(e);
+    }
     const done = () => {
       clearTimeout(timer);
-      resolve();
+      release();
     };
-    timer = setTimeout(() => {
-      console.warn("twitch-adblock: a DNR update took over " + DNR_SECTION_MAX_MS / 1000 + " s; not waiting for it any longer");
-      resolve();
-    }, DNR_SECTION_MAX_MS);
     run.then(done, done);
+    return run;
   });
-  return run;
 }
 
 function getSettings() {
