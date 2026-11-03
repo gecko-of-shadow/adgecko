@@ -4,7 +4,8 @@
  * Filter lists: refreshed from the "gecko-refresh" alarm (every 3 h, at most
  * one real run per 12 h, per-list expiry respected) and on popup Update.
  */
-importScripts("general-settings.js", "general/filter-options.js", "general/update.js", "general/cosmetic-parse.js");
+importScripts("general-settings.js", "general/filter-options.js", "threat/protected-hosts.js", "threat/compile.js", "general/update.js", "general/cosmetic-parse.js");
+const TC = self.GeckoThreatCompile;
 const CP = self.GeneralCosmeticParse;
 const GU = self.GeneralAdblockUpdate;
 
@@ -129,6 +130,35 @@ function syncAllowRules(origins) {
     } catch (e) {
       resolve({ ok: false, error: String(e && e.message || e) });
     }
+  });
+}
+
+// User "Allow this domain" override for the threat tier (priority 2,000,020,
+// all resource types incl. main_frame). Domains in storage key
+// `threatAllowDomains`; the text box comes with the settings page.
+const THREAT_ALLOW_KEY = "threatAllowDomains";
+const THREAT_ALLOW_ID_BASE = 950000;
+const THREAT_ALLOW_MAX = 1000;
+function syncThreatAllowRules() {
+  if (!TC || !chrome.declarativeNetRequest || !chrome.declarativeNetRequest.updateDynamicRules) {
+    return Promise.resolve({ ok: false, error: "dnr-missing" });
+  }
+  return new Promise((resolve) => {
+    chrome.storage.local.get([THREAT_ALLOW_KEY], (s) => {
+      void chrome.runtime.lastError;
+      const domains = Array.isArray(s && s[THREAT_ALLOW_KEY]) ? s[THREAT_ALLOW_KEY] : [];
+      chrome.declarativeNetRequest.getDynamicRules((existing) => {
+        void chrome.runtime.lastError;
+        const removeRuleIds = (existing || [])
+          .filter((r) => r.id >= THREAT_ALLOW_ID_BASE && r.id < THREAT_ALLOW_ID_BASE + THREAT_ALLOW_MAX)
+          .map((r) => r.id);
+        const addRules = TC.buildUserAllowRules(domains, THREAT_ALLOW_ID_BASE, THREAT_ALLOW_MAX);
+        chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules }, () => {
+          const err = chrome.runtime.lastError;
+          resolve(err ? { ok: false, error: err.message || String(err) } : { ok: true, count: addRules.length });
+        });
+      });
+    });
   });
 }
 
@@ -520,6 +550,7 @@ storageReady();
 chrome.runtime.onInstalled.addListener(() => {
   ensureCosmetic();
   ensureRefreshAlarm();
+  syncThreatAllowRules();
   chrome.storage.local.get(Object.keys(GS.DEFAULTS), (stored) => {
     void chrome.runtime.lastError;
     const patch = {};
@@ -535,6 +566,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup.addListener(() => {
   applyGeneralState();
+  syncThreatAllowRules();
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -542,6 +574,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.generalEnabled || changes.generalAllowedOrigins) {
     applyGeneralState();
   }
+  if (changes[THREAT_ALLOW_KEY]) syncThreatAllowRules();
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

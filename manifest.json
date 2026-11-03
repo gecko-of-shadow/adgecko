@@ -44,6 +44,11 @@
         "id": "ubo-youtube",
         "enabled": true,
         "path": "src/rules/ubo-youtube-network.json"
+      },
+      {
+        "id": "threat",
+        "enabled": true,
+        "path": "src/rules/threat-network.json"
       }
     ]
   },

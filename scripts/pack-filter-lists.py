@@ -627,6 +627,21 @@ def main() -> int:
     if len(rules) > MAX_DNR_RULES:
         print("ERROR: exceeded DNR rule budget", file=sys.stderr)
         return 1
+    # Threat tier (static ruleset "threat"): rebuilt from the same downloads
+    # with the runtime's own parser and compiler (src/threat/compile.js), so
+    # it never goes stale next to general-network.json.
+    try:
+        threat = subprocess.run(
+            ["deno", "run", "--allow-read", "--allow-write", str(ROOT / "scripts" / "build-threat-rules.mjs")],
+            cwd=str(ROOT),
+            check=False,
+        )
+    except FileNotFoundError:
+        print("ERROR: deno not found; run scripts/build-threat-rules.mjs by hand", file=sys.stderr)
+        return 3
+    if threat.returncode != 0:
+        print("ERROR: scripts/build-threat-rules.mjs failed", file=sys.stderr)
+        return threat.returncode
     return 0
 
 

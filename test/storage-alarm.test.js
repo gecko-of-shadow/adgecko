@@ -169,7 +169,7 @@ Deno.test("refresh after migration rebuilds the same rules from the per-list key
   await w.send({ source: "twitch-adblock-general", type: "applyGeneralState" });
   await settle(300);
   const listRules = w.dnr.dynamic.filter((r) => r.id >= U.LIST_RULE_ID_BASE && r.id < U.KEPT_RULE_ID_BASE).length;
-  assert(listRules > 0 && !w.dnr.staticOn && w.dnr.errors.length === 0, "dynamic lists active: " + listRules);
+  assert(listRules > 0 && w.dnr.staticOn && w.dnr.errors.length === 0, "dynamic lists active: " + listRules);
 });
 
 // ---- write errors ----

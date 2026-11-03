@@ -65,7 +65,7 @@ Deno.test("first refresh swaps to dynamic rules, writes cosmetics; startup throt
   const d = fakeDeps({ responses: ok });
   const r = await U.refresh(d, {});
   assert(r.ok && r.rules > 0, JSON.stringify(r));
-  assert(d.staticOn === false, "bundle off after swap");
+  assert(d.staticOn === true, "packed floor stays on after swap");
   assert(d.dynamic.length < 30000 && d.dynamic.some((x) => x.id >= U.KEPT_RULE_ID_BASE), "under limit, allows kept");
   assert(d.cosmetic.length === 1 && d.cosmetic[0].sites["example.com"].length === 2, "cosmetic from easylist+easyprivacy");
   d.t += 60 * 60 * 1000;
@@ -84,7 +84,7 @@ Deno.test("304 keeps cached domains and cosmetics", async () => {
   const before = d.dynamic.length;
   d.fetch = async () => ({ ok: false, status: 304, headers: new Headers() });
   const r = await U.refresh(d, { manual: true });
-  assert(r.ok && r.reason === "unchanged" && d.dynamic.length === before && !d.staticOn && d.cosmetic.length === 1, JSON.stringify(r));
+  assert(r.ok && r.reason === "unchanged" && d.dynamic.length === before && d.staticOn && d.cosmetic.length === 1, JSON.stringify(r));
 });
 
 Deno.test("errors fall back to the bundled ruleset silently", async () => {
@@ -105,18 +105,18 @@ Deno.test("a failed later refresh keeps a good earlier swap; toggling off/on wor
   const count = d.dynamic.length;
   d.fetch = async () => { throw new Error("offline"); };
   const r = await U.refresh(d, { manual: true });
-  assert(d.dynamic.length === count && !d.staticOn && Object.keys((await d.getState()).lastErrors).length === U.SOURCES.length, "keeps previous dynamic set, records errors");
+  assert(d.dynamic.length === count && d.staticOn && Object.keys((await d.getState()).lastErrors).length === U.SOURCES.length, "keeps previous dynamic set, records errors");
   await U.applyEnabled(d, false);
   assert(!d.staticOn && d.dynamic.length === 0, "off removes list rules");
   await U.applyEnabled(d, true);
-  assert(!d.staticOn && d.dynamic.length === count, "on rebuilds from cache");
+  assert(d.staticOn && d.dynamic.length === count, "on rebuilds from cache");
 });
 
 Deno.test("EasyList failing on the first refresh leaves the hide list alone until both cosmetic lists are in", async () => {
   let easylistDown = true;
   const d = fakeDeps({ responses: (url) => (easylistDown && /easylist\.txt|easylist-downloads|fanboy/.test(url) ? new TypeError("Failed to fetch") : ok(url)) });
   const r = await U.refresh(d, {});
-  assert(r.ok && !d.staticOn, "network lists still swap " + JSON.stringify(r));
+  assert(r.ok && d.staticOn, "network lists still swap " + JSON.stringify(r));
   assert(d.cosmetic.length === 0, "no partial hide list written: " + JSON.stringify(d.cosmetic.map((c) => c.general?.length)));
   easylistDown = false;
   await U.refresh(d, { manual: true });
@@ -127,7 +127,7 @@ Deno.test("one list failing keeps the others and records a readable reason", asy
   const d = fakeDeps({ responses: (url) => (url.includes("malware-filter") ? { ok: false, status: 403, headers: new Headers() } : url.includes("pgl.yoyo") ? new TypeError("Failed to fetch") : ok(url)) });
   const r = await U.refresh(d, {});
   const st = await d.getState();
-  assert(r.ok && !d.staticOn && d.dynamic.length > 0, "partial success swaps " + JSON.stringify(r));
+  assert(r.ok && d.staticOn && d.dynamic.length > 0, "partial success swaps " + JSON.stringify(r));
   assert(st.lastErrors.urlhaus_hosts === "malware-filter.gitlab.io: HTTP 403", JSON.stringify(st.lastErrors));
   assert(/pgl\.yoyo\.org: network error/.test(st.lastErrors.peter_lowe), st.lastErrors.peter_lowe);
   const abort = new Error("aborted"); abort.name = "AbortError";
@@ -142,14 +142,14 @@ Deno.test("all lists failing keeps the bundle and stores the reasons; manual cli
   assert((await U.refresh(d, {})).reason === "throttled", "startup throttled after a failure");
   d.fetch = async (url) => ok(url);
   const m = await U.refresh(d, { manual: true });
-  assert(m.ok && !d.staticOn && Object.keys((await d.getState()).lastErrors).length === 0, "manual retry succeeds and clears errors");
+  assert(m.ok && d.staticOn && Object.keys((await d.getState()).lastErrors).length === 0, "manual retry succeeds and clears errors");
 });
 
 Deno.test("easylist.to failing in Chrome falls through to a mirror; validators stay per URL", async () => {
   const d = fakeDeps({ responses: (url) => (url.includes("easylist.to") ? new TypeError("Failed to fetch") : ok(url)) });
   const r = await U.refresh(d, {});
   const st = await d.getState();
-  assert(r.ok && !d.staticOn && Object.keys(st.lastErrors).length === 0, JSON.stringify(st.lastErrors));
+  assert(r.ok && d.staticOn && Object.keys(st.lastErrors).length === 0, JSON.stringify(st.lastErrors));
   assert(st.lists.easylist.url.includes("ublockorigin.github.io") && /easylist\.to: network error \(Failed to fetch\)/.test(st.lastNotes.easylist), JSON.stringify(st.lastNotes));
   d.calls.length = 0;
   await U.refresh(d, { manual: true });
@@ -162,7 +162,7 @@ Deno.test("lists failing everywhere: successes merged with packed copies, no 'to
   const r = await U.refresh(d, {});
   const st = await d.getState();
   const packed = bundled.filter((x) => x.action.type === "block" && x.id !== EXTRA_ID).reduce((n, x) => n + x.condition.requestDomains.length, 0);
-  assert(r.ok && !d.staticOn && st.domainCount >= packed, "partial swap keeps packed protection " + JSON.stringify(r));
+  assert(r.ok && d.staticOn && st.domainCount >= packed, "partial swap keeps packed protection " + JSON.stringify(r));
   assert(/easylist\.to: network error \(Failed to fetch\).*ublockorigin\.github\.io/.test(st.lastErrors.easylist), st.lastErrors.easylist);
 });
 
@@ -196,7 +196,7 @@ Deno.test("parser skips non-blocking options; merge drops live-video.net", () =>
 Deno.test("offline, garbage, and empty lists keep the last good copy", async () => {
   const d = fakeDeps({ responses: ok });
   const first = await U.refresh(d, {});
-  assert(first.ok && !d.staticOn, JSON.stringify(first));
+  assert(first.ok && d.staticOn, JSON.stringify(first));
   const before = await d.getState();
   const keep = ["hagezi_pro_mini", "dandelion_antimalware", "adguard_base"];
   const saved = Object.fromEntries(keep.map((name) => [name, before.lists[name].count]));
@@ -210,7 +210,7 @@ Deno.test("offline, garbage, and empty lists keep the last good copy", async () 
   };
   const again = await U.refresh(d, { manual: true });
   const st = await d.getState();
-  assert(again.ok && !d.staticOn && d.dynamic.length > 0, JSON.stringify(again));
+  assert(again.ok && d.staticOn && d.dynamic.length > 0, JSON.stringify(again));
   assert(d.dynamic.length >= rulesBefore, "rules were not dropped");
   for (const name of keep) {
     assert(st.lists[name].count === saved[name], name + " kept " + st.lists[name].count);

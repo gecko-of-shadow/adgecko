@@ -11,7 +11,7 @@ In short: the extension does not send your browsing history anywhere. It downloa
 | Permission | Used for |
 | --- | --- |
 | `storage` | `chrome.storage.local` holds the ordinary-site on/off switch (`generalEnabled`, default on), allowed origins, a small list-refresh state key (`listState`: ETags, timestamps, counts, last errors), one payload key per list (`listData:<name>`: parsed domains and selectors, read only by the service worker), the status text, and cosmetic rules. |
-| `declarativeNetRequest` | Static rulesets `general` (`src/rules/general-network.json`) and `ubo-youtube` (`src/rules/ubo-youtube-network.json`). Dynamic rules hold a refreshed domain block list, per-site allows, and an allow rule so list downloads are not blocked by those rules. |
+| `declarativeNetRequest` | Static rulesets `general` (`src/rules/general-network.json`), `ubo-youtube` (`src/rules/ubo-youtube-network.json`) and `threat` (`src/rules/threat-network.json`, see [threat-tier.md](threat-tier.md)). Dynamic rules hold a refreshed domain block list, refreshed threat rules, per-site allows, "Allow this domain" overrides, and an allow rule so list downloads are not blocked by those rules. |
 | `alarms` | One alarm, `gecko-refresh`, every 3 hours, that wakes the service worker to check the lists. |
 
 ### Host permissions

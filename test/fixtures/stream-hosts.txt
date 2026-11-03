@@ -1,0 +1,61 @@
+# Hosts Twitch, YouTube and Kick need for pages and playback. No threat rule may
+# ever match one of these (test/threat-tier.test.js). Seeded on 2026-11-02 from
+# the repo's own exclusion lists: src/general-exclude-hosts.js (SITE_DOMAINS,
+# VIDEO_CDN_DOMAINS), scripts/merge-dnr-rules.py, src/general/update.js
+# NEVER_BLOCK_SUFFIXES, the manifest's stream-site exclude_matches, and host
+# names that appear in src/youtube.js, src/kick.js and src/vendor/*.
+# Every host here must also be rejected by src/threat/protected-hosts.js itself.
+
+# Twitch
+twitch.tv
+www.twitch.tv
+m.twitch.tv
+player.twitch.tv
+clips.twitch.tv
+gql.twitch.tv
+usher.ttvnw.net
+video-edge-o2q4s6.pop01.abs.hls.ttvnw.net
+static-cdn.jtvnw.net
+twitchcdn.net
+twitchcdn.com
+ext-twitch.tv
+live-video.net
+stats.live-video.net
+video-weaver.example-pop.hls.live-video.net
+
+# YouTube
+youtube.com
+www.youtube.com
+m.youtube.com
+music.youtube.com
+youtu.be
+youtube-nocookie.com
+www.youtube-nocookie.com
+youtubekids.com
+www.youtubekids.com
+googlevideo.com
+redirector.googlevideo.com
+rr2---sn-h9jk2mn5.googlevideo.com
+ytimg.com
+i.ytimg.com
+s.ytimg.com
+ggpht.com
+yt3.ggpht.com
+youtubei.googleapis.com
+play.googleapis.com
+fonts.googleapis.com
+fonts.gstatic.com
+www.gstatic.com
+ssl.gstatic.com
+www.google.com
+accounts.google.com
+googleapis.com
+gstatic.com
+storage.googleapis.com
+
+# Kick
+kick.com
+www.kick.com
+files.kick.com
+kick-streamer.com
+kickusercontent.com

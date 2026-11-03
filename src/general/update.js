@@ -5,7 +5,8 @@
 // after its own "! Expires:" window, plus the popup's Update button.
 // Conditional requests (ETag / If-Modified-Since). Lists are parsed to
 // domain block rules and swapped into dynamic DNR rules; the bundled static
-// ruleset is disabled only after a successful swap and is restored on any error.
+// "general" ruleset stays enabled as the floor (only the lists switch turns it
+// off). The threat lists also feed the dynamic threat tier (src/threat/).
 //
 // Storage split: deps.getState()/setState() hold only small run metadata (per
 // list: url, etag, lastModified, fetchedAt, expiresMs, count, cosmetic flag).
@@ -24,6 +25,12 @@ function installGeneralAdblockUpdate(target) {
   const LIST_RULE_ID_BASE = 100000;
   const KEPT_RULE_ID_BASE = 800000; // copies of bundled allow / extra rules
   const ALLOW_RULE_ID_BASE = 900000; // user "Allow this page" rules (untouched)
+  // Refreshed threat-tier rules (priority 2,000,010, src/threat/compile.js).
+  // Own id range and own updateDynamicRules call: the lists switch, fallback()
+  // and a failed list swap never touch them; only a rebuild replaces them.
+  const THREAT_RULE_ID_BASE = 600000;
+  const THREAT_RULE_ID_END = 610000;
+  const DYNAMIC_RULE_LIMIT = 30000; // Chrome's dynamic (+session) "safe" rule cap
   const FETCH_TIMEOUT_MS = 90000;
 
   // Primary URL first, then mirrors of the same list (tried in order).
@@ -237,8 +244,42 @@ function installGeneralAdblockUpdate(target) {
       .map((r) => Object.assign({}, r, { id: id++ }));
   }
 
+  function isThreatRule(id) {
+    return id >= THREAT_RULE_ID_BASE && id < THREAT_RULE_ID_END;
+  }
+
   function isOurRule(id) {
-    return id >= LIST_RULE_ID_BASE && id < ALLOW_RULE_ID_BASE;
+    return id >= LIST_RULE_ID_BASE && id < ALLOW_RULE_ID_BASE && !isThreatRule(id);
+  }
+
+  // Rebuild the dynamic threat rules from the threat lists' payloads. Errors
+  // are recorded, never thrown: the static "threat" ruleset stays the floor.
+  async function applyThreatRules(deps, payloads, now) {
+    const TC = typeof globalThis !== "undefined" && globalThis.GeckoThreatCompile;
+    if (!TC) return { ok: false, reason: "threat compiler not loaded" };
+    try {
+      const hosts = [];
+      for (const name of TC.THREAT_LISTS) {
+        const p = payloads[name];
+        if (p) hosts.push(...TC.threatHostsFromEntries(p));
+      }
+      const existing = (await deps.getDynamicRules()) || [];
+      const others = existing.filter((r) => !isThreatRule(r.id)).length;
+      const budget = Math.max(0, Math.min(THREAT_RULE_ID_END - THREAT_RULE_ID_BASE, DYNAMIC_RULE_LIMIT - others - 100));
+      const compiled = TC.compileThreatRules(hosts, { idBase: THREAT_RULE_ID_BASE, maxRules: budget });
+      const removeRuleIds = existing.filter((r) => isThreatRule(r.id)).map((r) => r.id);
+      await deps.updateDynamicRules({ removeRuleIds, addRules: compiled.rules });
+      await deps.setState({ threatRules: compiled.rules.length, threatHosts: compiled.accepted.length, threatRejected: compiled.rejected.length, threatError: "", threatUpdatedAt: now });
+      return { ok: true, rules: compiled.rules.length };
+    } catch (e) {
+      const reason = String(e && e.message || e);
+      try {
+        await deps.setState({ threatError: reason });
+      } catch {
+        // silent
+      }
+      return { ok: false, reason };
+    }
   }
 
   // Throttle: automatic runs at most once per 12h after a successful run, and
@@ -558,8 +599,15 @@ function installGeneralAdblockUpdate(target) {
     const existing = (await deps.getDynamicRules()) || [];
     const removeRuleIds = existing.filter((r) => isOurRule(r.id)).map((r) => r.id);
     await deps.updateDynamicRules({ removeRuleIds, addRules });
-    await deps.setStaticEnabled(false);
+    // The packed "general" ruleset stays enabled next to the refreshed rules:
+    // it is the offline floor (and holds the 2,000,000 stream-site allows), so
+    // those never depend on dynamic rules surviving. Only the lists switch
+    // turns it off. Trade-off: domains dropped upstream stay blocked by the
+    // packed copy until the next release. (The switch may have gone off while
+    // this swap ran: never turn the packed lists back on then.)
+    if (deps.enabled()) await deps.setStaticEnabled(true);
     await deps.setState({ dynamicActive: true, updatedAt: now, ruleCount: addRules.length, domainCount: total, rebuiltForParser: PARSER_VERSION });
+    await applyThreatRules(deps, payloads, now);
     return { ok: true, ran: true, rules: addRules.length, domains: total };
   }
 
@@ -605,7 +653,7 @@ function installGeneralAdblockUpdate(target) {
     const staleRules = staleParserLists(state).length > 0 && state.rebuiltForParser !== PARSER_VERSION;
     if (state.dynamicActive && state.lists && Object.keys(state.lists).length) {
       if (!retired.length && !staleRules && await dynamicLooksActive(deps, state)) {
-        await deps.setStaticEnabled(false);
+        await deps.setStaticEnabled(true);
         return { ok: true, mode: "dynamic" };
       }
       try {
@@ -631,6 +679,7 @@ function installGeneralAdblockUpdate(target) {
   Object.assign(target, {
     POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
     RETIRED_LISTS, dropRetiredLists, PARSER_VERSION, parseEntries, mergeScoped, staleParserLists,
+    THREAT_RULE_ID_BASE, THREAT_RULE_ID_END, DYNAMIC_RULE_LIMIT, isThreatRule, isOurRule, applyThreatRules,
     LIST_RULE_ID_BASE, KEPT_RULE_ID_BASE, ALLOW_RULE_ID_BASE, SOURCES, LIST_HOSTS,
     isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules, keepsWholeDomain,
     shouldRun, listDue, refresh, describeError, LIST_ALLOW_RULE_ID, listAllowRule, applyEnabled, isListUrl,

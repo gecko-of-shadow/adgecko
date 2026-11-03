@@ -7,7 +7,8 @@ function assert(c, l) { if (!c) throw new Error(l); }
 
 const U = {};
 new Function(`${updateSource}\nreturn installGeneralAdblockUpdate;`)()(U);
-const listRules = (w) => w.dnr.dynamic.filter((r) => r.id >= U.LIST_RULE_ID_BASE && r.id < U.KEPT_RULE_ID_BASE).length;
+// List rules only: the dynamic threat tier (its own id range) stays on when lists go off.
+const listRules = (w) => w.dnr.dynamic.filter((r) => U.isOurRule(r.id) && r.id < U.KEPT_RULE_ID_BASE).length;
 const allowHosts = (w) => w.dnr.dynamic.filter((r) => r.id >= U.ALLOW_RULE_ID_BASE && r.id < U.ALLOW_RULE_ID_BASE + 10000)
   .map((r) => r.condition.initiatorDomains[0]);
 const MSG = { source: "twitch-adblock-general", type: "applyGeneralState" };
@@ -23,7 +24,7 @@ Deno.test("lists off then on keeps the refreshed rule set (no duplicate-id rebui
   await w.send(MSG);
   await settle();
   const before = listRules(w);
-  assert(before > 0 && !w.dnr.staticOn, "precondition: refreshed lists active, got " + before);
+  assert(before > 0 && w.dnr.staticOn, "precondition: refreshed lists active, got " + before);
   await popupWrite(w, { generalEnabled: false });
   await settle();
   assert(listRules(w) === 0 && !w.dnr.staticOn, "off removes every list rule");
@@ -32,7 +33,7 @@ Deno.test("lists off then on keeps the refreshed rule set (no duplicate-id rebui
   // Seeded in the old one-key layout; the worker migrates it to listState + listData:*.
   const st = w.store.listState;
   assert(w.dnr.errors.length === 0, "DNR errors: " + w.dnr.errors.join("; "));
-  assert(listRules(w) === before && !w.dnr.staticOn && st.dynamicActive,
+  assert(listRules(w) === before && w.dnr.staticOn && st.dynamicActive,
     `refreshed lists dropped: listRules=${listRules(w)} staticOn=${w.dnr.staticOn} dynamicActive=${st.dynamicActive}`);
 });
 

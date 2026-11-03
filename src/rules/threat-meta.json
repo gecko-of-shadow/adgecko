@@ -1,0 +1,48 @@
+{
+  "built_at_utc": "2026-11-03T00:22:30Z",
+  "lists_packed_at_utc": "2026-11-03T00:07:22Z",
+  "priority": 2000010,
+  "resource_types": [
+    "main_frame",
+    "sub_frame",
+    "script",
+    "xmlhttprequest",
+    "ping",
+    "media",
+    "websocket",
+    "other"
+  ],
+  "hosts_per_rule": 80,
+  "scopes_used": [
+    "",
+    "p=|t=main_frame|x="
+  ],
+  "sources": {
+    "urlhaus_hosts": {
+      "sha256_matches_meta": true,
+      "whole_domains": 546,
+      "scoped_entries": 0,
+      "threat_hosts": 546,
+      "added": 546
+    },
+    "ublock_badware": {
+      "sha256_matches_meta": true,
+      "whole_domains": 1113,
+      "scoped_entries": 2204,
+      "threat_hosts": 3299,
+      "added": 3297
+    },
+    "dandelion_antimalware": {
+      "sha256_matches_meta": true,
+      "whole_domains": 11817,
+      "scoped_entries": 309,
+      "threat_hosts": 12117,
+      "added": 12083
+    }
+  },
+  "hosts_total": 15926,
+  "rule_count": 200,
+  "rejected_total": 0,
+  "rejected_by_reason": {},
+  "rejected": []
+}
