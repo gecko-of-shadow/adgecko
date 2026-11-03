@@ -162,7 +162,7 @@ Deno.test("L-5: a lists switch that lands after the refresh's own check is honou
     return realGet((rules) => setTimeout(() => cb(rules), 300));
   };
   dnr.updateDynamicRules = (o, cb) => {
-    if (triggered && (o.addRules || []).some((r) => r.id >= U.LIST_RULE_ID_BASE && r.id < U.KEPT_RULE_ID_BASE)) listAddsAfter++;
+    if (triggered && (o.addRules || []).some((r) => r.id >= U.LIST_RULE_ID_BASE && r.id < U.KEPT_RULE_ID_BASE && !U.isThreatRule(r.id))) listAddsAfter++;
     return realUpdate(o, cb);
   };
   // The downloads are done (the refresh stores the list metadata). A slow
@@ -247,23 +247,32 @@ Deno.test("L-5: the backstop timer starts with each section, so sections queued 
   // A stuck head: after the limit the next section runs, and the one after it
   // still waits for that one (only the stuck head may overlap).
   const log2 = { active: 0, maxActive: 0, order: [] };
-  dnrExclusive(() => new Promise(() => {})); // never settles
+  const stuck = dnrExclusive(() => new Promise(() => {})); // never settles
   const b = dnrExclusive(tracked(log2, "b", 40));
   const c = dnrExclusive(tracked(log2, "c", 40));
   assert((await within(Promise.all([b, c]), 2000)) === "done", "queue held by a stuck section");
   assert(log2.maxActive === 1 && log2.order.join(" ") === "b+ b- c+ c-", "sections overlapped after the backstop: " + log2.order.join(" "));
   assert(warnings.length === 1, "one backstop warning: " + warnings.length);
+  // The stuck section's own caller moves on too (its chain is not held).
+  const got = await within(stuck.then((r) => { stuckResult = r; }), 500);
+  assert(got === "done" && stuckResult && stuckResult.ok === false && stuckResult.timedOut === true, "stuck caller: " + JSON.stringify(stuckResult));
 });
+let stuckResult = null;
 
 Deno.test("L-5: a section that throws or rejects does not hold the queue, and its caller sees the error", async () => {
-  const { dnrExclusive } = loadQueue(1000);
+  const { dnrExclusive, warnings } = loadQueue(1000);
   const sync = dnrExclusive(() => { throw new Error("sync"); });
   const rejected = dnrExclusive(() => Promise.reject(new Error("async")));
   const after = dnrExclusive(async () => "ran");
-  const got = await Promise.allSettled([sync, rejected, after]);
+  const all = Promise.allSettled([sync, rejected, after]);
+  // Well under the 1 s backstop: the slots were released by the throw and
+  // the rejection themselves, not by the timer.
+  assert((await within(all, 200)) === "done", "the queue waited for the backstop after a throw or rejection");
+  const got = await all;
   assert(got[0].status === "rejected" && got[0].reason.message === "sync", "sync throw reaches the caller");
   assert(got[1].status === "rejected" && got[1].reason.message === "async", "rejection reaches the caller");
   assert(got[2].status === "fulfilled" && got[2].value === "ran", "the next section still runs");
+  assert(warnings.length === 0, "backstop fired: " + warnings.join("; "));
 });
 
 // Engine side: refresh() takes the section only around its rule writes.

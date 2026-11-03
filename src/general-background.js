@@ -39,10 +39,13 @@ const ICON_OFF = {
 // STARTED (a lost callback) stops holding the queue, so one stuck run cannot
 // block every later DNR write until the worker restarts. The timer starts
 // with the section, not when it is queued: sections queued together must
-// still run one after another. Real sections take seconds. A stuck section
-// that wakes up after the backstop can still write next to the next one;
-// no backstop can prevent that.
+// still run one after another. Real sections take seconds. The caller then
+// gets DNR_TIMED_OUT ({ok:false, reason, timedOut}), so its own chain
+// (settings sync, refresh, revert) moves on too. A stuck section that wakes
+// up after the backstop can still write next to the next one; no backstop
+// can prevent that.
 const DNR_SECTION_MAX_MS = 120000;
+const DNR_TIMED_OUT = Object.freeze({ ok: false, reason: "DNR update timed out", error: "DNR update timed out", timedOut: true });
 let dnrQueue = Promise.resolve();
 function dnrExclusive(op) {
   let release;
@@ -51,10 +54,11 @@ function dnrExclusive(op) {
   });
   const prev = dnrQueue;
   dnrQueue = slot;
-  return prev.then(() => {
+  return prev.then(() => new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       console.warn("twitch-adblock: a DNR update took over " + DNR_SECTION_MAX_MS / 1000 + " s; not waiting for it any longer");
       release();
+      resolve(DNR_TIMED_OUT);
     }, DNR_SECTION_MAX_MS);
     let run;
     try {
@@ -62,13 +66,16 @@ function dnrExclusive(op) {
     } catch (e) {
       run = Promise.reject(e);
     }
-    const done = () => {
+    run.then((value) => {
       clearTimeout(timer);
       release();
-    };
-    run.then(done, done);
-    return run;
-  });
+      resolve(value);
+    }, (e) => {
+      clearTimeout(timer);
+      release();
+      reject(e);
+    });
+  }));
 }
 
 function getSettings() {
@@ -349,7 +356,10 @@ function feedDeps() {
     // The write goes through the DNR queue like every other DNR write. The
     // read before it (feed rule ids) needs no lock: the feed is the only
     // writer of session rules and feedRun() runs one feed operation at a time.
-    updateSessionRules: (opts) => dnrExclusive(() => cb((done) => dnr.updateSessionRules(opts, done))),
+    updateSessionRules: (opts) => dnrExclusive(() => cb((done) => dnr.updateSessionRules(opts, done))).then((r) => {
+      if (r === DNR_TIMED_OUT) throw new Error(r.reason);
+      return r;
+    }),
     loadSnapshot: async () => (await fetch(chrome.runtime.getURL("src/rules/threat-snapshot.json"))).json(),
   };
 }
