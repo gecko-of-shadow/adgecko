@@ -276,17 +276,19 @@ function installKickAdblock(target) {
     }
   }
 
-  function watchCovers() {
-    settleCovers(document);
+  // isOn: the "kick" switch (security review L-14): with it off, covers are
+  // left alone like every other Kick helper.
+  function watchCovers(isOn = () => true) {
+    if (isOn()) settleCovers(document);
     const root = document.documentElement;
     if (!root || typeof MutationObserver !== "function") return;
     let scheduled = false;
     const observer = new MutationObserver((mutations) => {
-      if (scheduled || !coverMutation(mutations)) return;
+      if (scheduled || !isOn() || !coverMutation(mutations)) return;
       scheduled = true;
       requestAnimationFrame(() => {
         scheduled = false;
-        settleCovers(document);
+        if (isOn()) settleCovers(document);
       });
     });
     observer.observe(root, { childList: true, subtree: true });
@@ -527,10 +529,11 @@ function installKickAdblock(target) {
       if (kickOn) postCommand(ivsWorker, command);
     });
     injectChromeCss();
-    watchCovers();
+    watchCovers(() => kickOn);
     debugLog("watching Kick");
   }
 
+  target.watchCovers = watchCovers;
   target.startKickAdblock = startKickAdblock;
   target.wrapMediaTailor = wrapMediaTailor;
 }

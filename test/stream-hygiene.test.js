@@ -75,3 +75,22 @@ Deno.test("kick MediaTailor session: listeners can be removed again, and adding 
   s.dispatch("ad", { detail: { x: 2 } });
   assert(calls === 1 && (listeners.get("ad") || new Set()).size === 0, "removed: " + calls + " left " + (listeners.get("ad") || new Set()).size);
 });
+
+// Security review L-14: Kick's post-roll cover handling obeys the "kick" switch.
+Deno.test("kick covers: nothing is touched while the kick switch is off; handled again when it is on", () => {
+  let queries = 0;
+  let observerCb = null;
+  const document = { documentElement: {}, querySelectorAll: () => { queries++; return []; } };
+  class MO { constructor(cb) { observerCb = cb; } observe() {} }
+  const raf = (fn) => fn();
+  const api = {};
+  new Function("document", "MutationObserver", "requestAnimationFrame", `${unwrapMain(kickSource)}\nreturn installKickAdblock;`)(document, MO, raf)(api);
+  let on = false;
+  api.watchCovers(() => on);
+  const mutation = [{ addedNodes: [{ nodeType: 1, tagName: "IFRAME" }] }];
+  observerCb(mutation);
+  assert(queries === 0, "touched covers while off: " + queries);
+  on = true;
+  observerCb(mutation);
+  assert(queries > 0, "covers handled again when on");
+});
