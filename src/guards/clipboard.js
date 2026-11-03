@@ -6,24 +6,48 @@
 //
 // ClickFix-style attacks get a page to put a shell command into the clipboard
 // and then tell the visitor to paste it into Run, PowerShell or a terminal.
-// This wraps navigator.clipboard.writeText, document.execCommand("copy"/"cut")
-// and DataTransfer.setData during copy events: text that looks like a dangerous
-// command is not written unless the visitor clearly asked for exactly that
-// text, or the site is on the known-safe list (documentation and code hosts).
-// A small notice says why.
-// "Clearly asked" (security review M-2): a copy shortcut while the text is part
-// of the real selection, or a click on something labelled "copy" while the
-// text is visible right next to it. A "copy" label alone is not enough.
-// Values are coerced to a string once; the checked string is the one passed
-// on. Wrappers sit on the prototype that owns each method, and the selection
-// and form-field values are read through getters captured before any page
-// script runs, so a page cannot show the check one text and copy another.
+// Checked: navigator.clipboard.writeText and .write, document.execCommand
+// ("copy"/"cut"), the browser's own copy/cut of the selection, and
+// DataTransfer.setData on a copy/cut event's clipboard data. Text that looks
+// like a dangerous command is not written unless the visitor copied exactly
+// that text themselves, or the site is on the known-safe list (documentation
+// and code hosts). A small notice says why and how to copy on purpose.
+//
+// "Copied it themselves" (security review M-2 and its follow-up review): the
+// text is part of the selection the visitor had when they pressed Ctrl/Cmd+C
+// (or opened the context menu). A button labelled "Copy" does not count: a
+// page can label, hide or fake anything it shows (opacity:0, off-screen text).
+// The page runs in this same JavaScript world, so everything on the decision
+// path is captured when this file runs (document_start, before any page
+// script): built-ins (RegExp exec, string methods, Reflect.apply, Date.now,
+// Promise.reject), the selection and form-field getters and the key-event
+// getters. Values are turned into text once; the checked text is the one
+// passed on. Wrappers sit on the prototype that owns each method.
+// Known limit (UNVERIFIED in practice): the clipboard.write() check awaits
+// promises, and a page that rewrites Promise internals can still interfere
+// with that one asynchronous path.
 // Fail-open: an error in the guard lets the original call through, but an
-// error while judging "did the visitor ask for it" counts as "no".
+// error while judging "did the visitor copy it" counts as "no".
 // Switch: flag "guardClipboard" from src/settings/flags.js, read at use time,
 // on until a flag says otherwise.
 // Wrapped in one function so the page sees no globals from this file (L-18).
 (() => {
+// Captured at load (document_start), before any page script can replace them.
+const apply = Reflect.apply;
+const reExec = RegExp.prototype.exec;
+const sLower = String.prototype.toLowerCase;
+const sSlice = String.prototype.slice;
+const sIndexOf = String.prototype.indexOf;
+const sCharCodeAt = String.prototype.charCodeAt;
+const StringFn = String;
+const dateNow = Date.now;
+const PromiseCtor = Promise;
+const promiseReject = Promise.reject;
+const getOwnDesc = Object.getOwnPropertyDescriptor;
+const getProto = Object.getPrototypeOf;
+const defineProp = Object.defineProperty;
+const hasOwn = Object.prototype.hasOwnProperty;
+
 function installClipboardGuard(target) {
   // Commands people are tricked into running (patterns are case-insensitive).
   const PATTERNS = [
@@ -53,64 +77,67 @@ function installClipboardGuard(target) {
     "npmjs.com", "pypi.org", "crates.io", "brew.sh", "rustup.rs", "deno.com", "deno.land", "nodejs.org", "python.org",
     "docker.com", "kubernetes.io", "archlinux.org", "debian.org", "ubuntu.com", "fedoraproject.org", "chocolatey.org",
   ];
-  const MAX_NEARBY_TEXT = 200000; // characters read from one ancestor at most
+  // How long a copy gesture authorises a write of the selected text.
+  const KEY_WINDOW_MS = 1500;
+  const MENU_WINDOW_MS = 30000;
+
+  const lower = (s) => apply(sLower, s, []);
+  const matches = (re, s) => apply(reExec, re, [s]) !== null;
+  const contains = (hay, needle) => apply(sIndexOf, hay, [needle]) !== -1;
 
   function hostOf(loc) {
     try {
-      return String(loc.hostname || "").toLowerCase();
+      return lower(StringFn(loc.hostname || ""));
     } catch {
       return "";
     }
   }
 
   function onSafeHost(host) {
-    return SAFE_HOSTS.some((d) => host === d || host.endsWith("." + d));
+    for (let i = 0; i < SAFE_HOSTS.length; i++) {
+      const d = SAFE_HOSTS[i];
+      if (host === d || (host.length > d.length && apply(sSlice, host, [host.length - d.length - 1]) === "." + d)) return true;
+    }
+    return false;
   }
 
   function matchDangerous(text) {
-    const s = typeof text === "string" ? text : String(text == null ? "" : text);
+    const s = typeof text === "string" ? text : (text == null ? "" : StringFn(text));
     if (s.length < 8) return null;
-    const sample = s.length > 20000 ? s.slice(0, 20000) : s;
-    for (const p of PATTERNS) if (p.re.test(sample)) return p.id;
+    const sample = s.length > 20000 ? apply(sSlice, s, [0, 20000]) : s;
+    for (let i = 0; i < PATTERNS.length; i++) if (matches(PATTERNS[i].re, sample)) return PATTERNS[i].id;
     return null;
   }
 
-  const squash = (s) => String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  // Whitespace runs -> one space, trimmed (no regex, no page-replaceable methods).
+  function squash(s) {
+    const str = typeof s === "string" ? s : (s == null ? "" : StringFn(s));
+    let out = "";
+    let gap = false;
+    for (let i = 0; i < str.length; i++) {
+      const c = apply(sCharCodeAt, str, [i]);
+      if (c <= 32 || c === 160 || c === 0x2028 || c === 0x2029) {
+        gap = out.length > 0;
+        continue;
+      }
+      if (gap) out += " ";
+      gap = false;
+      out += str[i];
+    }
+    return out;
+  }
 
-  // Did the visitor ask for exactly this text? last = most recent trusted
-  // input (last.sel = the selected text when a copy shortcut was pressed, read
-  // through native getters by the first keydown listener on window).
-  //  - copy shortcut (Ctrl/Cmd+C): the text must be part of that selection, so
-  //    a copy handler cannot swap a command in, and a page that changes the
-  //    selection after the key press gains nothing ("pastejacking");
-  //  - click on an element (or one of 3 ancestors) labelled "copy": the text
-  //    must also be visible in that element or one of its 4 nearest ancestors
-  //    (a code block next to its copy button). A fake "I'm not a robot" or a
-  //    "Copy" button over hidden text does not count.
-  // Any error means "no".
+  // Did the visitor copy exactly this text themselves? last = the last copy
+  // gesture: { kind: "key" | "menu", at, sel } where sel is the selection when
+  // they pressed Ctrl/Cmd+C or opened the context menu. Any error means "no".
   function deliberateCopy(last, now, text) {
     try {
-      if (!last || now - last.at > 1500) return false;
+      if (!last) return false;
+      const windowMs = last.kind === "menu" ? MENU_WINDOW_MS : KEY_WINDOW_MS;
+      if (now - last.at > windowMs || now < last.at) return false;
       const want = squash(text);
       if (!want) return false;
-      if (last.kind === "key") return last.copyKey === true && squash(last.sel).includes(want);
-      let labelled = false;
-      let el = last.target;
-      for (let i = 0; el && i < 4; i++, el = el.parentElement) {
-        const bits = [el.getAttribute && el.getAttribute("aria-label"), el.getAttribute && el.getAttribute("title"), el.getAttribute && el.getAttribute("data-clipboard-text") != null ? "copy" : "", typeof el.className === "string" ? el.className : "", el.id, i === 0 ? String(el.textContent || "").slice(0, 40) : ""];
-        if (bits.some((b) => b && /\bcop(?:y|ied)\b|clipboard/i.test(String(b)))) {
-          labelled = true;
-          break;
-        }
-      }
-      if (!labelled) return false;
-      el = last.target;
-      for (let i = 0; el && i < 5; i++, el = el.parentElement) {
-        const shown = typeof el.innerText === "string" ? el.innerText : el.textContent;
-        if (typeof shown !== "string" || shown.length > MAX_NEARBY_TEXT) continue;
-        if (squash(shown).includes(want)) return true;
-      }
-      return false;
+      return contains(squash(last.sel), want);
     } catch {
       return false;
     }
@@ -119,8 +146,8 @@ function installClipboardGuard(target) {
   // The object on the prototype chain that owns `key` (where a wrapper must
   // go so that no prototype further up still holds the native function).
   function ownerOf(obj, key) {
-    for (let o = obj; o; o = Object.getPrototypeOf(o)) {
-      if (Object.prototype.hasOwnProperty.call(o, key)) return o;
+    for (let o = obj; o; o = getProto(o)) {
+      if (apply(hasOwn, o, [key])) return o;
     }
     return null;
   }
@@ -131,39 +158,51 @@ function installClipboardGuard(target) {
   target.onSafeHost = onSafeHost;
   target.deliberateCopy = deliberateCopy;
   target.ownerOf = ownerOf;
+  target.squash = squash;
 
   // Install the wrappers. env: { window, document, navigator, location, now(), notify(text), flagOn() }
   target.install = function install(env) {
     const win = env.window;
     const doc = env.document;
-    const now = env.now || (() => Date.now());
+    const now = env.now || (() => apply(dateNow, Date, []));
     const flagOn = env.flagOn || (() => true);
-    let lastInput = null;
+    let lastCopy = null;
+    let copyData = null; // clipboardData of the copy/cut event being dispatched
 
-    // Native getters, captured now (document_start, before page scripts).
+    // Native getters and methods, captured now (before page scripts).
     const getter = (proto, key) => {
       try {
-        const d = proto && Object.getOwnPropertyDescriptor(proto, key);
+        const d = proto && getOwnDesc(proto, key);
         return d && typeof d.get === "function" ? d.get : null;
       } catch {
         return null;
       }
     };
+    const protoOf = (C) => (C && C.prototype) || null;
     const nativeGetSelection = typeof win.getSelection === "function" ? win.getSelection : null;
-    const nativeSelectionText = win.Selection && win.Selection.prototype && typeof win.Selection.prototype.toString === "function" ? win.Selection.prototype.toString : null;
-    const nativeActive = getter(win.Document && win.Document.prototype, "activeElement");
+    const nativeSelectionText = protoOf(win.Selection) && typeof win.Selection.prototype.toString === "function" ? win.Selection.prototype.toString : null;
+    const nativeActive = getter(protoOf(win.Document), "activeElement");
+    const keyGet = getter(protoOf(win.KeyboardEvent), "key");
+    const ctrlGet = getter(protoOf(win.KeyboardEvent), "ctrlKey");
+    const metaGet = getter(protoOf(win.KeyboardEvent), "metaKey");
+    const clipboardDataGet = getter(protoOf(win.ClipboardEvent), "clipboardData");
+    const preventDefaultFn = protoOf(win.Event) && typeof win.Event.prototype.preventDefault === "function" ? win.Event.prototype.preventDefault : null;
+    const DOMExceptionCtor = typeof win.DOMException === "function" ? win.DOMException : (typeof DOMException === "function" ? DOMException : Error);
     const fieldGetters = [];
-    for (const C of [win.HTMLTextAreaElement, win.HTMLInputElement]) {
-      const p = C && C.prototype;
+    const fieldCtors = [win.HTMLTextAreaElement, win.HTMLInputElement];
+    for (let i = 0; i < fieldCtors.length; i++) {
+      const p = protoOf(fieldCtors[i]);
       const g = { value: getter(p, "value"), start: getter(p, "selectionStart"), end: getter(p, "selectionEnd") };
       if (g.value && g.start && g.end) fieldGetters.push(g);
     }
+    const read = (g, obj, name) => (g ? apply(g, obj, []) : obj[name]);
+    const blocked = () => new DOMExceptionCtor("Write blocked by the browser's protection", "NotAllowedError");
 
     function selectionText() {
       try {
-        const sel = nativeGetSelection ? Reflect.apply(nativeGetSelection, win, []) : null;
+        const sel = nativeGetSelection ? apply(nativeGetSelection, win, []) : null;
         if (!sel) return "";
-        return nativeSelectionText ? String(Reflect.apply(nativeSelectionText, sel, [])) : String(sel);
+        return StringFn(nativeSelectionText ? apply(nativeSelectionText, sel, []) : sel);
       } catch {
         return "";
       }
@@ -171,18 +210,19 @@ function installClipboardGuard(target) {
     function fieldSelection() {
       let active = null;
       try {
-        active = nativeActive ? Reflect.apply(nativeActive, doc, []) : doc.activeElement;
+        active = nativeActive ? apply(nativeActive, doc, []) : doc.activeElement;
       } catch {
         return "";
       }
       if (!active) return "";
-      for (const g of fieldGetters) {
+      for (let i = 0; i < fieldGetters.length; i++) {
+        const g = fieldGetters[i];
         try {
           // Throws "Illegal invocation" unless active really is that kind of field.
-          const v = Reflect.apply(g.value, active, []);
-          const s = Reflect.apply(g.start, active, []);
-          const e = Reflect.apply(g.end, active, []);
-          return typeof v === "string" && typeof s === "number" && typeof e === "number" ? v.slice(s, e) : "";
+          const v = apply(g.value, active, []);
+          const s = apply(g.start, active, []);
+          const e = apply(g.end, active, []);
+          return typeof v === "string" && typeof s === "number" && typeof e === "number" ? apply(sSlice, v, [s, e]) : "";
         } catch {
           // not this kind of field
         }
@@ -190,40 +230,20 @@ function installClipboardGuard(target) {
       if (fieldGetters.length) return "";
       // No native getters available (not a browser): plain properties.
       try {
-        return typeof active.value === "string" && typeof active.selectionStart === "number" ? active.value.slice(active.selectionStart, active.selectionEnd) : "";
+        return typeof active.value === "string" && typeof active.selectionStart === "number" ? apply(sSlice, active.value, [active.selectionStart, active.selectionEnd]) : "";
       } catch {
         return "";
       }
     }
 
-    const remember = (e, kind) => {
-      try {
-        if (!e || e.isTrusted !== true) return;
-        const copyKey = kind === "key" && (e.ctrlKey || e.metaKey) && String(e.key || "").toLowerCase() === "c";
-        lastInput = { kind, at: now(), target: e.target, copyKey, sel: copyKey ? selectionText() + "\n" + fieldSelection() : "" };
-      } catch {
-        // fail open
-      }
-    };
-    // Capture listeners on window, added before any page script: they run
-    // before every page listener, so the selection is the visitor's own.
-    const inputTarget = typeof win.addEventListener === "function" ? win : doc;
-    try {
-      inputTarget.addEventListener("pointerdown", (e) => remember(e, "click"), true);
-      inputTarget.addEventListener("click", (e) => remember(e, "click"), true);
-      inputTarget.addEventListener("keydown", (e) => remember(e, "key"), true);
-    } catch {
-      // without input tracking every dangerous write outside safe hosts is held
-    }
-
-    // text must already be a string. true = let it through.
+    // true = let it through.
     function allowed(text) {
       try {
         if (!flagOn()) return true;
         const hit = matchDangerous(text);
         if (!hit) return true;
         if (onSafeHost(hostOf(env.location))) return true;
-        if (deliberateCopy(lastInput, now(), text)) return true;
+        if (deliberateCopy(lastCopy, now(), text)) return true;
         if (env.notify) env.notify(hit);
         return false;
       } catch {
@@ -232,24 +252,112 @@ function installClipboardGuard(target) {
     }
     target.allowed = allowed;
 
+    // Copy gestures, recorded by listeners on window (capture) added before any
+    // page script: they run first, so the selection is the visitor's own.
+    const listenOn = typeof win.addEventListener === "function" ? win : doc;
+    try {
+      listenOn.addEventListener("keydown", (e) => {
+        try {
+          if (!e || e.isTrusted !== true) return;
+          const copyKey = (read(ctrlGet, e, "ctrlKey") || read(metaGet, e, "metaKey")) && lower(StringFn(read(keyGet, e, "key") || "")) === "c";
+          lastCopy = copyKey ? { kind: "key", at: now(), sel: selectionText() + "\n" + fieldSelection() } : null;
+        } catch {
+          lastCopy = null;
+        }
+      }, true);
+      listenOn.addEventListener("contextmenu", (e) => {
+        try {
+          lastCopy = e && e.isTrusted === true ? { kind: "menu", at: now(), sel: selectionText() + "\n" + fieldSelection() } : lastCopy;
+        } catch {
+          lastCopy = null;
+        }
+      }, true);
+      // The browser's own copy/cut of the selection (keyboard, menu, or the
+      // copy event an execCommand("copy") fires): if the selection changed to
+      // a command the visitor did not select, cancel the copy. Also remember
+      // this event's clipboardData so setData is checked on it (and only on it,
+      // not on drag-and-drop data).
+      const onCopy = (e) => {
+        try {
+          copyData = clipboardDataGet ? apply(clipboardDataGet, e, []) : e && e.clipboardData;
+          const sel = selectionText();
+          const field = fieldSelection();
+          if (!allowed(sel) || (field && field !== sel && !allowed(field))) {
+            if (preventDefaultFn) apply(preventDefaultFn, e, []);
+            else e.preventDefault();
+          }
+        } catch {
+          // fail open
+        }
+      };
+      listenOn.addEventListener("copy", onCopy, true);
+      listenOn.addEventListener("cut", onCopy, true);
+    } catch {
+      // without gesture tracking every dangerous write outside safe hosts is held
+    }
+
     const clip = env.navigator && env.navigator.clipboard;
     const clipOwner = clip && ownerOf(clip, "writeText");
     if (clipOwner && typeof clipOwner.writeText === "function") {
       try {
         const wrapped = new Proxy(clipOwner.writeText, {
           apply(fn, self, args) {
-            if (args.length === 0) return Reflect.apply(fn, self, args); // native error
+            if (args.length === 0) return apply(fn, self, args); // native error
             let text;
             try {
-              text = String(args[0]); // once: the checked string is the written one
+              text = StringFn(args[0]); // once: the checked string is the written one
             } catch (error) {
-              return Promise.reject(error);
+              return apply(promiseReject, PromiseCtor, [error]);
             }
-            if (!allowed(text)) return Promise.reject(new DOMException("Write blocked by the browser's protection", "NotAllowedError"));
-            return Reflect.apply(fn, self, [text, ...args.slice(1)]);
+            if (!allowed(text)) return apply(promiseReject, PromiseCtor, [blocked()]);
+            return apply(fn, self, [text]);
           },
         });
-        Object.defineProperty(clipOwner, "writeText", { value: wrapped, configurable: true, writable: true });
+        defineProp(clipOwner, "writeText", { value: wrapped, configurable: true, writable: true });
+      } catch {
+        // stays native
+      }
+    }
+
+    // clipboard.write([ClipboardItem]): text/plain and text/html parts are read
+    // through the native ClipboardItem/Blob methods and checked before the
+    // native write runs (follow-up review: this path was not covered).
+    const writeOwner = clip && ownerOf(clip, "write");
+    const ciProto = protoOf(win.ClipboardItem);
+    const typesGet = getter(ciProto, "types");
+    const getTypeFn = ciProto && typeof ciProto.getType === "function" ? ciProto.getType : null;
+    const blobTextFn = protoOf(win.Blob) && typeof win.Blob.prototype.text === "function" ? win.Blob.prototype.text : null;
+    if (writeOwner && typeof writeOwner.write === "function" && typesGet && getTypeFn && blobTextFn) {
+      try {
+        const wrappedWrite = new Proxy(writeOwner.write, {
+          apply(fn, self, args) {
+            const run = async () => {
+              let verdict = true;
+              try {
+                if (flagOn() && !onSafeHost(hostOf(env.location))) {
+                  const items = args[0];
+                  const n = items ? items.length : 0;
+                  for (let i = 0; i < n && verdict; i++) {
+                    const item = items[i];
+                    const types = apply(typesGet, item, []);
+                    for (let j = 0; j < types.length && verdict; j++) {
+                      const type = lower(StringFn(types[j]));
+                      if (type !== "text/plain" && type !== "text/html") continue;
+                      const blob = await apply(getTypeFn, item, [types[j]]);
+                      verdict = allowed(await apply(blobTextFn, blob, []));
+                    }
+                  }
+                }
+              } catch {
+                verdict = true; // not readable by us: the native call decides
+              }
+              if (!verdict) throw blocked();
+              return apply(fn, self, args);
+            };
+            return run();
+          },
+        });
+        defineProp(writeOwner, "write", { value: wrappedWrite, configurable: true, writable: true });
       } catch {
         // stays native
       }
@@ -260,11 +368,12 @@ function installClipboardGuard(target) {
       try {
         const wrappedExec = new Proxy(execOwner.execCommand, {
           apply(fn, self, args) {
-            if (args.length === 0) return Reflect.apply(fn, self, args); // native error
-            const call = args.slice();
+            if (args.length === 0) return apply(fn, self, args); // native error
+            const call = [];
+            for (let i = 0; i < args.length; i++) call[i] = args[i];
             try {
-              call[0] = String(args[0]); // once
-              const cmd = call[0].toLowerCase();
+              call[0] = StringFn(args[0]); // once
+              const cmd = lower(call[0]);
               if (cmd === "copy" || cmd === "cut") {
                 const sel = selectionText();
                 const field = fieldSelection();
@@ -273,36 +382,39 @@ function installClipboardGuard(target) {
             } catch {
               // fail open
             }
-            return Reflect.apply(fn, self, call);
+            return apply(fn, self, call);
           },
         });
-        Object.defineProperty(execOwner, "execCommand", { value: wrappedExec, configurable: true, writable: true });
+        defineProp(execOwner, "execCommand", { value: wrappedExec, configurable: true, writable: true });
       } catch {
         // stays native
       }
     }
 
-    // A page's copy handler can swap the copied text: check it too.
+    // A page's copy handler can swap the copied text: check setData on the
+    // clipboard data of the copy/cut event being dispatched (not on other
+    // DataTransfer objects such as drag-and-drop data).
     const DT = win.DataTransfer;
     const dtOwner = DT && DT.prototype && ownerOf(DT.prototype, "setData");
     if (dtOwner && typeof dtOwner.setData === "function") {
       try {
         const wrappedSet = new Proxy(dtOwner.setData, {
           apply(fn, self, args) {
-            if (args.length < 2) return Reflect.apply(fn, self, args); // native error
-            const call = args.slice();
+            if (args.length < 2 || self !== copyData) return apply(fn, self, args);
+            const call = [];
+            for (let i = 0; i < args.length; i++) call[i] = args[i];
             try {
-              call[0] = String(args[0]); // once each
-              call[1] = String(args[1]);
-              const type = call[0].toLowerCase();
+              call[0] = StringFn(args[0]); // once each
+              call[1] = StringFn(args[1]);
+              const type = lower(call[0]);
               if ((type === "text/plain" || type === "text" || type === "text/html") && !allowed(call[1])) return undefined;
             } catch {
               // fail open
             }
-            return Reflect.apply(fn, self, call);
+            return apply(fn, self, call);
           },
         });
-        Object.defineProperty(dtOwner, "setData", { value: wrappedSet, configurable: true, writable: true });
+        defineProp(dtOwner, "setData", { value: wrappedSet, configurable: true, writable: true });
       } catch {
         // stays native
       }
@@ -315,14 +427,15 @@ function clipboardGuardNotice(doc) {
   let shown = 0;
   return () => {
     try {
-      if (Date.now() - shown < 3000) return;
-      shown = Date.now();
+      const t = apply(dateNow, Date, []);
+      if (t - shown < 3000) return;
+      shown = t;
       const host = doc.createElement("div");
       const root = host.attachShadow ? host.attachShadow({ mode: "closed" }) : host;
       const box = doc.createElement("div");
       box.setAttribute("role", "alert");
       box.style.cssText = "position:fixed;z-index:2147483647;right:16px;bottom:16px;max-width:360px;padding:12px 14px;border-radius:8px;background:#18181b;color:#efeff1;font:13px/1.4 sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.4);border:1px solid #f0a33a";
-      box.textContent = "Blocked: this page tried to put a command into your clipboard. If a page asks you to paste something into Run, PowerShell or a terminal to \"verify\" you, don't.";
+      box.textContent = "Blocked: this page tried to put a command into your clipboard. If a page asks you to paste something into Run, PowerShell or a terminal to \"verify\" you, don't. If you meant to copy it yourself, select the text and press Ctrl+C.";
       root.appendChild(box);
       (doc.body || doc.documentElement).appendChild(host);
       setTimeout(() => {
