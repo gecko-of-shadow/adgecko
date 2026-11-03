@@ -190,3 +190,45 @@ Deno.test("feed-sign.mjs loads psl.js before protected-hosts.js (follow-up revie
   const i = src.indexOf('"src/threat/psl.js"');
   assert(i > 0 && i < src.indexOf('"src/threat/protected-hosts.js"'), "feed-sign would refuse every host");
 });
+
+// Security review L-17 + follow-up review: the popup guard's same-site check
+// uses registrable domains from a small copy of psl.js, and its decision path
+// survives poisoned built-ins.
+import popupsSource from "../src/guards/popups.js" with { type: "text" };
+import { unwrapMain } from "./fixtures/main-source.mjs";
+Deno.test("popup guard: registrable-domain same-site check, copy of psl.js data, poisoned built-ins, shadow-DOM clicks", () => {
+  const m = /\/\*POPUP-PSL-START\*\/([\s\S]*?)\/\*POPUP-PSL-END\*\//.exec(popupsSource);
+  const copy = JSON.parse(m[1]);
+  assert(JSON.stringify(copy) === JSON.stringify({ generic: PS.DATA.generic, wildcardTlds: PS.DATA.wildcardTlds, platforms: PS.DATA.platforms }), "popups.js copy differs from psl.js (re-run scripts/build-psl-subset.mjs)");
+  const g = {};
+  new Function(`${unwrapMain(popupsSource)}\nreturn installPopupGuard;`)()(g);
+  const loc = (h) => ({ href: "https://" + h + "/", hostname: h });
+  assert(!g.sameSiteOrAllowed("https://evil.co.uk/x", loc("a.co.uk")), "a.co.uk vs evil.co.uk are different sites");
+  assert(!g.sameSiteOrAllowed("https://y.github.io/x", loc("x.github.io")), "x.github.io vs y.github.io are different sites");
+  assert(g.sameSiteOrAllowed("https://cdn.news.example/x", loc("www.news.example")), "same registrable domain");
+  assert(g.sameSiteOrAllowed("https://shop.example.co.uk/x", loc("www.example.co.uk")), "same site under co.uk");
+  assert(g.siteOf("a.b.example.co.uk") === "example.co.uk" && g.siteOf("x.github.io") === "x.github.io" && g.siteOf("deep.x.github.io") === "x.github.io", "siteOf");
+  const saved = { some: Array.prototype.some, split: String.prototype.split, lower: String.prototype.toLowerCase, has: Set.prototype.has };
+  try {
+    Array.prototype.some = () => true;
+    String.prototype.split = () => ["x"];
+    String.prototype.toLowerCase = function () { return "news.example"; };
+    Set.prototype.has = () => true;
+    const ctx = { location: loc("news.example"), activation: false, opensThisGesture: 0, lastClickTarget: null, lastClickInteractive: true };
+    assert(g.judge("https://ads.example/x", ctx) === "no user gesture", "poisoned built-ins let a no-gesture popup through");
+  } finally {
+    Array.prototype.some = saved.some; String.prototype.split = saved.split; String.prototype.toLowerCase = saved.lower; Set.prototype.has = saved.has;
+  }
+  // A click inside a shadow root: composedPath()[0] is the real button, the event target is the plain host.
+  const opened = [];
+  const listeners = {};
+  class Event { composedPath() { return this._path; } get target() { return this._target; } }
+  const button = { tagName: "BUTTON", closest: () => button };
+  const host = { tagName: "DIV", closest: () => null };
+  const win = { open: (u) => { opened.push(u); return {}; }, Event };
+  g.install({ window: win, document: { addEventListener: (t, f) => { listeners[t] = f; } }, navigator: { userActivation: { isActive: true } }, location: loc("news.example"), now: () => 5000, flagOn: () => true });
+  const click = Object.assign(new Event(), { isTrusted: true, _path: [button, host], _target: host });
+  listeners.click(click);
+  win.open("https://share.example/");
+  assert(opened.length === 1, "button inside a shadow root counts as a button, not page content");
+});
