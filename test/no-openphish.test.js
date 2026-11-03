@@ -177,3 +177,18 @@ Deno.test("no stale Curben data: cleanup is a no-op without errors", async () =>
   const d2 = fakeDeps({ schema: 2, lists: {} }, data);
   assert(JSON.stringify(await U.dropRetiredLists(d2, { lists: {} })) === '["curben_phishing"]' && !data.curben_phishing, "orphan payload removed");
 });
+
+// Block 1h (security review M-8): every list names its upstream terms (checked
+// 2026-11-02), not "see ... for the current license".
+Deno.test("licence record: each list's line names concrete upstream terms", () => {
+  const line = (name) => {
+    const block = licenses.split(/\r?\n### /).find((b) => b.startsWith(name + "\n") || b.startsWith(name + "\r\n"));
+    return block ? (block.split(/\r?\n/).find((l) => l.startsWith("- License / terms: ")) || "") : "";
+  };
+  assert(!/for the current license/i.test(licenses), "a list still says 'see ... for the current license'");
+  assert(/GPL-3\.0/.test(line("hagezi_pro_mini")) && /GPL-3\.0/.test(line("ublock_badware")) && /GPL-3\.0/.test(line("adguard_base")), "GPL-3.0 lists");
+  assert(/Dandelicence v1\.4/.test(line("dandelion_antimalware")) && /adfilt\/blob\/master\/LICENSE\.md/.test(line("dandelion_antimalware")), "Dandelicence + link");
+  assert(/GPL-3\.0-or-later OR CC BY-SA 3\.0/.test(line("easylist")), "EasyList dual licence");
+  // Peter Lowe: wording kept as it was; the owner decides (NEEDS OWNER in BUILD-PROGRESS.md).
+  assert(/Peter Lowe's list/.test(line("peter_lowe")), "Peter Lowe line present");
+});

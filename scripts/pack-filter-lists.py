@@ -71,7 +71,7 @@ SOURCES = OrderedDict(
             "hagezi_pro_mini",
             {
                 "url": "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt",
-                "license": "HaGeZi Pro mini - see https://github.com/hagezi/dns-blocklists for the current license. Credit: HaGeZi.",
+                "license": "HaGeZi DNS Blocklists (Pro mini) - GPL-3.0 (repository LICENSE, checked 2026-11-02). Credit: HaGeZi. https://github.com/hagezi/dns-blocklists",
                 "role": "ads_trackers",
                 "priority": 40,
             },
@@ -80,7 +80,7 @@ SOURCES = OrderedDict(
             "ublock_badware",
             {
                 "url": "https://ublockorigin.github.io/uAssets/filters/badware.txt",
-                "license": "uBlock Origin badware filters - GPL-3.0. Credit: Raymond Hill and uBlock Origin contributors.",
+                "license": "uBlock Origin badware filters (uAssets) - GPL-3.0 (repository LICENSE, checked 2026-11-02). Credit: Raymond Hill and uBlock Origin contributors. https://github.com/uBlockOrigin/uAssets",
                 "role": "malware_threat",
                 "priority": 35,
             },
@@ -89,7 +89,7 @@ SOURCES = OrderedDict(
             "dandelion_antimalware",
             {
                 "url": "https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt",
-                "license": "Dandelion Sprout's Anti-Malware List - see https://github.com/DandelionSprout/adfilt for the current license. Credit: Dandelion Sprout.",
+                "license": "Dandelion Sprout's Anti-Malware List - Dandelicence v1.4 (use and redistribution with or without changes and with or without commercial purpose; keep the licence text or a link to it; checked 2026-11-02): https://github.com/DandelionSprout/adfilt/blob/master/LICENSE.md. Credit: Dandelion Sprout.",
                 "role": "malware_threat",
                 "priority": 30,
             },
@@ -103,7 +103,7 @@ SOURCES = OrderedDict(
             "adguard_base",
             {
                 "url": "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt",
-                "license": "AdGuard Base filter (EasyList already removed) - GPL-3.0. Credit: AdGuard.",
+                "license": "AdGuard Base filter (EasyList already removed) - GPL-3.0 (AdguardFilters repository LICENSE, checked 2026-11-02). Credit: AdGuard. https://github.com/AdguardTeam/AdguardFilters",
                 "role": "ads",
                 "priority": 20,
             },

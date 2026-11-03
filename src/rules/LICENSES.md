@@ -58,28 +58,28 @@ release gate and the tests.
 - URL: `https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt`
 - Role: `ads_trackers`
 - SHA-256 of downloaded bytes: `78c9ff1c5df4ce2ff20334393228a215beee0f7ed4874eb9c9030313a27649d0`
-- License / terms: HaGeZi Pro mini - see https://github.com/hagezi/dns-blocklists for the current license. Credit: HaGeZi.
+- License / terms: HaGeZi DNS Blocklists (Pro mini) - GPL-3.0 (repository LICENSE, checked 2026-11-02). Credit: HaGeZi. https://github.com/hagezi/dns-blocklists
 
 ### ublock_badware
 
 - URL: `https://ublockorigin.github.io/uAssets/filters/badware.txt`
 - Role: `malware_threat`
 - SHA-256 of downloaded bytes: `eeafc77b6eef9188fc01ffebb74f67c532bddc3367f92a27263fc71aa02ea33c`
-- License / terms: uBlock Origin badware filters - GPL-3.0. Credit: Raymond Hill and uBlock Origin contributors.
+- License / terms: uBlock Origin badware filters (uAssets) - GPL-3.0 (repository LICENSE, checked 2026-11-02). Credit: Raymond Hill and uBlock Origin contributors. https://github.com/uBlockOrigin/uAssets
 
 ### dandelion_antimalware
 
 - URL: `https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt`
 - Role: `malware_threat`
 - SHA-256 of downloaded bytes: `1b0b456c66792d1cacf42274693d99c14355085c685df903c0f0841aee80773e`
-- License / terms: Dandelion Sprout's Anti-Malware List - see https://github.com/DandelionSprout/adfilt for the current license. Credit: Dandelion Sprout.
+- License / terms: Dandelion Sprout's Anti-Malware List - Dandelicence v1.4 (use and redistribution with or without changes and with or without commercial purpose; keep the licence text or a link to it; checked 2026-11-02): https://github.com/DandelionSprout/adfilt/blob/master/LICENSE.md. Credit: Dandelion Sprout.
 
 ### adguard_base
 
 - URL: `https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt`
 - Role: `ads`
 - SHA-256 of downloaded bytes: `607d881783544b06bff3d171acab04866876e97c0a587c58c48f6a17a87e4c71`
-- License / terms: AdGuard Base filter (EasyList already removed) - GPL-3.0. Credit: AdGuard.
+- License / terms: AdGuard Base filter (EasyList already removed) - GPL-3.0 (AdguardFilters repository LICENSE, checked 2026-11-02). Credit: AdGuard. https://github.com/AdguardTeam/AdguardFilters
 
 ## How we use them
 
