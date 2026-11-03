@@ -111,8 +111,22 @@ function fakeEl(tag, props, children) {
   for (const c of el.children) c.parentElement = el;
   return el;
 }
+// A <video> stand-in: duration NaN until "metadata" is set, media events by fire().
 function fakeVideo({ src = "", srcObject = null, duration = NaN } = {}) {
-  const v = fakeEl("VIDEO", { src, currentSrc: src, srcObject, duration, muted: false, paused: false, pause() { this.paused = true; } });
+  const listeners = {};
+  const v = fakeEl("VIDEO", {
+    src, currentSrc: src, srcObject, duration, muted: false, paused: false,
+    pause() { this.paused = true; },
+    addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
+    fire(type) { for (const fn of listeners[type] || []) fn(); },
+    setSource(s, d = NaN) {
+      this.src = s;
+      this.currentSrc = s;
+      if (s) this.attrs.src = s;
+      else delete this.attrs.src;
+      this.duration = d;
+    },
+  });
   if (src) v.attrs.src = src;
   return v;
 }
@@ -132,9 +146,15 @@ function kickWithCovers(covers) {
   class MO { constructor(cb) { observerCb = cb; } observe() {} }
   const api = {};
   new Function("document", "MutationObserver", "requestAnimationFrame", `${unwrapMain(kickSource)}\nreturn installKickAdblock;`)(document, MO, (fn) => fn())(api);
-  api.watchCovers(() => true);
-  return { api, pass: () => observerCb([{ addedNodes: [{ nodeType: 1, tagName: "VIDEO" }] }]) };
+  const sw = { on: true };
+  api.watchCovers(() => sw.on);
+  return { api, sw, observe: (m) => observerCb(m), pass: () => observerCb([{ addedNodes: [{ nodeType: 1, tagName: "VIDEO" }] }]) };
 }
+const addVideo = (cover, video) => {
+  video.parentElement = cover.player;
+  cover.player.children.push(video);
+  return video;
+};
 const hidden = (c) => c.overlay.style.getPropertyValue("display") === "none";
 
 Deno.test("kick covers: a cover with only an ad clip is hidden and the clip paused", () => {
@@ -149,6 +169,7 @@ Deno.test("kick covers: a cover that holds the live player is left alone (blob s
   const cases = [
     ["blob: source", fakeVideo({ src: "blob:https://kick.com/0000", duration: 3600 })],
     ["srcObject", fakeVideo({ srcObject: {} })],
+    ["srcObject next to a leftover src attribute", fakeVideo({ src: "https://cdn.example/old.mp4", srcObject: {}, duration: 30 })],
     ["endless duration", fakeVideo({ src: "https://cdn.example/live.m3u8", duration: Infinity })],
   ];
   for (const [label, live] of cases) {
@@ -171,6 +192,11 @@ Deno.test("kick covers: a video without a source, or one that cannot be read, ke
   const cover2 = fakeCover([broken]);
   kickWithCovers([cover2]);
   assert(!hidden(cover2) && !broken.muted, "unreadable video: cover left alone");
+  // A plain URL before its metadata: it could still be a stream.
+  const early = fakeVideo({ src: "https://cdn.example/stream.m3u8" });
+  const cover3 = fakeCover([early]);
+  kickWithCovers([cover3]);
+  assert(!hidden(cover3) && !early.muted && !early.paused, "plain source without metadata: cover left alone");
 });
 
 Deno.test("kick covers: a cover hidden before the live player arrived is shown again, with its old display", () => {
@@ -187,10 +213,120 @@ Deno.test("kick covers: a cover hidden before the live player arrived is shown a
   assert(!live.muted && !live.paused, "live video untouched");
 });
 
-Deno.test("kick covers: the CSS rule skips covers with a blob: or src-less video", () => {
+Deno.test("kick covers: the stylesheet never hides a post-roll cover (only settleCovers decides), and video kinds", () => {
   const api = {};
   new Function(`${unwrapMain(kickSource)}\nreturn installKickAdblock;`)()(api);
   const css = api.chromeCss();
-  assert(css.includes('div:has(> video-player):has([data-testid="ima-ad-controls"]):not(:has(video[src^="blob:"])):not(:has(video:not([src])))'), "guarded post-roll selector");
-  assert(api.videoKind(fakeVideo({ src: "blob:https://kick.com/2" })) === "live" && api.videoKind(fakeVideo({ src: "https://ads.example/a.mp4" })) === "clip" && api.videoKind(fakeVideo()) === "unknown", "video kinds");
+  assert(!css.includes(":has(") && !css.includes("video-player"), "no post-roll rule in the stylesheet: " + css);
+  assert(css.includes("#native_feed_ad") && css.includes('[data-testid="ima-ad-controls"]'), "banner and ad-chrome hides kept");
+  const kinds = [
+    [fakeVideo({ src: "blob:https://kick.com/2" }), "live"],
+    [fakeVideo({ src: "https://ads.example/a.mp4", duration: 12 }), "clip"],
+    [fakeVideo({ src: "https://ads.example/a.mp4" }), "unknown"],
+    [fakeVideo({ src: "https://cdn.example/live.m3u8", duration: Infinity }), "live"],
+    [fakeVideo(), "unknown"],
+  ];
+  for (const [v, want] of kinds) assert(api.videoKind(v) === want, v.src + " -> " + api.videoKind(v) + ", want " + want);
+});
+
+Deno.test("kick covers: a sourceless video joining a hidden cover shows it again, and it stays shown when it turns live", () => {
+  const clip = fakeVideo({ src: "https://ads.example/clip.mp4", duration: 15 });
+  const cover = fakeCover([clip]);
+  cover.overlay.style.setProperty("display", "flex");
+  const kick = kickWithCovers([cover]);
+  assert(hidden(cover), "precondition: hidden while it held only the clip");
+  const next = addVideo(cover, fakeVideo());
+  kick.pass();
+  assert(cover.overlay.style.getPropertyValue("display") === "flex", "sourceless video: our hide undone: " + JSON.stringify(cover.overlay.style.props));
+  // The player attaches its stream: only an attribute change, no DOM mutation.
+  next.setSource("blob:https://kick.com/0002");
+  next.fire("loadstart");
+  assert(!hidden(cover) && !next.muted && !next.paused, "live video hidden or quieted after it attached");
+});
+
+Deno.test("kick covers: an ad clip that gets its source later is quieted once its metadata says it ends", () => {
+  const video = fakeVideo();
+  const cover = fakeCover([video]);
+  kickWithCovers([cover]);
+  assert(!hidden(cover) && !video.muted, "sourceless: left alone");
+  video.setSource("https://ads.example/late.mp4");
+  video.fire("loadstart");
+  assert(!hidden(cover) && !video.muted, "no metadata yet: left alone");
+  video.duration = 20;
+  video.fire("durationchange");
+  assert(hidden(cover) && video.muted && video.paused, "clip with metadata: cover hidden, clip quieted");
+});
+
+Deno.test("kick covers: a plain-URL stream whose duration turns out endless is never quieted", () => {
+  const video = fakeVideo({ src: "https://cdn.example/live.m3u8" });
+  const cover = fakeCover([video]);
+  kickWithCovers([cover]);
+  video.duration = Infinity;
+  video.fire("durationchange");
+  assert(!hidden(cover) && !video.muted && !video.paused, "endless stream hidden or quieted");
+});
+
+Deno.test("kick covers: a quieted clip element reused for the live stream gets its sound back", () => {
+  const video = fakeVideo({ src: "https://ads.example/clip.mp4", duration: 15 });
+  const cover = fakeCover([video]);
+  kickWithCovers([cover]);
+  assert(hidden(cover) && video.muted, "precondition: clip quieted");
+  video.setSource("blob:https://kick.com/0003");
+  video.fire("loadstart");
+  assert(!hidden(cover) && !video.muted, "reused element still hidden or muted");
+  // A clip that was muted before we touched it stays muted.
+  const muted = fakeVideo({ src: "https://ads.example/clip2.mp4", duration: 15 });
+  muted.muted = true;
+  const cover2 = fakeCover([muted]);
+  kickWithCovers([cover2]);
+  muted.setSource("blob:https://kick.com/0004");
+  muted.fire("loadstart");
+  assert(muted.muted, "a video muted before our pass was unmuted");
+});
+
+Deno.test("kick covers: undoing our hide keeps a display value the page set after it", () => {
+  const clip = fakeVideo({ src: "https://ads.example/clip.mp4", duration: 15 });
+  const cover = fakeCover([clip]);
+  cover.overlay.style.setProperty("display", "none");
+  const kick = kickWithCovers([cover]);
+  assert(hidden(cover), "precondition: hidden by us");
+  cover.overlay.style.setProperty("display", "block"); // the page re-renders the cover
+  addVideo(cover, fakeVideo({ src: "blob:https://kick.com/0005" }));
+  kick.pass();
+  assert(cover.overlay.style.getPropertyValue("display") === "block", "page's newer display overwritten: " + JSON.stringify(cover.overlay.style.props));
+});
+
+Deno.test("kick covers: the kick switch going off shows every cover we hid", () => {
+  const clip = fakeVideo({ src: "https://ads.example/clip.mp4", duration: 15 });
+  const cover = fakeCover([clip]);
+  cover.overlay.style.setProperty("display", "grid");
+  const kick = kickWithCovers([cover]);
+  assert(hidden(cover), "precondition: hidden");
+  kick.sw.on = false;
+  kick.api.releaseCovers();
+  assert(cover.overlay.style.getPropertyValue("display") === "grid", "cover still hidden after the switch went off");
+  clip.fire("durationchange");
+  assert(!hidden(cover), "a media event re-hid a cover while the switch is off");
+  assert(/removeChromeCss\(\);\s*releaseCovers\(\);/.test(kickSource), "the switch's off branch releases the covers");
+});
+
+Deno.test("kick covers: added ad controls trigger a pass; a video in an open shadow root is seen", () => {
+  const live = fakeVideo({ src: "blob:https://kick.com/0006" });
+  const player = fakeEl("VIDEO-PLAYER", { shadowRoot: { children: [live] } });
+  const controls = fakeEl("DIV");
+  const overlay = fakeEl("DIV", {}, [player, controls]);
+  const cover = { overlay, player, controls };
+  const kick = kickWithCovers([cover]);
+  assert(!hidden(cover) && !live.muted, "live video in an open shadow root: cover hidden or muted");
+  let ran = 0;
+  const api = {};
+  const document = { documentElement: {}, querySelectorAll: () => { ran++; return []; } };
+  let cb = null;
+  class MO { constructor(f) { cb = f; } observe() {} }
+  new Function("document", "MutationObserver", "requestAnimationFrame", `${unwrapMain(kickSource)}\nreturn installKickAdblock;`)(document, MO, (fn) => fn())(api);
+  api.watchCovers(() => true);
+  const before = ran;
+  cb([{ addedNodes: [{ nodeType: 1, tagName: "DIV", matches: (s) => s.includes("ima-ad-controls"), querySelector: () => null }] }]);
+  assert(ran > before, "an added ad-controls node did not trigger a pass");
+  assert(kick, "harness");
 });

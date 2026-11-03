@@ -36,15 +36,12 @@ function installKickAdblock(target) {
     "#native_feed_ad",
     'iframe[id^="google_ads_iframe"]',
   ];
-  // Security review L-14 (second half): never a cover that may hold the live
-  // player. The CSS rule hides a cover only when every <video> in it has a
-  // plain src attribute (an ad clip): a blob: source (Media Source
-  // Extensions, how the IVS player plays) or no src attribute at all (a
-  // stream set through srcObject, or nothing loaded yet) leaves it to
-  // settleCovers(), which can read srcObject and duration. UNVERIFIED on live
-  // Kick (needs a live check).
-  const POSTROLL_OVERLAY = 'div:has(> video-player):has([data-testid="ima-ad-controls"])' +
-    ':not(:has(video[src^="blob:"])):not(:has(video:not([src])))';
+  // Security review L-14 (second half): the post-roll cover (a DIV with a
+  // direct <video-player> child and IMA ad controls) is hidden by
+  // settleCovers() only, never by the stylesheet: a CSS rule cannot see
+  // srcObject or a video's duration, so it could hide a cover that holds the
+  // live player. Elements that mark a cover (or hold one) for coverMutation:
+  const COVER_NODES = '[data-testid="ima-ad-controls"], iframe[id^="google_ads_iframe"], video-player';
 
   function onKickHost(host) {
     const value = String(host || "").toLowerCase();
@@ -215,8 +212,14 @@ function installKickAdblock(target) {
     const children = element && element.children;
     if (!children) return clips;
     for (const child of children) {
-      if (String(child.tagName || "").toUpperCase() === "VIDEO") clips.push(child);
-      else videosInside(child, clips);
+      if (String(child.tagName || "").toUpperCase() === "VIDEO") {
+        clips.push(child);
+      } else {
+        videosInside(child, clips);
+        // A custom player element may keep its <video> in an open shadow
+        // root. A closed one stays invisible (UNVERIFIED whether Kick uses one).
+        if (child.shadowRoot) videosInside(child.shadowRoot, clips);
+      }
     }
     return clips;
   }
@@ -228,8 +231,10 @@ function installKickAdblock(target) {
     return parent;
   }
 
+  // Plain attribute and id selectors only (no :has()): one invalid selector
+  // would drop the whole rule.
   function chromeCss() {
-    const hide = [...AD_CHROME_SELECTORS, ...BANNER_SELECTORS, POSTROLL_OVERLAY];
+    const hide = [...AD_CHROME_SELECTORS, ...BANNER_SELECTORS];
     return `${hide.join(",")}{display:none!important;pointer-events:none!important;}`;
   }
 
@@ -252,10 +257,27 @@ function installKickAdblock(target) {
   target.SKIP_WINDOW_MS = SKIP_WINDOW_MS;
   target.HOLD_MS = HOLD_MS;
 
+  // Clips quieted by settleCovers -> whether they were muted before, so a
+  // <video> that later turns out to be the live player gets its sound back.
+  const quieted = new WeakMap();
+
   function quietClip(video) {
     try {
+      if (!quieted.has(video)) quieted.set(video, video.muted === true);
       video.muted = true;
       if (typeof video.pause === "function" && !video.paused) video.pause();
+    } catch (error) {
+      debugLog("kick failed open", error);
+    }
+  }
+
+  // Play state is left to the player (a new source resets it anyway).
+  function unquiet(video) {
+    try {
+      if (!quieted.has(video)) return;
+      const wasMuted = quieted.get(video);
+      quieted.delete(video);
+      if (video.muted && !wasMuted) video.muted = false;
     } catch (error) {
       debugLog("kick failed open", error);
     }
@@ -265,60 +287,108 @@ function installKickAdblock(target) {
   // cover is. "live": the IVS player's video (live and VOD) plays from Media
   // Source Extensions or a stream object, so it has a blob: source or a
   // srcObject, and live it reports an endless duration. "clip": a plain URL
-  // source of its own (an ad clip). "unknown": no source yet, or a read that
-  // throws. UNVERIFIED on live Kick: that the IVS video always looks "live"
-  // here and which element plays the post-roll clip (needs a live check).
+  // source of its own whose metadata says it ends (an ad clip). "unknown":
+  // no source yet, a plain URL whose duration is not known yet (it could
+  // still be a stream), or a read that throws. UNVERIFIED on live Kick: that
+  // the IVS video always looks "live" here and which element plays the
+  // post-roll clip (needs a live check).
   function videoKind(video) {
     try {
       if (video.srcObject) return "live";
       const attr = typeof video.getAttribute === "function" ? video.getAttribute("src") : "";
       const sources = [video.currentSrc, video.src, attr].map((s) => String(s || ""));
       if (sources.some((s) => s.startsWith("blob:"))) return "live";
-      if (video.duration === Infinity) return "live";
-      return sources.some((s) => s !== "") ? "clip" : "unknown";
+      const duration = video.duration;
+      if (duration === Infinity) return "live";
+      if (!sources.some((s) => s !== "")) return "unknown";
+      return Number.isFinite(duration) ? "clip" : "unknown";
     } catch {
       return "unknown";
     }
   }
 
-  // { live, unknown, clips }: a cover is hidden (and its clips paused) only
-  // when it holds no live video and no video of unknown kind.
+  // A cover is hidden (and its clips quieted) only when every <video> in it
+  // is a clip. A cover without any <video> we can see is hidden as before
+  // (an ad slate or a video in a closed shadow root: UNVERIFIED which).
   function coverContent(overlay) {
-    const clips = [];
-    let unknown = false;
+    const content = { live: false, unknown: false, clips: [], liveVideos: [], videos: [] };
     try {
-      for (const video of videosInside(overlay)) {
+      content.videos = videosInside(overlay);
+      for (const video of content.videos) {
         const kind = videoKind(video);
-        if (kind === "live") return { live: true, unknown: false, clips: [] };
-        if (kind === "unknown") unknown = true;
-        else clips.push(video);
+        if (kind === "live") {
+          content.live = true;
+          content.liveVideos.push(video);
+        } else if (kind === "unknown") {
+          content.unknown = true;
+        } else {
+          content.clips.push(video);
+        }
       }
     } catch {
-      return { live: true, unknown: false, clips: [] };
+      // Cannot tell: treat it as holding the live player.
+      content.live = true;
     }
-    return { live: false, unknown, clips };
+    return content;
   }
 
-  // Covers hidden by settleCovers, with the inline display they had before,
-  // so a cover that later turns out to hold the live player is shown again.
-  const hiddenCovers = new WeakMap();
+  // Covers hidden by settleCovers -> the inline display they had before our
+  // hide. A Map, so the kick switch can show them all again; covers that
+  // left the page are dropped on every pass.
+  const hiddenCovers = new Map();
+  const isOurHide = (style) => style.getPropertyValue("display") === "none" && style.getPropertyPriority("display") === "important";
 
   function hideCover(overlay) {
-    if (!hiddenCovers.has(overlay)) {
-      hiddenCovers.set(overlay, {
-        value: overlay.style.getPropertyValue("display"),
-        priority: overlay.style.getPropertyPriority("display"),
-      });
+    const style = overlay.style;
+    // Snapshot again when the page changed display since our last write.
+    if (!hiddenCovers.has(overlay) || !isOurHide(style)) {
+      hiddenCovers.set(overlay, { value: style.getPropertyValue("display"), priority: style.getPropertyPriority("display") });
     }
-    overlay.style.setProperty("display", "none", "important");
+    style.setProperty("display", "none", "important");
   }
 
+  // Undo our own hide only: a newer display value set by the page is kept.
   function showCover(overlay) {
     const before = hiddenCovers.get(overlay);
     if (!before) return;
     hiddenCovers.delete(overlay);
-    if (before.value) overlay.style.setProperty("display", before.value, before.priority);
-    else overlay.style.removeProperty("display");
+    const style = overlay.style;
+    if (!isOurHide(style)) return;
+    if (before.value) style.setProperty("display", before.value, before.priority);
+    else style.removeProperty("display");
+  }
+
+  // Kick switch off: every cover we hid is shown again.
+  function releaseCovers() {
+    for (const overlay of Array.from(hiddenCovers.keys())) {
+      try {
+        showCover(overlay);
+      } catch (error) {
+        hiddenCovers.delete(overlay);
+        debugLog("kick failed open", error);
+      }
+    }
+  }
+
+  // A new source or new metadata on a <video> is not a DOM mutation, so each
+  // <video> seen in a cover gets two listeners of its own (loadstart: a new
+  // src or srcObject; durationchange: metadata, e.g. a stream's endless
+  // duration) that run the pass again. Once per element; no polling.
+  const watchedMedia = new WeakSet();
+  let coversOn = () => true;
+
+  function watchMedia(video) {
+    try {
+      if (watchedMedia.has(video) || typeof video.addEventListener !== "function") return;
+      watchedMedia.add(video);
+      const recheck = () => {
+        if (coversOn()) settleCovers(document);
+      };
+      video.addEventListener("loadstart", recheck);
+      video.addEventListener("durationchange", recheck);
+    } catch (error) {
+      debugLog("kick failed open", error);
+    }
   }
 
   function settleCovers(root) {
@@ -332,20 +402,29 @@ function installKickAdblock(target) {
       debugLog("kick failed open", error);
       return;
     }
+    for (const overlay of Array.from(hiddenCovers.keys())) {
+      if (overlay.isConnected === false) hiddenCovers.delete(overlay);
+    }
     for (const node of controls) {
       const overlay = postRollOverlay(node);
       if (!overlay || !overlay.style) continue;
       try {
         const content = coverContent(overlay);
+        for (const video of content.videos) watchMedia(video);
         if (content.live) {
           // Holds the live player (perhaps attached after an earlier pass
-          // hid the cover): leave it, and undo our own hide.
+          // hid the cover): leave it, undo our hide, give back its sound.
+          showCover(overlay);
+          for (const video of content.liveVideos) unquiet(video);
+          continue;
+        }
+        if (content.unknown) {
+          // A video that may still become the live player: the cover stays
+          // visible (our earlier hide undone) until its source and metadata
+          // say otherwise (watchMedia runs the pass again then).
           showCover(overlay);
           continue;
         }
-        // A video without a source yet: not now (the CSS rule hides the
-        // cover as soon as the clip has its src attribute).
-        if (content.unknown) continue;
         hideCover(overlay);
         for (const video of content.clips) quietClip(video);
       } catch (error) {
@@ -353,14 +432,19 @@ function installKickAdblock(target) {
       }
     }
     for (const frame of frames) {
-      const targetNode = bannerCollapseTarget(frame);
-      if (targetNode && targetNode.style) targetNode.style.setProperty("display", "none", "important");
+      try {
+        const targetNode = bannerCollapseTarget(frame);
+        if (targetNode && targetNode.style) targetNode.style.setProperty("display", "none", "important");
+      } catch (error) {
+        debugLog("kick failed open", error);
+      }
     }
   }
 
   // isOn: the "kick" switch (security review L-14): with it off, covers are
   // left alone like every other Kick helper.
   function watchCovers(isOn = () => true) {
+    coversOn = isOn;
     if (isOn()) settleCovers(document);
     const root = document.documentElement;
     if (!root || typeof MutationObserver !== "function") return;
@@ -384,8 +468,12 @@ function installKickAdblock(target) {
         if (!node || node.nodeType !== 1) continue;
         const tag = String(node.tagName || "");
         if (tag === "IFRAME" || tag === "VIDEO" || tag === "VIDEO-PLAYER") return true;
-        if (typeof node.querySelector === "function" && node.querySelector('[data-testid="ima-ad-controls"], iframe[id^="google_ads_iframe"], video-player')) {
-          return true;
+        try {
+          // The added node itself may be the ad controls.
+          if (typeof node.matches === "function" && node.matches(COVER_NODES)) return true;
+          if (typeof node.querySelector === "function" && node.querySelector(COVER_NODES)) return true;
+        } catch (error) {
+          debugLog("kick failed open", error);
         }
       }
     }
@@ -590,6 +678,7 @@ function installKickAdblock(target) {
           kickOn = f.kick;
           if (!kickOn) {
             removeChromeCss();
+            releaseCovers();
           } else {
             injectChromeCss();
           }
@@ -636,6 +725,7 @@ function installKickAdblock(target) {
   target.watchCovers = watchCovers;
   target.videoKind = videoKind;
   target.coverContent = coverContent;
+  target.releaseCovers = releaseCovers;
   target.startKickAdblock = startKickAdblock;
   target.wrapMediaTailor = wrapMediaTailor;
 }

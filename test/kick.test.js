@@ -182,7 +182,10 @@ Deno.test("ad chrome is hidden and the video element is not", () => {
   assert(css.includes("#consolidated_header"), "header banner slot");
   assert(css.includes("#native_feed_ad"), "feed banner slot");
   assert(css.includes('iframe[id^="google_ads_iframe"]'), "banner frame");
-  assert(css.includes('div:has(> video-player):has([data-testid="ima-ad-controls"])'), "post-roll cover");
+  // L-14: the post-roll cover is hidden by settleCovers() only (a stylesheet
+  // cannot see srcObject or duration, the live player's signals); no :has()
+  // that could drop the whole rule.
+  assert(!css.includes(":has(") && !css.includes("video-player"), "post-roll cover left to settleCovers");
   assert(!css.includes("video{"), "video stays visible");
   assert(!css.includes("video,"), "video is not in the hide list");
   for (const selector of api.AD_CHROME_SELECTORS) {
