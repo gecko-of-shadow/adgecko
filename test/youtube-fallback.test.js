@@ -1,4 +1,5 @@
 import source from "../src/youtube.js" with { type: "text" };
+import { unwrapMain } from "./fixtures/main-source.mjs";
 
 function assertEquals(a, b, label) {
   const l = JSON.stringify(a), r = JSON.stringify(b);
@@ -7,7 +8,7 @@ function assertEquals(a, b, label) {
 function assert(c, label) { if (!c) throw new Error(label); }
 function fresh() {
   const api = {};
-  new Function(`${source}\nreturn installYoutubeAdblock;`)()(api);
+  new Function(`${unwrapMain(source)}\nreturn installYoutubeAdblock;`)()(api);
   return api;
 }
 const BAD = "https://rr2---sn-h9jk2mn5.googlevideo.com/videoplayback?expire=1&id=o-abc&itag=243&mn=sn-h9jk2mn5%2Csn-n5pqrstu&fvip=2&sabr=1";

@@ -1,5 +1,6 @@
 import source from "../src/youtube.js" with { type: "text" };
 import manifest from "../manifest.json" with { type: "json" };
+import { unwrapMain } from "./fixtures/main-source.mjs";
 
 function assertEquals(actual, expected, label) {
   const left = JSON.stringify(actual);
@@ -12,7 +13,7 @@ function assert(condition, label) {
 }
 
 const api = {};
-const installYoutubeAdblock = new Function(`${source}\nreturn installYoutubeAdblock;`)();
+const installYoutubeAdblock = new Function(`${unwrapMain(source)}\nreturn installYoutubeAdblock;`)();
 installYoutubeAdblock(api);
 const STEALTH_DEFAULTS = { ...api.STEALTH };
 const denoTest = Deno.test;

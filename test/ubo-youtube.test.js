@@ -3,6 +3,7 @@ import manifest from "../manifest.json" with { type: "json" };
 import rules from "../src/rules/ubo-youtube-network.json" with { type: "json" };
 import meta from "../src/vendor/ubo-youtube-meta.json" with { type: "json" };
 import youtubeSource from "../src/youtube.js" with { type: "text" };
+import { unwrapMain } from "./fixtures/main-source.mjs";
 function assert(c, l) { if (!c) throw new Error(l); }
 
 async function runBundle(opts) {
@@ -102,7 +103,8 @@ Deno.test("youtube.js stands down on player ad fields when the uBO layer is pres
   assert(youtubeSource.includes('Symbol.for("gk.u")'), "marker read");
   const api = {};
   // Installed BEFORE the uBO marker exists (late MAIN-world injection): must still see it live.
-  new Function(`${youtubeSource.slice(0, youtubeSource.indexOf("function startYoutubeAdblock"))}\nreturn installYoutubeAdblock;`)()(api);
+  const yt = unwrapMain(youtubeSource);
+  new Function(`${yt.slice(0, yt.indexOf("function startYoutubeAdblock"))}\nreturn installYoutubeAdblock;`)()(api);
   assert(api.UBO_LAYER === false, "no layer yet");
   globalThis[Symbol.for("gk.u")] = true;
   try {

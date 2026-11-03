@@ -61,3 +61,37 @@ Deno.test("the vendored Twitch file is untouched (its AuthorizationHeader switch
   const v = read("src/vendor/video-swap-new.user.js");
   assert(v.includes("ourTwitchAdSolutionsVersion = 23") && v.includes("scope.AuthorizationHeader = undefined;"), "vendored file unchanged");
 });
+
+// Security review L-18: the extension's own MAIN-world files add no globals
+// to the page (each is one `(() => { ... })();`).
+Deno.test("own MAIN-world scripts add no page globals (one IIFE each)", () => {
+  const mainOwned = [...new Set(manifest.content_scripts.filter((c) => c.world === "MAIN").flatMap((c) => c.js).filter((f) => !f.startsWith("src/vendor/")))];
+  assert(mainOwned.sort().join() === ["src/guards/clipboard.js", "src/guards/popups.js", "src/kick.js", "src/youtube.js"].join(), mainOwned.join());
+  for (const f of mainOwned) {
+    const src = read(f);
+    const lines = src.split(/\r?\n/).filter((l) => l.trim() && !/^\s*\/\//.test(l));
+    assert(lines[0] === "(() => {" && lines.at(-1) === "})();", f + " is not wrapped in one IIFE");
+    // Evaluate as a classic script in the global scope (indirect eval): no new
+    // global names appear. (No window/document here, so nothing starts.)
+    const before = new Set(Object.getOwnPropertyNames(globalThis));
+    (0, eval)(src);
+    const added = Object.getOwnPropertyNames(globalThis).filter((k) => !before.has(k));
+    assert(added.length === 0, f + " adds globals: " + added.join());
+  }
+});
+
+// Security review M-2: blank / srcdoc / blob: frames of ordinary sites get the
+// guards (and their flag script), so a page cannot copy through a pristine
+// same-origin frame; stream sites stay excluded.
+Deno.test("guards and their flag script also run in about:blank-style frames of ordinary sites only", () => {
+  const entries = manifest.content_scripts.filter((c) => c.js.includes("src/guards/clipboard.js") || (c.js.includes("src/settings/flags.js") && c.matches.includes("https://*/*")));
+  assert(entries.length === 2, "guard + flags entries");
+  for (const e of entries) {
+    assert(e.match_about_blank === true && e.match_origin_as_fallback === true, "blank-frame matching on " + e.js.join());
+    assert(e.matches.every((m) => /^https?:\/\/\*\/\*$/.test(m)), "match_origin_as_fallback needs /* paths");
+    for (const host of ["twitch.tv", "youtube.com", "kick.com", "googlevideo.com"]) assert(e.exclude_matches.includes("*://*." + host + "/*"), host + " excluded");
+  }
+  for (const c of manifest.content_scripts.filter((x) => !entries.includes(x))) {
+    assert(!c.match_about_blank && !c.match_origin_as_fallback, "only the guard entries match blank frames: " + c.js.join());
+  }
+});

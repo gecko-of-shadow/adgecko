@@ -2,6 +2,7 @@
 // (M-5); Kick MediaTailor listener wrapper supports removeEventListener (M-16).
 import directorySource from "../src/twitch-directory-ads.js" with { type: "text" };
 import kickSource from "../src/kick.js" with { type: "text" };
+import { unwrapMain } from "./fixtures/main-source.mjs";
 function assert(c, l) { if (!c) throw new Error(l); }
 
 function loadDirectory() {
@@ -53,7 +54,7 @@ Deno.test("directory sweep is throttled: a burst of mutations runs at most one s
 
 Deno.test("kick MediaTailor session: listeners can be removed again, and adding the same one twice fires once", async () => {
   const api = {};
-  new Function(`${kickSource}\nreturn installKickAdblock;`)()(api);
+  new Function(`${unwrapMain(kickSource)}\nreturn installKickAdblock;`)()(api);
   const listeners = new Map();
   const session = {
     addEventListener(type, fn) { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(fn); },

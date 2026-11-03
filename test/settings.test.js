@@ -257,7 +257,7 @@ Deno.test({
     const flagFrames = manifest.content_scripts.filter((c) => c.js.includes("src/settings/flags.js"));
     for (const cs of manifest.content_scripts.filter((c) => c.world === "MAIN" && c.js.some((j) => !j.startsWith("src/vendor/")))) {
       const covering = flagFrames.filter((fl) => cs.matches.every((m) => fl.matches.includes(m)));
-      assert(covering.length && covering.every((fl) => !cs.all_frames || fl.all_frames) &&
+      assert(covering.length && covering.every((fl) => (!cs.all_frames || fl.all_frames) && (!cs.match_about_blank || fl.match_about_blank) && (!cs.match_origin_as_fallback || fl.match_origin_as_fallback)) &&
         covering.every((fl) => JSON.stringify((fl.exclude_matches || []).slice().sort()) === JSON.stringify((cs.exclude_matches || []).slice().sort())),
         "flags.js does not run in every frame of " + cs.js.join());
     }

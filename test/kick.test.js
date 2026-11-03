@@ -1,5 +1,6 @@
 import source from "../src/kick.js" with { type: "text" };
 import manifest from "../manifest.json" with { type: "json" };
+import { unwrapMain } from "./fixtures/main-source.mjs";
 
 function assertEquals(actual, expected, label) {
   const left = JSON.stringify(actual);
@@ -12,7 +13,7 @@ function assert(condition, label) {
 }
 
 const api = {};
-const installKickAdblock = new Function(`${source}\nreturn installKickAdblock;`)();
+const installKickAdblock = new Function(`${unwrapMain(source)}\nreturn installKickAdblock;`)();
 installKickAdblock(api);
 
 const detail = {

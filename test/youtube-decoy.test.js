@@ -1,8 +1,9 @@
 import source from "../src/youtube.js" with { type: "text" };
+import { unwrapMain } from "./fixtures/main-source.mjs";
 function assert(c, label) { if (!c) throw new Error(label); }
 function fresh() {
   const api = {};
-  new Function(`${source}\nreturn installYoutubeAdblock;`)()(api);
+  new Function(`${unwrapMain(source)}\nreturn installYoutubeAdblock;`)()(api);
   return api;
 }
 const NOW = Date.UTC(2026, 9, 16) ;

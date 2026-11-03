@@ -6,6 +6,8 @@
 // backoff (often 10 seconds) after a click. The same wait is in the first
 // /initplayback response and in the start-buffer policy. Both are cleared
 // below, and player requests ask YouTube not to schedule the slot.
+// Wrapped in one function so the page sees no globals from this file (L-18).
+(() => {
 function uboLayerPresent() {
   try {
     // Set by the generated uBO bundle (scripts/sync-ubo-youtube.mjs); neutral id.
@@ -2176,3 +2178,4 @@ function startYoutubeAdblock() {
 }
 
 if (typeof document !== "undefined" && typeof window !== "undefined") startYoutubeAdblock();
+})();

@@ -2,11 +2,15 @@
 // IVS player can jump back to the stream. If a skip would rewind a long way,
 // or the player cannot take it, the ad plays. The live video is never hidden,
 // muted, or sped up. A separate post-roll cover can be paused.
+// Wrapped in one function so the page sees no globals from this file (L-18).
+(() => {
 function installKickAdblock(target) {
   // Neutral ids, no marker properties on page objects (wrapped objects are
   // remembered in a WeakSet), and no page-console output unless DEBUG.
   const DEBUG = false;
-  const KICK_CSS_ID = "gk-k1";
+  // The chrome-hiding style element is kept by reference (no id for the page
+  // to look up).
+  let chromeCssEl = null;
   const wrapped = new WeakSet();
   const debugLog = (...args) => {
     if (DEBUG) console.log(...args);
@@ -307,16 +311,25 @@ function installKickAdblock(target) {
   function injectChromeCss() {
     try {
       if (typeof document === "undefined" || !document.createElement) return;
-      if (document.getElementById && document.getElementById(KICK_CSS_ID)) return;
+      if (chromeCssEl && chromeCssEl.isConnected !== false) return;
       const style = document.createElement("style");
-      style.id = KICK_CSS_ID;
       style.textContent = chromeCss();
       const parent = document.head || document.documentElement;
       if (!parent || typeof parent.appendChild !== "function") return;
       parent.appendChild(style);
+      chromeCssEl = style;
     } catch (error) {
       debugLog("kick failed open", error);
     }
+  }
+
+  function removeChromeCss() {
+    try {
+      if (chromeCssEl) chromeCssEl.remove();
+    } catch {
+      // already gone
+    }
+    chromeCssEl = null;
   }
 
   function postCommand(worker, command) {
@@ -474,12 +487,7 @@ function installKickAdblock(target) {
           if (!f || typeof f !== "object" || typeof f.kick !== "boolean") return;
           kickOn = f.kick;
           if (!kickOn) {
-            try {
-              const css = document.getElementById(KICK_CSS_ID);
-              if (css) css.remove();
-            } catch {
-              // already gone
-            }
+            removeChromeCss();
           } else {
             injectChromeCss();
           }
@@ -532,3 +540,4 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
   installKickAdblock(api);
   api.startKickAdblock();
 }
+})();

@@ -1,8 +1,9 @@
 import source from "../src/youtube.js" with { type: "text" };
+import { unwrapMain } from "./fixtures/main-source.mjs";
 function assert(c, label) { if (!c) throw new Error(label); }
 function rig(mode) {
   const api = {};
-  new Function(`${source}\nreturn installYoutubeAdblock;`)()(api);
+  new Function(`${unwrapMain(source)}\nreturn installYoutubeAdblock;`)()(api);
   let t = 0; const timers = []; const log = [];
   const g = api.createErrorFlashGuard({
     mode, windowMs: 5000, revealMs: 1500, now: () => t,

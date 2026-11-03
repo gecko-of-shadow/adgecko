@@ -6,6 +6,8 @@
 // Logins and share dialogs on the allowed list always open. Per-site override
 // through the popup's feature list. Fail-open on any internal error.
 // Switch: flag "guardPopups" from src/settings/flags.js (read at use time).
+// Wrapped in one function so the page sees no globals from this file (L-18).
+(() => {
 function installPopupGuard(target) {
   // Destinations that legitimately open in a new window (sign-in, payment,
   // share dialogs). A host matches itself and its subdomains.
@@ -121,3 +123,4 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
     // guard not installed
   }
 }
+})();
