@@ -3,7 +3,7 @@
   "name": "twitch-adblock",
   "version": "0.2.21",
   "minimum_chrome_version": "137",
-  "description": "Blocks video ads on Twitch (TwitchAdSolutions video-swap-new, unmodified), YouTube, and Kick, plus general-site ad blocking.",
+  "description": "Blocks ads on Twitch, YouTube, Kick and other sites, blocks known malware sites, and stops pages from copying shell commands.",
   "permissions": [
     "storage",
     "declarativeNetRequest",

@@ -95,3 +95,12 @@ Deno.test("guards and their flag script also run in about:blank-style frames of 
     assert(!c.match_about_blank && !c.match_origin_as_fallback, "only the guard entries match blank frames: " + c.js.join());
   }
 });
+
+// Security review M-10: the store description says what the extension does
+// (ads, the malware tier, the page guards). The name is the owner's call.
+Deno.test("manifest description covers ads, the malware tier and the page guards; name unchanged", () => {
+  const d = manifest.description;
+  assert(d.length <= 132, "Chrome Web Store limit: " + d.length);
+  assert(/ads/i.test(d) && /malware/i.test(d) && /copying shell commands/i.test(d), d);
+  assert(manifest.name === "twitch-adblock", "the product name is not changed by this build");
+});
