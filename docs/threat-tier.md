@@ -39,7 +39,9 @@ mirror, Curben's phishing list, or any OpenPhish source.
 **Smaller phishing coverage (owner decision #13, 2026-11-02):** Curben's
 phishing-filter is not used anywhere, because it is curated from OpenPhish. That
 list was about 30,000 of the roughly 45,000 packed malware/phishing domains.
-Chrome Safe Browsing remains the backstop for phishing pages. The repo ships
+There is no phishing list of its own any more: phishing pages are blocked only
+when uBO badware, Dandelion Sprout's Anti-Malware List or the EasyList-family
+lists name them. Chrome Safe Browsing remains the backstop for phishing pages. The repo ships
 HaGeZi **Pro mini** (an ads/trackers list), not HaGeZi's threat-intelligence
 list, so HaGeZi does not feed this tier.
 

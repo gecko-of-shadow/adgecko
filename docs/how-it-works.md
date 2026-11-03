@@ -37,15 +37,24 @@ Covers `kick.com` and subdomains.
 Covers other http and https sites. The README and the popup call these "ordinary sites".
 
 - `declarativeNetRequest` blocks domains from the packed lists, and `src/cosmetic.js` hides leftover ad boxes.
-- The packed snapshot in `src/rules/meta.json` is 211,995 domains.
+- The packed snapshot in `src/rules/meta.json` is 185,816 whole-domain and 4,030 scoped entries in 2,406 rules (packed 2026-11-03).
 - Twitch, YouTube (including `youtu.be`, nocookie, Kids, and the video CDNs), and Kick are excluded from this general pass.
 - Ordinary-site blocking starts **on**.
 
-How the lists are downloaded and refreshed: [What it transmits](permissions-and-privacy.md#what-it-transmits). To turn blocking off for one site: [Allow a page](allow-a-page.md).
+How the lists are downloaded and refreshed: [What it transmits](permissions-and-privacy.md#what-it-transmits). To turn blocking off for one site: [Allow a site](allow-a-page.md).
+
+## Page guards
+
+On ordinary sites (never Twitch, YouTube or Kick) two small scripts run in the page itself, in every frame including blank and `srcdoc` frames:
+
+- **Clipboard guard (on by default).** Checks `navigator.clipboard.writeText` and `.write`, `document.execCommand("copy"/"cut")`, the browser's own copy of the selection, and the text a copy handler sets. A command that looks like the "paste this into Run / PowerShell / a terminal" trick is not written unless you copied exactly that text yourself (Ctrl/Cmd+C or the context menu on your selection) or the site is a known documentation host. A copy button on the page does not count. A short notice explains it.
+- **Pop-up guard (off by default).** Blocks `window.open` without a click, a second window per click, and pop-unders from clicks on plain page content, unless the target is the same site (same registrable domain) or a known sign-in or share page.
+
+Both get their on/off switch from the extension over a private channel the page cannot read or forge, and both keep working if the page replaces built-in functions after it loads.
 
 ## The popup
 
-The popup turns ordinary-site blocking on or off and can ask for a list refresh. It also draws an **Allow this page** button.
+The popup shows the site, one status line (**✅ Protected** or **Allowed – not blocking here**), a **Fix this site** button (turns off hide rules and the page guards for that site only, then asks whether that helped; **No** puts back exactly what it changed), **Allow this site** / **Block again**, and a folded **Show more** with the list and feed status and the version. The gear opens the settings page, which has every other switch, the per-site list, list updates and the popup theme. A small magenta dot on the toolbar icon means a page guard blocked something on that tab; opening the popup says what and clears it.
 
 ### How the popup finds the page
 

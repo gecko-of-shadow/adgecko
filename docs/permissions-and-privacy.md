@@ -28,6 +28,12 @@ Host permissions, all for downloading public filter lists:
 - `https://raw.githubusercontent.com/DandelionSprout/adfilt/*` — Dandelion Sprout’s Anti-Malware List
 - `https://filters.adtidy.org/extension/ublock/*` — AdGuard Base
 
+### Local only
+
+- The clipboard and pop-up guards run inside the page and decide there; the text a page tries to copy is never sent anywhere.
+- When a guard blocks something, the extension's own service worker sets a small dot on that tab's toolbar icon (`chrome.action`, no permission) and keeps "what was blocked on which tab" in `chrome.storage.session` (cleared when the browser closes). Nothing leaves the browser.
+- The popup's "Fix this site" question and the one-time welcome card use two small keys in `chrome.storage.local` (`popupFix`, `popupWelcomed`); the popup theme is `uiTheme`.
+
 ### Not requested
 
 The manifest does not request `tabs`, `activeTab`, `scripting`, `cookies`, `history`, `webRequest`, `unlimitedStorage`, or `declarativeNetRequestFeedback`, and it has no web-accessible resources.

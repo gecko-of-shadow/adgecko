@@ -795,8 +795,9 @@ async function siteInfo(origin) {
 // private port to src/settings/flags.js, which forwards only {kind} here.
 // Per-tab badge through chrome.action (no permission); the last event per tab
 // is kept in storage.session (trusted contexts only) so the popup can say what
-// happened and clear the dot. Whether Chrome resets a per-tab badge when the
-// tab navigates is UNVERIFIED. No DNR block counts: that would need
+// happened and clear the dot. Chrome clears a per-tab badge when the tab
+// navigates (observed in Chrome for Testing 155, 2026-11-03), so the dot
+// belongs to the page that caused it. No DNR block counts: that would need
 // declarativeNetRequestFeedback, which this extension does not ask for.
 const GUARD_KINDS = ["clipboard", "popup"];
 const SIGNAL_KEY = "tabSignals";
