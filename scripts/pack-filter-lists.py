@@ -134,6 +134,8 @@ NEVER_BLOCK_SUFFIXES = (
     "live-video.net",
     "youtube-nocookie.com",
     "youtubekids.com",
+    # Kick media host (was missing here; security review L-6).
+    "kickusercontent.com",
 )
 
 DOMAIN_RE = re.compile(

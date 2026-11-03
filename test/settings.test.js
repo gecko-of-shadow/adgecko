@@ -275,3 +275,30 @@ Deno.test("youtubeCosmetic gates every DOM ad sweep and toast removal in youtube
   assert(calls(/cosmeticSweep\(\);/g) === 3, "observer, watchDom start and navigation use it");
   assert(/function injectHomeFeedCss\(\) \{[\s\S]{0,800}?!flagOn\("youtubeCosmetic"\)/.test(yt), "home feed CSS gated too");
 });
+
+// Security review L-6: the stream-host copies must not drift. The registry is
+// the one list; the threat tier's protected hosts and the list tier's
+// never-block hosts may add Google hosts the players load, but name no
+// Twitch/YouTube/Kick host the registry lacks, and cover every registry host.
+Deno.test("stream hosts: registry, threat protected hosts and list never-block hosts agree", () => {
+  const PH = globalThis.GeckoProtectedHosts;
+  const update = read("general/update.js");
+  const neverBlock = JSON.parse("[" + /const NEVER_BLOCK_SUFFIXES = \[([\s\S]*?)\];/.exec(update)[1].replace(/,\s*$/, "") + "]");
+  const google = (h) => /(^|\.)(google\.com|googleapis\.com|gstatic\.com)$/.test(h);
+  for (const h of PH.SUFFIX.filter((x) => !google(x))) assert(F.isStreamHost(h), "protected host not in STREAM_SITES: " + h);
+  for (const h of neverBlock.filter((x) => !google(x))) assert(F.isStreamHost(h), "never-block host not in STREAM_SITES: " + h);
+  for (const h of F.STREAM_SITES) {
+    assert(PH.protectedReason(h) !== null && PH.protectedReason("cdn." + h) !== null, "threat tier could block " + h);
+    assert(neverBlock.some((s) => h === s || h.endsWith("." + s)), "list tier could block " + h);
+  }
+  for (const h of ["ext-twitch.tv", "twitchcdn.com", "live-video.net", "kick-streamer.com"]) {
+    assert(manifest.content_scripts.filter((c) => c.exclude_matches).every((c) => c.exclude_matches.includes("*://*." + h + "/*")), h + " excluded from ordinary-site scripts");
+  }
+});
+
+Deno.test("stream hosts: the packer's never-block list covers every registry host (L-6)", () => {
+  const packer = Deno.readTextFileSync(new URL("../scripts/pack-filter-lists.py", import.meta.url));
+  const block = /NEVER_BLOCK_SUFFIXES = \(([\s\S]*?)\n\)/.exec(packer)[1];
+  const hosts = [...block.matchAll(/"([a-z0-9.-]+)"/g)].map((m) => m[1]);
+  for (const h of F.STREAM_SITES) assert(hosts.some((s) => h === s || h.endsWith("." + s)), "packer could block " + h);
+});

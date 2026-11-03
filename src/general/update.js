@@ -104,7 +104,7 @@ function installGeneralAdblockUpdate(target) {
     "twitch.tv", "ttvnw.net", "jtvnw.net", "twitchcdn.net", "twitchcdn.com", "ext-twitch.tv",
     "youtube.com", "youtu.be", "googlevideo.com", "ytimg.com", "ggpht.com",
     "youtubei.googleapis.com", "googleapis.com", "gstatic.com", "kick.com", "kick-streamer.com",
-    "live-video.net", "youtube-nocookie.com", "youtubekids.com",
+    "live-video.net", "youtube-nocookie.com", "youtubekids.com", "kickusercontent.com",
   ];
 
   const DOMAIN_RE = /^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])\^(\$[^#]*)?$/i;

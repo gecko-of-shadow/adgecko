@@ -149,6 +149,12 @@
         "*://*.jtvnw.net/*",
         "*://twitchcdn.net/*",
         "*://*.twitchcdn.net/*",
+        "*://twitchcdn.com/*",
+        "*://*.twitchcdn.com/*",
+        "*://ext-twitch.tv/*",
+        "*://*.ext-twitch.tv/*",
+        "*://live-video.net/*",
+        "*://*.live-video.net/*",
         "*://youtube.com/*",
         "*://*.youtube.com/*",
         "*://youtu.be/*",
@@ -166,7 +172,9 @@
         "*://kick.com/*",
         "*://*.kick.com/*",
         "*://kickusercontent.com/*",
-        "*://*.kickusercontent.com/*"
+        "*://*.kickusercontent.com/*",
+        "*://kick-streamer.com/*",
+        "*://*.kick-streamer.com/*"
       ],
       "js": [
         "src/settings/features.js",
@@ -217,6 +225,12 @@
         "*://*.jtvnw.net/*",
         "*://twitchcdn.net/*",
         "*://*.twitchcdn.net/*",
+        "*://twitchcdn.com/*",
+        "*://*.twitchcdn.com/*",
+        "*://ext-twitch.tv/*",
+        "*://*.ext-twitch.tv/*",
+        "*://live-video.net/*",
+        "*://*.live-video.net/*",
         "*://youtube.com/*",
         "*://*.youtube.com/*",
         "*://youtu.be/*",
@@ -234,7 +248,9 @@
         "*://kick.com/*",
         "*://*.kick.com/*",
         "*://kickusercontent.com/*",
-        "*://*.kickusercontent.com/*"
+        "*://*.kickusercontent.com/*",
+        "*://kick-streamer.com/*",
+        "*://*.kick-streamer.com/*"
       ],
       "js": [
         "src/settings/features.js",
@@ -259,6 +275,12 @@
         "*://*.jtvnw.net/*",
         "*://twitchcdn.net/*",
         "*://*.twitchcdn.net/*",
+        "*://twitchcdn.com/*",
+        "*://*.twitchcdn.com/*",
+        "*://ext-twitch.tv/*",
+        "*://*.ext-twitch.tv/*",
+        "*://live-video.net/*",
+        "*://*.live-video.net/*",
         "*://youtube.com/*",
         "*://*.youtube.com/*",
         "*://youtu.be/*",
@@ -276,7 +298,9 @@
         "*://kick.com/*",
         "*://*.kick.com/*",
         "*://kickusercontent.com/*",
-        "*://*.kickusercontent.com/*"
+        "*://*.kickusercontent.com/*",
+        "*://kick-streamer.com/*",
+        "*://*.kick-streamer.com/*"
       ],
       "js": [
         "src/guards/clipboard.js",

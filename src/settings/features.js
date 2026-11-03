@@ -13,10 +13,12 @@
   // media hosts). Ordinary-site scripts (cosmetic hide, page guards) never run
   // here, "Allow this page" never applies here, and the lists never touch the
   // pages. A host matches itself and every subdomain.
+  // test/settings.test.js checks that the threat tier's protected hosts and the
+  // list tier's never-block hosts name no stream host missing here (L-6).
   const STREAM_SITES = Object.freeze([
-    "twitch.tv", "ttvnw.net", "jtvnw.net", "twitchcdn.net",
+    "twitch.tv", "ttvnw.net", "jtvnw.net", "twitchcdn.net", "twitchcdn.com", "ext-twitch.tv", "live-video.net",
     "youtube.com", "youtu.be", "youtube-nocookie.com", "youtubekids.com", "googlevideo.com", "ytimg.com", "ggpht.com",
-    "kick.com", "kickusercontent.com",
+    "kick.com", "kickusercontent.com", "kick-streamer.com",
   ]);
 
   // layer: dnr (network rules), isolated (content script), main (page world)
