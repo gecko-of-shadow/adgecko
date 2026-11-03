@@ -537,17 +537,18 @@ SCAN_ROOT="$PKG/src"
 # video-swap-new (pixeltris) needs eval(workerString) to boot the player worker
 # blob and one innerHTML write for the in-player "Blocking ads" banner. Allow only
 # those two known lines in the vendored userscript; everything else still fails.
-# importScripts is allowed only in the service worker and only with string
-# literals (rg is line-based, so this matches the first line of the call; the
-# package check in section 1 parses the whole call and rejects anything but
-# literals).
+# importScripts is allowed only in the service worker, only on a line that
+# holds nothing but the call's string literals (so no other call can hide on
+# that line; follow-up review). rg is line-based: the continuation line has
+# no importScripts token, and the package check in section 1 parses the whole
+# call and rejects anything but literals.
 DANGER_PAT='\beval\s*\(|\.innerHTML\s*=|document\.write\s*\(|importScripts\s*\(|chrome\.identity|browser\.identity|navigator\.sendBeacon|geolocation|webkitRTCPeerConnection|\bRTCPeerConnection\b'
 # Scan JS under src/ but skip rules JSON (not JS). Cosmetic may use style injection.
 if rg -n --pcre2 "$DANGER_PAT" "$SCAN_ROOT" --glob '*.js' >/tmp/gate-danger-raw.txt 2>/dev/null; then
   set +e
   rg -v 'video-swap-new\.user\.js:[0-9]+:.*eval\(workerString\)' /tmp/gate-danger-raw.txt \
     | rg -v 'video-swap-new\.user\.js:[0-9]+:.*adBlockDiv\.innerHTML = ' \
-    | rg -v 'general-background\.js:[0-9]+:importScripts\("' \
+    | rg -v --pcre2 'general-background\.js:[0-9]+:importScripts\((\s*"[^"\\]*"\s*,?)+\s*(\);)?\s*\r?$' \
     >/tmp/gate-danger.txt
   set -e
   if [[ -s /tmp/gate-danger.txt ]]; then

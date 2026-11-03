@@ -50,9 +50,12 @@ ALLOWED_REFS = {
 SOURCE_ID = "urlhaus_hosts"
 # Words that must not appear at all in the checked texts.
 BANNED = re.compile(r"open[\s_-]?phish|phishing[-_]filter|curben[-_]phishing", re.I)
-# A host or URL that names Curben's project (any mirror or path).
+# A host or URL that names Curben's project (any mirror or path), including
+# its per-list Cloudflare Pages mirrors such as urlhaus-filter.pages.dev
+# (follow-up review).
 CURBEN_REF = re.compile(
-    r"(?:https?://)?(?:[a-z0-9-]+\.)*[a-z0-9-]*(?:malware-filter|curbengh|curben)[a-z0-9-]*"
+    r"(?:https?://)?(?:[a-z0-9-]+\.)*[a-z0-9-]+-filter\.pages\.dev(?:/[^\s\"'`)<>\],;]*)?"
+    r"|(?:https?://)?(?:[a-z0-9-]+\.)*[a-z0-9-]*(?:malware-filter|curbengh|curben)[a-z0-9-]*"
     r"(?:\.[a-z0-9-]+)+(?:/[^\s\"'`)<>\],;]*)?"
     r"|(?:https?://)?(?:[a-z0-9-]+\.)+[a-z]{2,}/[^\s\"'`)<>\],;]*(?:malware-filter|curbengh|curben)[^\s\"'`)<>\],;]*",
     re.I,

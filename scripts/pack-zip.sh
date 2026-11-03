@@ -13,6 +13,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$ROOT/manifest.json")"
 OUT="${1:-$ROOT/twitch-adblock-${VERSION}.zip}"
+# The zip is written from a temp folder: make a relative output path absolute.
+case "$OUT" in
+  /*|[A-Za-z]:*) ;;
+  *) OUT="$PWD/$OUT" ;;
+esac
 LIST_PY="$ROOT/scripts/lib/package_files.py"
 
 if [[ -f "$ROOT/popup.html" || -f "$ROOT/popup.js" ]]; then
