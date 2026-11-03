@@ -136,13 +136,28 @@
     renderAllow();
     renderSites();
     if ($("ui-theme")) $("ui-theme").value = THEMES.includes(stored.uiTheme) ? stored.uiTheme : "auto";
+    applyTheme(stored.uiTheme);
+  }
+
+  // The settings page wears the same theme as the popup ("auto" = no attribute:
+  // purple, or high contrast when the system asks for it).
+  function applyTheme(t) {
+    try {
+      const root = document.documentElement;
+      if (t === "purple" || t === "contrast") root.setAttribute("data-theme", t);
+      else root.removeAttribute("data-theme");
+    } catch {
+      // fake DOM in tests
+    }
   }
 
   // Popup theme (design rules): automatic, the purple theme, or high contrast.
   if ($("ui-theme")) {
     $("ui-theme").addEventListener("change", async () => {
       const v = $("ui-theme").value;
-      await set({ uiTheme: THEMES.includes(v) ? v : "auto" });
+      const theme = THEMES.includes(v) ? v : "auto";
+      applyTheme(theme);
+      await set({ uiTheme: theme });
     });
   }
 

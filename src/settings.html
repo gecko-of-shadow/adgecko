@@ -5,21 +5,49 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Gecko Adblock settings</title>
   <style>
-    :root { --bg: #0e0e10; --panel: #18181b; --text: #efeff1; --muted: #adadb8; --line: #2d2d35; --glow: #f0a33a; }
-    body { margin: 0; color: var(--text); background: var(--bg); font: 14px/1.5 sans-serif; }
+    /* Same themes as the popup (src/popup.css): purple by default, high contrast by the
+       "Popup look" switch (data-theme="contrast") or prefers-contrast: more (unless
+       "Purple" is picked), system colours under forced-colors. No animation. */
+    :root {
+      color-scheme: dark;
+      --bg: #0e0b14; --panel: #171222; --text: #f3effb; --muted: #bcb0d4; --line: #3b2a5c;
+      --accent: #8f3dff; --accent-text: #ffffff; --focus: #e0c8ff; --field: #0e0b14; --status: #d9bdff;
+    }
+    :root[data-theme="contrast"] {
+      --bg: #000000; --panel: #000000; --text: #ffffff; --muted: #ffffff; --line: #ffffff;
+      --accent: #ffd400; --accent-text: #000000; --focus: #ffd400; --field: #000000; --status: #ffd400;
+    }
+    @media (prefers-contrast: more) {
+      :root:not([data-theme="purple"]) {
+        --bg: #000000; --panel: #000000; --text: #ffffff; --muted: #ffffff; --line: #ffffff;
+        --accent: #ffd400; --accent-text: #000000; --focus: #ffd400; --field: #000000; --status: #ffd400;
+      }
+    }
+    body { margin: 0; color: var(--text); background: var(--bg); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
     main { max-width: 720px; margin: 0 auto; padding: 16px; }
     h1 { font-size: 18px; margin: 8px 0 12px; }
-    section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
     h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 8px; }
     label { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
+    input[type="checkbox"] { accent-color: var(--accent); }
     .note, .fixed { color: var(--muted); font-size: 12px; margin: 4px 0; }
-    button { border: 0; border-radius: 4px; padding: 7px 10px; background: #2d2d35; color: var(--text); font: inherit; cursor: pointer; }
+    button { border: 1px solid var(--accent); border-radius: 8px; padding: 7px 12px; background: var(--accent); color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; }
     button:hover { filter: brightness(1.1); }
-    input[type="text"] { background: #0e0e10; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; min-width: 0; flex: 1; }
+    input[type="text"], select { background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
+    input[type="text"] { min-width: 0; flex: 1; }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     ul { margin: 6px 0; padding-left: 18px; }
     li { margin: 3px 0; word-break: break-all; }
-    #status { min-height: 1.2em; color: var(--glow); }
+    #status { min-height: 1.2em; color: var(--status); }
+    :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    @media (forced-colors: active) {
+      :root { color-scheme: light dark; }
+      body, section { background: Canvas; color: CanvasText; }
+      section, input[type="text"], select { border-color: CanvasText; }
+      button { background: ButtonFace; color: ButtonText; border-color: ButtonText; }
+      h2, .note, .fixed, #status { color: CanvasText; }
+      :focus-visible { outline: 2px solid Highlight; }
+    }
   </style>
 </head>
 <body>

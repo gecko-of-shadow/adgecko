@@ -6,6 +6,8 @@ import popupHtml from "../src/popup.html" with { type: "text" };
 import popupCss from "../src/popup.css" with { type: "text" };
 import popupSource from "../src/popup.js" with { type: "text" };
 import flagsSource from "../src/settings/flags.js" with { type: "text" };
+import settingsHtml from "../src/settings.html" with { type: "text" };
+import settingsSource from "../src/settings.js" with { type: "text" };
 import manifest from "../manifest.json" with { type: "json" };
 function assert(c, l) { if (!c) throw new Error(l); }
 
@@ -43,6 +45,40 @@ Deno.test("popup CSS: no animation, visible focus, automatic and manual high con
   assert(/@media \(prefers-contrast: more\)/.test(popupCss) && /:root\[data-theme="contrast"\]/.test(popupCss), "high contrast, auto and manual");
   assert(/@media \(forced-colors: active\)/.test(popupCss) && /Canvas/.test(popupCss), "forced colours use system colours");
   assert(!/@import|url\(/.test(popupCss), "no fonts or images from CSS");
+});
+
+// 2026-11-03 alignment with docs/design/popup-single.jpg and popup-high-contrast.jpg.
+const rule = (css, sel) => {
+  const m = css.replace(/\/\*[\s\S]*?\*\//g, "").match(new RegExp("(?:^|\\})\\s*" + sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\{([^}]*)\\}"));
+  return m ? m[1] : "";
+};
+
+Deno.test("popup matches the mockups: bigger header icon, Block again outlined in the accent, Show more chevron after the text", () => {
+  assert(/<img id="brand-icon"[^>]*width="40" height="40"/.test(popupHtml) && /width:\s*40px/.test(rule(popupCss, "#brand-icon")), "40 px header icon");
+  const pressed = rule(popupCss, 'button.primary[aria-pressed="true"]');
+  assert(/background:\s*transparent/.test(pressed) && /color:\s*var\(--outline\)/.test(pressed), "Block again: outline + accent text");
+  assert(/border:\s*1px solid var\(--card-line\)/.test(rule(popupCss, ".card")), "card border in the accent family");
+  assert(/list-style:\s*none/.test(rule(popupCss, "summary")) && /display:\s*none/.test(rule(popupCss, "summary::-webkit-details-marker")), "default marker hidden");
+  assert(/content:\s*""/.test(rule(popupCss, "summary::after")) && /rotate\(-135deg\)/.test(rule(popupCss, "details[open] > summary::after")), "chevron after the text, flips when open");
+});
+
+Deno.test("high contrast: white gecko and ringed yellow buttons, manual and automatic, never over an explicit Purple", () => {
+  const manual = rule(popupCss, ':root[data-theme="contrast"]');
+  assert(/--icon-filter:\s*grayscale\(1\)/.test(manual) && /--ring:\s*0 0 0 2px #000000, 0 0 0 4px #ffffff/.test(manual), "manual contrast tokens");
+  const auto = popupCss.match(/@media \(prefers-contrast: more\)\s*\{\s*:root:not\(\[data-theme="purple"\]\)\s*\{([^}]*)\}/);
+  assert(auto && auto[1].includes("--icon-filter: grayscale(1)") && auto[1].includes("--ring:"), "automatic contrast has the same tokens, guarded by :not([data-theme=purple])");
+  assert(/filter:\s*var\(--icon-filter\)/.test(rule(popupCss, "#brand-icon")) && /box-shadow:\s*var\(--ring\)/.test(rule(popupCss, "button.primary")), "tokens used");
+  assert(/--icon-filter:\s*none/.test(rule(popupCss, ":root")) && /--ring:\s*none/.test(rule(popupCss, ":root")), "purple: no filter, no ring");
+});
+
+Deno.test("settings page wears the popup's themes: tokens, manual switch, automatic contrast, forced colours, focus ring", () => {
+  const css = settingsHtml.match(/<style>([\s\S]*?)<\/style>/)[1].replace(/\/\*[\s\S]*?\*\//g, "");
+  assert(/:root\s*\{[^}]*--bg:\s*#0e0b14[^}]*--accent:\s*#8f3dff/.test(css), "purple tokens as in popup.css");
+  assert(/:root\[data-theme="contrast"\]\s*\{[^}]*--accent:\s*#ffd400/.test(css), "manual contrast");
+  assert(/@media \(prefers-contrast: more\)\s*\{\s*:root:not\(\[data-theme="purple"\]\)/.test(css), "automatic contrast unless Purple");
+  assert(/@media \(forced-colors: active\)[\s\S]*Canvas/.test(css) && /:focus-visible\s*\{[^}]*outline:/.test(css), "forced colours + focus ring");
+  assert(!/transition|animation|@keyframes|@import|url\(/.test(css), "no animation, fonts or images");
+  assert(/function applyTheme\(t\)/.test(settingsSource) && /applyTheme\(stored\.uiTheme\)/.test(settingsSource) && /applyTheme\(theme\);/.test(settingsSource), "theme applied on load and on change");
 });
 
 Deno.test("guard pings: flags.js forwards only {g: clipboard|popup}, rate-limited, never settings", () => {
