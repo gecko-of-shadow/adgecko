@@ -64,8 +64,8 @@ Full details, permissions, and the list sites: [docs/permissions-and-privacy.md]
 
 ## Links
 
-- **Docs:** [How it works](docs/how-it-works.md) · [Allow a page](docs/allow-a-page.md) · [Permissions and privacy](docs/permissions-and-privacy.md)
-- **Permissions:** `storage` and `declarativeNetRequest`, plus host permissions, all for downloading public filter lists. [Full list](docs/permissions-and-privacy.md#permissions)
+- **Docs:** [How it works](docs/how-it-works.md) · [Allow a page](docs/allow-a-page.md) · [Permissions and privacy](docs/permissions-and-privacy.md) · [Threat tier](docs/threat-tier.md) · [Signed threat feed setup](docs/feed-setup.md)
+- **Permissions:** exactly `storage`, `declarativeNetRequest`, `alarms`, and the listed hosts (all for downloading public filter lists). [Full list](docs/permissions-and-privacy.md#permissions)
 - **Credits and licenses:** TwitchAdSolutions (MIT), uBlock Origin and uAssets (GPLv3), the EasyList authors and the other lists. [Details and license files](docs/credits.md)
 - **Development:** there is no build step. From a git clone, load the repository root (the directory that contains `manifest.json`); `docs/`, `test/`, and `scripts/` are not part of the running extension. The version is the `version` field in `manifest.json`. The release zip root is `manifest.json`, `src/`, and `icons/`, and `scripts/pack-zip.sh` writes `twitch-adblock-<version>.zip` containing the same three.
 

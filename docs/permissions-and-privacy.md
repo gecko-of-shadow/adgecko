@@ -6,7 +6,7 @@ In short: the extension does not send your browsing history anywhere. It downloa
 
 ## Permissions
 
-`manifest.json` requests three API permissions:
+The permissions are exactly: `storage`, `declarativeNetRequest`, `alarms`, and the listed hosts below. `manifest.json` requests these three API permissions:
 
 | Permission | Used for |
 | --- | --- |
@@ -30,7 +30,9 @@ Host permissions, all for downloading public filter lists:
 
 ### Not requested
 
-The manifest does not request `tabs`, `activeTab`, `scripting`, `cookies`, `history`, `webRequest`, `unlimitedStorage`, or `declarativeNetRequestFeedback`.
+The manifest does not request `tabs`, `activeTab`, `scripting`, `cookies`, `history`, `webRequest`, `unlimitedStorage`, or `declarativeNetRequestFeedback`, and it has no web-accessible resources.
+
+Once the signed threat feed is set up ([feed-setup.md](feed-setup.md)), its one host is added to the host permissions; until then the feed is dormant and contacts nothing. Settings live in two small keys, `settings` and `siteOverrides`, plus `threatAllowDomains` for the "Allow this domain" list.
 
 ## Privacy
 
