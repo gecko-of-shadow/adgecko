@@ -1,203 +1,52 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>twitch-adblock</title>
-  <style>
-    :root {
-      --bg: #0e0e10;
-      --panel: #18181b;
-      --text: #efeff1;
-      --muted: #adadb8;
-      --line: #2d2d35;
-      --glow: #f0a33a;
-      --glow-soft: rgba(240, 163, 58, 0.35);
-      --accent: #9147ff;
-      --ok: #00c474;
-    }
-    body {
-      margin: 0;
-      width: 300px;
-      color: var(--text);
-      background: var(--bg);
-      font: 13px/1.4 sans-serif;
-    }
-    main { padding: 12px; }
-    header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    #brand-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      box-shadow: 0 0 0 0 transparent;
-      transition: box-shadow 160ms ease;
-    }
-    #brand-icon[data-glow="on"] {
-      box-shadow: 0 0 10px 1px var(--glow-soft);
-    }
-    h1 {
-      margin: 0;
-      font-size: 14px;
-      font-weight: 650;
-    }
-    .sub {
-      margin: 2px 0 0;
-      color: var(--muted);
-      font-size: 11px;
-    }
-    section {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px;
-      margin-bottom: 8px;
-    }
-    section h2 {
-      margin: 0 0 6px;
-      font-size: 11px;
-      font-weight: 650;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-    .row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .label { flex: 1; }
-    .hint {
-      margin: 6px 0 0;
-      color: var(--muted);
-      font-size: 11px;
-    }
-    #general-status, #page-status, #lists-status {
-      min-height: 1.2em;
-      margin: 6px 0 0;
-      color: var(--text);
-      font-size: 12px;
-    }
-    .switch {
-      position: relative;
-      width: 40px;
-      height: 22px;
-      flex: 0 0 auto;
-    }
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-    .slider {
-      position: absolute;
-      inset: 0;
-      border-radius: 999px;
-      background: #2d2d35;
-      cursor: pointer;
-      transition: background 120ms ease;
-    }
-    .slider::before {
-      content: "";
-      position: absolute;
-      width: 16px;
-      height: 16px;
-      left: 3px;
-      top: 3px;
-      border-radius: 50%;
-      background: #efeff1;
-      transition: transform 120ms ease, box-shadow 120ms ease;
-    }
-    .switch input:checked + .slider {
-      background: #5c3d14;
-    }
-    .switch input:checked + .slider::before {
-      transform: translateX(18px);
-      background: var(--glow);
-      box-shadow: 0 0 8px var(--glow-soft);
-    }
-    .btns { display: flex; gap: 8px; margin-top: 8px; }
-    button {
-      flex: 1;
-      border: 0;
-      border-radius: 4px;
-      padding: 8px 10px;
-      background: #2d2d35;
-      color: var(--text);
-      font: inherit;
-      cursor: pointer;
-    }
-    button:hover { filter: brightness(1.08); }
-    button:disabled {
-      opacity: 0.45;
-      cursor: default;
-      filter: none;
-    }
-    button[aria-pressed="true"] { background: var(--accent); }
-    button.primary[aria-pressed="true"] {
-      background: #5c3d14;
-      color: #ffe6bd;
-      box-shadow: inset 0 0 0 1px rgba(240, 163, 58, 0.35);
-    }
-    .credit {
-      margin: 0;
-      color: #6f6f78;
-      font-size: 10px;
-    }
-    .host { margin: 0 0 4px; font-weight: 650; word-break: break-all; }
-    .features { margin-top: 8px; }
-    .features label { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 12px; }
-    .features .fixed { color: var(--muted); font-size: 11px; margin: 3px 0; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gecko Adblock</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <main>
-    <header>
-      <img id="brand-icon" src="../icons/icon48-working.png" alt="" width="36" height="36" data-glow="on">
-      <div>
-        <h1>twitch-adblock</h1>
-        <p class="sub" id="version-line">General lists · streams unchanged</p>
-      </div>
+    <header class="top">
+      <img id="brand-icon" src="../icons/icon48-working.png" alt="" width="32" height="32" data-glow="on">
+      <h1 id="product">Gecko Adblock</h1>
+      <button id="open-settings" class="gear" type="button" aria-label="Settings" title="Settings">&#9881;&#xFE0E;</button>
     </header>
 
-    <section aria-labelledby="site-heading">
-      <h2 id="site-heading">This site</h2>
-      <p id="site-host" class="host">Checking this page…</p>
-      <div class="btns">
-        <button id="allow-page" type="button" class="primary" aria-pressed="false">Allow this page</button>
-      </div>
-      <p id="page-status"></p>
-      <div id="feature-list" class="features" aria-label="Features on this site"></div>
+    <section id="welcome" class="card welcome" aria-labelledby="welcome-title" hidden>
+      <p id="welcome-title" class="card-title">You're protected</p>
+      <p class="note">Nothing to set up. Ads and known bad sites are blocked while you browse.</p>
+      <button id="welcome-close" type="button" class="link">Got it</button>
     </section>
 
-    <section aria-labelledby="general-heading">
-      <h2 id="general-heading">Everywhere</h2>
-      <div class="row">
-        <div class="label">Block ads on ordinary sites</div>
-        <label class="switch" title="Filter lists on all ordinary sites">
-          <input id="general-enabled" type="checkbox" checked>
-          <span class="slider"></span>
-        </label>
+    <p id="site-host" class="host">Checking this page…</p>
+    <p id="site-status" class="status" role="status" aria-live="polite"></p>
+
+    <section class="card" aria-labelledby="fix-title">
+      <p id="fix-title" class="card-title">Something broke?</p>
+      <button id="fix-site" type="button" class="primary">Fix this site</button>
+      <div id="fix-ask" hidden>
+        <p id="fix-question" class="question">Did that fix it? Reload the page and look.</p>
+        <div class="pair">
+          <button id="fix-yes" type="button" class="primary">Yes</button>
+          <button id="fix-no" type="button" class="secondary">No</button>
+        </div>
       </div>
-      <p class="hint">Default on. Does not turn off Twitch, YouTube, or Kick playback filters.</p>
-      <p id="general-status"></p>
-      <div class="btns">
-        <button id="open-settings" type="button">All settings</button>
-      </div>
+      <p id="fix-note" class="note" aria-live="polite"></p>
     </section>
 
-    <section aria-labelledby="lists-heading">
-      <h2 id="lists-heading">Filter lists</h2>
-      <button id="update-lists" type="button">Update lists</button>
-      <p class="hint">Lists are checked every 3 hours and refreshed at most every 12h. Click to check now.</p>
-      <p id="lists-status"></p>
-      <p id="feed-status"></p>
-      <p class="credit">List credit: The EasyList authors (when EasyList is packed).</p>
-    </section>
+    <button id="allow-site" type="button" class="primary big" aria-pressed="false">Allow this site</button>
+    <p id="page-status" class="note" aria-live="polite"></p>
+
+    <details id="more">
+      <summary>Show more</summary>
+      <p id="signal-line" class="note"></p>
+      <p id="lists-status" class="note"></p>
+      <p id="feed-status" class="note"></p>
+      <p id="version-line" class="note"></p>
+      <p class="note credit">List credit: The EasyList authors.</p>
+    </details>
   </main>
   <script src="popup.js"></script>
 </body>

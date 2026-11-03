@@ -790,6 +790,81 @@ async function siteInfo(origin) {
   };
 }
 
+// Quiet alerts (design rules): a small magenta dot on the toolbar icon of the
+// tab where a page guard blocked something. The page guards report over their
+// private port to src/settings/flags.js, which forwards only {kind} here.
+// Per-tab badge through chrome.action (no permission); the last event per tab
+// is kept in storage.session (trusted contexts only) so the popup can say what
+// happened and clear the dot. Whether Chrome resets a per-tab badge when the
+// tab navigates is UNVERIFIED. No DNR block counts: that would need
+// declarativeNetRequestFeedback, which this extension does not ask for.
+const GUARD_KINDS = ["clipboard", "popup"];
+const SIGNAL_KEY = "tabSignals";
+const SIGNAL_TABS_MAX = 50;
+const BADGE_COLOR = "#e81cd8"; // magenta
+const lastSignalAt = new Map();
+
+function sessionArea() {
+  return chrome.storage && chrome.storage.session ? chrome.storage.session : null;
+}
+
+function guardEvent(tabId, kind) {
+  const now = Date.now();
+  if (now - (lastSignalAt.get(tabId) || 0) < 2000) return; // coalesce bursts
+  lastSignalAt.set(tabId, now);
+  if (lastSignalAt.size > SIGNAL_TABS_MAX) lastSignalAt.delete(lastSignalAt.keys().next().value);
+  try {
+    chrome.action.setBadgeBackgroundColor({ tabId, color: BADGE_COLOR }, () => void chrome.runtime.lastError);
+    chrome.action.setBadgeText({ tabId, text: " " }, () => void chrome.runtime.lastError);
+  } catch {
+    // no dot; nothing else depends on it
+  }
+  const area = sessionArea();
+  if (!area) return;
+  try {
+    area.get(SIGNAL_KEY, (got) => {
+      void chrome.runtime.lastError;
+      const signals = Object.assign({}, got && got[SIGNAL_KEY]);
+      signals[tabId] = { kind, at: now };
+      const ids = Object.keys(signals);
+      if (ids.length > SIGNAL_TABS_MAX) {
+        ids.sort((a, b) => signals[a].at - signals[b].at);
+        for (const id of ids.slice(0, ids.length - SIGNAL_TABS_MAX)) delete signals[id];
+      }
+      area.set({ [SIGNAL_KEY]: signals }, () => void chrome.runtime.lastError);
+    });
+  } catch {
+    // the dot is still shown
+  }
+}
+
+// Popup: what was blocked on this tab, then clear the dot.
+function takeTabSignal(tabId) {
+  return new Promise((resolve) => {
+    try {
+      chrome.action.setBadgeText({ tabId, text: "" }, () => void chrome.runtime.lastError);
+    } catch {
+      // nothing shown
+    }
+    const area = sessionArea();
+    if (!area) return resolve({ ok: true, signal: null });
+    try {
+      area.get(SIGNAL_KEY, (got) => {
+        void chrome.runtime.lastError;
+        const signals = Object.assign({}, got && got[SIGNAL_KEY]);
+        const signal = signals[tabId] || null;
+        if (signal) {
+          delete signals[tabId];
+          area.set({ [SIGNAL_KEY]: signals }, () => void chrome.runtime.lastError);
+        }
+        resolve({ ok: true, signal });
+      });
+    } catch {
+      resolve({ ok: true, signal: null });
+    }
+  });
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.source !== "twitch-adblock-general") return;
   // Popup and settings page only. A content-script sender carries a tab and
@@ -803,6 +878,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then((r) => r.text())
       .then((css) => sendResponse({ css }), () => sendResponse({ css: null }));
     return true;
+  }
+  // Our ISOLATED content script (src/settings/flags.js) reports a page-guard
+  // block: only a known kind, only for the sender's own tab, nothing returned.
+  if (message.type === "guardEvent") {
+    if (sender.tab && typeof sender.tab.id === "number" && GUARD_KINDS.includes(message.kind)) guardEvent(sender.tab.id, message.kind);
+    return;
   }
   if (sender.tab) {
     let settingsPage = "";
@@ -823,6 +904,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === "revertLists") {
     revertLists().then(sendResponse);
+    return true;
+  }
+  if (message.type === "tabSignal") {
+    if (typeof message.tabId !== "number") {
+      sendResponse({ ok: false });
+      return;
+    }
+    takeTabSignal(message.tabId).then(sendResponse);
     return true;
   }
   if (message.type === "siteInfo") {

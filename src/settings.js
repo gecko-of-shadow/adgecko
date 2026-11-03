@@ -7,7 +7,8 @@
   const F = globalThis.GeckoFeatures;
   const TC = globalThis.GeckoThreatCompile;
   const $ = (id) => document.getElementById(id);
-  const KEYS = ["settings", "siteOverrides", "threatAllowDomains", "feedState", "generalListStatus", "generalListUpdatedAt"];
+  const KEYS = ["settings", "siteOverrides", "threatAllowDomains", "feedState", "generalListStatus", "generalListUpdatedAt", "uiTheme"];
+  const THEMES = ["auto", "purple", "contrast"];
   let stored = {};
 
   const get = () => new Promise((resolve) => chrome.storage.local.get(KEYS, (s) => {
@@ -134,6 +135,15 @@
     renderFeed();
     renderAllow();
     renderSites();
+    if ($("ui-theme")) $("ui-theme").value = THEMES.includes(stored.uiTheme) ? stored.uiTheme : "auto";
+  }
+
+  // Popup theme (design rules): automatic, the purple theme, or high contrast.
+  if ($("ui-theme")) {
+    $("ui-theme").addEventListener("change", async () => {
+      const v = $("ui-theme").value;
+      await set({ uiTheme: THEMES.includes(v) ? v : "auto" });
+    });
   }
 
   $("master").addEventListener("change", () => saveSettings((s) => { s.enabled = $("master").checked; }));

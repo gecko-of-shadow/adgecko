@@ -41,10 +41,29 @@
     }
   }
 
+  // The only thing a page-world script may send back: "a page guard blocked
+  // something here" ({g: "clipboard" | "popup"}). Forwarded to the worker for
+  // the toolbar dot, at most once per 2 s per frame; anything else is ignored
+  // (flags never travel this way).
+  let lastPing = 0;
+  function onGuardPing(m) {
+    try {
+      const d = m && m.data;
+      if (!d || typeof d !== "object" || (d.g !== "clipboard" && d.g !== "popup")) return;
+      const now = Date.now();
+      if (now - lastPing < 2000) return;
+      lastPing = now;
+      chrome.runtime.sendMessage({ source: "twitch-adblock-general", type: "guardEvent", kind: d.g }, () => void chrome.runtime.lastError);
+    } catch {
+      // no dot
+    }
+  }
+
   function handshake() {
     if (ports.length >= MAX_PORTS) return;
     try {
       const ch = new MessageChannel();
+      ch.port1.onmessage = onGuardPing;
       ports.push(ch.port1);
       window.dispatchEvent(new MessageEvent(PORT_EVENT, { ports: [ch.port2] }));
       send(ch.port1);

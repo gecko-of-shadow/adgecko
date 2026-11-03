@@ -17,10 +17,12 @@ function assertEquals(actual, expected, label) {
 }
 
 Deno.test("general popup defaults on and never auto-fetches lists", () => {
-  assert(popupHtml.includes('id="general-enabled"'), "master switch present");
-  assert(/id="general-enabled"[^>]*checked|checked[^>]*id="general-enabled"/.test(popupHtml), "master defaults checked");
+  // Redesign (design rules, 2026-11-02): the global switches and "Update lists"
+  // live on the settings page (the gear); the popup has none.
+  assert(!popupHtml.includes('id="general-enabled"') && !popupHtml.includes("Update lists"), "no master switch / update button in the popup");
+  const settingsHtml = Deno.readTextFileSync(new URL("../src/settings.html", import.meta.url));
+  assert(settingsHtml.includes('id="master"') && settingsHtml.includes('id="update-lists"'), "they are on the settings page");
   assert(popupSource.includes("generalEnabled: true") || popupSource.includes("generalEnabled: true,"), "storage default ON");
-  assert(popupSource.includes("updateLists") || popupHtml.includes("Update lists"), "manual Update control");
   assert(!popupSource.includes("chrome.alarms"), "no alarms in popup");
   // The worker's single 3 h "gecko-refresh" alarm is allowed (owner decision 2026-11-02).
   assert(!/chrome\.alarms\.create\((?!REFRESH_ALARM,)/.test(backgroundSource), "only the refresh alarm in background");
@@ -38,7 +40,7 @@ Deno.test("allow-this-page skips Twitch YouTube Kick hosts", async () => {
   assert(!GS.isHardExcludedHost("news.example.com"), "ordinary host");
   assert(settingsSource.includes("isStreamHost") && !/twitch\\?\.tv/.test(settingsSource), "settings module uses the registry, no own list");
   assert(popupSource.includes('notifyBackground("siteInfo"') && !/twitch\\?\.tv/.test(popupSource), "popup asks the worker, no own list");
-  assert(popupHtml.includes("Allow this page"), "allow control labeled");
+  assert(popupHtml.includes("Allow this site"), "allow control labeled");
 });
 
 Deno.test("glowing-eyes icon variants are packaged and wired", () => {

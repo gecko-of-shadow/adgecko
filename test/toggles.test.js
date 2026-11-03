@@ -54,7 +54,9 @@ Deno.test("master toggle is the only popup switch", () => {
   assert(!popupHtml.includes("debug-off"), "debug off is gone");
   assert(!popupHtml.includes("Copy debug"), "copy debug is gone");
   assert(!popupSource.includes("sendDebug"), "popup does not message a debug log");
-  assert(popupHtml.includes("general-enabled"), "general master is its own control");
+  // Redesign: no switches in the popup at all; the master switch is on the settings page.
+  assert(!popupHtml.includes("<input") && !popupHtml.includes("general-enabled"), "no switches in the popup");
+  assert(Deno.readTextFileSync(new URL("../src/settings.html", import.meta.url)).includes('id="master"'), "master switch on the settings page");
   assert(!popupSource.includes("kick.js"), "popup does not load Kick playback");
   assert(!popupSource.includes("youtube.js"), "popup does not load YouTube playback");
 });

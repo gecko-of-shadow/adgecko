@@ -190,8 +190,8 @@ Deno.test("a failed payload write is recorded in state and shown in the list sta
 });
 
 Deno.test("popup shows a failed settings write instead of dropping it", () => {
-  assert(/const err = chrome\.runtime\.lastError;\s*saveError = err \?/.test(popupSource), "savePartial checks lastError");
-  assert(popupSource.includes('listsStatus.textContent = formatListStatus(settings) + (saveError ? " " + saveError : "")'), "shown in the status line");
+  assert(/saveError = err \? "Could not save: "/.test(popupSource) && /const err = chrome\.runtime\.lastError;/.test(popupSource), "save() checks lastError");
+  assert(popupSource.includes("pageStatus.textContent = saveError;"), "shown under the Allow button");
 });
 
 // ---- who reads what ----

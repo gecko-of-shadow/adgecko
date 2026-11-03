@@ -1,29 +1,33 @@
 (function () {
-  // popup.html may only load this file, so the feature registry
-  // (src/settings/features.js) is reached through the worker ("siteInfo").
-  // Writes go to the small `settings` / `siteOverrides` keys; the worker turns
-  // them into DNR rules and the legacy generalEnabled / generalAllowedOrigins
-  // mirrors.
+  // Gecko Adblock popup (design rules, update 2026-11-02): icon,
+  // name and gear; the site; one status line; "Something broke? / Fix this
+  // site"; Allow this site / Block again; a folded "Show more". Advanced
+  // switches and the per-site list live on the settings page (the gear).
+  // popup.html may only load this file, so the feature registry is reached
+  // through the worker ("siteInfo"). Writes go to the small `settings` /
+  // `siteOverrides` keys; the worker turns them into blocking rules and the legacy
+  // generalEnabled / generalAllowedOrigins mirrors. No network calls here.
   const KEYS = {
     enabled: "generalEnabled",
     allowedOrigins: "generalAllowedOrigins",
     listUpdatedAt: "generalListUpdatedAt",
     listStatus: "generalListStatus",
-    listUpdateRequestAt: "generalListUpdateRequestAt",
     settings: "settings",
     overrides: "siteOverrides",
+    fix: "popupFix", // { host, at, prev: { <feature id>: true | false | null } }
+    welcomed: "popupWelcomed",
+    theme: "uiTheme", // "auto" | "purple" | "contrast" (settings page)
   };
   const DEFAULTS = {
     generalEnabled: true,
     generalAllowedOrigins: [],
     generalListUpdatedAt: null,
     generalListStatus: "Packed lists (checked every 3 hours).",
-    generalListUpdateRequestAt: null,
   };
+  const FIX_TTL_MS = 24 * 60 * 60 * 1000;
+  const FEED_STATE_KEY = "feedState";
+  const FEED_PAUSE_KEY = "feedPaused";
 
-  function withDefaults(stored) {
-    return Object.assign({}, DEFAULTS, stored || {});
-  }
   function normalizeOrigin(url) {
     try {
       const u = new URL(url);
@@ -41,45 +45,31 @@
     }
   }
 
-  const brandIcon = document.getElementById("brand-icon");
-  const versionLine = document.getElementById("version-line");
-  const generalEnabled = document.getElementById("general-enabled");
-  const generalStatus = document.getElementById("general-status");
-  const allowPage = document.getElementById("allow-page");
-  const pageStatus = document.getElementById("page-status");
-  const siteHost = document.getElementById("site-host");
-  const featureList = document.getElementById("feature-list");
-  const openSettings = document.getElementById("open-settings");
-  const updateLists = document.getElementById("update-lists");
-  const listsStatus = document.getElementById("lists-status");
-  const feedStatus = document.getElementById("feed-status");
-
-  // Threat feed status: the worker stores the sentence in feedState.text
-  // (src/feed/client.js statusText); the popup adds how long ago it checked.
-  // Small keys only: never the feed cache.
-  const FEED_STATE_KEY = "feedState";
-  const FEED_PAUSE_KEY = "feedPaused";
-  let feedState = null;
-  let feedPaused = false;
-  function feedStatusText(state, paused, now) {
-    if (paused) return "Threat feed: paused (packed threat list still on).";
-    const st = state || {};
-    const base = st.text || "Threat feed: not set up (packed threat list in use).";
-    if (st.status === "active" && st.source === "feed" && st.fetchedAt) {
-      const mins = Math.max(0, Math.round((now - st.fetchedAt) / 60000));
-      return base + (mins < 120 ? " Checked " + mins + " min ago." : " Checked " + Math.round(mins / 60) + " h ago.");
-    }
-    return base;
-  }
-  function renderFeed() {
-    if (feedStatus) feedStatus.textContent = feedStatusText(feedState, feedPaused, Date.now());
-  }
+  const el = (id) => document.getElementById(id);
+  const brandIcon = el("brand-icon");
+  const siteHost = el("site-host");
+  const siteStatus = el("site-status");
+  const welcome = el("welcome");
+  const welcomeClose = el("welcome-close");
+  const fixSite = el("fix-site");
+  const fixAsk = el("fix-ask");
+  const fixYes = el("fix-yes");
+  const fixNo = el("fix-no");
+  const fixNote = el("fix-note");
+  const allowSite = el("allow-site");
+  const pageStatus = el("page-status");
+  const openSettings = el("open-settings");
+  const signalLine = el("signal-line");
+  const listsStatus = el("lists-status");
+  const feedStatus = el("feed-status");
+  const versionLine = el("version-line");
 
   let activeTab = null;
   let pageChecked = false;
-  let settings = withDefaults(null);
-  let stored = {}; // raw settings / siteOverrides
+  let all = {}; // stored small keys
   let info = null; // worker's siteInfo answer for this page
+  let saveError = "";
+  let note = "";
 
   function packagedVersion() {
     try {
@@ -89,28 +79,15 @@
     }
   }
 
-  const title = document.querySelector("h1");
-  if (title) title.textContent = "twitch-adblock " + packagedVersion();
-  if (versionLine) {
-    versionLine.textContent = "v" + packagedVersion() + " · general lists · streams unchanged";
-  }
-
-  function setGlow(on) {
-    const working = on === true;
-    brandIcon.dataset.glow = working ? "on" : "off";
-    brandIcon.src = working
-      ? "../icons/icon48-working.png"
-      : "../icons/icon48-off.png";
-  }
-
-  function formatListStatus(state) {
-    const base = state.generalListStatus || DEFAULTS.generalListStatus;
-    if (!state.generalListUpdatedAt) return base;
+  function applyTheme() {
+    const t = all[KEYS.theme];
     try {
-      const when = new Date(state.generalListUpdatedAt).toLocaleString();
-      return base + " Last update: " + when + ".";
+      const root = document.documentElement;
+      if (!root) return;
+      if (t === "purple" || t === "contrast") root.setAttribute("data-theme", t);
+      else root.removeAttribute("data-theme");
     } catch {
-      return base;
+      // fake DOM in tests
     }
   }
 
@@ -122,153 +99,142 @@
     return normalizeOrigin(activeTab.url || activeTab.pageOrigin || "");
   }
 
-  // Lists on everywhere: the network feature (stored settings win over the
-  // legacy mirror, which the worker derives from them).
-  function networkOn() {
-    const s = stored[KEYS.settings];
-    if (s && typeof s === "object") return s.enabled !== false && !(s.features && s.features.network === false);
-    return settings.generalEnabled !== false;
+  function overridesCopy() {
+    const o = all[KEYS.overrides];
+    return o && typeof o === "object" ? JSON.parse(JSON.stringify(o)) : {};
   }
 
-  function overridesCopy() {
-    const o = stored[KEYS.overrides];
-    return o && typeof o === "object" ? JSON.parse(JSON.stringify(o)) : {};
+  function extensionOn() {
+    const s = all[KEYS.settings];
+    return !(s && typeof s === "object" && s.enabled === false);
   }
 
   // The site switch: this host's override says enabled:false. Before the
   // worker migrated, the legacy allowed-origins list still counts.
   function siteOff(origin) {
     const host = hostOfOrigin(origin);
-    const o = stored[KEYS.overrides];
-    if (o && typeof o === "object" && o[host] && o[host].enabled === false) return true;
+    const o = all[KEYS.overrides];
+    const key = info && info.host === host && info.overrideHost ? info.overrideHost : host;
+    if (o && typeof o === "object" && o[key] && o[key].enabled === false) return true;
     if (info && info.host === host && info.siteEnabled === false) return true;
-    const legacy = Array.isArray(settings.generalAllowedOrigins) ? settings.generalAllowedOrigins : [];
-    return !stored[KEYS.settings] && legacy.includes(origin);
+    const legacy = Array.isArray(all[KEYS.allowedOrigins]) ? all[KEYS.allowedOrigins] : [];
+    return !all[KEYS.settings] && legacy.includes(origin);
   }
 
-  function renderFeatures() {
-    if (!featureList) return;
-    const list = info && Array.isArray(info.features) ? info.features : null;
+  // "Fix this site": every per-site switch that applies here except the
+  // filter lists (cosmetic hiding and the page guards on ordinary sites, our
+  // own helpers on Twitch/YouTube/Kick). The threat tier is not a per-site
+  // switch and stays on (its allow box is on the settings page).
+  function fixIds() {
+    const list = info && Array.isArray(info.features) ? info.features : [];
+    return list.filter((f) => f.perSite && f.available !== false && f.apply !== "always" && f.id !== "network").map((f) => f.id);
+  }
+
+  function overrideKey(host) {
+    return info && info.host === host && info.overrideHost ? info.overrideHost : host;
+  }
+
+  function pendingFix(host) {
+    const f = all[KEYS.fix];
+    if (!f || typeof f !== "object" || !host) return null;
+    if (f.host !== overrideKey(host)) return null;
+    if (typeof f.at !== "number" || Date.now() - f.at > FIX_TTL_MS) return null;
+    return f;
+  }
+
+  function feedText() {
+    if (all[FEED_PAUSE_KEY] === true) return "Threat feed: paused (packed threat list still on).";
+    const st = all[FEED_STATE_KEY] || {};
+    const base = st.text || "Threat feed: not set up (packed threat list in use).";
+    if (st.status === "active" && st.source === "feed" && st.fetchedAt) {
+      const mins = Math.max(0, Math.round((Date.now() - st.fetchedAt) / 60000));
+      return base + (mins < 120 ? " Checked " + mins + " min ago." : " Checked " + Math.round(mins / 60) + " h ago.");
+    }
+    return base;
+  }
+
+  function listText() {
+    const base = all[KEYS.listStatus] || DEFAULTS.generalListStatus;
+    if (!all[KEYS.listUpdatedAt]) return base;
     try {
-      while (featureList.firstChild) featureList.removeChild(featureList.firstChild);
+      return base + " Last update: " + new Date(all[KEYS.listUpdatedAt]).toLocaleString() + ".";
     } catch {
-      // fake DOM in tests
-    }
-    if (!list || typeof document.createElement !== "function") {
-      featureList.textContent = list ? list.map((f) => f.label + ": " + (f.on ? "on" : "off")).join(" · ") : "";
-      return;
-    }
-    for (const f of list) {
-      if (!f.available) continue;
-      if (f.apply === "always") {
-        const p = document.createElement("p");
-        p.className = "fixed";
-        p.textContent = f.label + ": always on";
-        featureList.appendChild(p);
-        continue;
-      }
-      if (!f.perSite) {
-        const p = document.createElement("p");
-        p.className = "fixed";
-        p.textContent = f.label + ": " + (f.on ? "on" : "off") + " (change in All settings)";
-        featureList.appendChild(p);
-        continue;
-      }
-      const label = document.createElement("label");
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.checked = !!f.on;
-      box.disabled = !(info && info.siteEnabled) || !(info && info.enabled);
-      box.addEventListener("change", () => setSiteFeature(f.id, box.checked));
-      label.appendChild(box);
-      label.appendChild(document.createTextNode(f.label));
-      featureList.appendChild(label);
+      return base;
     }
   }
 
-  function renderGeneral() {
-    const on = networkOn();
-    generalEnabled.checked = on;
-    setGlow(on);
-    generalStatus.textContent = on
-      ? "List blocking is on for ordinary sites."
-      : "List blocking is off. Stream filters still run.";
-
+  function render() {
+    const on = extensionOn();
     const origin = currentOrigin();
     const host = origin ? hostOfOrigin(origin) : "";
-    const stream = !!(info && info.host === host && info.stream);
-    if (siteHost) siteHost.textContent = host || (pageChecked ? "No web page" : "Checking this page…");
+    const allowed = origin ? siteOff(origin) : false;
+    if (brandIcon) {
+      brandIcon.dataset.glow = on ? "on" : "off";
+      brandIcon.src = on ? "../icons/icon48-working.png" : "../icons/icon48-off.png";
+    }
+    siteHost.textContent = host || (pageChecked ? "No web page" : "Checking this page…");
 
+    // One status line, text first (never colour alone).
+    if (!origin) siteStatus.textContent = "";
+    else if (!on) siteStatus.textContent = "Off – turned off in settings";
+    else if (allowed) siteStatus.textContent = "Allowed – not blocking here";
+    else siteStatus.textContent = "✅ Protected";
+
+    allowSite.disabled = !origin || !on;
+    allowSite.setAttribute("aria-pressed", allowed ? "true" : "false");
+    allowSite.textContent = allowed ? "Block again" : "Allow this site";
     if (!origin) {
-      allowPage.disabled = true;
-      allowPage.setAttribute("aria-pressed", "false");
-      allowPage.textContent = "Allow this page";
       // Pages open from before the extension loaded have no content script to ask.
-      pageStatus.textContent = pageChecked
-        ? "Open a normal http(s) page to allow it. Already on one? Reload it."
-        : "Checking this page…";
+      pageStatus.textContent = pageChecked ? "Open a normal http(s) page to allow it. Already on one? Reload it." : "Checking this page…";
     } else {
-      const off = siteOff(origin);
-      allowPage.disabled = false;
-      allowPage.setAttribute("aria-pressed", off ? "true" : "false");
-      allowPage.textContent = off ? "Blocking this page" : "Allow this page";
-      if (stream) {
-        pageStatus.textContent = off
-          ? "Our own helpers are off on " + host + ". The vendored Twitch/YouTube blockers and the threat tier stay on."
-          : "Twitch / YouTube / Kick keep their own filters (lists never touch them).";
-      } else if (!on) {
-        pageStatus.textContent = off ? "Allowed for this site: " + origin : "List blocking is off everywhere; this switch still turns hide rules and page helpers off here.";
-      } else {
-        pageStatus.textContent = off
-          ? "Allowed for this site: " + origin
-          : "Lists apply on this page.";
-      }
+      pageStatus.textContent = saveError;
     }
 
-    renderFeatures();
-    listsStatus.textContent = formatListStatus(settings) + (saveError ? " " + saveError : "");
-    renderFeed();
+    const pending = pendingFix(host);
+    const canFix = !!origin && on && !allowed && fixIds().length > 0;
+    fixSite.hidden = !!pending;
+    fixSite.disabled = !canFix;
+    fixAsk.hidden = !pending;
+    fixNote.textContent = note || (origin && allowed && !pending ? "Already allowed: nothing is blocked here." : "");
+
+    if (listsStatus) listsStatus.textContent = listText();
+    if (feedStatus) feedStatus.textContent = feedText();
+    if (versionLine) versionLine.textContent = "Version " + packagedVersion();
   }
 
-  function loadSettings() {
+  function load() {
     return new Promise((resolve) => {
       try {
-        chrome.storage.local.get(Object.keys(DEFAULTS).concat([FEED_STATE_KEY, FEED_PAUSE_KEY, KEYS.settings, KEYS.overrides]), (got) => {
+        chrome.storage.local.get(Object.keys(DEFAULTS).concat([KEYS.settings, KEYS.overrides, KEYS.fix, KEYS.welcomed, KEYS.theme, FEED_STATE_KEY, FEED_PAUSE_KEY]), (got) => {
           void chrome.runtime.lastError;
-          const all = got || {};
-          feedState = all[FEED_STATE_KEY] || null;
-          feedPaused = all[FEED_PAUSE_KEY] === true;
-          stored = { [KEYS.settings]: all[KEYS.settings], [KEYS.overrides]: all[KEYS.overrides] };
-          const own = {};
-          for (const k of Object.keys(DEFAULTS)) if (k in all) own[k] = all[k];
-          settings = withDefaults(own);
-          resolve(settings);
+          all = Object.assign({}, DEFAULTS, got || {});
+          resolve();
         });
       } catch {
-        settings = withDefaults(null);
-        resolve(settings);
+        all = Object.assign({}, DEFAULTS);
+        resolve();
       }
     });
   }
 
-  // A failed write (quota, I/O) is shown in the list status line instead of
-  // being dropped; the setting still applies for this popup session.
-  let saveError = "";
-  function savePartial(patch) {
+  // A failed write (quota, I/O) is shown instead of being dropped; the change
+  // still applies for this popup session.
+  function save(patch, removeKeys) {
     return new Promise((resolve) => {
+      const done = (err) => {
+        saveError = err ? "Could not save: " + (err.message || String(err)) + "." : "";
+        Object.assign(all, patch);
+        for (const k of removeKeys || []) delete all[k];
+        resolve();
+      };
       try {
         chrome.storage.local.set(patch, () => {
           const err = chrome.runtime.lastError;
-          saveError = err ? "Could not save setting: " + (err.message || String(err)) + "." : "";
-          Object.assign(settings, patch);
-          for (const k of [KEYS.settings, KEYS.overrides]) if (k in patch) stored[k] = patch[k];
-          resolve();
+          if (!removeKeys || !removeKeys.length || !chrome.storage.local.remove) return done(err);
+          chrome.storage.local.remove(removeKeys, () => done(err || chrome.runtime.lastError));
         });
       } catch (e) {
-        saveError = "Could not save setting: " + String(e && e.message || e) + ".";
-        Object.assign(settings, patch);
-        for (const k of [KEYS.settings, KEYS.overrides]) if (k in patch) stored[k] = patch[k];
-        resolve();
+        done(e);
       }
     });
   }
@@ -276,13 +242,10 @@
   function notifyBackground(type, extra) {
     return new Promise((resolve) => {
       try {
-        chrome.runtime.sendMessage(
-          Object.assign({ source: "twitch-adblock-general", type }, extra || {}),
-          (response) => {
-            void chrome.runtime.lastError;
-            resolve(response || null);
-          },
-        );
+        chrome.runtime.sendMessage(Object.assign({ source: "twitch-adblock-general", type }, extra || {}), (response) => {
+          void chrome.runtime.lastError;
+          resolve(response || null);
+        });
       } catch {
         resolve(null);
       }
@@ -290,8 +253,7 @@
   }
 
   async function refreshInfo() {
-    const origin = currentOrigin();
-    const res = await notifyBackground("siteInfo", { origin: origin || "" });
+    const res = await notifyBackground("siteInfo", { origin: currentOrigin() || "" });
     info = res && res.ok ? res : null;
   }
 
@@ -305,7 +267,8 @@
     }).then(askPageOrigin);
   }
 
-  // Browser pages have no content script: no answer, no origin.
+  // Browser pages have no content script: no answer, no origin. Only the top
+  // frame is asked.
   function askPageOrigin(tab) {
     if (!tab || tab.url || typeof tab.id !== "number") return tab;
     return new Promise((resolve) => {
@@ -321,57 +284,105 @@
     });
   }
 
-  function settingsCopy() {
-    const s = stored[KEYS.settings];
-    const out = s && typeof s === "object" ? JSON.parse(JSON.stringify(s)) : { v: 1, enabled: true, features: {} };
-    if (!out.features || typeof out.features !== "object") out.features = {};
-    return out;
+  // The magenta dot: the worker says what a page guard blocked on this tab
+  // and clears the dot (the visitor has now seen it).
+  async function readSignal() {
+    if (!activeTab || typeof activeTab.id !== "number" || !signalLine) return;
+    const res = await notifyBackground("tabSignal", { tabId: activeTab.id });
+    const kind = res && res.ok && res.signal ? res.signal.kind : "";
+    signalLine.textContent = kind === "clipboard"
+      ? "Blocked: this page tried to put a command into your clipboard."
+      : kind === "popup" ? "Blocked a pop-up on this page." : "";
   }
 
-  async function setSiteFeature(id, on) {
-    const host = hostOfOrigin(currentOrigin() || "");
-    if (!host) return;
-    const o = overridesCopy();
-    const key = info && info.overrideHost ? info.overrideHost : host;
-    const entry = o[key] || {};
-    entry.features = Object.assign({}, entry.features, { [id]: on });
-    o[key] = entry;
-    await savePartial({ [KEYS.overrides]: o });
-    await refreshInfo();
-    renderGeneral();
+  async function applyRules() {
+    await notifyBackground("applyGeneralState");
   }
 
-  generalEnabled.addEventListener("change", async () => {
-    const on = generalEnabled.checked === true;
-    const s = settingsCopy();
-    s.features.network = on;
-    await savePartial({ [KEYS.settings]: s });
-    renderGeneral();
-    const res = await notifyBackground("applyGeneralState");
-    if (res && res.error) {
-      generalStatus.textContent = "Saved, but rules engine is not ready yet.";
-    }
-  });
-
-  // The site switch ("Allow this page"): turns every per-site feature off for
-  // this host (lists, hide rules, page helpers). Never touches stream-site
-  // allow rules, the threat tier or the vendored players.
-  allowPage.addEventListener("click", async () => {
+  allowSite.addEventListener("click", async () => {
     const origin = currentOrigin();
-    if (!origin) return;
-    const host = hostOfOrigin(origin);
+    const host = origin ? hostOfOrigin(origin) : "";
     if (!host) return;
     const o = overridesCopy();
-    const key = info && info.overrideHost && info.host === host ? info.overrideHost : host;
+    const key = overrideKey(host);
     const entry = Object.assign({}, o[key]);
     if (siteOff(origin)) delete entry.enabled;
     else entry.enabled = false;
     if (Object.keys(entry).length) o[key] = entry;
     else delete o[key];
-    await savePartial({ [KEYS.overrides]: o });
+    note = "";
+    await save({ [KEYS.overrides]: o }, [KEYS.fix]);
     await refreshInfo();
-    renderGeneral();
-    await notifyBackground("applyGeneralState");
+    render();
+    await applyRules();
+  });
+
+  fixSite.addEventListener("click", async () => {
+    const origin = currentOrigin();
+    const host = origin ? hostOfOrigin(origin) : "";
+    const ids = fixIds();
+    if (!host || !ids.length) return;
+    const o = overridesCopy();
+    const key = overrideKey(host);
+    const entry = Object.assign({}, o[key]);
+    const features = Object.assign({}, entry.features);
+    const prev = {};
+    for (const id of ids) {
+      prev[id] = typeof features[id] === "boolean" ? features[id] : null;
+      features[id] = false;
+    }
+    entry.features = features;
+    o[key] = entry;
+    note = "";
+    await save({ [KEYS.overrides]: o, [KEYS.fix]: { host: key, at: Date.now(), prev } });
+    await refreshInfo();
+    render();
+    await applyRules();
+    try {
+      fixYes.focus();
+    } catch {
+      // fake DOM
+    }
+  });
+
+  fixYes.addEventListener("click", async () => {
+    note = "";
+    await save({}, [KEYS.fix]);
+    render();
+    try {
+      if (typeof window !== "undefined" && window.close) window.close();
+    } catch {
+      // stays open
+    }
+  });
+
+  // "No": put back exactly the switches Fix changed (a change made on the
+  // settings page in between is kept), then point to Allow this site.
+  fixNo.addEventListener("click", async () => {
+    const f = all[KEYS.fix];
+    const o = overridesCopy();
+    if (f && typeof f === "object" && f.prev && o[f.host]) {
+      const entry = Object.assign({}, o[f.host]);
+      const features = Object.assign({}, entry.features);
+      for (const id of Object.keys(f.prev)) {
+        if (f.prev[id] === null) delete features[id];
+        else features[id] = f.prev[id];
+      }
+      if (Object.keys(features).length) entry.features = features;
+      else delete entry.features;
+      if (Object.keys(entry).length) o[f.host] = entry;
+      else delete o[f.host];
+    }
+    note = "Turned back on. If the site still breaks, use Allow this site.";
+    await save({ [KEYS.overrides]: o }, [KEYS.fix]);
+    await refreshInfo();
+    render();
+    await applyRules();
+    try {
+      allowSite.focus();
+    } catch {
+      // fake DOM
+    }
   });
 
   if (openSettings) {
@@ -384,33 +395,27 @@
     });
   }
 
-  updateLists.addEventListener("click", async () => {
-    updateLists.disabled = true;
-    listsStatus.textContent = "Checking filter lists…";
-    const now = Date.now();
-    await savePartial({
-      [KEYS.listUpdateRequestAt]: now,
-      [KEYS.listStatus]: "Checking filter lists…",
+  if (welcomeClose) {
+    welcomeClose.addEventListener("click", () => {
+      welcome.hidden = true;
     });
-    const res = await notifyBackground("updateLists", { requestedAt: now });
-    await loadSettings();
-    if (res && res.ok) {
-      listsStatus.textContent = formatListStatus(settings);
-    } else {
-      listsStatus.textContent = (settings[KEYS.listStatus] || "Update failed.") + " Packed lists still active.";
-    }
-    updateLists.disabled = false;
-    renderGeneral();
-  });
+  }
 
   (async function init() {
-    // A busy page answers late, so show the stored settings before asking it.
-    await loadSettings();
-    renderGeneral();
+    // A busy page answers late, so show the stored state before asking it.
+    await load();
+    applyTheme();
+    // One small "You're protected" card on the very first open, never again.
+    if (welcome && all[KEYS.welcomed] !== true) {
+      welcome.hidden = false;
+      await save({ [KEYS.welcomed]: true });
+    }
+    render();
     await queryActiveTab();
     pageChecked = true;
     await refreshInfo();
-    renderGeneral();
-    await notifyBackground("applyGeneralState");
+    render();
+    await readSignal();
+    await applyRules();
   })();
 })();

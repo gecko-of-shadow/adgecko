@@ -1,0 +1,191 @@
+/* Gecko Adblock popup (design rules, update 2026-11-02).
+   Neon purple by default; a high-contrast theme turns on by itself with
+   prefers-contrast: more (unless "Purple" is picked in settings) or by the
+   manual switch in settings (data-theme="contrast"). With forced-colors the
+   system palette wins. No animations, no web fonts, no images but the icon. */
+:root {
+  color-scheme: dark;
+  --bg: #0e0b14;
+  --panel: #171222;
+  --line: #3b2a5c;
+  --text: #f3effb;
+  --muted: #bcb0d4;
+  --accent: #8f3dff;
+  --accent-hover: #a35cff;
+  --accent-text: #ffffff;
+  --outline: #b88aff;
+  --focus: #e0c8ff;
+  --glow: rgba(143, 61, 255, 0.45);
+}
+:root[data-theme="contrast"] {
+  --bg: #000000;
+  --panel: #000000;
+  --line: #ffffff;
+  --text: #ffffff;
+  --muted: #ffffff;
+  --accent: #ffd400;
+  --accent-hover: #ffe24d;
+  --accent-text: #000000;
+  --outline: #ffffff;
+  --focus: #ffd400;
+  --glow: transparent;
+}
+@media (prefers-contrast: more) {
+  :root:not([data-theme="purple"]) {
+    --bg: #000000;
+    --panel: #000000;
+    --line: #ffffff;
+    --text: #ffffff;
+    --muted: #ffffff;
+    --accent: #ffd400;
+    --accent-hover: #ffe24d;
+    --accent-text: #000000;
+    --outline: #ffffff;
+    --focus: #ffd400;
+    --glow: transparent;
+  }
+}
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+body {
+  width: 300px;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { padding: 14px; }
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#brand-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+#brand-icon[data-glow="on"] { box-shadow: 0 0 10px 1px var(--glow); }
+h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+.gear {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.gear:hover { border-color: var(--line); }
+
+.host {
+  margin: 14px 0 2px;
+  font-size: 18px;
+  font-weight: 650;
+  word-break: break-all;
+}
+.status {
+  min-height: 1.3em;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.card {
+  margin: 0 0 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: center;
+}
+.card-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.welcome { text-align: left; }
+.welcome .card-title { font-weight: 650; }
+.question { margin: 10px 0 6px; }
+.note {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.note:empty { display: none; }
+.pair { display: flex; gap: 8px; }
+.pair button { flex: 1; }
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+button.primary, button.secondary {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+button.primary {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+button.primary:hover { background: var(--accent-hover); }
+button.secondary,
+button.primary[aria-pressed="true"] {
+  border: 1px solid var(--outline);
+  background: transparent;
+  color: var(--text);
+}
+button.big {
+  padding: 11px 12px;
+  font-size: 15px;
+}
+button.link {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--outline);
+  text-decoration: underline;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+details { margin-top: 12px; }
+summary {
+  color: var(--outline);
+  cursor: pointer;
+  text-align: right;
+  font-size: 13px;
+}
+.credit { opacity: 0.85; }
+
+/* Visible keyboard focus everywhere. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Windows high contrast and similar: use the system colours. */
+@media (forced-colors: active) {
+  :root { color-scheme: light dark; }
+  html, body, .card { background: Canvas; color: CanvasText; }
+  .card, .gear, button.primary, button.secondary { border: 1px solid ButtonText; }
+  button.primary, button.secondary { background: ButtonFace; color: ButtonText; }
+  button.primary[aria-pressed="true"] { border-width: 2px; }
+  .note, summary, button.link { color: CanvasText; }
+  #brand-icon[data-glow="on"] { box-shadow: none; }
+  :focus-visible { outline: 2px solid Highlight; }
+}

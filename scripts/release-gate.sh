@@ -82,6 +82,7 @@ REQUIRED=(
   manifest.json
   src/popup.html
   src/popup.js
+  src/popup.css
   src/general-settings.js
   src/general-background.js
   src/vendor/video-swap-new.user.js
@@ -139,7 +140,7 @@ REQUIRED=(
 # Shippable paths. Cosmetic hide, popup worker, list rules, and stream exclusion module.
 # Must cover every path scripts/lib/package_files.py derives (test/packaging.test.js
 # checks that); settings page, guards, threat tier and signed-feed client added 2026-11-02.
-ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/settings\.html|src/settings\.js|src/settings/(features|flags)\.js|src/guards/(clipboard|popups)\.js|src/threat/(psl|protected-hosts|compile)\.js|src/feed/(config|keys|canonical|schema|verify|compile|client)\.js|src/rules/threat-(network|snapshot|meta)\.json|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|cosmetic-parse|exclusions|filter-options|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/vendor/ubo-youtube(-isolated)?\.js|src/vendor/ubo-youtube\.css|src/vendor/ubo-youtube-meta\.json|src/vendor/LICENSE-uBlock\.md|src/vendor/LICENSE-uBlock-GPLv3\.txt|src/rules/ubo-youtube-network\.json|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/rules/cosmetic-rules\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/youtube-ads\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/popup\.css|src/settings\.html|src/settings\.js|src/settings/(features|flags)\.js|src/guards/(clipboard|popups)\.js|src/threat/(psl|protected-hosts|compile)\.js|src/feed/(config|keys|canonical|schema|verify|compile|client)\.js|src/rules/threat-(network|snapshot|meta)\.json|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|cosmetic-parse|exclusions|filter-options|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/vendor/ubo-youtube(-isolated)?\.js|src/vendor/ubo-youtube\.css|src/vendor/ubo-youtube-meta\.json|src/vendor/LICENSE-uBlock\.md|src/vendor/LICENSE-uBlock-GPLv3\.txt|src/rules/ubo-youtube-network\.json|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/rules/cosmetic-rules\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/youtube-ads\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
 
 # YouTube is the beta script (spinner + search cards). The Twitch vendor stays at main.
 PLAYBACK_FILES=(

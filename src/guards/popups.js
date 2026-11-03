@@ -120,7 +120,7 @@ function installPopupGuard(target) {
   target.siteOf = siteOf;
   target.sameSiteOrAllowed = sameSiteOrAllowed;
 
-  // env: { window, document, navigator, location, now(), flagOn() }
+  // env: { window, document, navigator, location, now(), flagOn(), signal() }
   target.install = function install(env) {
     const win = env.window;
     const now = env.now || (() => apply(dateNow, Date, []));
@@ -201,7 +201,10 @@ function installPopupGuard(target) {
                 location: env.location, activation, opensThisGesture: fresh ? opens : 0,
                 lastClickTarget: fresh ? fresh.target : null, lastClickInteractive: fresh ? fresh.interactive : true,
               });
-              if (reason) return null;
+              if (reason) {
+                if (env.signal) env.signal();
+                return null;
+              }
               if (fresh) opens += 1;
             }
           } catch {
@@ -256,7 +259,16 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
     window.dispatchEvent(new Event("gk-r1"));
     const api = {};
     installPopupGuard(api);
-    api.install({ window, document, navigator: typeof navigator !== "undefined" ? navigator : null, location, flagOn: () => on });
+    // "Blocked something" ping for the toolbar dot over the private port.
+    const portPost = typeof MessagePort === "function" ? MessagePort.prototype.postMessage : null;
+    const signal = () => {
+      try {
+        if (port) applyFn(portPost || port.postMessage, port, [{ g: "popup" }]);
+      } catch {
+        // no dot
+      }
+    };
+    api.install({ window, document, navigator: typeof navigator !== "undefined" ? navigator : null, location, flagOn: () => on, signal });
   } catch {
     // guard not installed
   }

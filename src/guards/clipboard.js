@@ -485,9 +485,20 @@ if (typeof window !== "undefined" && typeof document !== "undefined" && typeof n
     };
     window.addEventListener(PORT_EVENT, take, true);
     window.dispatchEvent(new Event("gk-r1"));
+    // "Blocked something" ping for the toolbar dot, over the same private port
+    // (postMessage captured now, before page scripts).
+    const portPost = typeof MessagePort === "function" ? MessagePort.prototype.postMessage : null;
+    const signal = () => {
+      try {
+        if (port) applyFn(portPost || port.postMessage, port, [{ g: "clipboard" }]);
+      } catch {
+        // no dot
+      }
+    };
+    const notice = clipboardGuardNotice(document);
     const api = {};
     installClipboardGuard(api);
-    api.install({ window, document, navigator, location, notify: clipboardGuardNotice(document), flagOn: () => on });
+    api.install({ window, document, navigator, location, notify: (hit) => { notice(hit); signal(); }, flagOn: () => on });
   } catch {
     // guard not installed; the page works as before
   }

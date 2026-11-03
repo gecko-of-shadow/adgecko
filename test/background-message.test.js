@@ -6,7 +6,7 @@ function assert(c, l) { if (!c) throw new Error(l); }
 
 const EXT = "abcdefghijklmnopabcdefghijklmnop";
 
-function loadWorker() {
+function loadWorker(rec = { badges: [], session: {} }) {
   const store = {};
   const listener = () => ({ addListener() {} });
   let onMessage = null;
@@ -23,7 +23,10 @@ function loadWorker() {
         set(items, cb) { Object.assign(store, items); if (cb) cb(); },
         remove(_k, cb) { if (cb) cb(); },
       },
-      session: { get(_k, cb) { cb({ listRefreshStarted: true }); }, set(_o, cb) { if (cb) cb(); } },
+      session: {
+        get(k, cb) { const out = { listRefreshStarted: true }; for (const key of [].concat(k || [])) if (key in rec.session) out[key] = structuredClone(rec.session[key]); cb(out); },
+        set(o, cb) { Object.assign(rec.session, structuredClone(o)); if (cb) cb(); },
+      },
       onChanged: listener(),
     },
     declarativeNetRequest: {
@@ -31,7 +34,11 @@ function loadWorker() {
       updateDynamicRules(_o, cb) { if (cb) cb(); },
       updateEnabledRulesets(_o, cb) { if (cb) cb(); },
     },
-    action: { setIcon(_o, cb) { if (cb) cb(); }, setTitle() {} },
+    action: {
+      setIcon(_o, cb) { if (cb) cb(); }, setTitle() {},
+      setBadgeText(o, cb) { rec.badges.push(["text", o.tabId, o.text]); if (cb) cb(); },
+      setBadgeBackgroundColor(o, cb) { rec.badges.push(["color", o.tabId, o.color]); if (cb) cb(); },
+    },
   };
   const importScripts = (...names) => {
     for (const n of names) (0, eval)(Deno.readTextFileSync(new URL("../src/" + n, import.meta.url)));
@@ -66,4 +73,31 @@ Deno.test("background messages: content scripts and other extensions are ignored
       assert(r.keepOpen === undefined && r.response === undefined, type + " from " + JSON.stringify(sender) + " was handled");
     }
   }
+});
+
+// Design rules: a quiet magenta dot on the tab where a page guard blocked
+// something. Content scripts may only report {kind} for their own tab.
+Deno.test("background messages: a guard event from our content script sets that tab's dot; the popup reads and clears it", async () => {
+  const rec = { badges: [], session: {} };
+  const onMessage = loadWorker(rec);
+  const tabSender = { id: EXT, tab: { id: 7 }, frameId: 0, url: "https://news.example/" };
+  let r = await send(onMessage, { source: "twitch-adblock-general", type: "guardEvent", kind: "clipboard" }, tabSender);
+  assert(r.keepOpen === undefined && r.response === undefined, "no answer to a content script");
+  assert(rec.badges.some((b) => b[0] === "text" && b[1] === 7 && b[2] === " ") && rec.badges.some((b) => b[0] === "color" && b[1] === 7 && /^#e8/.test(b[2])), JSON.stringify(rec.badges));
+  assert(rec.session.tabSignals && rec.session.tabSignals[7].kind === "clipboard", "remembered for the popup");
+  // Narrow: unknown kinds, no tab, other extensions: nothing.
+  const before = rec.badges.length;
+  await send(onMessage, { source: "twitch-adblock-general", type: "guardEvent", kind: "flags" }, { id: EXT, tab: { id: 8 } });
+  await send(onMessage, { source: "twitch-adblock-general", type: "guardEvent", kind: "popup" }, { id: EXT });
+  await send(onMessage, { source: "twitch-adblock-general", type: "guardEvent", kind: "popup" }, { id: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", tab: { id: 9 } });
+  assert(rec.badges.length === before, "ignored: " + JSON.stringify(rec.badges.slice(before)));
+  // A content script cannot read or clear signals.
+  r = await send(onMessage, { source: "twitch-adblock-general", type: "tabSignal", tabId: 7 }, tabSender);
+  assert(r.response === undefined, "tabSignal answered a content script");
+  // The popup reads it once and the dot is cleared.
+  r = await send(onMessage, { source: "twitch-adblock-general", type: "tabSignal", tabId: 7 }, { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" });
+  assert(r.response && r.response.ok && r.response.signal.kind === "clipboard", JSON.stringify(r));
+  assert(rec.badges.at(-1)[0] === "text" && rec.badges.at(-1)[1] === 7 && rec.badges.at(-1)[2] === "", "dot cleared");
+  r = await send(onMessage, { source: "twitch-adblock-general", type: "tabSignal", tabId: 7 }, { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" });
+  assert(r.response.signal === null, "read once");
 });
