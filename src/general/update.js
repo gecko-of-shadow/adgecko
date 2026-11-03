@@ -134,10 +134,11 @@ function installGeneralAdblockUpdate(target) {
 
   // Security review L-3: a list line naming a public suffix ("co.uk") or a
   // private / loopback / link-local IPv4 address is never turned into a rule.
-  // Same data as the threat tier (src/threat/psl.js; skipped when not loaded,
-  // e.g. in old harnesses). Shared-platform parents (github.io, ...) are left
-  // to the lists here: this tier is priority 1, never blocks navigations, and
-  // "Allow this page" overrides it. The packer applies the same check.
+  // ICANN suffixes from src/threat/psl.js (skipped when not loaded, e.g. in old
+  // harnesses). Private suffixes and shared-platform parents (github.io,
+  // dynamic-DNS parents, ...) are left to the lists here: this tier is
+  // priority 1, never blocks navigations, and "Allow this page" overrides it.
+  // The packer applies the same check.
   function localAddress(d) {
     const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(d);
     if (!m) return false;
@@ -152,7 +153,7 @@ function installGeneralAdblockUpdate(target) {
     if (!d.split(".").every(Boolean)) return false;
     if (localAddress(d)) return false;
     const PS = typeof globalThis !== "undefined" && globalThis.GeckoPublicSuffix;
-    if (PS && PS.isPublicSuffix(d)) return false;
+    if (PS && PS.isIcannSuffix(d)) return false;
     return true;
   }
 
@@ -330,7 +331,11 @@ function installGeneralAdblockUpdate(target) {
 
   // Rebuild the dynamic threat rules from the threat lists' payloads. Errors
   // are recorded, never thrown: the static "threat" ruleset stays the floor.
-  async function applyThreatRules(deps, payloads, now) {
+  // opts.downloaded: a threat list was freshly downloaded in this run. Only
+  // then may a held jump be confirmed (follow-up review: re-applying the same
+  // stored payloads, e.g. switching the threat tier off and on, must not
+  // count as "seen again").
+  async function applyThreatRules(deps, payloads, now, opts) {
     const TC = typeof globalThis !== "undefined" && globalThis.GeckoThreatCompile;
     if (!TC) return { ok: false, reason: "threat compiler not loaded" };
     // Feature "threatTier" switched off: no refreshed threat rules either.
@@ -367,16 +372,18 @@ function installGeneralAdblockUpdate(target) {
         } catch {
           st = {};
         }
-        const seenBefore = st.threatRejectedNew > 0 && Math.abs(added - st.threatRejectedNew) / st.threatRejectedNew <= CONFIRM_RATIO;
+        const seenBefore = !!(opts && opts.downloaded) && st.threatRejectedNew > 0 && st.threatHeldAt > 0 && now > st.threatHeldAt &&
+          Math.abs(added - st.threatRejectedNew) / st.threatRejectedNew <= CONFIRM_RATIO;
         if (tooMany && !seenBefore) {
           const reason = "too many new threat hosts in one refresh (" + added + " new, " + previous.size + " before); kept the previous rules";
-          await deps.setState({ threatError: reason, threatRejectedNew: added });
+          // A held jump confirmed only by a later download keeps its first hold time.
+          await deps.setState({ threatError: reason, threatRejectedNew: added, threatHeldAt: st.threatRejectedNew > 0 && st.threatHeldAt > 0 ? st.threatHeldAt : now });
           return { ok: false, reason, held: true };
         }
       }
       const removeRuleIds = previousRules.map((r) => r.id);
       await deps.updateDynamicRules({ removeRuleIds, addRules: compiled.rules });
-      await deps.setState({ threatRules: compiled.rules.length, threatHosts: compiled.accepted.length, threatRejected: compiled.rejected.length, threatError: "", threatRejectedNew: 0, threatUpdatedAt: now });
+      await deps.setState({ threatRules: compiled.rules.length, threatHosts: compiled.accepted.length, threatRejected: compiled.rejected.length, threatError: "", threatRejectedNew: 0, threatHeldAt: 0, threatUpdatedAt: now });
       return { ok: true, rules: compiled.rules.length };
     } catch (e) {
       const reason = String(e && e.message || e);
@@ -784,7 +791,9 @@ function installGeneralAdblockUpdate(target) {
     // this swap ran: never turn the packed lists back on then.)
     if (deps.enabled()) await deps.setStaticEnabled(true);
     await deps.setState({ dynamicActive: true, updatedAt: now, ruleCount: addRules.length, domainCount: total, rebuiltForParser: PARSER_VERSION });
-    await applyThreatRules(deps, payloads, now);
+    const TCX = typeof globalThis !== "undefined" && globalThis.GeckoThreatCompile;
+    const downloaded = !!TCX && Object.keys(fresh || {}).some((n) => TCX.THREAT_LISTS.includes(n));
+    await applyThreatRules(deps, payloads, now, { downloaded });
     return { ok: true, ran: true, rules: addRules.length, domains: total };
   }
 
@@ -848,6 +857,11 @@ function installGeneralAdblockUpdate(target) {
     const existing = (await deps.getDynamicRules()) || [];
     const removeRuleIds = existing.filter((r) => isThreatRule(r.id)).map((r) => r.id);
     if (removeRuleIds.length) await deps.updateDynamicRules({ removeRuleIds, addRules: [] });
+    try {
+      await deps.setState({ threatRejectedNew: 0, threatHeldAt: 0 });
+    } catch {
+      // the next refresh writes it again
+    }
     return { ok: true, removed: removeRuleIds.length };
   }
 
@@ -895,7 +909,7 @@ function installGeneralAdblockUpdate(target) {
     const removeRuleIds = existing.filter((r) => isOurRule(r.id) || isThreatRule(r.id)).map((r) => r.id);
     if (removeRuleIds.length) await deps.updateDynamicRules({ removeRuleIds, addRules: [] });
     if (deps.enabled()) await deps.setStaticEnabled(true);
-    await deps.setState({ lists: {}, dynamicActive: false, revertedAt: now, lastRunAt: now, lastRejected: {}, lastErrors: {}, threatRules: 0, threatHosts: 0, threatError: "" });
+    await deps.setState({ lists: {}, dynamicActive: false, revertedAt: now, lastRunAt: now, lastRejected: {}, lastErrors: {}, threatRules: 0, threatHosts: 0, threatError: "", threatRejectedNew: 0, threatHeldAt: 0 });
     if (deps.revertCosmetic) {
       try {
         await deps.revertCosmetic();

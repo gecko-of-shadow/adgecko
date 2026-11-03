@@ -292,7 +292,8 @@ def load_psl_subset() -> dict:
     start = text.index("/*PSL-SUBSET-START*/") + len("/*PSL-SUBSET-START*/")
     end = text.index("/*PSL-SUBSET-END*/")
     data = json.loads(text[start:end])
-    return {"generic": set(data["generic"]), "wildcard": set(data["wildcardTlds"]), "suffixes": set(data["suffixes"])}
+    # ICANN suffixes only, like looksLikeDomain() (isIcannSuffix) at run time.
+    return {"wildcard": set(data["wildcardTlds"]), "suffixes": set(data["suffixes"])}
 
 
 PSL = load_psl_subset()
@@ -307,7 +308,7 @@ def is_public_suffix(host: str) -> bool:
     labels = h.split(".")
     if len(labels) != 2:
         return False
-    return (len(labels[1]) == 2 and labels[0] in PSL["generic"]) or labels[1] in PSL["wildcard"]
+    return labels[1] in PSL["wildcard"]
 
 
 def is_local_address(host: str) -> bool:

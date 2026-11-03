@@ -20,7 +20,8 @@ if (!keyPath || !feedPath) {
   Deno.exit(2);
 }
 const ROOT = new URL("..", import.meta.url);
-for (const f of ["src/threat/protected-hosts.js", "src/feed/canonical.js", "src/feed/schema.js"]) await import(new URL(f, ROOT).href);
+// psl.js first: protected-hosts.js refuses every host without it (follow-up review).
+for (const f of ["src/threat/psl.js", "src/threat/protected-hosts.js", "src/feed/canonical.js", "src/feed/schema.js"]) await import(new URL(f, ROOT).href);
 const C = globalThis.GeckoFeedCanonical;
 const S = globalThis.GeckoFeedSchema;
 

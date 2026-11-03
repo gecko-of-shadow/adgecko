@@ -27,16 +27,22 @@ const REJECT = ["co.uk", "com.au", "co.jp", "github.io", "githubusercontent.com"
   "amazonaws.com", "s3.amazonaws.com", "cloudfront.net", "blogspot.com", "netlify.app", "vercel.app", "herokuapp.com",
   "web.app", "firebaseapp.com", "appspot.com", "azurewebsites.net", "blob.core.windows.net", "core.windows.net", "windows.net",
   "docs.google.com", "drive.google.com", "sites.google.com", "github.com", "dropbox.com", "sharepoint.com", "discordapp.com", "ngrok.io",
-  "duckdns.org", "x.ck", "pisz.pl", "uk", "com"];
+  "duckdns.org", "x.ck", "pisz.pl", "uk", "com",
+  // PSL PRIVATE parents the first subset missed (follow-up review).
+  "ru.com", "webhop.me", "3utilities.com", "cprapid.com", "fastvps-server.com"];
 // Customers' own hosts under those stay blockable.
 const ALLOW = ["evil.github.io", "phish.co.uk", "bad.blogspot.com", "d123abc.cloudfront.net", "malware-drop.example", "x.pages.dev",
-  "bucket.s3.amazonaws.com", "t.co", "a.b.c.example", "203.0.113.5", "evil.ngrok.io", "tenant.sharepoint.com"];
+  "bucket.s3.amazonaws.com", "t.co", "a.b.c.example", "203.0.113.5", "evil.ngrok.io", "tenant.sharepoint.com",
+  // Real sites a generic "<label>.<cc>" rule wrongly called suffixes (follow-up review).
+  "web.de", "id.me", "pro.de", "me.ly", "co.nf", "evil.ru.com"];
 
 Deno.test("psl: public suffixes, shared platforms, big sites and their parents are refused; their customers' hosts are not", () => {
   for (const h of REJECT) assert(PS.suffixReason(h), "should be refused: " + h);
   for (const h of ALLOW) assert(PS.suffixReason(h) === null, "should be blockable: " + h + " (" + PS.suffixReason(h) + ")");
   for (const h of REJECT) assert(PH.protectedReason(h), "threat check refuses " + h);
-  for (const h of ALLOW) assert(PH.protectedReason(h) === null, "threat check blocks " + h + ": " + PH.protectedReason(h));
+  // The threat tier keeps its older, stricter two-label heuristic ("co.<tld>" etc.): co.nf stays refused there.
+  for (const h of ALLOW.filter((x) => x !== "co.nf")) assert(PH.protectedReason(h) === null, "threat check blocks " + h + ": " + PH.protectedReason(h));
+  assert(/public suffix/.test(PH.protectedReason("co.nf")), "heuristic still applies in the threat tier");
   assert(PS.registrableDomain("a.b.example.co.uk") === "example.co.uk" && PS.registrableDomain("x.github.io") === "x.github.io" && PS.registrableDomain("www.news.example") === "news.example", "registrable domain");
 });
 
@@ -87,11 +93,12 @@ Deno.test("ordinary list tier: public suffixes and non-public IPs never become r
   const text = ["||co.uk^", "||phish.co.uk^", "||192.168.0.1^", "||203.0.113.44^", "0.0.0.0 10.0.0.5", "0.0.0.0 ads.example", "||github.io^$third-party", "||0.0.0.1^", "duckdns.org", "||t.co^"].join("\n");
   const p = U.parseEntries(text);
   const all = [...p.domains, ...p.scoped.map((e) => e[0])].sort();
-  assert(JSON.stringify(all) === JSON.stringify(["203.0.113.44", "ads.example", "phish.co.uk", "t.co"]), JSON.stringify(all));
+  // ICANN suffixes only here: private parents (github.io, duckdns.org) stay up to the lists.
+  assert(JSON.stringify(all) === JSON.stringify(["203.0.113.44", "ads.example", "duckdns.org", "github.io", "phish.co.uk", "t.co"]), JSON.stringify(all));
   // A payload stored by an older version still holding them: filtered when rules are built.
-  const rules = U.buildListRules(["co.uk", "ok.example", "127.0.0.1"], [["github.io", "p=3p|t=|x="]]);
+  const rules = U.buildListRules(["co.uk", "ok.example", "127.0.0.1"], [["com.au", "p=3p|t=|x="], ["github.io", "p=3p|t=|x="]]);
   const domains = rules.flatMap((r) => r.condition.requestDomains);
-  assert(JSON.stringify(domains) === JSON.stringify(["ok.example"]), JSON.stringify(domains));
+  assert(JSON.stringify(domains) === JSON.stringify(["ok.example", "github.io"]), JSON.stringify(domains));
   // Packer parity on the same hosts.
   const hosts = ["co.uk", "phish.co.uk", "192.168.0.1", "203.0.113.44", "10.0.0.5", "ads.example", "github.io", "0.0.0.1", "duckdns.org", "t.co", "a.se", "x.ck", "pisz.pl", "evil.github.io", "com.au", "blogspot.com", "s3.amazonaws.com", "amazonaws.com"];
   const script = [
@@ -114,10 +121,14 @@ Deno.test("every host in the shipped threat ruleset and snapshot passes the new 
 });
 
 Deno.test("psl.js: the generated data is small, MPL-attributed and names its PSL version", () => {
-  assert(pslSource.length < 30000, "psl.js size " + pslSource.length);
+  // Loaded only by the worker and the settings page, never by web pages.
+  assert(pslSource.length < 120000, "psl.js size " + pslSource.length);
+  assert(!manifest.content_scripts.some((c) => (c.js || []).includes("src/threat/psl.js")), "psl.js must not be a content script");
   assert(/Mozilla Public License 2\.0/.test(pslSource) && /VERSION \d{4}-\d{2}-\d{2}/.test(pslSource), "attribution + version");
   const d = PS.DATA;
-  assert(d.generic.includes("co") && d.generic.includes("com") && !d.generic.includes("t"), "generic labels");
+  assert(d.generic.includes("co") && d.generic.includes("com") && !d.generic.includes("t"), "generic labels (popup guard data)");
+  assert(d.suffixes.includes("co.uk") && !d.suffixes.includes("github.io") && d.privateSuffixes.includes("github.io") && d.privateSuffixes.includes("ru.com"), "ICANN and private parts");
+  assert(PS.isIcannSuffix("co.uk") && !PS.isIcannSuffix("github.io") && PS.isPublicSuffix("github.io") && !PS.isPublicSuffix("web.de"), "ICANN vs public");
   assert(["github.io", "amazonaws.com", "blogspot.com", "pages.dev"].every((x) => d.platforms.includes(x)), "platform list");
   assert(manifest.background.service_worker === "src/general-background.js", "worker");
 });
@@ -146,12 +157,20 @@ Deno.test("threat refresh: too many new hosts at once keep the previous rules; t
   // 30% new (> 20%): held.
   let r = await U.applyThreatRules(d, { urlhaus_hosts: { domains: before.concat(hostsN(300, "b")), scoped: [] } }, 1);
   assert(r.ok === false && r.held && blockedHosts(d).length === 1000 && d.state.threatRejectedNew === 300 && /too many new threat hosts/.test(d.state.threatError), JSON.stringify(r));
-  // Next refresh, similar jump (310, within 10%): accepted as real.
-  r = await U.applyThreatRules(d, { urlhaus_hosts: { domains: before.concat(hostsN(310, "b")), scoped: [] } }, 2);
+  // Re-applying stored payloads (threat tier off and on) is not a new download: still held.
+  r = await U.applyThreatRules(d, { urlhaus_hosts: { domains: before.concat(hostsN(305, "b")), scoped: [] } }, 2);
+  assert(r.held && blockedHosts(d).length === 1000, "re-applied payloads confirmed a held jump");
+  // Next refresh with a fresh download, similar jump (310, within 10%): accepted as real.
+  r = await U.applyThreatRules(d, { urlhaus_hosts: { domains: before.concat(hostsN(310, "b")), scoped: [] } }, 3, { downloaded: true });
   assert(r.ok && blockedHosts(d).length === 1310 && d.state.threatRejectedNew === 0 && d.state.threatError === "", JSON.stringify(r));
   // Small change (5% new): applied at once.
-  r = await U.applyThreatRules(d, { urlhaus_hosts: { domains: before.concat(hostsN(310, "b"), hostsN(60, "c")), scoped: [] } }, 3);
+  r = await U.applyThreatRules(d, { urlhaus_hosts: { domains: before.concat(hostsN(310, "b"), hostsN(60, "c")), scoped: [] } }, 4);
   assert(r.ok && blockedHosts(d).length === 1370, "small change applied");
+  // A hold is forgotten when the threat rules are removed (switch off / revert).
+  await U.applyThreatRules(d, { urlhaus_hosts: { domains: before.concat(hostsN(310, "b"), hostsN(60, "c"), hostsN(900, "d")), scoped: [] } }, 5);
+  assert(d.state.threatRejectedNew === 900, "held again");
+  await U.removeThreatRules(d);
+  assert(d.state.threatRejectedNew === 0 && d.state.threatHeldAt === 0, "removeThreatRules clears the hold");
 });
 
 Deno.test("threat refresh: absolute cap, and the packed ruleset is the baseline on the first refresh", async () => {
@@ -164,4 +183,10 @@ Deno.test("threat refresh: absolute cap, and the packed ruleset is the baseline 
   assert(r2.held && blockedHosts(first).length === 0, "first refresh compared with the packed ruleset");
   const r3 = await U.applyThreatRules(capDeps([], hostsN(1000, "a")), { urlhaus_hosts: { domains: hostsN(1000, "a").concat(hostsN(50, "z")), scoped: [] } }, 1);
   assert(r3.ok, "first refresh close to the packed set applies");
+});
+
+Deno.test("feed-sign.mjs loads psl.js before protected-hosts.js (follow-up review)", () => {
+  const src = Deno.readTextFileSync(new URL("../scripts/feed-sign.mjs", import.meta.url));
+  const i = src.indexOf('"src/threat/psl.js"');
+  assert(i > 0 && i < src.indexOf('"src/threat/protected-hosts.js"'), "feed-sign would refuse every host");
 });

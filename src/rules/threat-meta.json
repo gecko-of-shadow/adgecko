@@ -1,5 +1,5 @@
 {
-  "built_at_utc": "2026-11-03T05:23:38Z",
+  "built_at_utc": "2026-11-03T06:23:46Z",
   "lists_packed_at_utc": "2026-11-03T00:07:22Z",
   "priority": 2000010,
   "resource_types": [
@@ -43,10 +43,37 @@
       "added": 12082
     }
   },
-  "hosts_total": 15925,
+  "hosts_total": 15920,
   "popup_only_hosts_total": 0,
-  "rule_count": 200,
-  "rejected_total": 0,
-  "rejected_by_reason": {},
-  "rejected": []
+  "rule_count": 199,
+  "rejected_total": 5,
+  "rejected_by_reason": {
+    "public suffix 3utilities.com": 1,
+    "public suffix ru.com": 1,
+    "public suffix fastvps-server.com": 1,
+    "public suffix webhop.me": 1,
+    "public suffix cprapid.com": 1
+  },
+  "rejected": [
+    {
+      "host": "3utilities.com",
+      "reason": "public suffix 3utilities.com"
+    },
+    {
+      "host": "ru.com",
+      "reason": "public suffix ru.com"
+    },
+    {
+      "host": "fastvps-server.com",
+      "reason": "public suffix fastvps-server.com"
+    },
+    {
+      "host": "webhop.me",
+      "reason": "public suffix webhop.me"
+    },
+    {
+      "host": "cprapid.com",
+      "reason": "public suffix cprapid.com"
+    }
+  ]
 }
