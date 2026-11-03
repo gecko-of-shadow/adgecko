@@ -1,7 +1,7 @@
 // Threat tier: known-bad hosts -> DNR block rules at priority 2,000,010.
 // Above the 2,000,000 stream-site allows (frame allowAllRequests on YouTube and
-// Kick, the Twitch and player-CDN allows) and the 2,000,001 YouTube doubleclick
-// block, so a threat host is blocked on stream pages too; below the 3,000,000
+// Kick, the Twitch and player-CDN allows) and the 2,000,001 YouTube ad-host
+// block (rule id 4), so a threat host is blocked on stream pages too; below the 3,000,000
 // list-download allow. "Allow this page" (10,000) does not let threat hosts
 // through; the user allow-domain override (2,000,020) does.
 // Every host goes through GeckoProtectedHosts first (src/threat/protected-hosts.js).

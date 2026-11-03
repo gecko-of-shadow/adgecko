@@ -83,6 +83,19 @@ Deno.test("per-site overrides: site switch, per-feature override, parent domains
   assert(eq(F.normalizeOverrides({ "A.Example.": { enabled: false, features: { threatTier: false, cosmetic: false, bogus: true } } }), { "a.example": { enabled: false, features: { cosmetic: false } } }), "only per-site features stored");
 });
 
+Deno.test("the site switch on a stream site turns our own helpers off there (vendored ones and the threat tier stay on)", () => {
+  const s = { v: 1, enabled: true, features: {} };
+  const o = { "www.youtube.com": { enabled: false }, "kick.com": { enabled: false }, "twitch.tv": { enabled: false } };
+  const yt = F.resolve(s, o, "www.youtube.com");
+  assert(!yt.youtubeWatchdog && !yt.youtubeCosmetic && yt.youtubeScriptlets && yt.threatTier, JSON.stringify(yt));
+  assert(!F.resolve(s, o, "kick.com").kick && F.resolve(s, {}, "kick.com").kick, "kick");
+  const tw = F.resolve(s, o, "www.twitch.tv");
+  assert(!tw.twitchDisplay && tw.twitchPlayer, "twitch: display off, vendored swap stays");
+  // One helper off on one site via the popup's feature list.
+  assert(!F.resolve(s, { "www.youtube.com": { features: { youtubeWatchdog: false } } }, "www.youtube.com").youtubeWatchdog, "per-feature on a stream site");
+  for (const id of ["twitchDisplay", "youtubeWatchdog", "youtubeCosmetic", "kick"]) assert(F.byId(id).perSite, id + " per-site");
+});
+
 Deno.test("legacy mirror: lists switch and allowed origins come from settings, never a stream site", () => {
   const m = F.legacyMirror({ enabled: true, features: { network: true } }, { "news.example": { enabled: false }, "www.youtube.com": { enabled: false }, "kick.com": { features: { network: false } }, "shop.example": { features: { network: false } }, "blog.example": { features: { cosmetic: false } } });
   assert(m.generalEnabled === true && eq(m.generalAllowedOrigins, ["http://news.example", "http://shop.example", "https://news.example", "https://shop.example"]), JSON.stringify(m));
@@ -173,8 +186,11 @@ Deno.test("flags.js hands the page-world scripts their switches (fail-open until
   const window = { postMessage: (m, o) => posted.push([m, o]), addEventListener: (t, f) => { listeners[t] = f; } };
   window.top = window;
   new Function("chrome", "window", "location", "globalThis", src)(chrome, window, { hostname: "www.youtube.com", origin: "https://www.youtube.com" }, globalThis);
-  // Block J added the two page-guard flags (off here: the site switch is off and the popup guard defaults off).
-  assert(posted.length === 1 && eq(posted[0][0], { "gk-f1": { youtubeWatchdog: false, youtubeCosmetic: true, kick: true, guardClipboard: false, guardPopups: false } }) && posted[0][1] === "https://www.youtube.com", JSON.stringify(posted));
+  // Block J added the two page-guard flags. The site switch for www.youtube.com
+  // is off, so every per-site helper is off there (youtubeCosmetic included:
+  // the stream-site helpers became per-site switchable so the popup's site
+  // switch, one of the D-3 off switches, really turns them off).
+  assert(posted.length === 1 && eq(posted[0][0], { "gk-f1": { youtubeWatchdog: false, youtubeCosmetic: false, kick: false, guardClipboard: false, guardPopups: false } }) && posted[0][1] === "https://www.youtube.com", JSON.stringify(posted));
   listeners.message({ source: window, data: { "gk-f1": "?" } });
   assert(posted.length === 2, "answers a request");
   let origin = null;

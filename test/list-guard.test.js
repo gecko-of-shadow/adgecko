@@ -60,6 +60,29 @@ Deno.test("first load has no size bound; a later +100% (huge growth) refresh is 
   assert(rulesBefore !== JSON.stringify(d.dynamic), "the accepted lists did update");
 });
 
+Deno.test("a size change that persists is accepted on the next download (no list frozen forever); a one-off spike stays rejected", async () => {
+  const d = await primed();
+  const sizes = { now: 28000 }; // +40% for peter_lowe
+  d.fetch = async (url) => res(listText(tagOf(url), url.includes("pgl.yoyo") ? sizes.now : 20000));
+  await U.refresh(d, { manual: true });
+  assert(/size changed by 40%/.test(d.state.lastErrors.peter_lowe || ""), "first time rejected " + JSON.stringify(d.state.lastErrors));
+  assert(d.state.lists.peter_lowe.count === 20000 && d.state.lists.peter_lowe.rejectedCount === 28000, JSON.stringify(d.state.lists.peter_lowe));
+  sizes.now = 28500; // the same new size again (within 10%)
+  await U.refresh(d, { manual: true });
+  assert(!d.state.lastErrors.peter_lowe && d.state.lists.peter_lowe.count === 28500 && !d.state.lists.peter_lowe.rejectedCount, "accepted on repeat " + JSON.stringify(d.state.lists.peter_lowe));
+  // A one-off spike, then back to normal: the spike is rejected, normal accepted,
+  // and a different spike later is rejected again.
+  sizes.now = 60000;
+  await U.refresh(d, { manual: true });
+  assert(/size changed/.test(d.state.lastErrors.peter_lowe || ""), "spike rejected");
+  sizes.now = 29000;
+  await U.refresh(d, { manual: true });
+  assert(!d.state.lastErrors.peter_lowe && d.state.lists.peter_lowe.count === 29000, "back to normal accepted");
+  sizes.now = 9000;
+  await U.refresh(d, { manual: true });
+  assert(/size changed/.test(d.state.lastErrors.peter_lowe || "") && d.state.lists.peter_lowe.count === 29000, "new spike rejected again");
+});
+
 Deno.test("a list that shrinks by more than 25% is rejected; a 10% change is accepted", async () => {
   const d = await primed();
   d.fetch = async (url) => res(listText(tagOf(url), url.includes("pro.mini") ? 12000 : 18000));

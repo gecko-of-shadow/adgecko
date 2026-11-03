@@ -319,7 +319,7 @@ function installGeneralAdblockUpdate(target) {
 
   function listMeta(m) {
     const out = {};
-    for (const k of ["url", "etag", "lastModified", "fetchedAt", "expiresMs", "count", "cosmetic", "parser", "genericCount"]) if (m && m[k] !== undefined) out[k] = m[k];
+    for (const k of ["url", "etag", "lastModified", "fetchedAt", "expiresMs", "count", "cosmetic", "parser", "genericCount", "rejectedCount", "rejectedGeneric"]) if (m && m[k] !== undefined) out[k] = m[k];
     return out;
   }
 
@@ -346,11 +346,17 @@ function installGeneralAdblockUpdate(target) {
 
   // null when acceptable, else the rejection reason. `prev` is the stored
   // list meta (count, genericCount) of the last good copy, if any.
+  // A size change that comes back on the next download (within 10% of the
+  // rejected size) is real, not a one-off: accept it as the new baseline, so a
+  // list that moves for good is not frozen on its old copy forever.
+  const CONFIRM_RATIO = 0.10;
+  const confirmed = (n, rejected) => rejected > 0 && Math.abs(n - rejected) / rejected <= CONFIRM_RATIO;
+
   function checkListChange(prev, parsed, cosmetic) {
     const total = parsed.domains.length + parsed.scoped.length;
     if (prev && prev.parser === PARSER_VERSION && prev.count > 0) {
       const ratio = Math.abs(total - prev.count) / prev.count;
-      if (ratio > MAX_CHANGE_RATIO) {
+      if (ratio > MAX_CHANGE_RATIO && !confirmed(total, prev.rejectedCount)) {
         return "size changed by " + Math.round(ratio * 100) + "% in one refresh (" + prev.count + " -> " + total + ")";
       }
     }
@@ -361,7 +367,7 @@ function installGeneralAdblockUpdate(target) {
       if (g > MAX_GENERIC_SELECTORS) return "too many generic hide rules (" + g + ")";
       if (prev && prev.parser === PARSER_VERSION && prev.genericCount > 0) {
         const ratio = Math.abs(g - prev.genericCount) / prev.genericCount;
-        if (ratio > MAX_CHANGE_RATIO) return "hide list changed by " + Math.round(ratio * 100) + "% (" + prev.genericCount + " -> " + g + ")";
+        if (ratio > MAX_CHANGE_RATIO && !confirmed(g, prev.rejectedGeneric)) return "hide list changed by " + Math.round(ratio * 100) + "% (" + prev.genericCount + " -> " + g + ")";
       }
       const roots = cosmetic.stats ? cosmetic.stats.pageRootSite : 0;
       if (roots > MAX_PAGE_ROOT_SITE_RULES) return "too many whole-page hide rules (" + roots + ")";
@@ -499,6 +505,13 @@ function installGeneralAdblockUpdate(target) {
           const rejected = checkListChange(meta, parsed, payload.cosmetic);
           if (rejected) {
             rejections[src.name] = { reason: rejected, at: now };
+            // Remember the rejected sizes: the same size next time is accepted.
+            if (meta) {
+              lists[src.name] = Object.assign({}, meta, {
+                rejectedCount: parsed.domains.length + parsed.scoped.length,
+                rejectedGeneric: payload.cosmetic ? (payload.cosmetic.generic || []).length : 0,
+              });
+            }
             throw new Error("rejected, kept the last good copy: " + rejected);
           }
           if (payload.cosmetic) delete payload.cosmetic.stats;
