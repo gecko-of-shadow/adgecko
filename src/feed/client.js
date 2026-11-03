@@ -38,6 +38,40 @@
     return { ok: true, origin };
   }
 
+  // Reads the body as a stream and stops (cancels) as soon as it passes the
+  // cap, so a chunked body without Content-Length cannot fill memory (L-8).
+  async function readCapped(res, cap, path) {
+    const reader = res.body && typeof res.body.getReader === "function" ? res.body.getReader() : null;
+    if (!reader) {
+      const whole = new Uint8Array(await res.arrayBuffer());
+      if (whole.length > cap) throw new Error(path + ": larger than " + cap + " bytes");
+      return whole;
+    }
+    const parts = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > cap) {
+        try {
+          await reader.cancel();
+        } catch {
+          // already closed
+        }
+        throw new Error(path + ": larger than " + cap + " bytes");
+      }
+      parts.push(value);
+    }
+    const out = new Uint8Array(total);
+    let at = 0;
+    for (const p of parts) {
+      out.set(p, at);
+      at += p.length;
+    }
+    return out;
+  }
+
   async function fetchCapped(deps, origin, path, cap) {
     const url = origin + path;
     if (!url.startsWith("https://")) throw new Error("feed URL must be https");
@@ -50,9 +84,7 @@
       if (res.url && new URL(res.url).origin !== origin) throw new Error(path + ": answered from another origin");
       const len = Number(res.headers && res.headers.get && res.headers.get("Content-Length"));
       if (len > cap) throw new Error(path + ": larger than " + cap + " bytes");
-      const buf = new Uint8Array(await res.arrayBuffer());
-      if (buf.length > cap) throw new Error(path + ": larger than " + cap + " bytes");
-      return buf;
+      return await readCapped(res, cap, path);
     } catch (e) {
       if (e && (e.name === "AbortError" || /abort/i.test(String(e.message)))) throw new Error(path + ": timeout");
       throw e;
@@ -109,6 +141,16 @@
     }
   }
 
+  // Kill latch (security review M-4): a document signed by the KILL key stops
+  // the feed until the extension itself is updated (an update can ship new
+  // pinned keys). Until then nothing is fetched and no feed-key document is
+  // accepted, so a stolen feed key cannot switch a killed feed back on. A
+  // feed's own killFeed flag is not a latch (a later feed may lift it).
+  function latched(st, deps) {
+    return !!(st && st.killLatch && st.killedVersion === (deps.extensionVersion || ""));
+  }
+  const RELEASED = { killLatch: false, killed: false, killedVersion: "", lastError: "kill switch released by an extension update" };
+
   // The packaged snapshot (src/rules/threat-snapshot.json) as rules.
   async function snapshotRules(deps) {
     const snap = await deps.loadSnapshot();
@@ -129,7 +171,11 @@
       await setState(deps, { status: "paused", ruleCount: 0 });
       return { ok: true, mode: "paused" };
     }
-    const st = (await deps.getState()) || {};
+    let st = (await deps.getState()) || {};
+    if (st.killLatch && !latched(st, deps)) {
+      await setState(deps, RELEASED);
+      st = Object.assign({}, st, RELEASED);
+    }
     if (st.killed) {
       await removeFeedRules(deps);
       await setState(deps, { status: "killed", ruleCount: 0 });
@@ -164,7 +210,16 @@
       return { ok: true, ran: false, reason: "paused" };
     }
     const now = deps.now();
-    const st = (await deps.getState()) || {};
+    let st = (await deps.getState()) || {};
+    if (latched(st, deps)) {
+      await removeFeedRules(deps);
+      await setState(deps, { status: "killed", ruleCount: 0, lastCheckAt: now });
+      return { ok: true, ran: false, reason: "killed with the kill key; off until the next extension version" };
+    }
+    if (st.killLatch) {
+      await setState(deps, RELEASED);
+      st = Object.assign({}, st, RELEASED);
+    }
     let bytes;
     let sigText;
     try {
@@ -183,7 +238,7 @@
     try {
       if (r.kind === "kill") {
         await removeFeedRules(deps);
-        await setState(deps, { status: "killed", killed: true, killSerial: r.doc.serial, ruleCount: 0, lastError: "", lastCheckAt: now, fetchedAt: now });
+        await setState(deps, { status: "killed", killed: true, killLatch: true, killedVersion: deps.extensionVersion || "", killSerial: r.doc.serial, ruleCount: 0, lastError: "", lastCheckAt: now, fetchedAt: now });
         return { ok: true, ran: true, mode: "killed" };
       }
       const doc = r.doc;
@@ -199,12 +254,13 @@
           await setState(deps, { serial: doc.serial, lastError: "rollback to " + doc.rollbackTo + " ignored: not stored", lastCheckAt: now, fetchedAt: now });
           return { ok: false, ran: true, reason: "rollback target not stored" };
         }
-        const { rules } = K().compileFeed(picked.doc);
+        const { rules, killed } = K().compileFeed(picked.doc);
         await replaceRules(deps, rules);
         const pickedSlot = docs.current === picked ? "current" : "previous";
         const other = pickedSlot === "current" ? cache.previous : cache.current;
         await deps.setCache({ current: cache[pickedSlot], previous: other || null });
-        await setState(deps, { status: "active", source: "feed", killed: false, serial: doc.serial, appliedSerial: picked.serial, ruleCount: rules.length, notAfter: picked.doc.notAfter, appliedAt: now, lastError: "", lastCheckAt: now, fetchedAt: now });
+        // A rolled-back document with killFeed reports "killed", not "active" (I-6).
+        await setState(deps, { status: killed ? "killed" : "active", source: "feed", killed, serial: doc.serial, appliedSerial: picked.serial, ruleCount: rules.length, notAfter: picked.doc.notAfter, appliedAt: now, lastError: "", lastCheckAt: now, fetchedAt: now });
         return { ok: true, ran: true, mode: "rollback", serial: picked.serial };
       }
       const { rules, killed } = K().compileFeed(doc);

@@ -131,19 +131,27 @@ Deno.test("replace is one atomic session-rule update; previous payload kept for 
   assert(!ign.ok && /not stored/.test(w.store.feedState.lastError) && hostsOf(w).join() === keep, "ignored rollback " + JSON.stringify(ign));
 });
 
-Deno.test("kill: the kill-key document drops all feed rules and survives a restart; a newer feed turns it back on", async () => {
+Deno.test("kill: the kill-key document latches until the next extension version; a feed-key document cannot revive it (M-4)", async () => {
   const w = world();
   await publish(w, feedDoc(1, ["evil.example"]));
   await FC.checkFeed(w.deps);
   await publish(w, { format: 1, kill: true, serial: 1, createdAt: iso(NOW) }, killPair);
   const k = await FC.checkFeed(w.deps);
-  assert(k.ok && k.mode === "killed" && w.session.length === 0 && w.store.feedState.killed === true, JSON.stringify(k));
+  assert(k.ok && k.mode === "killed" && w.session.length === 0 && w.store.feedState.killed === true && w.store.feedState.killLatch === true, JSON.stringify(k));
   w.session = [];
   const a = await FC.applyCached(w.deps);
   assert(a.mode === "killed" && w.session.length === 0, "restart stays killed");
+  // A (possibly stolen) feed key signs a newer document: refused, not even fetched.
   await publish(w, feedDoc(2, ["back.example"]));
+  const calls = w.calls.length;
+  const refused = await FC.checkFeed(w.deps);
+  assert(refused.ran === false && /next extension version/.test(refused.reason) && w.calls.length === calls && w.session.length === 0, JSON.stringify(refused));
+  // The extension is updated (new pinned keys would ship with it): the latch is released.
+  w.deps.extensionVersion = "0.2.22";
+  await FC.applyCached(w.deps);
+  assert(w.store.feedState.killLatch === false && /released by an extension update/.test(w.store.feedState.lastError), JSON.stringify(w.store.feedState));
   await FC.checkFeed(w.deps);
-  assert(hostsOf(w).join() === "back.example" && w.store.feedState.killed === false, "re-enabled");
+  assert(hostsOf(w).join() === "back.example" && w.store.feedState.killed === false, "re-enabled after the update");
   // killFeed in a normal feed does the same.
   await publish(w, feedDoc(3, ["x.example"], { killFeed: true }));
   await FC.checkFeed(w.deps);
@@ -263,4 +271,52 @@ Deno.test("keygen/sign helpers: a signed file verifies with the printed public k
     const src = await Deno.readTextFile(new URL("../scripts/" + f, import.meta.url));
     assert(!/console\.(log|error)\([^)]*(pkcs8|privateRecord|privateKey)/.test(src), f + " prints private key material");
   }
+});
+
+// Security review L-8: a body without Content-Length is read as a stream and
+// cut at the cap; I-6: a rollback to a killFeed document reports "killed".
+Deno.test("streamed size cap: a chunked body over the cap is refused and reading stops early", async () => {
+  let pulled = 0;
+  const big = () => new ReadableStream({
+    pull(ctrl) {
+      pulled++;
+      if (pulled > 200) { ctrl.close(); return; }
+      ctrl.enqueue(new Uint8Array(64 * 1024));
+    },
+  });
+  const w = world({ fetch: async (url) => new URL(url).pathname.endsWith(".sig") ? new Response("keyId=feed-test\nAAAA\n") : new Response(big(), { status: 200 }) });
+  const r = await FC.checkFeed(w.deps);
+  assert(!r.ok && /larger than/.test(r.reason) && pulled < 20, JSON.stringify(r) + " pulled " + pulled);
+  const small = await FC.fetchCapped({ fetch: async () => new Response(new ReadableStream({ start(c) { c.enqueue(new Uint8Array([1, 2])); c.enqueue(new Uint8Array([3])); c.close(); } })) }, ORIGIN, "/x", 10);
+  assert(small.join() === "1,2,3", "chunks joined");
+});
+
+Deno.test("rollback to a stored killFeed document reports killed, not active (I-6)", async () => {
+  const w = world();
+  await publish(w, feedDoc(1, ["a.example"], { killFeed: true }));
+  await FC.checkFeed(w.deps);
+  await publish(w, feedDoc(2, ["b.example"]));
+  await FC.checkFeed(w.deps);
+  await publish(w, feedDoc(3, [], { rollbackTo: 1 }));
+  const rb = await FC.checkFeed(w.deps);
+  assert(rb.mode === "rollback" && w.store.feedState.status === "killed" && w.session.length === 0, JSON.stringify(w.store.feedState));
+});
+
+Deno.test("feed-keygen refuses a key path that really lands in the repo ('..', missing folder) (L-9)", async () => {
+  const { keyTargetProblem, repoRoot } = await import("../scripts/lib/feed-tools.mjs");
+  assert(/outside the repository/.test(await keyTargetProblem(repoRoot() + "/scripts/../k.json")), "dot-dot into the repo root");
+  assert(/outside the repository/.test(await keyTargetProblem(repoRoot() + "/scripts/lib/../../test/k.json")), "dot-dot into a repo folder");
+  assert(/must already exist/.test(await keyTargetProblem(repoRoot() + "-nonexistent-folder-x/k.json")), "missing folder");
+  const parent = repoRoot().replace(/\/[^/]+$/, "");
+  assert(await keyTargetProblem(parent + "/gecko-test-key.json") === null, "the folder above the repo is fine");
+});
+
+Deno.test("build-threat-rules refuses cached lists whose bytes differ from meta.json (L-10)", async () => {
+  // Run WITHOUT --allow-write: if the check failed, writing would throw instead of touching the repo.
+  const out = await new Deno.Command(Deno.execPath(), {
+    args: ["run", "--no-lock", "--allow-read", "scripts/build-threat-rules.mjs", "--cache", new URL("fixtures/threat-cache-mismatch/", import.meta.url).href],
+    cwd: new URL("..", import.meta.url), stdout: "piped", stderr: "piped",
+  }).output();
+  const err = new TextDecoder().decode(out.stderr);
+  assert(out.code === 5 && /do not match src\/rules\/meta\.json/.test(err), out.code + " " + err);
 });

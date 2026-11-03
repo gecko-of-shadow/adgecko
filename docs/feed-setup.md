@@ -38,7 +38,9 @@ signs, by hand or automatically (D-7). The scripts below work for either.
    ```
 
    It prints one line like `"feed-2026-11": "<base64 public key>"`. The private
-   key goes only into the file. Back that file up offline.
+   key goes only into the file. Back that file up offline. The folder for the
+   file must already exist and must really be outside the repository (".."
+   steps, symbolic links and junctions are resolved before the check).
 
 2. **Optional: make the kill key pair** (a separate key that can sign only
    the kill document `{"format":1,"kill":true,"serial":1,"createdAt":"..."}`):
@@ -70,8 +72,12 @@ signs, by hand or automatically (D-7). The scripts below work for either.
    {"format":1,"serial":1,"createdAt":"2026-11-10T12:00:00Z","notBefore":"2026-11-10T12:00:00Z","notAfter":"2026-11-24T12:00:00Z","dnr":[{"id":1,"requestDomains":["malware-drop.example"]}]}
    ```
 
-   `notAfter` may be at most 14 days after `createdAt`; publish a new file
-   (higher `serial`) before then. Then sign it:
+   `notAfter` may be at most 14 days after `createdAt` and after `notBefore`;
+   `notBefore` may not be more than 1 hour before `createdAt`, and `createdAt`
+   may not be more than 1 hour ahead of the browser's clock. `serial` may not
+   go above 2,147,483,647 or jump more than 1,000,000 past the last one a
+   browser applied (a date-like serial such as 2026111001 is fine). Publish a
+   new file (higher `serial`) before `notAfter`. Then sign it:
 
    ```
    deno run --allow-read --allow-write scripts\feed-sign.mjs --key <folder outside the repo>\feed-2026-11.key.json --feed feed.json
@@ -88,11 +94,15 @@ signs, by hand or automatically (D-7). The scripts below work for either.
 
 ## Emergency switches
 
-- **Kill (for everyone):** sign a kill document with the kill key and upload
-  it as `feed.json` + `feed.json.sig`, or publish a normal feed with
-  `"killFeed": true`. Every client drops the feed rules; public lists and the
-  packed threat tier keep running. A later feed with a higher serial turns it
-  back on.
+- **Kill (for everyone):** sign a kill document with the KILL key and upload
+  it as `feed.json` + `feed.json.sig`. Every client drops the feed rules;
+  public lists and the packed threat tier keep running. This is a latch: the
+  feed stays off, and nothing signed with the feed key is accepted, until the
+  extension itself is updated (ship new pinned keys in that update if the
+  feed key was stolen). Clients do not even download the feed meanwhile.
+- **Pause the feed rules (soft):** publish a normal feed with
+  `"killFeed": true`. Clients drop the feed rules; a later feed with a higher
+  serial turns them back on.
 - **Rollback:** publish a feed with a higher `serial`, an empty `dnr` and
   `"rollbackTo": <earlier serial>`. Clients re-apply that earlier file if they
   still have it (they keep the last two); otherwise they keep their current

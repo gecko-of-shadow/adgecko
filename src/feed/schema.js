@@ -8,7 +8,12 @@
 //   serial       integer >= 1, greater than the stored serial (required)
 //   createdAt    ISO-8601 UTC time (required)
 //   notBefore    ISO time; not valid before it (required)
-//   notAfter     ISO time; expired after it; at most 14 days after createdAt (required)
+//   notAfter     ISO time; expired after it; at most 14 days after createdAt
+//                AND after notBefore (required)
+//   (also: notBefore >= createdAt - 1 h, createdAt <= now + 1 h, so a future
+//    createdAt cannot stretch the window; security review M-5)
+//   (serial <= 2^31-1 and at most 1,000,000 above the stored serial, so one
+//    document cannot push the serial out of reach; L-7)
 //   minExtension dotted version or null; maxExtension dotted version or null
 //   killFeed     boolean (default false): drop every feed rule
 //   dropRuleIds  integers 1..4500 to leave out of the compiled set
@@ -25,7 +30,10 @@
 //   { format: 1, kill: true, serial, createdAt }
 (function (root) {
   const FORMAT = 1;
-  const MAX_LIFETIME_MS = 14 * 24 * 60 * 60 * 1000; // notAfter - createdAt (D-7)
+  const MAX_LIFETIME_MS = 14 * 24 * 60 * 60 * 1000; // notAfter - createdAt and - notBefore (D-7)
+  const CLOCK_SKEW_MS = 60 * 60 * 1000; // allowed clock difference signer vs. browser
+  const MAX_SERIAL = 2147483647; // 2^31 - 1
+  const MAX_SERIAL_STEP = 1000000; // largest jump over the stored serial
   const MAX_RULE_ID = 4500;
   const MAX_HOSTS_PER_ENTRY = 80;
   const THREAT_TYPES = Object.freeze(["main_frame", "sub_frame", "script", "xmlhttprequest", "ping", "media", "websocket", "other"]);
@@ -61,6 +69,11 @@
     return 0;
   }
 
+  function checkSerialBound(serial, stored, name) {
+    if (serial > MAX_SERIAL) fail(name + " " + serial + " is above " + MAX_SERIAL);
+    if ((stored || 0) > 0 && serial - stored > MAX_SERIAL_STEP) fail(name + " jumps from " + stored + " to " + serial + " (more than " + MAX_SERIAL_STEP + ")");
+  }
+
   function onlyKeys(obj, allowed, where) {
     for (const k of Object.keys(obj)) if (!allowed.includes(k)) fail("unknown key " + JSON.stringify(k) + " in " + where);
   }
@@ -76,12 +89,16 @@
     if (doc.format !== FORMAT) fail("unsupported format " + JSON.stringify(doc.format));
     if (!isPosInt(doc.serial)) fail("serial must be a positive integer");
     if (doc.serial <= (c.storedSerial || 0)) fail("serial " + doc.serial + " is not newer than " + (c.storedSerial || 0) + " (replay or rollback attack)");
+    checkSerialBound(doc.serial, c.storedSerial, "serial");
     const created = parseTime(doc.createdAt, "createdAt");
     const notBefore = parseTime(doc.notBefore, "notBefore");
     const notAfter = parseTime(doc.notAfter, "notAfter");
+    const now = typeof c.now === "number" ? c.now : Date.now();
     if (notAfter <= notBefore) fail("notAfter must be after notBefore");
     if (notAfter - created > MAX_LIFETIME_MS) fail("notAfter is more than 14 days after createdAt");
-    const now = typeof c.now === "number" ? c.now : Date.now();
+    if (notAfter - notBefore > MAX_LIFETIME_MS) fail("notAfter is more than 14 days after notBefore");
+    if (notBefore < created - CLOCK_SKEW_MS) fail("notBefore is before createdAt");
+    if (created > now + CLOCK_SKEW_MS) fail("createdAt is in the future (" + doc.createdAt + ")");
     if (now < notBefore) fail("feed not valid yet (notBefore " + doc.notBefore + ")");
     if (now >= notAfter) fail("feed expired (notAfter " + doc.notAfter + ")");
     for (const k of ["minExtension", "maxExtension"]) {
@@ -165,12 +182,13 @@
     if (doc.format !== FORMAT || doc.kill !== true) fail("not a format-1 kill document");
     if (!isPosInt(doc.serial)) fail("kill serial must be a positive integer");
     if (doc.serial <= (c.storedKillSerial || 0)) fail("kill serial " + doc.serial + " is not newer than " + (c.storedKillSerial || 0));
+    checkSerialBound(doc.serial, c.storedKillSerial, "kill serial");
     parseTime(doc.createdAt, "createdAt");
     return doc;
   }
 
   root.GeckoFeedSchema = Object.freeze({
-    FORMAT, MAX_LIFETIME_MS, MAX_RULE_ID, MAX_HOSTS_PER_ENTRY, THREAT_TYPES,
+    FORMAT, MAX_LIFETIME_MS, CLOCK_SKEW_MS, MAX_SERIAL, MAX_SERIAL_STEP, MAX_RULE_ID, MAX_HOSTS_PER_ENTRY, THREAT_TYPES,
     validateFeed, validateKill, validateSnapshot, validateEntries, compareVersions,
   });
 })(typeof self !== "undefined" ? self : globalThis);

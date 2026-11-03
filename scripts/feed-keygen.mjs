@@ -7,7 +7,7 @@
 // must not exist yet. It is never printed. The PUBLIC key is printed, ready to
 // paste into src/feed/keys.js (FEED_KEYS for --kind feed, KILL_KEYS for kill).
 // Steps: docs/feed-setup.md. Keep the private key file offline and backed up.
-import { generateKeyPair, isInside, repoRoot, absolutePath } from "./lib/feed-tools.mjs";
+import { generateKeyPair, absolutePath, keyTargetProblem } from "./lib/feed-tools.mjs";
 
 const arg = (k, d) => { const i = Deno.args.indexOf(k); return i >= 0 ? Deno.args[i + 1] : d; };
 const keyId = arg("--key-id");
@@ -18,8 +18,10 @@ if (!keyId || !out) {
   Deno.exit(2);
 }
 const target = absolutePath(out);
-if (isInside(target, repoRoot())) {
-  console.error("refusing: the private key file must be outside the repository");
+// Real path check: "..", symlinks and junctions cannot sneak the key into the repo.
+const problem = await keyTargetProblem(target);
+if (problem) {
+  console.error("refusing: " + problem);
   Deno.exit(2);
 }
 let exists = false;

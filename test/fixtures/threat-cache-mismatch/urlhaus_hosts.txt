@@ -1,0 +1,2 @@
+! fixture: bytes differ from src/rules/meta.json on purpose (test/feed-client.test.js, L-10)
+||mismatch-urlhaus.example^

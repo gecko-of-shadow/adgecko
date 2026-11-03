@@ -11,7 +11,8 @@
 // parseEntries) and compiling is src/threat/compile.js, which rejects every
 // protected stream host (src/threat/protected-hosts.js). One implementation,
 // shared with the runtime refresh.
-// Exits non-zero (and writes nothing) if a threat list is missing from the cache.
+// Exits non-zero (and writes nothing) if a threat list is missing from the
+// cache or its bytes do not match the sha256 recorded in src/rules/meta.json.
 const ROOT = new URL("..", import.meta.url);
 const arg = (k, d) => { const i = Deno.args.indexOf(k); return i >= 0 ? Deno.args[i + 1] : d; };
 const cacheDir = arg("--cache", null);
@@ -68,6 +69,14 @@ for (const name of TC.THREAT_LISTS) {
     console.error(`threat list ${name} produced no hosts; refusing to write a partial ruleset`);
     Deno.exit(3);
   }
+}
+
+// Security review L-10: the cached bytes must be the ones the packer hashed
+// into src/rules/meta.json, else nothing is written.
+const mismatched = Object.entries(sources).filter(([, s]) => s.sha256_matches_meta === false).map(([n]) => n);
+if (mismatched.length) {
+  console.error(`cached list bytes do not match src/rules/meta.json for ${mismatched.join(", ")}; re-run scripts/pack-filter-lists.py (nothing written)`);
+  Deno.exit(5);
 }
 
 const compiled = TC.compileThreatRules(hosts, { idBase: 1, popupHosts });

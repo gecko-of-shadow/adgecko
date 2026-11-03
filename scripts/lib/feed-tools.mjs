@@ -52,3 +52,32 @@ export function absolutePath(p) {
   if (/^[A-Za-z]:\//.test(s) || s.startsWith("/")) return s;
   return Deno.cwd().replace(/\\/g, "/").replace(/\/$/, "") + "/" + s;
 }
+
+// Security review L-9: "outside the repo" must hold for the REAL location, so
+// "..", symlinks and junctions are resolved (Deno.realPath on the folder the
+// key goes into, which must already exist, and on the repo). -> null when the
+// target is fine, else the reason.
+export async function keyTargetProblem(target) {
+  const abs = absolutePath(target);
+  const slash = abs.lastIndexOf("/");
+  const dir = slash > 0 ? abs.slice(0, slash) : "/";
+  const base = abs.slice(slash + 1);
+  if (!base || base === "." || base === "..") return "the key file needs a file name";
+  const real = async (p) => (await Deno.realPath(/^[A-Za-z]:$/.test(p) ? p + "/" : p)).replace(/^\\\\\?\\/, "").replace(/\\/g, "/");
+  let realDir;
+  let realRepo;
+  try {
+    realDir = await real(dir);
+  } catch {
+    return "the folder for the key file must already exist";
+  }
+  try {
+    realRepo = await real(repoRoot());
+  } catch {
+    return "could not resolve the repository path";
+  }
+  if (isInside(abs, repoRoot()) || isInside(realDir.replace(/\/$/, "") + "/" + base, realRepo)) {
+    return "the private key file must be outside the repository";
+  }
+  return null;
+}

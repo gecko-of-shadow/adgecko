@@ -198,3 +198,27 @@ Deno.test("feed library is data-only: no eval, Function, remote code or chrome.*
     assert(!/-----BEGIN|PRIVATE KEY/.test(src), f + " holds key material");
   }
 });
+
+// Security review M-5 / L-7: the 14-day window is bounded from notBefore too,
+// a future createdAt cannot stretch it, and the serial cannot jump out of reach.
+Deno.test("window and serial bounds: future createdAt, notBefore before createdAt, >14 days from notBefore, serial ceiling and jump", async () => {
+  const rej = async (over, opts, re) => {
+    const r = await check(feed(over), opts);
+    assert(!r.ok && re.test(r.error), JSON.stringify(over) + " -> " + JSON.stringify(r));
+  };
+  // The review's example: createdAt far ahead, notBefore long ago, notAfter = createdAt + 13 days.
+  await rej({ createdAt: "2030-01-01T00:00:00Z", notBefore: "2025-01-01T00:00:00Z", notAfter: "2030-01-14T00:00:00Z" }, {}, /14 days after notBefore|before createdAt|in the future/);
+  await rej({ createdAt: iso(NOW + 2 * 3600000), notBefore: iso(NOW + 2 * 3600000), notAfter: iso(NOW + 10 * DAY) }, {}, /createdAt is in the future/);
+  await rej({ createdAt: iso(NOW - 3600000), notBefore: iso(NOW - 3 * 3600000), notAfter: iso(NOW + 10 * DAY) }, {}, /notBefore is before createdAt/);
+  await rej({ createdAt: iso(NOW - 3600000), notBefore: iso(NOW - 3600000), notAfter: iso(NOW + 14 * DAY) }, {}, /more than 14 days/);
+  await rej({ serial: 2147483648 }, { storedSerial: 0 }, /above 2147483647/);
+  await rej({ serial: 1000006 }, { storedSerial: 5 }, /jumps from 5 to 1000006/);
+  // Within bounds: a small clock difference, a fresh install with a large serial, a big but allowed step.
+  assert((await check(feed({ createdAt: iso(NOW + 30 * 60000), notBefore: iso(NOW + 30 * 60000 - 3600000), notAfter: iso(NOW + 10 * DAY) }))).ok, "createdAt 30 min ahead is fine");
+  assert((await check(feed({ serial: 2026110201 }), { storedSerial: 0 })).ok, "date-like serial on a fresh install");
+  assert((await check(feed({ serial: 1000005 }), { storedSerial: 5 })).ok, "a step of exactly 1,000,000");
+  // Kill documents: same serial bounds.
+  const killBytes = enc({ format: 1, kill: true, serial: 2000001, createdAt: iso(NOW) });
+  const kr = await V.verifyFeed(killBytes, await sign(killBytes, killKey.kp, "kill-test"), OPTS({ storedKillSerial: 1 }));
+  assert(!kr.ok && /kill serial jumps/.test(kr.error), JSON.stringify(kr));
+});
