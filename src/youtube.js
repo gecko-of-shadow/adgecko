@@ -2047,6 +2047,14 @@ function startYoutubeAdblock() {
     }
   }
 
+  // Switch "youtubeCosmetic" (security review L-16): every DOM ad sweep and
+  // the interruptions-toast removal go through here, not only the observer.
+  function cosmeticSweep() {
+    if (typeof flagOn === "function" && !flagOn("youtubeCosmetic")) return;
+    removeDomAds();
+    api.removeInterruptionsToast();
+  }
+
   function watchDom() {
     injectHomeFeedCss();
     const root = document.documentElement;
@@ -2060,10 +2068,7 @@ function startYoutubeAdblock() {
     const sweep = () => {
       scheduled = false;
       lastSweep = Date.now();
-      if (typeof flagOn !== "function" || flagOn("youtubeCosmetic")) {
-        removeDomAds();
-        api.removeInterruptionsToast();
-      }
+      cosmeticSweep();
       nudgeStart();
     };
     const observer = new MutationObserver(() => {
@@ -2073,8 +2078,7 @@ function startYoutubeAdblock() {
       setTimeout(() => (typeof requestIdleCallback === "function" ? requestIdleCallback(sweep, { timeout: 500 }) : requestAnimationFrame(sweep)), wait);
     });
     observer.observe(root, { childList: true, subtree: true });
-    removeDomAds();
-    api.removeInterruptionsToast();
+    cosmeticSweep();
   }
 
   // .ytp-error flash guard (see createErrorFlashGuard). Off with {"errorFlash":"off"}.
@@ -2163,8 +2167,7 @@ function startYoutubeAdblock() {
     // here; checkStall still waits OPTS.stallUboMs unless media failed.
     if (api.UBO_LAYER && onWatchSurface()) armStall(undefined, "watch navigation");
     injectHomeFeedCss();
-    removeDomAds();
-    api.removeInterruptionsToast();
+    cosmeticSweep();
     setTimeout(nudgeStart, 1000);
     setTimeout(nudgeStart, 3000);
   }, true);

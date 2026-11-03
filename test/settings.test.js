@@ -264,3 +264,14 @@ Deno.test({
     }
   },
 });
+
+// Security review L-16: the youtubeCosmetic switch covers every DOM sweep in
+// youtube.js (observer, start of watchDom, yt-navigate-finish), not one path.
+Deno.test("youtubeCosmetic gates every DOM ad sweep and toast removal in youtube.js", () => {
+  const yt = read("youtube.js");
+  const calls = (re) => [...yt.matchAll(re)].length;
+  assert(calls(/^\s*removeDomAds\(\);/gm) === 1 && calls(/^\s*api\.removeInterruptionsToast\(\);/gm) === 1, "direct sweep calls outside cosmeticSweep");
+  assert(/function cosmeticSweep\(\) \{\s*if \(typeof flagOn === "function" && !flagOn\("youtubeCosmetic"\)\) return;\s*removeDomAds\(\);\s*api\.removeInterruptionsToast\(\);/.test(yt), "cosmeticSweep checks the switch first");
+  assert(calls(/cosmeticSweep\(\);/g) === 3, "observer, watchDom start and navigation use it");
+  assert(/function injectHomeFeedCss\(\) \{[\s\S]{0,800}?!flagOn\("youtubeCosmetic"\)/.test(yt), "home feed CSS gated too");
+});
