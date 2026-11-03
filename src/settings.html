@@ -80,8 +80,8 @@
     </section>
 
     <section aria-labelledby="h-allow">
-      <h2 id="h-allow">Allow this domain (threat tier)</h2>
-      <p class="note">A domain added here is never blocked by the threat tier (also its subdomains). Use it only for a site you trust that the malware lists flag by mistake.</p>
+      <h2 id="h-allow">Allow this domain</h2>
+      <p class="note">A domain added here (and its subdomains) is never blocked: not by the malware lists and not by the filter lists. Use it when Chrome shows a blocked page ("blocked by an extension") for a site you trust: add its domain here, then reload the page. "Allow this site" in the popup cannot help there, because the blocked page is not a site the popup can see. Add only sites you trust.</p>
       <div class="row">
         <input id="allow-domain" type="text" placeholder="example.com" autocomplete="off" spellcheck="false" aria-label="Domain to allow">
         <button id="allow-add" type="button">Allow this domain</button>

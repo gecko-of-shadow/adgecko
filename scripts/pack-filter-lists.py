@@ -168,6 +168,77 @@ def load_filter_option_table() -> dict:
 OPTION_TABLE = load_filter_option_table()
 
 
+def load_nav_exempt() -> dict:
+    """Navigation-exempt hosts, the JSON between the NAV-EXEMPT markers in
+    src/general/filter-options.js (one source of truth with the runtime)."""
+    text = FILTER_OPTIONS_JS.read_text(encoding="utf-8")
+    start = text.index("/*NAV-EXEMPT-START*/") + len("/*NAV-EXEMPT-START*/")
+    end = text.index("/*NAV-EXEMPT-END*/")
+    return json.loads(text[start:end])
+
+
+NAV_EXEMPT = load_nav_exempt()
+
+
+def is_nav_exempt(host: str) -> bool:
+    h = (host or "").lower().rstrip(".")
+    return any(h == d or h.endswith("." + d) for d in NAV_EXEMPT["hosts"])
+
+
+PROTECTED_HOSTS_JS = ROOT / "src" / "threat" / "protected-hosts.js"
+
+
+def load_protected_hosts() -> tuple[list[str], list[str]]:
+    """SUFFIX and EXACT from src/threat/protected-hosts.js (the ONE stream-host
+    list; the threat compiler uses the same file)."""
+    text = PROTECTED_HOSTS_JS.read_text(encoding="utf-8")
+
+    def arr(name: str) -> list[str]:
+        m = re.search(r"const " + name + r" = Object\.freeze\(\[(.*?)\]\);", text, re.S)
+        body = re.sub(r"//[^\n]*", "", m.group(1))
+        return re.findall(r'"([^"]+)"', body)
+
+    return arr("SUFFIX"), arr("EXACT")
+
+
+PROTECTED_SUFFIX, PROTECTED_EXACT = load_protected_hosts()
+
+
+def is_nav_protected(host: str) -> bool:
+    """Mirrors isNavProtected(): under a SUFFIX entry, or an ancestor of any."""
+    h = (host or "").lower().rstrip(".")
+
+    def under(a: str, b: str) -> bool:
+        return a == b or a.endswith("." + b)
+
+    return any(under(h, p) for p in PROTECTED_SUFFIX) or any(under(p, h) for p in PROTECTED_SUFFIX + PROTECTED_EXACT)
+
+
+def scope_for_merge(domain: str, key: str, is_whole: bool):
+    """Scope an entry keeps at merge time, or None. Mirrors scopeForMerge().
+
+    A whole-domain host keeps only an explicit $document part as a
+    main_frame-only scope (party kept): whole-domain rules never match
+    opening the page. A navigation-exempt host never keeps main_frame.
+    """
+    if not key:
+        return None
+    parts = {}
+    for seg in key.split("|"):
+        k, _, v = seg.partition("=")
+        parts[k] = v
+    t = parts.get("t", "").split(",") if parts.get("t") else []
+    nav = "main_frame" in t
+    if nav and (is_nav_exempt(domain) or is_nav_protected(domain)):
+        t = [v for v in t if v != "main_frame"]
+        if not t or is_whole:
+            return None
+        return "p=" + parts.get("p", "") + "|t=" + ",".join(t) + "|x=" + parts.get("x", "")
+    if not is_whole:
+        return key
+    return "p=" + parts.get("p", "") + "|t=main_frame|x=" if nav else None
+
+
 def convert_options(opts: str):
     """Options string -> (key, cancel) or None (drop). Mirrors convertOptions()."""
     raw = (opts or "").strip()
@@ -449,8 +520,9 @@ def merge_domains(buckets: dict[str, list[str]]) -> tuple[list[str], dict]:
 
 
 def merge_scoped(buckets: dict[str, list[list[str]]], whole: list[str]) -> tuple[list[list[str]], dict]:
-    """Scoped entries in source order; deduped, never-block removed, and dropped
-    when the domain is already a whole-domain block. Mirrors mergeScoped()."""
+    """Scoped entries in source order; deduped, never-block removed, and reduced
+    to their $document (main_frame) part or dropped when the domain is already a
+    whole-domain block (scope_for_merge). Mirrors mergeScoped()."""
     whole_set = set(whole)
     seen: set[str] = set()
     out: list[list[str]] = []
@@ -459,9 +531,14 @@ def merge_scoped(buckets: dict[str, list[list[str]]], whole: list[str]) -> tuple
         cap = SOURCES[name].get("max_domains")
         stats[name]["raw"] = len(entries)
         kept_here = 0
-        for d, key in entries:
+        for d, key0 in entries:
+            if is_never_block(d):
+                continue
+            key = scope_for_merge(d, key0, d in whole_set)
+            if key is None:
+                continue
             ident = d + "\n" + key
-            if d in whole_set or is_never_block(d) or ident in seen:
+            if ident in seen:
                 continue
             seen.add(ident)
             out.append([d, key])

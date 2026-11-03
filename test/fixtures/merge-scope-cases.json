@@ -1,0 +1,35 @@
+{
+  "_note": "Bug 1 (2026-11-03). Shared by src/general/filter-options.js scopeForMerge (update.js mergeScoped + swap fallback) and scripts/pack-filter-lists.py scope_for_merge / merge_scoped. [domain, scope key, also a whole-domain block?] -> the scope kept at merge time, or null (dropped). A whole-domain DNR rule never matches opening the page, so an explicit $document part survives next to it; nav-exempt hosts (NAV_EXEMPT in filter-options.js) never keep main_frame.",
+  "cases": [
+    { "in": ["a-ads.example", "p=|t=main_frame|x=", true], "expect": "p=|t=main_frame|x=" },
+    { "in": ["a-ads.example", "p=|t=main_frame|x=", false], "expect": "p=|t=main_frame|x=" },
+    { "in": ["docframe.example", "p=|t=main_frame,sub_frame|x=", true], "expect": "p=|t=main_frame|x=" },
+    { "in": ["docframe.example", "p=|t=main_frame,sub_frame|x=", false], "expect": "p=|t=main_frame,sub_frame|x=" },
+    { "in": ["doc3p.example", "p=thirdParty|t=main_frame|x=", true], "expect": "p=thirdParty|t=main_frame|x=" },
+    { "in": ["docscript.example", "p=thirdParty|t=main_frame,script|x=", true], "expect": "p=thirdParty|t=main_frame|x=" },
+    { "in": ["script.example", "p=|t=script|x=", true], "expect": null },
+    { "in": ["script.example", "p=|t=script|x=", false], "expect": "p=|t=script|x=" },
+    { "in": ["party.example", "p=thirdParty|t=|x=", true], "expect": null },
+    { "in": ["neg.example", "p=|t=|x=script", true], "expect": null },
+    { "in": ["neg.example", "p=|t=|x=script", false], "expect": "p=|t=|x=script" },
+    { "in": ["whole.example", "", true], "expect": null },
+    { "in": ["redirectingat.com", "p=|t=main_frame|x=", true], "expect": null },
+    { "in": ["go.redirectingat.com", "p=|t=main_frame|x=", false], "expect": null },
+    { "in": ["track.adtraction.com", "p=|t=main_frame,sub_frame|x=", false], "expect": "p=|t=sub_frame|x=" },
+    { "in": ["track.adtraction.com", "p=|t=main_frame,sub_frame|x=", true], "expect": null },
+    { "in": ["x.ojrq.net", "p=|t=script|x=", false], "expect": "p=|t=script|x=" },
+    { "in": ["notredirectingat.com", "p=|t=main_frame|x=", true], "expect": "p=|t=main_frame|x=" },
+    { "in": ["ads.youtube.com", "p=|t=main_frame|x=", false], "expect": null },
+    { "in": ["www.google.com", "p=|t=main_frame,script|x=", false], "expect": "p=|t=script|x=" },
+    { "in": ["google.com", "p=|t=main_frame|x=", true], "expect": null },
+    { "in": ["x.storage.googleapis.com", "p=|t=main_frame|x=", false], "expect": "p=|t=main_frame|x=" }
+  ],
+  "lists": [
+    {
+      "_note": "merge_scoped / mergeScoped with whole = the whole-domain set given; easylist source order.",
+      "whole": ["a-ads.example", "dup.example", "redirectingat.com"],
+      "scoped": [["a-ads.example", "p=|t=main_frame|x="], ["dup.example", "p=|t=script|x="], ["dup.example", "p=|t=main_frame,script|x="], ["only.example", "p=|t=script|x="], ["redirectingat.com", "p=|t=main_frame|x="], ["ads.twitch.tv", "p=|t=main_frame|x="], ["a-ads.example", "p=|t=main_frame|x="]],
+      "expect": [["a-ads.example", "p=|t=main_frame|x="], ["dup.example", "p=|t=main_frame|x="], ["only.example", "p=|t=script|x="]]
+    }
+  ]
+}

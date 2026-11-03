@@ -6,7 +6,14 @@
 // main_frame, so following a link to e.g. prime.rambler.ru or (third-party)
 // eloqua.com failed although the lists only meant their page parts.
 import "../src/general/filter-options.js";
+import "../src/threat/psl.js";
+import "../src/threat/protected-hosts.js";
+import "../src/threat/compile.js";
 import source from "../src/general/update.js" with { type: "text" };
+import backgroundSource from "../src/general-background.js" with { type: "text" };
+import settingsHtml from "../src/settings.html" with { type: "text" };
+import threatRules from "../src/rules/threat-network.json" with { type: "json" };
+import mergeCases from "./fixtures/merge-scope-cases.json" with { type: "json" };
 import bundled from "../src/rules/general-network.json" with { type: "json" };
 import mergeMeta from "../src/rules/dnr-merge-meta.json" with { type: "json" };
 import { ruleMatches, evaluate } from "./fixtures/dnr-matcher.js";
@@ -138,4 +145,172 @@ Deno.test("matcher follows Chrome: excluded-only matches navigations, third-part
   const doc3p = { id: 2, priority: 1, action: { type: "block" }, condition: { requestDomains: ["f.example"], domainType: "thirdParty", resourceTypes: ["main_frame"] } };
   assert(ruleMatches(doc3p, typed("f.example")) && ruleMatches(doc3p, clicked("f.example")), "probe case f: typed URL counts as third-party");
   assert(evaluate([ex], typed("a.example")).action === "block", "evaluate agrees");
+});
+
+// ---------------------------------------------------------------------------
+// Bug 1: an explicit `$document` filter blocks opening the page even when
+// another list (or the same one) also blocks the host as a whole domain; a
+// whole-domain rule alone never matches main_frame.
+const TC = globalThis.GeckoThreatCompile;
+const STREAM_HOSTS = (await Deno.readTextFile(new URL("./fixtures/stream-hosts.txt", import.meta.url)))
+  .split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+
+Deno.test("bug 1, shared merge cases: JS scopeForMerge / mergeScoped and the packer agree", async () => {
+  for (const c of mergeCases.cases) {
+    const got = FO.scopeForMerge(...c.in);
+    assert(got === c.expect, "js " + JSON.stringify(c.in) + " -> " + got + " expected " + c.expect);
+  }
+  for (const l of mergeCases.lists) {
+    const got = U.mergeScoped({ easylist: l.scoped }, l.whole);
+    assert(JSON.stringify(got) === JSON.stringify(l.expect), "js mergeScoped " + JSON.stringify(got));
+  }
+  const out = await runPython(PY_LOAD + "\n" + [
+    "cases = json.loads(Path('test/fixtures/merge-scope-cases.json').read_text(encoding='utf-8'))",
+    "one = [mod.scope_for_merge(*c['in']) for c in cases['cases']]",
+    "lists = [mod.merge_scoped({'easylist': l['scoped']}, l['whole'])[0] for l in cases['lists']]",
+    "print(json.dumps({'one': one, 'lists': lists, 'exempt': mod.NAV_EXEMPT}))",
+  ].join("\n"));
+  const py = JSON.parse(out);
+  mergeCases.cases.forEach((c, i) => assert(py.one[i] === c.expect, "python " + JSON.stringify(c.in) + " -> " + py.one[i]));
+  mergeCases.lists.forEach((l, i) => assert(JSON.stringify(py.lists[i]) === JSON.stringify(l.expect), "python merge_scoped " + JSON.stringify(py.lists[i])));
+  assert(JSON.stringify(py.exempt) === JSON.stringify(FO.NAV_EXEMPT), "packer and runtime read the same exempt list");
+});
+
+const DOC_AND_WHOLE = [
+  "||a-ads.example^",
+  "||a-ads.example^$document",
+  "||docframe.example^",
+  "||docframe.example^$document,subdocument",
+  "||doc3p.example^$document,third-party",
+  "||doc3p.example^",
+  "||plain.example^",
+  "||party.example^$third-party",
+  "0.0.0.0 dns.example",
+  "||redirectingat.com^",
+  "||redirectingat.com^$document",
+].join("\n");
+
+function checkDocAndWhole(rules, label) {
+  for (const h of ["a-ads.example", "docframe.example", "doc3p.example"]) {
+    assert(blocks(rules, typed(h)) && blocks(rules, clicked(h)), `${label}: opening ${h} is blocked`);
+    assert(blocks(rules, sub(h, "image")) && blocks(rules, sub(h, "script")), `${label}: ${h} page parts still blocked`);
+  }
+  // party scope kept: a navigation inside the same site is first-party
+  assert(!blocks(rules, { url: "https://doc3p.example/next", type: "main_frame", initiator: "doc3p.example" }), `${label}: doc3p.example first-party navigation allowed`);
+  for (const h of ["plain.example", "party.example", "dns.example"]) assert(opensPage(rules, h), `${label}: ${h} (no $document) opens`);
+  assert(opensPage(rules, "redirectingat.com") && blocks(rules, sub("redirectingat.com", "script")), `${label}: exempt host opens, its scripts stay blocked`);
+  const mf = rules.filter((r) => (r.condition.resourceTypes || []).includes("main_frame"));
+  assert(mf.every((r) => r.condition.resourceTypes.length === 1), `${label}: whole-domain hosts keep a main_frame-only scope`);
+}
+
+function mergeLikePacker(text) {
+  const { domains, scoped } = U.parseEntries(text);
+  const whole = U.mergeDomains({ easylist: domains });
+  return U.buildListRules(whole, U.mergeScoped({ easylist: scoped }, whole));
+}
+
+Deno.test("bug 1, runtime: $document next to a whole-domain block keeps a navigation rule; nothing else gains one", () => {
+  checkDocAndWhole(mergeLikePacker(DOC_AND_WHOLE), "update.js");
+});
+
+Deno.test("bug 1, packer: same input, same behaviour", async () => {
+  const out = await runPython(PY_LOAD + "\n" + [
+    `whole, scoped = mod.extract_entries(${JSON.stringify(DOC_AND_WHOLE)})`,
+    "domains, _ = mod.merge_domains({'easylist': whole})",
+    "merged, _ = mod.merge_scoped({'easylist': scoped}, domains)",
+    "print(json.dumps(mod.domains_to_dnr_rules(domains, merged)))",
+  ].join("\n"));
+  checkDocAndWhole(JSON.parse(out), "packer");
+});
+
+function fakeSwapDeps(bundledRules, lists = {}) {
+  let dynamic = [];
+  const state = {};
+  const deps = {
+    t: 1e12, now: () => deps.t,
+    fetch: async (url) => {
+      const body = lists[url.split("/").pop()];
+      if (body !== undefined) return { ok: true, status: 200, headers: new Headers({}), text: async () => body };
+      throw new TypeError("network error");
+    },
+    getState: async () => structuredClone(state),
+    setState: async (p) => Object.assign(state, structuredClone(p)),
+    getListData: async () => ({}), setListData: async () => {}, removeListData: async () => {},
+    getDynamicRules: async () => dynamic.slice(),
+    updateDynamicRules: async ({ removeRuleIds, addRules }) => { dynamic = dynamic.filter((r) => !removeRuleIds.includes(r.id)).concat(addRules); },
+    setStaticEnabled: async () => {}, loadBundled: async () => ({ rules: bundledRules, extraIds: [] }),
+    enabled: () => true, cosmeticParse: null, writeCosmetic: async () => {},
+    get dynamic() { return dynamic; },
+  };
+  return deps;
+}
+
+Deno.test("bug 1, swap fallback: packed $document rules of whole-domain hosts survive a partial refresh", async () => {
+  const filler = Array.from({ length: 12000 }, (_, i) => `||fill${i}.example^`).join("\n");
+  const bundle = [
+    { id: 1, priority: 1, action: { type: "block" }, condition: { requestDomains: ["a-ads.example", "doc3p.example", "redirectingat.com"] } },
+    { id: 2, priority: 1, action: { type: "block" }, condition: { requestDomains: ["a-ads.example"], resourceTypes: ["main_frame"] } },
+    { id: 3, priority: 1, action: { type: "block" }, condition: { requestDomains: ["doc3p.example"], domainType: "thirdParty", resourceTypes: ["main_frame"] } },
+    { id: 4, priority: 1, action: { type: "block" }, condition: { requestDomains: ["redirectingat.com"], resourceTypes: ["main_frame"] } },
+  ];
+  const deps = fakeSwapDeps(bundle, { "easylist.txt": "! Expires: 4 days\n" + filler });
+  const r = await U.refresh(deps, { manual: true });
+  assert(r.ok && r.ran, JSON.stringify(r));
+  const rules = deps.dynamic.filter((x) => x.id >= U.LIST_RULE_ID_BASE && x.id < U.KEPT_RULE_ID_BASE);
+  assert(blocks(rules, typed("a-ads.example")) && blocks(rules, sub("a-ads.example", "image")), "a-ads.example: both rules after the swap");
+  assert(blocks(rules, typed("doc3p.example")) && !blocks(rules, { url: "https://doc3p.example/n", type: "main_frame", initiator: "doc3p.example" }), "party scope kept");
+  assert(opensPage(rules, "redirectingat.com") && blocks(rules, sub("redirectingat.com", "image")), "exempt host: packed main_frame rule not carried over");
+});
+
+Deno.test("bug 1: stream and never-block hosts never get a navigation block (guard)", async () => {
+  const text = STREAM_HOSTS.flatMap((h) => [`||${h}^`, `||${h}^$document`, `||ads.${h}^$document`]).join("\n");
+  const rules = mergeLikePacker(text);
+  for (const h of STREAM_HOSTS) assert(opensPage(rules, h) && opensPage(rules, "ads." + h), "stream host navigation blocked: " + h);
+  const out = await runPython(PY_LOAD + "\n" + [
+    `whole, scoped = mod.extract_entries(${JSON.stringify(text)})`,
+    "domains, _ = mod.merge_domains({'easylist': whole})",
+    "merged, _ = mod.merge_scoped({'easylist': scoped}, domains)",
+    "print(json.dumps(mod.domains_to_dnr_rules(domains, merged)))",
+  ].join("\n"));
+  const py = JSON.parse(out);
+  for (const h of STREAM_HOSTS) assert(opensPage(py, h), "packer: stream host navigation blocked: " + h);
+  const arrays = JSON.parse(await runPython(PY_LOAD + "\nprint(json.dumps([mod.PROTECTED_SUFFIX, mod.PROTECTED_EXACT]))"));
+  const PH = globalThis.GeckoProtectedHosts;
+  assert(JSON.stringify(arrays) === JSON.stringify([PH.SUFFIX, PH.EXACT]), "packer reads the same protected-host list");
+});
+
+Deno.test("bug 1: Allow this domain (2,000,020) lifts a list navigation block; per-site Allow lifts it for links from that site", () => {
+  const rules = mergeLikePacker(DOC_AND_WHOLE);
+  assert(blocks(rules, typed("a-ads.example")), "blocked before");
+  assert(TC.userDomainReason("a-ads.example").domain === "a-ads.example", "the box accepts an ordinary-list $document host");
+  const userAllow = TC.buildUserAllowRules(["a-ads.example"], 950000, 1000);
+  for (const req of [typed("a-ads.example"), clicked("a-ads.example"), sub("a-ads.example", "image")]) {
+    assert(evaluate(rules.concat(userAllow), req).action === "allow", "allow box beats the list rule: " + JSON.stringify(req));
+  }
+  // The per-site Allow rule shape the worker writes (general-background.js).
+  assert(/priority: 10000,\s*action: \{ type: "allow" \},\s*condition: \{\s*initiatorDomains: \[host\],\s*resourceTypes: \[\s*"main_frame"/.test(backgroundSource), "per-site allow shape");
+  const siteAllow = [{ id: 900000, priority: 10000, action: { type: "allow" }, condition: { initiatorDomains: ["news.example"], resourceTypes: ["main_frame", "sub_frame", "stylesheet", "script", "image", "font", "object", "xmlhttprequest", "ping", "media", "websocket", "other"] } }];
+  assert(evaluate(rules.concat(siteAllow), clicked("a-ads.example")).action === "allow", "link followed from the allowed site opens");
+  assert(evaluate(rules.concat(siteAllow), typed("a-ads.example")).action === "block", "typed URL has no initiator: still blocked (recovery = Allow this domain)");
+});
+
+Deno.test("exempt list: one-word reasons, no threat-tier host, real-engagement hosts open but stay blocked for page parts", () => {
+  const threat = new Set(threatRules.flatMap((r) => r.condition.requestDomains || []));
+  const under = (h, set) => { const p = h.split("."); for (let i = 0; i < p.length - 1; i++) if (set.has(p.slice(i).join("."))) return true; return false; };
+  const hosts = Object.entries(FO.NAV_EXEMPT.hosts);
+  assert(hosts.length >= 1, "exempt hosts listed");
+  for (const [h, why] of hosts) {
+    assert(/^[a-z]+$/.test(why), "one-word reason for " + h);
+    assert(!under(h, threat), "exempt host is in the threat tier: " + h);
+    const rules = mergeLikePacker(`||${h}^\n||${h}^$document\n||sub.${h}^$document`);
+    assert(opensPage(rules, h) && opensPage(rules, "sub." + h), "exempt host opens: " + h);
+    assert(blocks(rules, sub(h, "script")), "exempt host page parts still blocked: " + h);
+    assert(FO.isNavExempt("deep.sub." + h) && !FO.isNavExempt("not" + h), "subdomains only: " + h);
+  }
+});
+
+Deno.test("settings text: the allow box covers ordinary-list navigation blocks too", () => {
+  const box = settingsHtml.slice(settingsHtml.indexOf('id="h-allow"'), settingsHtml.indexOf('id="h-sites"'));
+  assert(!/\(threat tier\)<\/h2>/.test(box), "heading no longer limited to the threat tier");
+  assert(/blocked page/i.test(box) && /filter lists/i.test(box), "explains it also opens pages the filter lists block");
 });

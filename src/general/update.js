@@ -137,7 +137,8 @@ function installGeneralAdblockUpdate(target) {
   // ICANN suffixes from src/threat/psl.js (skipped when not loaded, e.g. in old
   // harnesses). Private suffixes and shared-platform parents (github.io,
   // dynamic-DNS parents, ...) are left to the lists here: this tier is
-  // priority 1, never blocks navigations, and "Allow this page" overrides it.
+  // priority 1, blocks navigations only for explicit `$document` filters, and
+  // "Allow this site" / Settings -> "Allow this domain" override it.
   // The packer applies the same check.
   function localAddress(d) {
     const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(d);
@@ -235,17 +236,32 @@ function installGeneralAdblockUpdate(target) {
     return ordered;
   }
 
+  // The scope an entry keeps next to the whole-domain set (filter-options.js
+  // scopeForMerge): a whole-domain host keeps only an explicit $document part
+  // (main_frame: a whole-domain rule never matches opening the page), a
+  // navigation-exempt host never keeps main_frame. Without the shared file,
+  // the old rule (drop entries of whole-domain hosts).
+  function mergedScope(d, key, whole) {
+    const FO = filterOptions();
+    if (FO && FO.scopeForMerge) return FO.scopeForMerge(d, key, whole.has(d));
+    return whole.has(d) ? null : key;
+  }
+
   // Scoped entries per list, in source order, deduped, never-block removed, and
-  // dropped when the same domain is already a whole-domain block.
+  // reduced to their main_frame part (or dropped) when the same domain is
+  // already a whole-domain block.
   function mergeScoped(perListScoped, wholeDomains) {
     const whole = new Set(wholeDomains);
     const seen = new Set();
     const out = [];
     for (const src of SOURCES) {
       let kept = 0;
-      for (const [d, key] of perListScoped[src.name] || []) {
+      for (const [d, key0] of perListScoped[src.name] || []) {
+        if (isNeverBlock(d)) continue;
+        const key = mergedScope(d, key0, whole);
+        if (key === null) continue;
         const id = d + "\n" + key;
-        if (whole.has(d) || isNeverBlock(d) || seen.has(id)) continue;
+        if (seen.has(id)) continue;
         seen.add(id);
         out.push([d, key]);
         kept += 1;
@@ -801,9 +817,12 @@ function installGeneralAdblockUpdate(target) {
       domains = domains.slice(0, MAX_LIST_RULES * DOMAINS_PER_RULE);
       const seenScoped = new Set(scoped.map(([d, k]) => d + "\n" + k));
       const whole = new Set(domains);
-      for (const [d, k] of packedScoped) {
+      for (const [d, k0] of packedScoped) {
+        if (isNeverBlock(d)) continue;
+        const k = mergedScope(d, k0, whole);
+        if (k === null) continue;
         const id = d + "\n" + k;
-        if (whole.has(d) || seenScoped.has(id) || isNeverBlock(d)) continue;
+        if (seenScoped.has(id)) continue;
         seenScoped.add(id);
         scoped.push([d, k]);
       }

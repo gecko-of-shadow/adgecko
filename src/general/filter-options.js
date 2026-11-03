@@ -47,6 +47,40 @@
     "cancel": ["badfilter"]
   }/*FILTER-OPTION-TABLE-END*/;
 
+  // Hosts people open on purpose (an affiliate link in an article, a shop
+  // deal): never a navigation (main_frame) block from the ordinary lists, even
+  // when a list asks for `$document`. Their other rules stay. One entry per
+  // registrable host (subdomains included), each with a one-word reason;
+  // evidence in BUILD-PROGRESS "NEXT BUILD 2" BLOCK 5. The threat tier does not
+  // read this. The packer reads the JSON between the markers.
+  const NAV_EXEMPT = /*NAV-EXEMPT-START*/{
+    "version": 1,
+    "hosts": {
+      "redirectingat.com": "affiliate",
+      "ojrq.net": "affiliate",
+      "invol.co": "affiliate",
+      "adtraction.com": "affiliate"
+    }
+  }/*NAV-EXEMPT-END*/;
+
+  function isNavExempt(host) {
+    const h = String(host || "").toLowerCase().replace(/\.$/, "");
+    for (const d of Object.keys(NAV_EXEMPT.hosts)) if (h === d || h.endsWith("." + d)) return true;
+    return false;
+  }
+
+  // Stream / player hosts (the ONE list in src/threat/protected-hosts.js,
+  // loaded before update.js in the worker): never a navigation block either.
+  // Same host relation as protectedReason(): under a SUFFIX entry, or an
+  // ancestor of (or equal to) any entry. The packer reads the same arrays.
+  const under = (h, d) => h === d || h.endsWith("." + d);
+  function isNavProtected(host) {
+    const h = String(host || "").toLowerCase().replace(/\.$/, "");
+    const PH = root.GeckoProtectedHosts;
+    if (!PH) return false;
+    return PH.SUFFIX.some((p) => under(h, p)) || PH.ALL.some((p) => under(p, h));
+  }
+
   const DOMAIN_RE = /^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])\^(\$[^#]*)?$/i;
 
   // Options string (with or without the leading "$") -> { key, cancel } or null.
@@ -139,6 +173,32 @@
     return "p=" + p + "|t=" + t.join(",") + "|x=" + x.join(",");
   }
 
+  // The scope a list entry keeps when the rules are merged (update.js
+  // mergeScoped / swap fallback, packer merge_scoped), or null to drop it.
+  //  - A host that is also a whole-domain block: its page parts are covered by
+  //    that block, but a whole-domain rule never matches opening the page, so
+  //    an explicit `$document` part is kept as a main_frame-only scope (party
+  //    kept). Everything else is dropped as before.
+  //  - A navigation-exempt or stream-protected host never keeps main_frame
+  //    (the rest stays).
+  function scopeForMerge(domain, key, isWhole) {
+    if (!key) return null;
+    const parts = {};
+    for (const seg of key.split("|")) {
+      const i = seg.indexOf("=");
+      parts[seg.slice(0, i)] = seg.slice(i + 1);
+    }
+    let t = parts.t ? parts.t.split(",") : [];
+    const nav = t.includes("main_frame");
+    if (nav && (isNavExempt(domain) || isNavProtected(domain))) {
+      t = t.filter((v) => v !== "main_frame");
+      if (!t.length || isWhole) return null;
+      return "p=" + (parts.p || "") + "|t=" + t.join(",") + "|x=" + (parts.x || "");
+    }
+    if (!isWhole) return key;
+    return nav ? "p=" + (parts.p || "") + "|t=main_frame|x=" : null;
+  }
+
   // One `||host^$opts` line -> [domain, key, cancel] or null (not this form / dropped).
   function convertLine(line) {
     const m = DOMAIN_RE.exec(String(line || "").trim());
@@ -163,5 +223,5 @@
     return popup;
   }
 
-  root.GeneralFilterOptions = { TABLE, DOMAIN_RE, convertOptions, keyToCondition, conditionKey, convertLine, isPopupOnly };
+  root.GeneralFilterOptions = { TABLE, NAV_EXEMPT, DOMAIN_RE, convertOptions, keyToCondition, conditionKey, convertLine, isPopupOnly, isNavExempt, isNavProtected, scopeForMerge };
 })(typeof self !== "undefined" ? self : globalThis);
