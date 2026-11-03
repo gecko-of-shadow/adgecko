@@ -107,12 +107,21 @@ accepted as real.
 The ordinary list tier skips ICANN public suffixes (`co.uk`) and non-public
 IPv4 addresses too (security review L-3), at refresh time and in the packer;
 private suffixes and shared-platform parents (`github.io`, dynamic-DNS
-parents) stay up to the lists there (that tier is priority 1, blocks page
-navigations only for `$doc` list entries, and "Allow this page" overrides
-it; known gap, not fixed yet: a filter with only negated types such as
-`$~script` becomes a rule that also blocks navigations to its host). The
-packed `general-network.json` was repacked on 2026-11-03 and no longer holds
-`pisz.pl` or `0.0.0.1`.
+parents) stay up to the lists there. That tier is priority 1 and blocks
+opening a page (main_frame) only for an explicit `$doc` / `$document` list
+entry, also when another list blocks the same host as a whole domain (fixed
+2026-11-03: the merge used to drop such entries, so about 500 EasyList ad
+servers opened when visited directly). A filter with only negated types
+(`$~script`, `$~stylesheet,third-party`) never blocks opening its host
+(fixed 2026-11-03: Chrome matches a rule with only `excludedResourceTypes`
+for page loads too, so `main_frame` is now always in that list). Stream and
+player hosts (`protected-hosts.js`) and a small list of affiliate
+redirectors people click on purpose (`NAV_EXEMPT` in
+`src/general/filter-options.js`) never get a navigation block from this
+tier. "Allow this site" in the popup lifts it for links followed from that
+site; Settings -> "Allow this domain" lifts it everywhere, also for a typed
+address. The packed `general-network.json` was repacked on 2026-11-03
+(20:37Z) with both fixes; it no longer holds `pisz.pl` or `0.0.0.1`.
 
 `youtubekids.com` and `kickusercontent.com` were added to the build prompt's
 list (fail-open): they are in the manifest's stream-site exclusions.

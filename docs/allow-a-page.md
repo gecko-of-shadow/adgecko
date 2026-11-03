@@ -29,7 +29,7 @@ When the window opens, the site line may say **Checking this page…** for a mom
 - Other addresses of the same site count separately. For example `example.com` without `www`, or `shop.example.com`. Allow each one you need.
 - Chrome remembers it. It stays until you undo it.
 - If you remove the extension, or load a new copy from a different folder, the allowed sites are forgotten. Allow them again.
-- Known malware sites stay blocked (the threat tier). The settings page has an **Allow this domain** box for that.
+- Known malware sites stay blocked (the threat tier). The settings page has an **Allow this domain** box for that (see below).
 - On Twitch, YouTube and Kick, allowing turns off only this extension's own helpers there; their built-in ad blocking always keeps running.
 
 ## Undo it
@@ -38,6 +38,18 @@ When the window opens, the site line may say **Checking this page…** for a mom
 2. Click the gecko icon.
 3. Click **Block again**. It goes back to **Allow this site**.
 4. Reload the page.
+
+## A page Chrome says is blocked
+
+Sometimes Chrome shows its own error page, "This page has been blocked by an extension", instead of the site. That happens when a filter list or the malware list blocks opening that site (mostly ad servers and known bad sites). The popup cannot help here: the blocked page is not a website it can see, and a typed address or bookmark has no "site you came from" to allow.
+
+If you trust the site:
+
+1. Click the gecko icon, then the gear (or open the extension's options) to open the settings page.
+2. Under **Allow this domain**, type the site's domain (for example `example.com`, without `https://`) and click **Allow this domain**.
+3. Go back to the page and reload it.
+
+The domain and all its subdomains are then never blocked, by the filter lists or the malware list. Remove it from the same list to undo. Public suffixes (`co.uk`) and big shared platforms are refused.
 
 ## If the button is grey
 

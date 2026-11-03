@@ -69,6 +69,7 @@ Full details, permissions, and the list sites: [docs/permissions-and-privacy.md]
   - *Open a normal http(s) page to allow it. Already on one? Reload it.* Chrome's own pages cannot be allowed. On a normal website, the page was open before you installed or reloaded the extension: reload it, then open the window again.
 - **A copy button on a website does not copy a command?** The clipboard guard stops pages from writing commands like `powershell ...` or `curl ... | sh` unless you copy them yourself: select the text and press Ctrl+C. Documentation sites such as GitHub are trusted. Or use **Fix this site**.
 - **Blocked things still missing after you allow a site?** Reload the page.
+- **Chrome says "This page has been blocked by an extension"?** A filter list or the malware list blocks opening that site (mostly ad servers and known bad sites). If you trust it: settings page (the gear) -> **Allow this domain** -> type the domain -> reload. The popup's **Allow this site** cannot help on that page. [Details](docs/allow-a-page.md#a-page-chrome-says-is-blocked)
 - **Loading a new copy?** Remove the old one first. Removing the extension, or loading a copy from a different folder, forgets the allowed sites, so allow them again.
 
 ## License and brand
