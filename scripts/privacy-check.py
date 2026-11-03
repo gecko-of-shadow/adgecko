@@ -303,13 +303,14 @@ def write_summary(text):
         handle.write(text)
 
 
-def kinds_for(line, personal, path=None):
+def kinds_for(line, personal, path=None, generic=True):
     found = []
     if any(pattern.search(line) for pattern in personal):
         found.append(PERSONAL_KIND)
     if any(pattern.search(line) for pattern in GENERIC_SECRET_PATTERNS):
         found.append(SECRET_KIND)
-    found.extend(generic_kinds(line, path))
+    if generic:
+        found.extend(generic_kinds(line, path))
     return found
 
 
@@ -409,7 +410,9 @@ def scan_diff(diff, personal, findings):
             new_line += 1
         else:
             continue
-        kinds = kinds_for(text, personal, path)
+        # The generic checks (IPs, e-mails, paths) look only at added lines:
+        # a change that removes such a value must not fail for it.
+        kinds = kinds_for(text, personal, path, generic=raw.startswith("+"))
         if not kinds:
             continue
         if not remember(findings, path, max(line, 1), kinds):

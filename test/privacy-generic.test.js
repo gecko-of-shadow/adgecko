@@ -120,3 +120,10 @@ Deno.test("no personal machine references in code, tests or docs (L-1)", async (
   const hits = dec.decode(out.stdout).trim();
   assert(hits === "", "personal references:\n" + hits);
 });
+
+Deno.test("privacy check: removing a public IP in a diff is fine, adding one is not", async () => {
+  const ip = j("93.184", ".216.34");
+  const diff = ["diff --git a/x.md b/x.md", "--- a/x.md", "+++ b/x.md", "@@ -1,2 +1,2 @@", " context", "-old " + ip, "+new 192.0.2.1", "diff --git a/y.md b/y.md", "--- a/y.md", "+++ b/y.md", "@@ -1 +1 @@", "-a", "+b " + ip].join("\n");
+  const got = await pyCall("(lambda f: (m.scan_diff(data, [], f), sorted(f))[1])(set())", diff);
+  assert(JSON.stringify(got) === JSON.stringify([["y.md", 1, "IP address"]]), JSON.stringify(got));
+});
