@@ -47,12 +47,40 @@ function installTwitchDirectoryAds(target) {
     root.querySelectorAll(FEEDBACK_SELECTOR).forEach((button) => hide(cardFor(button)));
   }
 
+  // Directory and home grids are where the in-grid Ad cards live. Channel
+  // pages (live chat mutates constantly) never run the sweep; the CSS rule
+  // above still hides the banner slot everywhere.
+  function isDirectoryPage(pathname) {
+    const p = String(pathname || "/");
+    return p === "/" || p === "/directory" || p.startsWith("/directory/");
+  }
+
+  // Mutation-driven sweep, at most once per SWEEP_MS, only on directory
+  // pages and only while the switch is on (M-5).
+  const SWEEP_MS = 250;
+  function makeScheduler(env) {
+    let timer = 0;
+    let last = -Infinity;
+    return function schedule() {
+      if (timer || !env.on() || !isDirectoryPage(env.pathname())) return;
+      const wait = Math.max(0, SWEEP_MS - (env.now() - last));
+      timer = env.setTimeout(() => {
+        timer = 0;
+        last = env.now();
+        if (env.on() && isDirectoryPage(env.pathname())) sweep(env.root());
+      }, wait);
+    };
+  }
+
   target.BANNER_SELECTOR = BANNER_SELECTOR;
   target.FEEDBACK_SELECTOR = FEEDBACK_SELECTOR;
   target.STYLE_ID = STYLE_ID;
   target.CSS = CSS;
+  target.SWEEP_MS = SWEEP_MS;
   target.cardFor = cardFor;
   target.hideDirectoryAds = sweep;
+  target.isDirectoryPage = isDirectoryPage;
+  target.makeScheduler = makeScheduler;
 }
 
 function startTwitchDirectoryAds() {
@@ -70,10 +98,10 @@ function startTwitchDirectoryAds() {
   style.id = api.STYLE_ID;
   style.textContent = api.CSS;
   (document.documentElement || document.head || document).appendChild(style);
-  api.hideDirectoryAds(document);
+  if (api.isDirectoryPage(location.pathname)) api.hideDirectoryAds(document);
   // Feature switch "twitchDisplay" (src/settings/features.js): on until
   // storage says otherwise; live (storage.onChanged). Hidden cards stay hidden
-  // until the next load; the sheet and the observer stop at once.
+  // until the next load; the sheet and the sweeps stop at once.
   let on = true;
   watchSwitch((next) => {
     on = next;
@@ -81,9 +109,14 @@ function startTwitchDirectoryAds() {
     if (on && !style.isConnected) (document.documentElement || document.head || document).appendChild(style);
   });
   if (typeof MutationObserver !== "function") return;
-  const observer = new MutationObserver(() => {
-    if (on) api.hideDirectoryAds(document);
+  const schedule = api.makeScheduler({
+    on: () => on,
+    pathname: () => location.pathname,
+    now: () => Date.now(),
+    setTimeout: (fn, ms) => setTimeout(fn, ms),
+    root: () => document,
   });
+  const observer = new MutationObserver(schedule);
   observer.observe(document.documentElement, { childList: true, subtree: true });
 }
 

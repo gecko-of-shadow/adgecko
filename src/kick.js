@@ -362,18 +362,40 @@ function installKickAdblock(target) {
       return Promise.resolve(nativeCreate(options)).then((session) => {
         if (!session || wrapped.has(session) || typeof session.addEventListener !== "function") return session;
         const nativeAdd = session.addEventListener.bind(session);
-        session.addEventListener = function (type, listener, listenerOptions) {
-          return nativeAdd(type, function (event) {
-            try {
-              const detail = event && typeof event === "object" ? event.detail : null;
-              onDetail(detail);
-            } catch (error) {
-              debugLog("kick failed open", error);
-            }
-            if (typeof listener === "function") return listener.call(this, event);
-            if (listener && typeof listener.handleEvent === "function") return listener.handleEvent(event);
-          }, listenerOptions);
+        const nativeRemove = typeof session.removeEventListener === "function" ? session.removeEventListener.bind(session) : null;
+        // One wrapper per (type, listener), so the page can remove its
+        // listener again and a repeated add is still deduplicated (M-16).
+        const wrappers = new Map();
+        const wrapperFor = (type, listener) => {
+          let byListener = wrappers.get(type);
+          if (!byListener) wrappers.set(type, (byListener = new WeakMap()));
+          let w = byListener.get(listener);
+          if (!w) {
+            w = function (event) {
+              try {
+                const detail = event && typeof event === "object" ? event.detail : null;
+                onDetail(detail);
+              } catch (error) {
+                debugLog("kick failed open", error);
+              }
+              if (typeof listener === "function") return listener.call(this, event);
+              if (listener && typeof listener.handleEvent === "function") return listener.handleEvent(event);
+            };
+            byListener.set(listener, w);
+          }
+          return w;
         };
+        session.addEventListener = function (type, listener, listenerOptions) {
+          if (!listener || (typeof listener !== "function" && typeof listener !== "object")) return nativeAdd(type, listener, listenerOptions);
+          return nativeAdd(type, wrapperFor(type, listener), listenerOptions);
+        };
+        if (nativeRemove) {
+          session.removeEventListener = function (type, listener, listenerOptions) {
+            const byListener = wrappers.get(type);
+            const w = listener && byListener ? byListener.get(listener) : null;
+            return nativeRemove(type, w || listener, listenerOptions);
+          };
+        }
         wrapped.add(session);
         return session;
       });
@@ -492,6 +514,7 @@ function installKickAdblock(target) {
   }
 
   target.startKickAdblock = startKickAdblock;
+  target.wrapMediaTailor = wrapMediaTailor;
 }
 
 if (typeof window !== "undefined" && typeof document !== "undefined") {
