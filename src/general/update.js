@@ -43,7 +43,6 @@ function installGeneralAdblockUpdate(target) {
     { name: "hagezi_pro_mini", url: "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt", minDomains: 10000, mirrors: [] },
     { name: "ublock_badware", url: "https://ublockorigin.github.io/uAssets/filters/badware.txt", minDomains: 500, mirrors: [] },
     { name: "dandelion_antimalware", url: "https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt", minDomains: 1000, mirrors: [] },
-    { name: "curben_phishing", url: "https://malware-filter.gitlab.io/malware-filter/phishing-filter.txt", minDomains: 5000, mirrors: [] },
     { name: "adguard_base", url: "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt", minDomains: 1000, mirrors: [] },
   ];
   const LIST_HOSTS = ["pgl.yoyo.org", "malware-filter.gitlab.io", "easylist.to", "ublockorigin.github.io", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz", "raw.githubusercontent.com", "filters.adtidy.org"];
@@ -206,6 +205,31 @@ function installGeneralAdblockUpdate(target) {
     return out;
   }
 
+  // Lists that were removed from SOURCES (e.g. curben_phishing, dropped
+  // 2026-11-02: OpenPhish-derived) but are still cached on existing installs:
+  // drop their payload and metadata. Returns the dropped names; the caller
+  // rebuilds the dynamic rules so their domains stop being blocked.
+  const RETIRED_LISTS = ["curben_phishing"];
+  async function dropRetiredLists(deps, state) {
+    const known = new Set(SOURCES.map((s) => s.name));
+    const lists = (state && state.lists) || {};
+    const names = Object.keys(lists).filter((n) => !known.has(n));
+    // Also catch a payload key left behind without metadata.
+    for (const n of RETIRED_LISTS) if (!names.includes(n) && !known.has(n)) names.push(n);
+    const present = await payloadsPresent(deps, names);
+    const metaDropped = names.filter((n) => lists[n]);
+    const toRemove = names.filter((n) => lists[n] || present.has(n));
+    if (!toRemove.length) return [];
+    if (deps.removeListData) await deps.removeListData(toRemove);
+    if (metaDropped.length) {
+      const next = {};
+      for (const [k, v] of Object.entries(lists)) if (!metaDropped.includes(k)) next[k] = v;
+      await deps.setState({ lists: next });
+      if (state) state.lists = next;
+    }
+    return toRemove;
+  }
+
   async function payloadsPresent(deps, names) {
     if (!names.length) return new Set();
     if (deps.listDataPresent) {
@@ -237,13 +261,19 @@ function installGeneralAdblockUpdate(target) {
     const now = deps.now();
     if (!shouldRun(state, now, manual)) return { ok: true, ran: false, reason: "throttled" };
     const fresh = {};
+    let retired = [];
+    try {
+      retired = await dropRetiredLists(deps, state);
+    } catch {
+      retired = [];
+    }
     try {
       await deps.setState({ lastAttemptAt: now });
       const lists = {};
       for (const [k, v] of Object.entries(state.lists || {})) lists[k] = listMeta(v);
       const present = await payloadsPresent(deps, Object.keys(lists));
       for (const k of Object.keys(lists)) if (!present.has(k)) delete lists[k];
-      let changed = !state.dynamicActive;
+      let changed = !state.dynamicActive || retired.length > 0;
       let cosmeticChanged = false;
       const errors = {};
       const mirrorNotes = {};
@@ -466,8 +496,14 @@ function installGeneralAdblockUpdate(target) {
       if (removeRuleIds.length) await deps.updateDynamicRules({ removeRuleIds, addRules: [] });
       return { ok: true, mode: "off" };
     }
+    let retired = [];
+    try {
+      retired = await dropRetiredLists(deps, state);
+    } catch {
+      retired = [];
+    }
     if (state.dynamicActive && state.lists && Object.keys(state.lists).length) {
-      if (await dynamicLooksActive(deps, state)) {
+      if (!retired.length && await dynamicLooksActive(deps, state)) {
         await deps.setStaticEnabled(false);
         return { ok: true, mode: "dynamic" };
       }
@@ -493,6 +529,7 @@ function installGeneralAdblockUpdate(target) {
 
   Object.assign(target, {
     POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
+    RETIRED_LISTS, dropRetiredLists,
     LIST_RULE_ID_BASE, KEPT_RULE_ID_BASE, ALLOW_RULE_ID_BASE, SOURCES, LIST_HOSTS,
     isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules, keepsWholeDomain,
     shouldRun, listDue, refresh, describeError, LIST_ALLOW_RULE_ID, listAllowRule, applyEnabled, isListUrl,

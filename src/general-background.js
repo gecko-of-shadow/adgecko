@@ -321,6 +321,10 @@ function listDeps() {
       await storageReady();
       await localSet({ [LIST_DATA_PREFIX + name]: payload });
     },
+    removeListData: async (names) => {
+      await storageReady();
+      await localRemove(names.map((n) => LIST_DATA_PREFIX + n));
+    },
     // Size only, so checking for a payload does not read megabytes.
     listDataPresent: async (names) => {
       await storageReady();

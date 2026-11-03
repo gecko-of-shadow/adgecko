@@ -41,6 +41,7 @@ function fakeDeps({ responses, enabled = true, failUpdate = false }) {
     setState: async (p) => Object.assign(state, structuredClone(p)),
     getListData: async (names) => Object.fromEntries(names.filter((n) => data[n]).map((n) => [n, structuredClone(data[n])])),
     setListData: async (name, payload) => { data[name] = structuredClone(payload); },
+    removeListData: async (names) => { for (const n of names) delete data[n]; },
     getDynamicRules: async () => dynamic.slice(),
     updateDynamicRules: async ({ removeRuleIds, addRules }) => {
       if (failUpdate && addRules.length) throw new Error("quota");
@@ -192,13 +193,13 @@ Deno.test("offline, garbage, and empty lists keep the last good copy", async () 
   const first = await U.refresh(d, {});
   assert(first.ok && !d.staticOn, JSON.stringify(first));
   const before = await d.getState();
-  const keep = ["hagezi_pro_mini", "curben_phishing", "adguard_base"];
+  const keep = ["hagezi_pro_mini", "dandelion_antimalware", "adguard_base"];
   const saved = Object.fromEntries(keep.map((name) => [name, before.lists[name].count]));
   const savedData = Object.fromEntries(keep.map((name) => [name, d.data[name].domains.length]));
   const rulesBefore = d.dynamic.length;
   d.fetch = async (url) => {
     if (url.includes("pro.mini")) throw new Error("offline");
-    if (url.includes("phishing-filter")) return { ok: true, status: 200, headers: new Headers(), text: async () => "this is garbage\n!!!" };
+    if (url.includes("Anti-Malware")) return { ok: true, status: 200, headers: new Headers(), text: async () => "this is garbage\n!!!" };
     if (url.includes("adtidy.org")) return { ok: true, status: 200, headers: new Headers(), text: async () => "" };
     return ok(url);
   };

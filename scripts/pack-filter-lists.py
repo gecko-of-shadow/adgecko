@@ -94,15 +94,9 @@ SOURCES = OrderedDict(
                 "priority": 30,
             },
         ),
-        (
-            "curben_phishing",
-            {
-                "url": "https://malware-filter.gitlab.io/malware-filter/phishing-filter.txt",
-                "license": "phishing-filter (curbengh / malware-filter). Attribution required. https://gitlab.com/malware-filter/phishing-filter",
-                "role": "malware_threat",
-                "priority": 25,
-            },
-        ),
+        # Curben's phishing-filter was removed on 2026-11-02 (owner decision: no
+        # OpenPhish data at all; that list is curated from OpenPhish, IPThreat and
+        # PhishTank). curbengh's urlhaus-filter above is URLhaus data and stays.
         (
             "adguard_base",
             {

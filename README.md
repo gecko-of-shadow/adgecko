@@ -49,7 +49,7 @@ An allow counts for the whole website address and stays until you undo it. Detai
 
 - No tracking: it does not send your browsing history anywhere.
 - No account, and no analytics call of its own. Settings stay in Chrome's storage on this browser.
-- It downloads nine public filter lists (EasyList, EasyPrivacy, AdGuard Base, and others) from the [list sites](docs/permissions-and-privacy.md#host-permissions), over HTTPS without cookies. Those sites see the list address and your IP address. The page you are visiting is not part of that address.
+- It downloads eight public filter lists (EasyList, EasyPrivacy, AdGuard Base, and others) from the [list sites](docs/permissions-and-privacy.md#host-permissions), over HTTPS without cookies. Those sites see the list address and your IP address. The page you are visiting is not part of that address.
 - On Twitch, it asks Twitch for ad-free copies of the stream. Those requests go to Twitch.
 
 Full details, permissions, and the list sites: [docs/permissions-and-privacy.md](docs/permissions-and-privacy.md)
