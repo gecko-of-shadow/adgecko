@@ -299,3 +299,36 @@ Deno.test({
     assert(await tryWrite(DANGER), "user switch did not reach the guard");
   },
 });
+
+// Real-browser finding (2026-11-02): an about:blank / srcdoc / blob: frame has
+// location.hostname "", so a per-site switch did not reach it. flags.js now
+// uses the inherited origin (window.origin, else the nearest ancestor origin).
+Deno.test({
+  name: "flag port: a blank frame gets its creator site's switches",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const run = async (win, loc) => {
+      const store = { settings: { v: 1, enabled: true, features: {} }, siteOverrides: { "news.example": { features: { guardClipboard: false } } } };
+      const chrome = { runtime: { lastError: undefined, onMessage: { addListener() {} } }, storage: { local: { get(_k, cb) { cb(structuredClone(store)); } }, onChanged: { addListener() {} } } };
+      let port = null;
+      win.addEventListener("gk-p1", (e) => { port = port || e.ports[0]; }, true);
+      win.dispatchEvent(new Event("gk-r1"));
+      new Function("chrome", "window", "location", "globalThis", flagsSource)(chrome, win, loc, globalThis);
+      const got = [];
+      port.onmessage = (m) => got.push(m.data);
+      await new Promise((r) => setTimeout(r, 5));
+      port.close();
+      return got.at(-1).f.guardClipboard;
+    };
+    const blank = Object.assign(new EventTarget(), { origin: "https://news.example" });
+    blank.top = {};
+    assert(await run(blank, { hostname: "", origin: "null" }) === false, "about:blank frame of news.example");
+    const viaAncestor = Object.assign(new EventTarget(), { origin: "null" });
+    viaAncestor.top = {};
+    assert(await run(viaAncestor, { hostname: "", ancestorOrigins: ["https://news.example"] }) === false, "ancestor origin fallback");
+    const sandboxed = Object.assign(new EventTarget(), { origin: "null" });
+    sandboxed.top = {};
+    assert(await run(sandboxed, { hostname: "" }) === true, "opaque origin keeps the defaults");
+  },
+});

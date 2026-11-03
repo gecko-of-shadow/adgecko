@@ -53,12 +53,30 @@
     }
   }
 
+  // about:blank, srcdoc and blob: frames have no host of their own
+  // (location.hostname is ""): they belong to the site that created them, so
+  // its per-site switches apply (window.origin is the inherited origin; the
+  // nearest ancestor's origin is the fallback). Opaque origins stay "".
+  function siteHost() {
+    try {
+      if (location.hostname) return location.hostname;
+      const candidates = [window.origin];
+      if (location.ancestorOrigins && location.ancestorOrigins.length) candidates.push(location.ancestorOrigins[0]);
+      for (const o of candidates) {
+        if (typeof o === "string" && /^https?:\/\//.test(o)) return new URL(o).hostname;
+      }
+    } catch {
+      // defaults
+    }
+    return "";
+  }
+
   function load() {
     try {
       chrome.storage.local.get(KEYS, (stored) => {
         void chrome.runtime.lastError;
         try {
-          flags = F.resolve(stored && stored.settings, stored && stored.siteOverrides, location.hostname);
+          flags = F.resolve(stored && stored.settings, stored && stored.siteOverrides, siteHost());
           for (const p of ports) send(p);
         } catch {
           // fail open
