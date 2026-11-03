@@ -83,7 +83,7 @@ function startFrame(href, isTop) {
 // the extension loaded, chrome://). `answerLater` holds the reply until `answer()`.
 // The fake worker answers "siteInfo" from the registry (like src/general-background.js)
 // and "tabSignal" from `signal`.
-async function openPopup({ pageHref, scripted = true, stored = {}, answerLater = false, signal = null, storage: shared = null }) {
+async function openPopup({ pageHref, scripted = true, stored = {}, answerLater = false, signal = null, storage: shared = null, streamTop = false }) {
   const storage = shared || Object.assign({}, stored);
   const F = globalThis.GeckoFeatures;
   // frameId -> listeners. The subframe comes first, so it would win a broadcast.
@@ -92,6 +92,8 @@ async function openPopup({ pageHref, scripted = true, stored = {}, answerLater =
     frames.set(3, startFrame("https://ads.example.net/slot?id=9", false));
     frames.set(0, startFrame(pageHref, true));
   }
+  // On Twitch/YouTube/Kick cosmetic.js never runs; settings/flags.js answers in the top frame.
+  if (streamTop) frames.set(0, [(msg, _s, reply) => { if (msg && msg.type === "pageOrigin") reply({ origin: new URL(pageHref).origin }); }]);
   const sent = [];
   const background = [];
   let pending = null;
@@ -324,6 +326,20 @@ Deno.test("Fix on a stream site turns off only our own helpers there; the dot's 
   assert(/^Version /.test(p.el["version-line"].textContent), "version under Show more");
   await p.el["open-settings"].fire("click");
   assert(p.background.some((m) => m.type === "openOptionsPage"), "gear opens the settings page");
+});
+
+Deno.test("Fix on YouTube turns off only the sponsored-tile helper; the stuck-start reload and Kick's ad skip stay baked in", async () => {
+  const storage = { settings: { v: 1, enabled: true, features: {} } };
+  const yt = await openPopup({ pageHref: "https://www.youtube.com/watch?v=x", storage, streamTop: true });
+  assertEquals(yt.el["site-host"].textContent, "www.youtube.com");
+  assertEquals(yt.status.textContent, "✅ Protected");
+  assertEquals(yt.el["fix-site"].disabled, false);
+  await yt.el["fix-site"].fire("click");
+  assertEquals(storage.siteOverrides["www.youtube.com"], { features: { youtubeCosmetic: false } }, "only the hide-type helper");
+  const kick = await openPopup({ pageHref: "https://kick.com/somechannel", stored: { settings: { v: 1, enabled: true, features: {} } }, streamTop: true });
+  assertEquals(kick.el["site-host"].textContent, "kick.com");
+  assertEquals(kick.el["fix-site"].disabled, true, "nothing to fix on Kick: the ad skip stays on");
+  assertEquals(kick.button.disabled, false, "Allow this site still works there");
 });
 
 Deno.test("the popup adds no permission", () => {

@@ -121,13 +121,16 @@
     return !all[KEYS.settings] && legacy.includes(origin);
   }
 
-  // "Fix this site": every per-site switch that applies here except the
-  // filter lists (cosmetic hiding and the page guards on ordinary sites, our
-  // own helpers on Twitch/YouTube/Kick). The threat tier is not a per-site
-  // switch and stays on (its allow box is on the settings page).
+  // "Fix this site": the extra filters only - cosmetic hiding and the page
+  // guards on ordinary sites, the hide-type helpers on YouTube and Twitch.
+  // Never the lists, never the threat tier (not a per-site switch; its allow
+  // box is on the settings page) and never what keeps streams playing (the
+  // YouTube stuck-start reload, the Kick ad skip, the vendored players): that
+  // stays baked in, so on Kick there is nothing to fix here.
+  const FIXABLE = ["cosmetic", "guardClipboard", "guardPopups", "youtubeCosmetic", "twitchDisplay"];
   function fixIds() {
     const list = info && Array.isArray(info.features) ? info.features : [];
-    return list.filter((f) => f.perSite && f.available !== false && f.apply !== "always" && f.id !== "network").map((f) => f.id);
+    return list.filter((f) => FIXABLE.includes(f.id) && f.perSite && f.available !== false && f.apply !== "always").map((f) => f.id);
   }
 
   function overrideKey(host) {
