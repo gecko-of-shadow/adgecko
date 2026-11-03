@@ -479,13 +479,31 @@ function installKickAdblock(target) {
     try {
       const PORT_EVENT = "gk-p1";
       let port = null;
+      // Read events through MessageEvent getters captured now, before any page
+      // script runs: a page that later redefines MessageEvent.prototype.data or
+      // .ports can then neither rewrite nor read the flags (review of M-1). Outside
+      // a browser (tests) plain property reads are used.
+      const applyFn = Reflect.apply;
+      const meGetter = (k) => {
+        const d = Object.getOwnPropertyDescriptor(MessageEvent.prototype, k);
+        return d && typeof d.get === "function" ? d.get : null;
+      };
+      const dataGet = meGetter("data");
+      const portsGet = meGetter("ports");
+      const dataOf = dataGet ? (m) => applyFn(dataGet, m, []) : (m) => m && m.data;
+      const portsOf = portsGet ? (e) => applyFn(portsGet, e, []) : (e) => e && e.ports;
+      const flagsOf = (m) => {
+        const d = dataOf(m);
+        return d && typeof d === "object" ? d.f : null;
+      };
       const take = (event) => {
-        const p = event && event.ports && event.ports[0];
+        const ps = portsOf(event);
+        const p = ps && ps[0];
         if (port || !p) return;
         port = p;
         window.removeEventListener(PORT_EVENT, take, true);
         p.addEventListener("message", (m) => {
-          const f = m && m.data && m.data.f;
+          const f = flagsOf(m);
           if (!f || typeof f !== "object" || typeof f.kick !== "boolean") return;
           kickOn = f.kick;
           if (!kickOn) {

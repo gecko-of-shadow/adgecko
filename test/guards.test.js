@@ -332,3 +332,44 @@ Deno.test({
     assert(await run(sandboxed, { hostname: "" }) === true, "opaque origin keeps the defaults");
   },
 });
+
+// Review of M-1 (2026-11-03): in Chromium MessageEvent.prototype.data/.ports are
+// configurable accessors, so a page could redefine them after load and rewrite
+// or read the flags. The guards read events through getters captured at
+// document_start. FakeME mimics Chromium's shape (accessors on the prototype).
+Deno.test({
+  name: "flag port: a page redefining MessageEvent.prototype.data/ports after load can neither forge nor read the flags",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    class FakeME extends Event {
+      constructor(type, init) { super(type); this._d = init && init.data; this._p = (init && init.ports) || []; }
+    }
+    Object.defineProperty(FakeME.prototype, "data", { configurable: true, get() { return this._d; } });
+    Object.defineProperty(FakeME.prototype, "ports", { configurable: true, get() { return this._p; } });
+    const win = new EventTarget();
+    win.getSelection = () => "";
+    const written = [];
+    class Clip { writeText(t) { written.push(t); return Promise.resolve(); } }
+    const nav = { clipboard: new Clip() };
+    const doc = { addEventListener() {}, createElement() { throw new Error("no DOM"); } };
+    new Function("window", "document", "navigator", "location", "MessageEvent", clipboardSource)(win, doc, nav, { hostname: "news.example" }, FakeME);
+    const portListeners = [];
+    const port = { addEventListener(_t, f) { portListeners.push(f); }, start() {} };
+    win.dispatchEvent(new FakeME("gk-p1", { ports: [port] }));
+    assert(portListeners.length === 1, "guard took the port");
+    // The page now poisons the accessors (first inline script).
+    let pageSaw = null;
+    Object.defineProperty(FakeME.prototype, "data", { configurable: true, get() { pageSaw = this._d; return this._d && this._d.f ? { f: { ...this._d.f, guardClipboard: false } } : this._d; } });
+    Object.defineProperty(FakeME.prototype, "ports", { configurable: true, get() { pageSaw = "ports"; return []; } });
+    for (const l of portListeners) l(new FakeME("message", { data: { f: { guardClipboard: true, guardPopups: false } } }));
+    let rejected = false;
+    await nav.clipboard.writeText(DANGEROUS[0]).catch(() => { rejected = true; });
+    assert(rejected && written.length === 0, "forged flag switched the guard off");
+    assert(pageSaw === null, "the page read the flags through its getter");
+    for (const f of ["src/guards/clipboard.js", "src/guards/popups.js", "src/kick.js", "src/youtube.js"]) {
+      const s = Deno.readTextFileSync(new URL("../" + f, import.meta.url));
+      assert(/const dataGet = meGetter\("data"\);/.test(s) && /const ps = portsOf\(event\);/.test(s) && !/m\.data\.f/.test(s), f + " reads the port through captured getters");
+    }
+  },
+});
