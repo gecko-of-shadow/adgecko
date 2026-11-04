@@ -834,6 +834,9 @@ storageReady();
 // Session rules die with the browser and on extension update: put the feed
 // rules back (from the verified cache, else the packed snapshot) on every start.
 applyCachedFeed();
+// Disable and enable fire neither onStartup nor onInstalled, and Chrome puts the
+// manifest icon back. Repaint from storage only: no DNR call, no queue.
+getSettings().then((s) => setIcon(s.generalEnabled !== false));
 
 chrome.runtime.onInstalled.addListener(() => {
   ensureCosmetic();

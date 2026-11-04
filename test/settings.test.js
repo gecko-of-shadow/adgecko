@@ -122,6 +122,16 @@ Deno.test("worker: the toolbar shows the working icon while list blocking is on,
   }
 });
 
+// Disable then enable fires neither onStartup nor onInstalled and Chrome puts the
+// manifest icon back, so every worker start repaints it. No event is fired here.
+Deno.test("worker: a plain worker start repaints the toolbar icon from storage", async () => {
+  for (const [enabled, file] of [[false, "off"], [true, "working"]]) {
+    const w = await worker({ settings: { v: 1, enabled: true, features: { network: enabled } }, generalEnabled: enabled });
+    const path = w.iconCalls.at(-1)?.path;
+    assert(path && path[16] === `../icons/icon16-${file}.png`, JSON.stringify(w.iconCalls));
+  }
+});
+
 Deno.test("worker: migrates the old keys at start and derives the old keys back from new settings", async () => {
   const w = await worker({ generalEnabled: true, generalAllowedOrigins: ["https://news.example"] });
   assert(w.store.settings && w.store.siteOverrides && w.store.siteOverrides["news.example"].enabled === false, JSON.stringify(w.store.siteOverrides));
