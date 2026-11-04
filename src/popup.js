@@ -295,9 +295,13 @@
     if (!activeTab || typeof activeTab.id !== "number" || !signalLine) return;
     const res = await notifyBackground("tabSignal", { tabId: activeTab.id });
     const kind = res && res.ok && res.signal ? res.signal.kind : "";
-    signalLine.textContent = kind === "clipboard"
+    const reason = kind === "clipboard"
       ? "Blocked: this page tried to put a command into your clipboard."
       : kind === "popup" ? "Blocked a pop-up on this page." : "";
+    signalLine.textContent = reason;
+    // The dot is already gone, so this is the one chance to read why.
+    const more = el("more");
+    if (reason && more) more.open = true;
   }
 
   async function applyRules() {

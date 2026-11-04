@@ -36,8 +36,9 @@ function loadWorker(rec = { badges: [], session: {} }) {
     },
     action: {
       setIcon(_o, cb) { if (cb) cb(); }, setTitle() {},
-      setBadgeText(o, cb) { rec.badges.push(["text", o.tabId, o.text]); if (cb) cb(); },
+      setBadgeText(o, cb) { rec.badges.push(["text", o.tabId, o.text]); (rec.shown = rec.shown || {})[o.tabId] = o.text; if (cb) cb(); },
       setBadgeBackgroundColor(o, cb) { rec.badges.push(["color", o.tabId, o.color]); if (cb) cb(); },
+      getBadgeText(o, cb) { cb((rec.shown && rec.shown[o.tabId]) || ""); },
     },
   };
   const importScripts = (...names) => {
@@ -83,7 +84,7 @@ Deno.test("background messages: a guard event from our content script sets that 
   const tabSender = { id: EXT, tab: { id: 7 }, frameId: 0, url: "https://news.example/" };
   let r = await send(onMessage, { source: "twitch-adblock-general", type: "guardEvent", kind: "clipboard" }, tabSender);
   assert(r.keepOpen === undefined && r.response === undefined, "no answer to a content script");
-  assert(rec.badges.some((b) => b[0] === "text" && b[1] === 7 && b[2] === " ") && rec.badges.some((b) => b[0] === "color" && b[1] === 7 && /^#e8/.test(b[2])), JSON.stringify(rec.badges));
+  assert(rec.badges.some((b) => b[0] === "text" && b[1] === 7 && b[2] === " ") && rec.badges.some((b) => b[0] === "color" && b[1] === 7 && b[2] === "#e81cd8"), JSON.stringify(rec.badges));
   assert(rec.session.tabSignals && rec.session.tabSignals[7].kind === "clipboard", "remembered for the popup");
   // Narrow: unknown kinds, no tab, other extensions: nothing.
   const before = rec.badges.length;
@@ -100,4 +101,34 @@ Deno.test("background messages: a guard event from our content script sets that 
   assert(rec.badges.at(-1)[0] === "text" && rec.badges.at(-1)[1] === 7 && rec.badges.at(-1)[2] === "", "dot cleared");
   r = await send(onMessage, { source: "twitch-adblock-general", type: "tabSignal", tabId: 7 }, { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" });
   assert(r.response.signal === null, "read once");
+});
+
+const popupSender = { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" };
+const guard = (documentId) => ({ id: EXT, tab: { id: 7 }, frameId: 0, documentId, url: "https://news.example/" });
+const ping = { source: "twitch-adblock-general", type: "guardEvent", kind: "clipboard" };
+
+// Chrome clears a tab's badge when the tab navigates, but the stored signal
+// stays, so the popup used to blame the next page for the last page's block.
+Deno.test("background messages: with no dot on the tab the popup gets no message, and the stale one is dropped", async () => {
+  const rec = { badges: [], session: {} };
+  const onMessage = loadWorker(rec);
+  await send(onMessage, ping, guard("doc-1"));
+  assert(rec.session.tabSignals[7], "remembered");
+  rec.shown[7] = ""; // the tab navigated
+  const r = await send(onMessage, { source: "twitch-adblock-general", type: "tabSignal", tabId: 7 }, popupSender);
+  assert(r.response.ok && r.response.signal === null, "stale signal handed out: " + JSON.stringify(r.response));
+  assert(!rec.session.tabSignals[7], "stale signal kept");
+});
+
+Deno.test("background messages: bursts are per page, so a block right after navigating still gets its dot", async () => {
+  const rec = { badges: [], session: {} };
+  const onMessage = loadWorker(rec);
+  await send(onMessage, ping, guard("doc-1"));
+  const dots = () => rec.badges.filter((b) => b[0] === "text" && b[2] === " ").length;
+  assert(dots() === 1, "first block");
+  await send(onMessage, ping, guard("doc-1"));
+  assert(dots() === 1, "same page: still one burst");
+  rec.shown[7] = ""; // navigated
+  await send(onMessage, ping, guard("doc-2"));
+  assert(dots() === 2 && rec.shown[7] === " ", "new page, same tab: dot again");
 });

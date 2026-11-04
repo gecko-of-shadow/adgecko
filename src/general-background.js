@@ -909,8 +909,9 @@ async function siteInfo(origin) {
 // is kept in storage.session (trusted contexts only) so the popup can say what
 // happened and clear the dot. Chrome clears a per-tab badge when the tab
 // navigates (observed in Chrome for Testing 155, 2026-11-03), so the dot
-// belongs to the page that caused it. No DNR block counts: that would need
-// declarativeNetRequestFeedback, which this extension does not ask for.
+// belongs to the page that caused it, and a stored event with no dot belongs to
+// a page that is gone. No dot for DNR blocks: reading which rules matched needs
+// declarativeNetRequestFeedback or activeTab, and this extension asks for neither.
 const GUARD_KINDS = ["clipboard", "popup"];
 const SIGNAL_KEY = "tabSignals";
 const SIGNAL_TABS_MAX = 50;
@@ -921,10 +922,11 @@ function sessionArea() {
   return chrome.storage && chrome.storage.session ? chrome.storage.session : null;
 }
 
-function guardEvent(tabId, kind) {
+function guardEvent(tabId, kind, documentId) {
   const now = Date.now();
-  if (now - (lastSignalAt.get(tabId) || 0) < 2000) return; // coalesce bursts
-  lastSignalAt.set(tabId, now);
+  const burst = documentId || tabId; // a new page in the tab is a new burst
+  if (now - (lastSignalAt.get(burst) || 0) < 2000) return; // coalesce bursts
+  lastSignalAt.set(burst, now);
   if (lastSignalAt.size > SIGNAL_TABS_MAX) lastSignalAt.delete(lastSignalAt.keys().next().value);
   try {
     chrome.action.setBadgeBackgroundColor({ tabId, color: BADGE_COLOR }, () => void chrome.runtime.lastError);
@@ -951,29 +953,40 @@ function guardEvent(tabId, kind) {
   }
 }
 
-// Popup: what was blocked on this tab, then clear the dot.
+// Popup: what was blocked on this tab, then clear the dot. The stored event is
+// handed out only while the dot is up; either way it is dropped.
 function takeTabSignal(tabId) {
   return new Promise((resolve) => {
+    const take = (dotShown) => {
+      try {
+        chrome.action.setBadgeText({ tabId, text: "" }, () => void chrome.runtime.lastError);
+      } catch {
+        // nothing shown
+      }
+      const area = sessionArea();
+      if (!area) return resolve({ ok: true, signal: null });
+      try {
+        area.get(SIGNAL_KEY, (got) => {
+          void chrome.runtime.lastError;
+          const signals = Object.assign({}, got && got[SIGNAL_KEY]);
+          const signal = signals[tabId] || null;
+          if (signal) {
+            delete signals[tabId];
+            area.set({ [SIGNAL_KEY]: signals }, () => void chrome.runtime.lastError);
+          }
+          resolve({ ok: true, signal: dotShown ? signal : null });
+        });
+      } catch {
+        resolve({ ok: true, signal: null });
+      }
+    };
     try {
-      chrome.action.setBadgeText({ tabId, text: "" }, () => void chrome.runtime.lastError);
-    } catch {
-      // nothing shown
-    }
-    const area = sessionArea();
-    if (!area) return resolve({ ok: true, signal: null });
-    try {
-      area.get(SIGNAL_KEY, (got) => {
+      chrome.action.getBadgeText({ tabId }, (text) => {
         void chrome.runtime.lastError;
-        const signals = Object.assign({}, got && got[SIGNAL_KEY]);
-        const signal = signals[tabId] || null;
-        if (signal) {
-          delete signals[tabId];
-          area.set({ [SIGNAL_KEY]: signals }, () => void chrome.runtime.lastError);
-        }
-        resolve({ ok: true, signal });
+        take(Boolean(text));
       });
     } catch {
-      resolve({ ok: true, signal: null });
+      take(false);
     }
   });
 }
@@ -995,7 +1008,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Our ISOLATED content script (src/settings/flags.js) reports a page-guard
   // block: only a known kind, only for the sender's own tab, nothing returned.
   if (message.type === "guardEvent") {
-    if (sender.tab && typeof sender.tab.id === "number" && GUARD_KINDS.includes(message.kind)) guardEvent(sender.tab.id, message.kind);
+    if (sender.tab && typeof sender.tab.id === "number" && GUARD_KINDS.includes(message.kind)) guardEvent(sender.tab.id, message.kind, sender.documentId);
     return;
   }
   if (sender.tab) {

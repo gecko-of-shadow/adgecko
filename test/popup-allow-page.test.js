@@ -342,6 +342,16 @@ Deno.test("Fix on a stream site turns off only our own helpers there; the dot's 
   assert(p.background.some((m) => m.type === "openOptionsPage"), "gear opens the settings page");
 });
 
+// The dot is cleared by opening the popup, so its reason must be on screen then.
+Deno.test("the dot's reason opens Show more; with no dot it stays folded", async () => {
+  const dot = await openPopup({ pageHref: "https://news.example.com/", signal: { kind: "popup", at: 1 } });
+  assert(dot.el["signal-line"].textContent.includes("pop-up"), "says what");
+  assertEquals(dot.el.more.open, true, "reason visible on the first open");
+  const quiet = await openPopup({ pageHref: "https://news.example.com/" });
+  assertEquals(quiet.el["signal-line"].textContent, "");
+  assert(!quiet.el.more.open, "folded by default");
+});
+
 Deno.test("Fix on YouTube turns off only the sponsored-tile helper; the stuck-start reload and Kick's ad skip stay baked in", async () => {
   const storage = { settings: { v: 1, enabled: true, features: {} } };
   const yt = await openPopup({ pageHref: "https://www.youtube.com/watch?v=x", storage, streamTop: true });
