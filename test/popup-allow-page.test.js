@@ -233,6 +233,8 @@ Deno.test("Allow this site works on a normal https page without the tabs permiss
   assertEquals(p.status.textContent, "Allowed – not blocking here");
   assert(p.background.some((m) => m.type === "applyGeneralState"), "rules re-applied after the click");
   assertEquals(p.el["fix-site"].disabled, true, "Fix is off while the site is allowed");
+  // Malware rules and stream-site code outrank Allow, so no "nothing is blocked" claim.
+  assertEquals(p.el["fix-note"].textContent, "", "no extra claim under Fix");
 });
 
 Deno.test("a site can be blocked again, http pages work, and the off state is honest", async () => {

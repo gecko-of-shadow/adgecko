@@ -670,7 +670,6 @@ let refreshing = null;
 
 // Popup text for the list status (the popup reads only this short string).
 function listStatusText(state, result, writeError) {
-  const when = state.updatedAt ? new Date(state.updatedAt).toLocaleString() : "";
   const errs = Object.values(state.lastErrors || {});
   const notes = Object.values(state.lastNotes || {});
   if (notes.length) console.log("twitch-adblock: list mirrors used:", notes);
@@ -680,7 +679,7 @@ function listStatusText(state, result, writeError) {
   const werr = writeError || state.lastError;
   const storageText = werr && werr.message ? " Storage error: " + werr.message + "." : "";
   return (state.dynamicActive
-    ? "Lists updated " + when + " (" + (state.domainCount || 0) + " domains)."
+    ? "Lists updated (" + (state.domainCount || 0) + " domains)."
     : "Using packed lists" + (result.ok ? "." : " (refresh failed; will retry later).")) + errText + storageText;
 }
 

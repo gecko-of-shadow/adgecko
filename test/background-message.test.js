@@ -103,6 +103,17 @@ Deno.test("background messages: a guard event from our content script sets that 
   assert(r.response.signal === null, "read once");
 });
 
+// The popup and settings page add "Last update: <date>" themselves.
+Deno.test("the list status text carries no date of its own", () => {
+  const fn = backgroundSource.match(/function listStatusText[\s\S]*?\r?\n}\r?\n/);
+  assert(fn, "listStatusText found");
+  const listStatusText = new Function(fn[0] + "; return listStatusText;")();
+  const when = new Date(0).toLocaleString();
+  const text = listStatusText({ dynamicActive: true, updatedAt: 0, domainCount: 5 }, { ok: true });
+  assert(text === "Lists updated (5 domains).", "got: " + text);
+  assert(!listStatusText({ dynamicActive: true, updatedAt: 0, domainCount: 5, lastErrors: { a: "x" } }, { ok: true }).includes(when), "date repeated");
+});
+
 const popupSender = { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" };
 const guard = (documentId) => ({ id: EXT, tab: { id: 7 }, frameId: 0, documentId, url: "https://news.example/" });
 const ping = { source: "twitch-adblock-general", type: "guardEvent", kind: "clipboard" };

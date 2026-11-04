@@ -204,7 +204,7 @@
     fixSite.hidden = !!pending;
     fixSite.disabled = !canFix;
     fixAsk.hidden = !pending;
-    fixNote.textContent = note || (origin && allowed && !pending ? "Already allowed: nothing is blocked here." : "");
+    fixNote.textContent = note;
 
     if (listsStatus) listsStatus.textContent = listText();
     if (feedStatus) feedStatus.textContent = feedText();
