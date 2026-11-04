@@ -83,7 +83,7 @@ function startFrame(href, isTop) {
 // the extension loaded, chrome://). `answerLater` holds the reply until `answer()`.
 // The fake worker answers "siteInfo" from the registry (like src/general-background.js)
 // and "tabSignal" from `signal`.
-async function openPopup({ pageHref, scripted = true, stored = {}, answerLater = false, signal = null, storage: shared = null, streamTop = false, failSet = null }) {
+async function openPopup({ pageHref, scripted = true, stored = {}, answerLater = false, signal = null, storage: shared = null, streamTop = false, failSet = null, failRemove = false }) {
   const storage = shared || Object.assign({}, stored);
   const F = globalThis.GeckoFeatures;
   // frameId -> listeners. The subframe comes first, so it would win a broadcast.
@@ -137,6 +137,12 @@ async function openPopup({ pageHref, scripted = true, stored = {}, answerLater =
           cb();
         },
         remove(keys, cb) {
+          if (failRemove) {
+            chrome.runtime.lastError = { message: "remove failed" };
+            cb();
+            chrome.runtime.lastError = undefined;
+            return;
+          }
           for (const k of [].concat(keys)) delete storage[k];
           cb();
         },
@@ -432,6 +438,21 @@ Deno.test("a failed Allow keeps the pending Fix question", async () => {
   await p.button.fire("click");
   assert(p.storage.popupFix, "question still stored, so No can still undo Fix");
   assertEquals(p.el["fix-ask"].hidden, false);
+});
+
+Deno.test("when only the clean-up fails, the saved change still shows", async () => {
+  const p = await openPopup({ pageHref: "https://news.example.com/", stored: pendingFix(), failRemove: true });
+  await p.button.fire("click");
+  assertEquals(p.storage.siteOverrides["news.example.com"].enabled, false, "the Allow was stored");
+  assertEquals(p.status.textContent, "Allowed – not blocking here", "and is shown");
+  assertEquals(p.note.textContent, SAVE_ERR);
+});
+
+Deno.test("each theme choice reaches the popup: an explicit Purple stays Purple, automatic sets nothing", async () => {
+  for (const [uiTheme, want] of [["purple", "purple"], ["contrast", "contrast"], ["auto", undefined]]) {
+    const p = await openPopup({ pageHref: "https://news.example.com/", stored: { popupWelcomed: true, uiTheme } });
+    assertEquals(p.rootAttrs["data-theme"], want, uiTheme);
+  }
 });
 
 Deno.test("a failed No does not say Turned back on", async () => {

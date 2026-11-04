@@ -43,10 +43,10 @@ Deno.test("allow-this-page skips Twitch YouTube Kick hosts", async () => {
   assert(popupHtml.includes("Allow this site"), "allow control labeled");
 });
 
-Deno.test("glowing-eyes icon variants are packaged and wired", () => {
-  assert(popupHtml.includes("icon48-working.png"), "popup uses working glow icon");
-  assert(popupSource.includes("icon48-off.png"), "popup can dim eyes when off");
-  assertEquals(manifest.action.default_icon["48"], "icons/icon48-working.png");
+Deno.test("working and off icon variants are packaged and wired", () => {
+  assert(popupHtml.includes("icon48-working.png"), "popup uses the working icon");
+  assert(popupSource.includes("icon48-off.png"), "popup can show the off icon");
+  for (const size of [16, 48, 128]) assertEquals(manifest.action.default_icon[size], `icons/icon${size}-working.png`);
   assert(backgroundSource.includes("icon48-working.png"), "worker sets working icon");
   assert(backgroundSource.includes("icon48-off.png"), "worker sets off icon");
 });

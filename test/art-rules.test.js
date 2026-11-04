@@ -49,6 +49,15 @@ Deno.test("the popup holds exactly the approved elements; the welcome card and t
   assert(/<div id="fix-ask"[^>]*\shidden>/.test(popupHtml), "Did that fix it? starts hidden");
 });
 
+Deno.test("the fixed wording sits in the element people see, and the status line is not a card", () => {
+  assert(/<button id="fix-site"[^>]*>Fix this site<\/button>/.test(popupHtml), "Fix button label");
+  assert(/<button id="fix-yes"[^>]*>Yes<\/button>/.test(popupHtml) && /<button id="fix-no"[^>]*>No<\/button>/.test(popupHtml), "Yes and No labels");
+  assert(/<p id="welcome-title"[^>]*>You're protected<\/p>/.test(popupHtml), "welcome title");
+  assert(!/<p id="fix-question"[^>]*\shidden/.test(popupHtml), "the question shows with its buttons");
+  assert(/<p id="site-status" class="status" /.test(popupHtml), "status is small text, not a card");
+  assert(!/#allow-site/.test(POPUP), "no id rule may refill Block again over its outlined style");
+});
+
 Deno.test("no animation from script or inline styles either", () => {
   const js = popupSource.replace(/\/\*[\s\S]*?\*\/|^\s*\/\/.*$/gm, "");
   assert(!/\.animate\(|requestAnimationFrame/.test(js), "popup.js animates");

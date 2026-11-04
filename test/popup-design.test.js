@@ -29,8 +29,9 @@ Deno.test("popup layout: header, site, status, Fix card, Allow button, folded Sh
 });
 
 Deno.test("popup words: plain status lines, no jargon, no counters", () => {
+  const code = popupSource.replace(/\/\*[\s\S]*?\*\/|^\s*\/\/.*$/gm, ""); // a comment does not show on screen
   for (const s of ["✅ Protected", "Allowed – not blocking here", "Fix this site", "Did that fix it?", "Allow this site", "Block again", "You're protected"]) {
-    assert(popupHtml.includes(s) || popupSource.includes(s), "missing: " + s);
+    assert(popupHtml.includes(s) || code.includes(s), "missing: " + s);
   }
   for (const s of ["streams untouched", "streams unchanged", "ads snapped", "DNR", "ruleset", "declarativeNetRequest"]) {
     const low = s.toLowerCase();
@@ -65,9 +66,9 @@ Deno.test("popup matches the mockups: bigger header icon, Block again outlined i
 
 Deno.test("high contrast: white gecko and ringed yellow buttons, manual and automatic, never over an explicit Purple", () => {
   const manual = rule(popupCss, ':root[data-theme="contrast"]');
-  assert(/--icon-filter:\s*grayscale\(1\)/.test(manual) && /--ring:\s*0 0 0 2px #000000, 0 0 0 4px #ffffff/.test(manual), "manual contrast tokens");
+  assert(/--icon-filter:\s*grayscale\(1\) brightness\(2\.2\)/.test(manual) && /--ring:\s*0 0 0 2px #000000, 0 0 0 4px #ffffff/.test(manual), "manual contrast tokens");
   const auto = popupCss.match(/@media \(prefers-contrast: more\)\s*\{\s*:root:not\(\[data-theme="purple"\]\)\s*\{([^}]*)\}/);
-  assert(auto && auto[1].includes("--icon-filter: grayscale(1)") && auto[1].includes("--ring:"), "automatic contrast has the same tokens, guarded by :not([data-theme=purple])");
+  assert(auto && auto[1].includes("--icon-filter: grayscale(1) brightness(2.2)") && auto[1].includes("--ring:"), "automatic contrast has the same tokens, guarded by :not([data-theme=purple])");
   assert(/filter:\s*var\(--icon-filter\)/.test(rule(popupCss, "#brand-icon")) && /box-shadow:\s*var\(--ring\)/.test(rule(popupCss, "button.primary")), "tokens used");
   assert(/--icon-filter:\s*none/.test(rule(popupCss, ":root")) && /--ring:\s*none/.test(rule(popupCss, ":root")), "purple: no filter, no ring");
 });
