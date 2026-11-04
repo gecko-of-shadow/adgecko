@@ -139,7 +139,8 @@ h1 {
   color: var(--muted);
   font-size: 12px;
 }
-.note:empty { display: none; }
+/* Collapsed, not display:none: a live region must be rendered before it fills. */
+.note:empty { margin: 0; }
 .pair { display: flex; gap: 8px; }
 .pair button { flex: 1; }
 

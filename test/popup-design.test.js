@@ -81,6 +81,15 @@ Deno.test("settings page wears the popup's themes: tokens, manual switch, automa
   assert(/function applyTheme\(t\)/.test(settingsSource) && /applyTheme\(stored\.uiTheme\)/.test(settingsSource) && /applyTheme\(theme\);/.test(settingsSource), "theme applied on load and on change");
 });
 
+Deno.test("screen readers: the question names the Yes / No group, and the live notes stay rendered while empty", () => {
+  assert(/<div id="fix-ask"[^>]*role="group"[^>]*aria-labelledby="fix-question"/.test(popupHtml), "Yes and No sit in a group named by the question");
+  assert(/id="fix-question"[^>]*>Did that fix it\?/.test(popupHtml), "the group's name is the question");
+  for (const id of ["fix-note", "page-status"]) assert(new RegExp(`id="${id}" class="note" aria-live="polite"`).test(popupHtml), id + " is a live region");
+  const css = popupCss.replace(/\/\*[\s\S]*?\*\//g, "");
+  assert(/\.note:empty\s*\{[^}]*margin:\s*0/.test(css), "empty notes collapse");
+  assert(!/\.note:empty\s*\{[^}]*display:\s*none/.test(css), "display:none takes a live region out of the accessibility tree");
+});
+
 Deno.test("guard pings: flags.js forwards only {g: clipboard|popup}, rate-limited, never settings", () => {
   assert(/ch\.port1\.onmessage = onGuardPing;/.test(flagsSource), "port1 listens for pings");
   assert(/d\.g !== "clipboard" && d\.g !== "popup"/.test(flagsSource) && /now - lastPing < 2000/.test(flagsSource), "shape check and rate limit");
