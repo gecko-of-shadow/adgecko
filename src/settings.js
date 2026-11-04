@@ -52,6 +52,16 @@
     const s = currentSettings();
     $("master").checked = s.enabled;
     const box = $("features");
+    // Update in place. Every save and every storage write ends up here, and a
+    // rebuild would throw keyboard focus back to the top of the page.
+    const built = box.querySelectorAll("input[data-feature]");
+    if (built.length) {
+      for (const input of built) {
+        input.checked = !!s.features[input.dataset.feature];
+        input.disabled = !s.enabled;
+      }
+      return;
+    }
     clear(box);
     for (const f of F.FEATURES) {
       if (f.available === false) {
