@@ -132,10 +132,15 @@ Deno.test("no personal machine references in code, tests or docs (L-1)", async (
 
 // The art record says "the owner". LICENSE and the README's licence and brand
 // lines are the owner's own, deliberate, and outside this list.
+// Exit code 1 means git grep ran and found nothing; anything else must not pass.
+async function noHits(pattern, paths) {
+  const out = await new Deno.Command("git", { args: ["grep", "-n", "-I", "-i", "-w", "-E", pattern, "--", ...paths], cwd: ROOT, stdout: "piped" }).output();
+  assert(out.code === 1, "personal references:\n" + (dec.decode(out.stdout).trim() || "git grep failed"));
+}
+
 Deno.test("the design record and the art sources carry no personal name or place", async () => {
-  const out = await new Deno.Command("git", { args: ["grep", "-n", "-i", "-w", "-E", j("personal", "-word"), "--", "docs/design/*.md", "docs/design/screenshots/*.md", "icons/source", "src/popup.css", "src/popup.js", "src/popup.html", "test/popup-design.test.js"], cwd: ROOT, stdout: "piped" }).output();
-  const hits = dec.decode(out.stdout).trim();
-  assert(hits === "", "personal references:\n" + hits);
+  await noHits(j("personal", "-word"), ["docs/design/*.md", "docs/design/screenshots/*.md", "icons/source", "src/popup.css", "src/popup.js", "src/popup.html", "test/popup-design.test.js"]);
+  await noHits(j("personal", "-word"), ["."]); // the whole tree, this file included
 });
 
 Deno.test("privacy check: removing a public IP in a diff is fine, adding one is not", async () => {

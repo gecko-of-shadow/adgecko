@@ -440,6 +440,21 @@ Deno.test("a failed Allow keeps the pending Fix question", async () => {
   assertEquals(p.el["fix-ask"].hidden, false);
 });
 
+Deno.test("a failed Yes keeps the window open and the question up", async () => {
+  let closed = false;
+  globalThis.window = { close() { closed = true; } };
+  try {
+    const p = await openPopup({ pageHref: "https://news.example.com/", stored: pendingFix(), failRemove: true });
+    await p.el["fix-yes"].fire("click");
+    assertEquals(closed, false, "stays open so the error can be read");
+    assertEquals(p.note.textContent, SAVE_ERR);
+    assertEquals(p.el["fix-ask"].hidden, false);
+    assert(p.storage.popupFix, "question still stored");
+  } finally {
+    delete globalThis.window;
+  }
+});
+
 Deno.test("when only the clean-up fails, the saved change still shows", async () => {
   const p = await openPopup({ pageHref: "https://news.example.com/", stored: pendingFix(), failRemove: true });
   await p.button.fire("click");
