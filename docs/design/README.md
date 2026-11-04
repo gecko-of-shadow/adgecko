@@ -99,7 +99,8 @@ holds only `manifest.json`, `src/` and `icons/`).
      only, then asks "Did that fix it?";
    - Twitch / YouTube / Kick stream-safe is baked in (a core rule, not a
      setting);
-   - quiet alerts only: a small magenta dot on the icon;
+   - quiet alerts only: a small magenta dot on the icon (as built: page-guard
+     blocks only, see the note in `DESIGN-RULES.md`);
    - advanced options behind a small gear;
    - two themes: the owner's purple and one high-contrast theme (on
      automatically with Windows high contrast / forced colours, plus a manual
@@ -107,13 +108,16 @@ holds only `manifest.json`, `src/` and `icons/`).
 
 8. **The owner's change.** Only the "Something broke? / Fix this
    site" card is useful, plus an Allow button. New single-popup layout
-   (`popup-single.jpg`, `popup-high-contrast.jpg`); `popup-states.jpg` is the
-   older four-card version and is superseded. The words "streams untouched"
+   (`popup-single.jpg`). `popup-high-contrast.jpg` still sets the high-contrast
+   colours but shows an older layout without the card; `popup-states.jpg` is
+   the older four-card version and is superseded. The words "streams untouched"
    were confusing and were dropped: the status is just "✅ Protected" or
    "Allowed – not blocking here". The mockups still show "streams untouched"
    and the "ads snapped today" counter: **the written rules win**. The counter
-   would need the `declarativeNetRequestFeedback` permission, which this
-   project does not use, so it is **out of scope and must not be built**.
+   would need real counting code, and its permission need is **UNVERIFIED**
+   (`getMatchedRules` needs `declarativeNetRequestFeedback` or `activeTab`,
+   neither of which this project uses). It is **out of scope and must not be
+   built**.
 
 9. **Status.**
    - The popup was rebuilt to these rules in commit `8e9567d` (2026-11-03).
@@ -146,7 +150,7 @@ States (the `data-state` attribute the build script sets on the SVG root):
 |---|---|---|
 | `normal` | the extension's own icon (`manifest.json` `icons`: extensions page, store) | full purple art; the pixel "ad" in the same purple |
 | `working` | the toolbar icon and the popup header while ordinary-site blocking is on | same art, the pixel "ad" lit up (white / pale lilac squares) |
-| `off` | the toolbar icon and the popup header while ordinary-site blocking is off | grey art, dimmer tongue, unlit pixels |
+| `off` | the toolbar icon and the popup header while ordinary-site blocking is off | grey art, dimmer tongue, unlit pixels (in the high-contrast popup the filter turns the header icon white, almost the same as `working`; the status text shows the state) |
 
 The working icon is the one people see most (the toolbar default), so the lit
 "ad" says "it is snapping ads right now"; grey says "not blocking".
@@ -154,18 +158,22 @@ The working icon is the one people see most (the toolbar default), so the lit
 Glow: the picture's soft glow muddies tiny sizes and blurs on white toolbars,
 so the 48 / 128 px art has at most a subtle glow and the 16 px cut has none.
 
-How close it is (see `icon-E-compare.png`): at 128 px the silhouette, crest,
-eye, mouth, neck and tongue sit on the picture's own lines (checked by laying
-the SVG outline over the JPEG). Simplified on purpose:
-- lines are about 25 % thicker than in the picture and mostly even in width
-  (the picture's brush strokes taper), so 48 px is not hairline;
+How close it is (see `icon-E-compare.png`): at 128 px the centre-lines of the
+outline, crest, mouth, neck and tongue follow the picture (checked by laying the
+SVG lines over the JPEG). The drawn shape does not match exactly: the sharp
+miter corners make the crest tips run up to about 73 px past the picture at
+1024 px scale (about 9 px at 128), and the lower eyelid sits up to about 22 px
+from the picture's. Simplified on purpose:
+- lines are about 1.8 to 2 times thicker than in the picture (the tongue about
+  1.25 times) and mostly even in width (the picture's brush strokes taper), so
+  48 px is not hairline;
 - the dark shading under the brow and around the eye is left out; the iris is
   one flat purple;
 - the pixel "ad" is about 1.6 times larger than in the picture so the lit
   squares still show at 48 px;
-- the 16 px cut keeps only the outline with three crest spikes, a two-pixel
-  eye, the mouth and jaw lines, two neck strokes, the tongue and four "ad"
-  pixels.
+- the 16 px cut keeps only the outline with four crest tips, the brow, a
+  two-pixel eye, the mouth and jaw lines, two neck strokes, the tongue and four
+  "ad" pixels.
 
 Rebuild the PNGs with `node scripts/build-icons.mjs` (set `CHROME_PATH` to a
 local Chrome / Chrome for Testing, or install Playwright).

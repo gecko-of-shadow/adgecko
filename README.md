@@ -9,7 +9,7 @@ It works inside Chrome: no separate program, no account.
 
 <img src="icons/icon48-working.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is on: purple gecko, the pixel ad at its tongue lit up bright"> &nbsp; <img src="icons/icon48-off.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is off: the same gecko in grey, pixel ad not lit">
 
-<sub>The toolbar gecko is purple with the pixel "ad" at its tongue lit up while blocking on ordinary sites is on, and grey when it is off. Twitch, YouTube, and Kick filters keep running either way. How the art was chosen: <a href="docs/design/README.md">docs/design</a>.</sub>
+<sub>The toolbar gecko is purple with the pixel "ad" at its tongue lit up while blocking on ordinary sites is on, and grey when it is off. Twitch, YouTube, and Kick filters keep running when only the list blocking switch is off; the master switch also stops the Kick ad skip, the Twitch banner hiding, the YouTube helpers and the malware lists. How the art was chosen: <a href="docs/design/README.md">docs/design</a>.</sub>
 
 [Install](#install) · [How to use](#how-to-use) · [Privacy](#privacy) · [Troubleshooting](#troubleshooting) · [Docs](#links)
 
@@ -45,7 +45,7 @@ Nothing to set up: it works as soon as it is installed.
 1. Click the gecko in the toolbar. A small window shows the site and one line: **✅ Protected**, or **Allowed – not blocking here**.
 2. **Something broke?** Click **Fix this site**. It turns off the extra filters for this site only (hidden boxes and the page guards). Reload the page and look, then answer **Did that fix it?** **Yes** keeps it. **No** turns them back on and suggests the next step.
 3. Still broken? Click **Allow this site**: the ad lists stop blocking what this site itself loads, and ad boxes are no longer hidden. Known malware sites stay blocked, and on Twitch and YouTube the built-in ad blocking keeps running. Details: [docs/allow-a-page.md](docs/allow-a-page.md). The button turns into **Block again** to undo it.
-4. **Show more** has the list status and the version. The gear opens the settings page with every switch, the per-site list, the list update button and the popup theme (purple or high contrast).
+4. **Show more** has the list status and the version. The gear opens the settings page with every switch, the per-site list, the list update button and the popup look (Automatic, Purple or High contrast).
 
 A small magenta dot on the gecko means a page guard just blocked something on that tab (for example a page trying to put a command into your clipboard). Open the window to see what; the dot then goes away (it also goes away when the tab opens another page). There are no pop-ups or counters.
 
@@ -64,7 +64,7 @@ Full details, permissions, and the list sites: [docs/permissions-and-privacy.md]
 
 ## Troubleshooting
 
-- **"Allow this site" is grey?** The line under it says why. Common reasons:
+- **"Allow this site" is grey?** The window says why, in the status line under the site name or in the line under the button. Common reasons:
   - *Off – turned off in settings.* The whole extension is switched off on the settings page.
   - *Open a normal http(s) page to allow it. Already on one? Reload it.* Chrome's own pages cannot be allowed. On a normal website, the page was open before you installed or reloaded the extension: reload it, then open the window again.
 - **A copy button on a website does not copy a command?** The clipboard guard stops pages from writing commands like `powershell ...` or `curl ... | sh` unless you copy them yourself: select the text and press Ctrl+C. Documentation sites such as GitHub are trusted. Or use **Fix this site**.

@@ -24,11 +24,11 @@ The popup is 300 px wide. Files are named `popup-<state>-<theme>.png`.
 |---|---|
 | `protected` | Normal page: "✅ Protected", Something broke? card with Fix this site, Allow this site, folded Show more. |
 | `first-open` | The one-time "You're protected" card (shown on the very first open only). |
-| `allowed` | After Allow this site: "Allowed – not blocking here", **Block again**, Fix disabled with its note. |
+| `allowed` | After Allow this site: "Allowed – not blocking here", **Block again**, Fix disabled. |
 | `fix-asked` | After Fix this site: "Did that fix it? Reload the page and look." with Yes / No (Yes has keyboard focus). |
 | `show-more` | Show more unfolded: list status, threat feed status, version, EasyList credit. |
-| `extension-off` | Whole extension switched off in settings: grey icon, "Off – turned off in settings", buttons disabled. |
-| `alert` | The magenta-dot state: a page guard blocked a clipboard command on this tab; Show more says what was blocked (opening the popup clears the dot on the toolbar icon, which is not part of the popup). |
+| `extension-off` | Whole extension switched off in settings: grey icon (white in `-contrast`), "Off – turned off in settings", buttons disabled. |
+| `alert` | The magenta-dot state: a page guard blocked a clipboard command on this tab; Show more unfolds by itself and says what was blocked (opening the popup clears the dot on the toolbar icon, which is not part of the popup). |
 
 ## Themes
 

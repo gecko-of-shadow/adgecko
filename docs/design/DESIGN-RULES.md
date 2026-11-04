@@ -7,6 +7,7 @@
 - "Something broke?" -> one tap turns off extra filters for that site only, then asks "Did that fix it?".
 - Twitch/YouTube/Kick stream-safe is baked in (core rule, not a setting): always play uninterrupted, fast, no ads.
 - Quiet alerts: no pop-ups; threat blocks show only as a small magenta dot on the icon.
+  - As built (audit note 2026-11-03, the rule above is unchanged): the dot appears only for page-guard blocks (clipboard, pop-up) on that tab. A threat-tier network block shows no dot, including a blocked page: Chrome reports no matches without declarativeNetRequestFeedback or activeTab, and neither is used. Chrome's own badge count needs no permission but counts ad blocks too and shows a number. A blocked clipboard write also shows a short notice on the page. Both points wait for the owner's decision.
 - Advanced toggles and per-site list hidden behind a small gear (options page, loads only when opened).
 - Themes: the owner's purple + one high-contrast accessibility theme (auto on with Windows high contrast / forced-colors, plus manual switch).
 - States mockup: popup-states.jpg; high contrast: popup-high-contrast.jpg.

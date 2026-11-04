@@ -61,4 +61,4 @@ The popup shows the site, one status line (**✅ Protected** or **Allowed – no
 
 This manifest does not include `tabs` or `activeTab`, so Chrome leaves `tab.url` unset on a normal page. The popup instead asks the page's top-frame content script (`src/cosmetic.js`) for its origin with `chrome.tabs.sendMessage`, and shows “Checking this page…” while it waits.
 
-Pages without that script (Twitch, YouTube, Kick, Chrome's own pages, and pages opened before the extension loaded) give no answer, so the button stays disabled there with “Open a normal http(s) page to allow it. Already on one? Reload it.”
+On Twitch, YouTube and Kick `src/settings/flags.js` answers instead. Pages with neither script (Chrome's own pages, pages opened before the extension loaded, and YouTube hosts such as YouTube Music) give no answer, so the button stays disabled there with “Open a normal http(s) page to allow it. Already on one? Reload it.”
