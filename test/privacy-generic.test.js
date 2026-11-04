@@ -130,6 +130,14 @@ Deno.test("no personal machine references in code, tests or docs (L-1)", async (
   assert(hits === "", "personal references:\n" + hits);
 });
 
+// The art record says "the owner". LICENSE and the README's licence and brand
+// lines are the owner's own, deliberate, and outside this list.
+Deno.test("the design record and the art sources carry no personal name or place", async () => {
+  const out = await new Deno.Command("git", { args: ["grep", "-n", "-i", "-w", "-E", j("personal", "-word"), "--", "docs/design/*.md", "docs/design/screenshots/*.md", "icons/source", "src/popup.css", "src/popup.js", "src/popup.html", "test/popup-design.test.js"], cwd: ROOT, stdout: "piped" }).output();
+  const hits = dec.decode(out.stdout).trim();
+  assert(hits === "", "personal references:\n" + hits);
+});
+
 Deno.test("privacy check: removing a public IP in a diff is fine, adding one is not", async () => {
   const ip = j("93.184", ".216.34");
   const diff = ["diff --git a/x.md b/x.md", "--- a/x.md", "+++ b/x.md", "@@ -1,2 +1,2 @@", " context", "-old " + ip, "+new 192.0.2.1", "diff --git a/y.md b/y.md", "--- a/y.md", "+++ b/y.md", "@@ -1 +1 @@", "-a", "+b " + ip].join("\n");

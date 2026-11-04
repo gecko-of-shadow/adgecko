@@ -20,16 +20,16 @@ holds only `manifest.json`, `src/` and `icons/`).
 | `popup-single.jpg` | The single-popup layout from the owner's change (normal and "Allowed" states). **This layout wins.** |
 | `popup-high-contrast.jpg` | The default theme next to the high-contrast theme (white art, yellow button). |
 | `popup-states.jpg` | The older four-card states mockup. **Superseded** by `popup-single.jpg`. |
-| `DESIGN-RULES.md` | the owner's written design rules (copy of the project notes). The written rules win over the pictures. |
+| `DESIGN-RULES.md` | The owner's written design rules (copy of the project notes with the name and time zone taken out, plus an as-built note). The written rules win over the pictures. |
 | `icon-E-compare.png` | The original concept E picture next to the hand-drawn SVG icon rendered at 128, 48 and 16 px (added with the redrawn icon). |
 | `screenshots/` | The real popup and settings page in each state and theme, with its own README (added with the popup alignment). |
 | `rejected/` | Every option the owner did not pick, kept as the decision trail. |
 
 ## The decision record
 
-1. **Start.** The owner asked for new artwork for the extension ("all": icon, popup
-   look, names). The owner asked for an abstract shield-style logo, gamer style,
-   Twitch purple, and for new product names.
+1. **Start.** The owner asked for new artwork for the extension ("all": icon,
+   popup look, names): an abstract shield-style logo, gamer style, Twitch
+   purple, and new product names.
 
 2. **Round 1: three shield concepts** (all in `rejected/`):
    - **A** `icon-A-slashed-shield.jpg`: a neon-purple shield cut by a diagonal
@@ -39,14 +39,15 @@ holds only `manifest.json`, `src/` and `icons/`).
    - **C** `icon-C-esports-lightning-shield.jpg`: an "esports" shield with a
      lightning bolt in purple and cyan, white outline.
 
-   the owner said they liked **A** the most. Name ideas offered with them
+   The owner liked **A** the most. Name ideas offered with them
    (StreamWard, Purple Aegis, Clutch Shield, HexGuard) are in the project
    decision notes. **The final product name is NOT decided** (the manifest
    still says `twitch-adblock`, the UI says "Gecko Adblock").
 
-3. **Why shields were dropped.** The owner changed their mind: every ad blocker uses a
-   shield, so a shield makes the extension look like all the rest. The owner wanted
-   something with a character of its own, tied to the product name (Gecko).
+3. **Why shields were dropped.** The owner changed course: every ad blocker
+   uses a shield, so a shield makes the extension look like all the rest. The
+   owner wanted something with a character of its own, tied to the product name
+   (Gecko).
 
 4. **Round 2: four gecko-and-ad concepts.** Only the pick's letter (E) is
    recorded; the letters of the other three are **not recorded (UNVERIFIED)**,
@@ -62,13 +63,13 @@ holds only `manifest.json`, `src/` and `icons/`).
    - "Reptile eye" `rejected/icon-r2-reptile-eye.jpg`: a reptile eye with a
      purple iris, slit pupil, scaly lids and glitch scan-lines.
 
-5. **The owner picked E.** The owner's own reason is **not recorded verbatim**. The reasons
-   below are **INFERRED** from the pictures and their stated rules (not their
-   words):
+5. **The owner picked E.** The owner's reason is **not recorded verbatim**. The
+   reasons below are **INFERRED** from the pictures and the owner's stated rules
+   (not the owner's words):
    - it is the only one that shows the product doing its job (a gecko
      snapping an ad);
    - it has no shield;
-   - it keeps the purple gamer look they asked for;
+   - it keeps the purple gamer look the owner asked for;
    - it is a one-colour line drawing that can be redrawn cleanly as a vector.
 
    And, also inferred, why the others fit less well: the play-slice reads like
@@ -100,8 +101,9 @@ holds only `manifest.json`, `src/` and `icons/`).
      setting);
    - quiet alerts only: a small magenta dot on the icon;
    - advanced options behind a small gear;
-   - two themes: the owner's purple and one high-contrast theme (on automatically
-     with Windows high contrast / forced colours, plus a manual switch).
+   - two themes: the owner's purple and one high-contrast theme (on
+     automatically with Windows high contrast / forced colours, plus a manual
+     switch).
 
 8. **The owner's change.** Only the "Something broke? / Fix this
    site" card is useful, plus an Allow button. New single-popup layout
@@ -117,9 +119,10 @@ holds only `manifest.json`, `src/` and `icons/`).
    - The popup was rebuilt to these rules in commit `8e9567d` (2026-11-03).
    - The icon art was not done then: `icons/` had not changed since `08b94c0`
      ("New gecko icon", 2026-10-28), a green gecko with an amber eye, and the
-     build notes carried "NEEDS OWNER: final concept E art as SVG
-     (normal/working/off + a 16 px pixel-grid cut)". The owner then required that
-     all artwork be in before the next push.
+     build notes listed the final concept E art as SVG (normal/working/off + a
+     16 px pixel-grid cut) as waiting on the owner (reworded here to leave the
+     name out). The owner then required that all artwork be in before the next
+     push.
    - The 2026-11-03 build (art + filter fixes) redraws the icon as concept E
      (see "The icon as built" below) and aligns the popup with the mockups.
 
