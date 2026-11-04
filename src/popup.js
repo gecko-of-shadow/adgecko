@@ -172,8 +172,10 @@
     const host = origin ? hostOfOrigin(origin) : "";
     const allowed = origin ? siteOff(origin) : false;
     if (brandIcon) {
-      brandIcon.dataset.glow = on ? "on" : "off";
-      brandIcon.src = on ? "../icons/icon48-working.png" : "../icons/icon48-off.png";
+      // Same trigger as the toolbar icon: the master switch and list blocking.
+      const blocking = on && all[KEYS.enabled] !== false;
+      brandIcon.dataset.glow = blocking ? "on" : "off";
+      brandIcon.src = blocking ? "../icons/icon48-working.png" : "../icons/icon48-off.png";
     }
     siteHost.textContent = host || (pageChecked ? "No web page" : "Checking this page…");
 

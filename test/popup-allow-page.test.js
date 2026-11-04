@@ -250,6 +250,20 @@ Deno.test("a site can be blocked again, http pages work, and the off state is ho
   assertEquals(off.button.disabled, true);
 });
 
+// Same trigger as the toolbar icon (generalEnabled = master switch AND list
+// blocking): the lit header must not sit next to a grey toolbar icon.
+Deno.test("the header icon and glow follow list blocking, like the toolbar icon", async () => {
+  const icon = (p) => [p.el["brand-icon"].src, p.el["brand-icon"].dataset.glow];
+  const WORKING = ["../icons/icon48-working.png", "on"];
+  const OFF = ["../icons/icon48-off.png", "off"];
+  const pageHref = "https://news.example.com/";
+  const on = { v: 1, enabled: true, features: {} };
+  assertEquals(icon(await openPopup({ pageHref, stored: { settings: on } })), WORKING, "all on");
+  assertEquals(icon(await openPopup({ pageHref, stored: { settings: on, generalEnabled: true } })), WORKING, "mirror says on");
+  assertEquals(icon(await openPopup({ pageHref, stored: { settings: { v: 1, enabled: true, features: { network: false } }, generalEnabled: false } })), OFF, "lists off");
+  assertEquals(icon(await openPopup({ pageHref, stored: { settings: { v: 1, enabled: false, features: {} }, generalEnabled: false } })), OFF, "master off");
+});
+
 Deno.test("a page with no content script stays greyed out and says why", async () => {
   const p = await openPopup({ pageHref: "https://news.example.com/", scripted: false });
   assertEquals(p.button.disabled, true);
