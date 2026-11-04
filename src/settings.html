@@ -11,16 +11,19 @@
     :root {
       color-scheme: dark;
       --bg: #0e0b14; --panel: #171222; --text: #f3effb; --muted: #bcb0d4; --line: #3b2a5c;
-      --accent: #8f3dff; --accent-text: #ffffff; --focus: #e0c8ff; --field: #0e0b14; --status: #d9bdff;
+      --accent: #8f3dff; --accent-hover: #8329ff; --accent-text: #ffffff; --focus: #e0c8ff; --field: #0e0b14; --status: #d9bdff;
+      --field-line: #8a74b0; --placeholder: #bcb0d4;
     }
     :root[data-theme="contrast"] {
       --bg: #000000; --panel: #000000; --text: #ffffff; --muted: #ffffff; --line: #ffffff;
-      --accent: #ffd400; --accent-text: #000000; --focus: #ffd400; --field: #000000; --status: #ffd400;
+      --accent: #ffd400; --accent-hover: #ffe24d; --accent-text: #000000; --focus: #ffd400; --field: #000000; --status: #ffd400;
+      --field-line: #ffffff; --placeholder: #a6a6a6;
     }
     @media (prefers-contrast: more) {
       :root:not([data-theme="purple"]) {
         --bg: #000000; --panel: #000000; --text: #ffffff; --muted: #ffffff; --line: #ffffff;
-        --accent: #ffd400; --accent-text: #000000; --focus: #ffd400; --field: #000000; --status: #ffd400;
+        --accent: #ffd400; --accent-hover: #ffe24d; --accent-text: #000000; --focus: #ffd400; --field: #000000; --status: #ffd400;
+        --field-line: #ffffff; --placeholder: #a6a6a6;
       }
     }
     body { margin: 0; color: var(--text); background: var(--bg); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -32,9 +35,11 @@
     input[type="checkbox"] { accent-color: var(--accent); }
     .note, .fixed { color: var(--muted); font-size: 12px; margin: 4px 0; }
     button { border: 1px solid var(--accent); border-radius: 8px; padding: 7px 12px; background: var(--accent); color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; }
-    button:hover { filter: brightness(1.1); }
-    input[type="text"], select { background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
+    button:hover { background: var(--accent-hover); }
+    input[type="text"], select { background: var(--field); color: var(--text); border: 1px solid var(--field-line); border-radius: 6px; padding: 6px 8px; font: inherit; }
     input[type="text"] { min-width: 0; flex: 1; }
+    input[type="text"]::placeholder { color: var(--placeholder); opacity: 1; }
+    select { max-width: 100%; }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     ul { margin: 6px 0; padding-left: 18px; }
     li { margin: 3px 0; word-break: break-all; }
