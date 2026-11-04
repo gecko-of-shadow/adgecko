@@ -150,7 +150,7 @@ States (the `data-state` attribute the build script sets on the SVG root):
 |---|---|---|
 | `normal` | the extension's own icon (`manifest.json` `icons`: extensions page, store) | full purple art; the pixel "ad" in the same purple |
 | `working` | the toolbar icon and the popup header while ordinary-site blocking is on | same art, the pixel "ad" lit up (white / pale lilac squares) |
-| `off` | the toolbar icon and the popup header while ordinary-site blocking is off | grey art, dimmer tongue, unlit pixels (in the high-contrast popup the filter turns the header icon white, almost the same as `working`; the status text shows the state) |
+| `off` | the toolbar icon and the popup header while ordinary-site blocking is off | grey art, dimmer tongue, unlit pixels (in the high-contrast popup the filter turns the header icon white, almost the same as `working`; the status text shows the state only when the whole extension is off) |
 
 The working icon is the one people see most (the toolbar default), so the lit
 "ad" says "it is snapping ads right now"; grey says "not blocking".

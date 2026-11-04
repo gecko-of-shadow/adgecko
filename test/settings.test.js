@@ -97,6 +97,13 @@ Deno.test("the site switch on a stream site turns our own helpers off there (ven
   for (const id of ["twitchDisplay", "youtubeWatchdog", "youtubeCosmetic", "kick"]) assert(F.byId(id).perSite, id + " per-site");
 });
 
+// README and docs/allow-a-page.md say exactly this.
+Deno.test("the site switch on an ordinary site stops the lists, the box hiding and both page guards, not the threat tier", () => {
+  const off = F.resolve({ v: 1, enabled: true, features: { guardPopups: true } }, { "news.example": { enabled: false } }, "news.example");
+  assert(!off.network && !off.cosmetic && !off.guardClipboard && !off.guardPopups, JSON.stringify(off));
+  assert(off.threatTier && off.threatFeed, "malware rules stay on: " + JSON.stringify(off));
+});
+
 Deno.test("legacy mirror: lists switch and allowed origins come from settings, never a stream site", () => {
   const m = F.legacyMirror({ enabled: true, features: { network: true } }, { "news.example": { enabled: false }, "www.youtube.com": { enabled: false }, "kick.com": { features: { network: false } }, "shop.example": { features: { network: false } }, "blog.example": { features: { cosmetic: false } } });
   assert(m.generalEnabled === true && eq(m.generalAllowedOrigins, ["http://news.example", "http://shop.example", "https://news.example", "https://shop.example"]), JSON.stringify(m));

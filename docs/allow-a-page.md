@@ -24,7 +24,7 @@ When the window opens, the site line may say **Checking this page…** for a mom
 
 ## What allowing changes
 
-- On that website, the extension stops blocking from the ad lists and stops hiding ad boxes.
+- On that website, the extension stops blocking from the ad lists, stops hiding ad boxes, and turns off the page guards (clipboard and pop-ups).
 - It counts for the whole website address (for example every page on `https://www.example.com`), not only the page you are on.
 - Other addresses of the same site count separately. For example `example.com` without `www`, or `shop.example.com`. Allow each one you need.
 - Chrome remembers it. It stays until you undo it.
