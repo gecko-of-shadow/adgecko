@@ -372,6 +372,21 @@ Deno.test("Fix on YouTube turns off only the sponsored-tile helper; the stuck-st
   assertEquals(kick.button.disabled, false, "Allow this site still works there");
 });
 
+// "No" with nothing to restore (the filters were already off when Fix ran again):
+// no claim that anything was turned back on. What to do in that state is the
+// owner's call; this only stops the false sentence.
+Deno.test("No does not say Turned back on when nothing was turned back on", async () => {
+  const storage = {
+    settings: { v: 1, enabled: true, features: {} },
+    siteOverrides: { "news.example.com": { features: { cosmetic: false, guardClipboard: false, guardPopups: false } } },
+  };
+  const p = await openPopup({ pageHref: "https://news.example.com/", storage });
+  await p.el["fix-site"].fire("click"); // Fix again, after an earlier Yes
+  await p.el["fix-no"].fire("click");
+  assertEquals(storage.siteOverrides["news.example.com"].features.cosmetic, false, "still off");
+  assertEquals(p.el["fix-note"].textContent, "");
+});
+
 // A failed storage write must not leave the popup claiming what was never saved
 // (storage full: the worker and the page read storage, not this popup).
 const SAVE_ERR = "Could not save. Try again.";
@@ -426,6 +441,31 @@ Deno.test("an unsaveable welcome flag shows no error the visitor cannot act on",
   const p = await openPopup({ pageHref: "https://news.example.com/", failSet: { on: true } });
   assertEquals(p.el.welcome.hidden, false);
   assertEquals(p.note.textContent, "");
+});
+
+// With an extension-off first open the card would say "You're protected" next to
+// the Off status, and it could never show again.
+Deno.test("the welcome card waits until the extension is on", async () => {
+  const storage = { settings: { v: 1, enabled: false, features: {} } };
+  const off = await openPopup({ pageHref: "https://news.example.com/", storage });
+  assertEquals(off.el.welcome.hidden, true, "no card while off");
+  assertEquals(storage.popupWelcomed, undefined, "not used up");
+  storage.settings.enabled = true;
+  const on = await openPopup({ pageHref: "https://news.example.com/", storage });
+  assertEquals(on.el.welcome.hidden, false, "shows on the first open while on");
+});
+
+Deno.test("Show more tells the truth about the threat list when it is off", async () => {
+  const more = async (settings, extra = {}) => (await openPopup({ pageHref: "https://news.example.com/", stored: { popupWelcomed: true, settings, ...extra } })).el["feed-status"].textContent;
+  const on = { v: 1, enabled: true, features: {} };
+  assertEquals(await more(on), "Threat feed: not set up (packed threat list in use).");
+  assertEquals(await more(on, { feedPaused: true }), "Threat feed: paused (packed threat list still on).", "a real pause keeps its wording");
+  const OFF = "Threat feed: off (extension turned off, packed threat list off too).";
+  assertEquals(await more({ v: 1, enabled: false, features: {} }, { feedPaused: true }), OFF, "master off");
+  const tierOff = { v: 1, enabled: true, features: { threatTier: false } };
+  assertEquals(await more(tierOff), "Threat feed: not set up (packed threat list off too).");
+  assertEquals(await more(tierOff, { feedPaused: true }), "Threat feed: paused (packed threat list off too).");
+  assertEquals(await more(tierOff, { feedState: { text: "Threat feed: not set up (packed threat list in use)." } }), "Threat feed: not set up (packed threat list off too).", "the worker's stored text too");
 });
 
 Deno.test("the popup adds no permission", () => {

@@ -95,6 +95,14 @@ Deno.test("a background storage write leaves the boxes alone but still shows new
   assert(p.boxes().every((b) => !b.disabled), "master on again");
 });
 
+Deno.test("the feed line tells the truth about the threat list when it is off", async () => {
+  const line = async (settings) => (await openSettings({ settings })).el["feed-status"].textContent;
+  assert(await line({ v: 1, enabled: true, features: {} }) === "Threat feed: not set up (packed threat list in use).", "normal");
+  assert(await line({ v: 1, enabled: true, features: { threatFeed: false } }) === "Threat feed: paused (packed threat list still on).", "real pause");
+  assert(await line({ v: 1, enabled: false, features: {} }) === "Threat feed: off (extension turned off, packed threat list off too).", "master off");
+  assert(await line({ v: 1, enabled: true, features: { threatTier: false } }) === "Threat feed: not set up (packed threat list off too).", "threat tier off");
+});
+
 Deno.test("the theme switch offers three choices, stores the pick and changes the page", async () => {
   const select = settingsHtml.match(/<select[^>]*id="ui-theme"[^>]*>([\s\S]*?)<\/select>/);
   assert(select, "theme switch exists");

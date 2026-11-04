@@ -146,9 +146,13 @@
   }
 
   function feedText() {
-    if (all[FEED_PAUSE_KEY] === true) return "Threat feed: paused (packed threat list still on).";
+    if (!extensionOn()) return "Threat feed: off (extension turned off, packed threat list off too).";
+    const s = all[KEYS.settings];
+    // The stored feed text assumes the packed list is on.
+    const tell = (t) => (s && s.features && s.features.threatTier === false ? t.replace(/packed threat list (still on|in use)/, "packed threat list off too") : t);
+    if (all[FEED_PAUSE_KEY] === true) return tell("Threat feed: paused (packed threat list still on).");
     const st = all[FEED_STATE_KEY] || {};
-    const base = st.text || "Threat feed: not set up (packed threat list in use).";
+    const base = tell(st.text || "Threat feed: not set up (packed threat list in use).");
     if (st.status === "active" && st.source === "feed" && st.fetchedAt) {
       const mins = Math.max(0, Math.round((Date.now() - st.fetchedAt) / 60000));
       return base + (mins < 120 ? " Checked " + mins + " min ago." : " Checked " + Math.round(mins / 60) + " h ago.");
@@ -371,12 +375,15 @@
   fixNo.addEventListener("click", async () => {
     const f = all[KEYS.fix];
     const o = overridesCopy();
+    let changed = false;
     if (f && typeof f === "object" && f.prev && o[f.host]) {
       const entry = Object.assign({}, o[f.host]);
       const features = Object.assign({}, entry.features);
       for (const id of Object.keys(f.prev)) {
+        const before = features[id];
         if (f.prev[id] === null) delete features[id];
         else features[id] = f.prev[id];
+        if (features[id] !== before) changed = true;
       }
       if (Object.keys(features).length) entry.features = features;
       else delete entry.features;
@@ -384,7 +391,7 @@
       else delete o[f.host];
     }
     const saved = await save({ [KEYS.overrides]: o }, [KEYS.fix]);
-    note = saved ? "Turned back on. If the site still breaks, use Allow this site." : "";
+    note = saved && changed ? "Turned back on. If the site still breaks, use Allow this site." : "";
     await refreshInfo();
     render();
     await applyRules();
@@ -416,7 +423,7 @@
     await load();
     applyTheme();
     // One small "You're protected" card on the very first open, never again.
-    if (welcome && all[KEYS.welcomed] !== true) {
+    if (welcome && all[KEYS.welcomed] !== true && extensionOn()) {
       welcome.hidden = false;
       await save({ [KEYS.welcomed]: true });
       saveError = ""; // nothing the visitor did or can retry

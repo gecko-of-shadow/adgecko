@@ -88,8 +88,9 @@
   function renderFeed() {
     const st = stored.feedState || {};
     const s = currentSettings();
-    const paused = !(s.enabled && s.features.threatFeed);
-    $("feed-status").textContent = paused ? "Threat feed: paused (packed threat list still on)." : (st.text || "Threat feed: not set up (packed threat list in use).");
+    const tell = (t) => (s.features.threatTier ? t : t.replace(/packed threat list (still on|in use)/, "packed threat list off too"));
+    $("feed-status").textContent = !s.enabled ? "Threat feed: off (extension turned off, packed threat list off too)."
+      : tell(!s.features.threatFeed ? "Threat feed: paused (packed threat list still on)." : (st.text || "Threat feed: not set up (packed threat list in use)."));
     $("pause-feed").checked = !s.features.threatFeed;
     let lists = stored.generalListStatus || "Packed lists.";
     if (stored.generalListUpdatedAt) lists += " Last update: " + new Date(stored.generalListUpdatedAt).toLocaleString() + ".";
