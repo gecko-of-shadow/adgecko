@@ -83,7 +83,7 @@ function startFrame(href, isTop) {
 // the extension loaded, chrome://). `answerLater` holds the reply until `answer()`.
 // The fake worker answers "siteInfo" from the registry (like src/general-background.js)
 // and "tabSignal" from `signal`.
-async function openPopup({ pageHref, scripted = true, stored = {}, answerLater = false, signal = null, storage: shared = null, streamTop = false }) {
+async function openPopup({ pageHref, scripted = true, stored = {}, answerLater = false, signal = null, storage: shared = null, streamTop = false, failSet = null }) {
   const storage = shared || Object.assign({}, stored);
   const F = globalThis.GeckoFeatures;
   // frameId -> listeners. The subframe comes first, so it would win a broadcast.
@@ -127,6 +127,12 @@ async function openPopup({ pageHref, scripted = true, stored = {}, answerLater =
           cb(out);
         },
         set(patch, cb) {
+          if (failSet && failSet.on) {
+            chrome.runtime.lastError = { message: "Resource::kQuotaBytes quota exceeded" };
+            cb();
+            chrome.runtime.lastError = undefined;
+            return;
+          }
           Object.assign(storage, structuredClone(patch));
           cb();
         },
@@ -364,6 +370,62 @@ Deno.test("Fix on YouTube turns off only the sponsored-tile helper; the stuck-st
   assertEquals(kick.el["site-host"].textContent, "kick.com");
   assertEquals(kick.el["fix-site"].disabled, true, "nothing to fix on Kick: the ad skip stays on");
   assertEquals(kick.button.disabled, false, "Allow this site still works there");
+});
+
+// A failed storage write must not leave the popup claiming what was never saved
+// (storage full: the worker and the page read storage, not this popup).
+const SAVE_ERR = "Could not save. Try again.";
+
+Deno.test("a failed Allow changes nothing on screen, says so plainly, and a retry works", async () => {
+  const failSet = { on: true };
+  const p = await openPopup({ pageHref: "https://news.example.com/", stored: { popupWelcomed: true }, failSet });
+  await p.button.fire("click");
+  assertEquals(p.storage.siteOverrides, undefined);
+  assertEquals(p.status.textContent, "✅ Protected");
+  assertEquals(p.button.textContent, "Allow this site");
+  assertEquals(p.button.attrs["aria-pressed"], "false");
+  assertEquals(p.note.textContent, SAVE_ERR);
+  failSet.on = false;
+  await p.button.fire("click");
+  assertEquals(p.storage.siteOverrides, { "news.example.com": { enabled: false } }, "the retry allows, it does not toggle back");
+  assertEquals(p.status.textContent, "Allowed – not blocking here");
+  assertEquals(p.note.textContent, "");
+});
+
+Deno.test("a failed Fix does not ask Did that fix it?", async () => {
+  const p = await openPopup({ pageHref: "https://news.example.com/", stored: { popupWelcomed: true }, failSet: { on: true } });
+  await p.el["fix-site"].fire("click");
+  assertEquals(p.storage.popupFix, undefined);
+  assertEquals(p.el["fix-ask"].hidden, true);
+  assertEquals(p.el["fix-site"].hidden, false);
+  assertEquals(p.note.textContent, SAVE_ERR);
+});
+
+const pendingFix = () => ({
+  popupWelcomed: true,
+  siteOverrides: { "news.example.com": { features: { cosmetic: false } } },
+  popupFix: { host: "news.example.com", at: Date.now(), prev: { cosmetic: null } },
+});
+
+Deno.test("a failed Allow keeps the pending Fix question", async () => {
+  const p = await openPopup({ pageHref: "https://news.example.com/", stored: pendingFix(), failSet: { on: true } });
+  await p.button.fire("click");
+  assert(p.storage.popupFix, "question still stored, so No can still undo Fix");
+  assertEquals(p.el["fix-ask"].hidden, false);
+});
+
+Deno.test("a failed No does not say Turned back on", async () => {
+  const p = await openPopup({ pageHref: "https://news.example.com/", stored: pendingFix(), failSet: { on: true } });
+  await p.el["fix-no"].fire("click");
+  assertEquals(p.el["fix-note"].textContent, "");
+  assertEquals(p.note.textContent, SAVE_ERR);
+  assert(p.storage.popupFix, "question still stored");
+});
+
+Deno.test("an unsaveable welcome flag shows no error the visitor cannot act on", async () => {
+  const p = await openPopup({ pageHref: "https://news.example.com/", failSet: { on: true } });
+  assertEquals(p.el.welcome.hidden, false);
+  assertEquals(p.note.textContent, "");
 });
 
 Deno.test("the popup adds no permission", () => {

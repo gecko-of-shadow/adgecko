@@ -222,24 +222,24 @@
     });
   }
 
-  // A failed write (quota, I/O) is shown instead of being dropped; the change
-  // still applies for this popup session.
+  // A failed write (quota, I/O) changes nothing: `all` keeps what storage holds
+  // and the visitor is told. Resolves true when everything was saved.
   function save(patch, removeKeys) {
     return new Promise((resolve) => {
-      const done = (err) => {
-        saveError = err ? "Could not save: " + (err.message || String(err)) + "." : "";
-        Object.assign(all, patch);
-        for (const k of removeKeys || []) delete all[k];
-        resolve();
+      const done = (err, patchStored) => {
+        saveError = err ? "Could not save. Try again." : "";
+        if (patchStored) Object.assign(all, patch);
+        if (!err) for (const k of removeKeys || []) delete all[k];
+        resolve(!err);
       };
       try {
         chrome.storage.local.set(patch, () => {
           const err = chrome.runtime.lastError;
-          if (!removeKeys || !removeKeys.length || !chrome.storage.local.remove) return done(err);
-          chrome.storage.local.remove(removeKeys, () => done(err || chrome.runtime.lastError));
+          if (err || !removeKeys || !removeKeys.length || !chrome.storage.local.remove) return done(err, !err);
+          chrome.storage.local.remove(removeKeys, () => done(chrome.runtime.lastError, true));
         });
       } catch (e) {
-        done(e);
+        done(e, false);
       }
     });
   }
@@ -356,8 +356,9 @@
 
   fixYes.addEventListener("click", async () => {
     note = "";
-    await save({}, [KEYS.fix]);
+    const saved = await save({}, [KEYS.fix]);
     render();
+    if (!saved) return;
     try {
       if (typeof window !== "undefined" && window.close) window.close();
     } catch {
@@ -382,8 +383,8 @@
       if (Object.keys(entry).length) o[f.host] = entry;
       else delete o[f.host];
     }
-    note = "Turned back on. If the site still breaks, use Allow this site.";
-    await save({ [KEYS.overrides]: o }, [KEYS.fix]);
+    const saved = await save({ [KEYS.overrides]: o }, [KEYS.fix]);
+    note = saved ? "Turned back on. If the site still breaks, use Allow this site." : "";
     await refreshInfo();
     render();
     await applyRules();
@@ -418,6 +419,7 @@
     if (welcome && all[KEYS.welcomed] !== true) {
       welcome.hidden = false;
       await save({ [KEYS.welcomed]: true });
+      saveError = ""; // nothing the visitor did or can retry
     }
     render();
     await queryActiveTab();
