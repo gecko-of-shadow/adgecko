@@ -33,7 +33,8 @@ Deno.test("popup words: plain status lines, no jargon, no counters", () => {
     assert(popupHtml.includes(s) || popupSource.includes(s), "missing: " + s);
   }
   for (const s of ["streams untouched", "streams unchanged", "ads snapped", "DNR", "ruleset", "declarativeNetRequest"]) {
-    assert(!popupHtml.includes(s) && !popupSource.includes(s), "jargon or counter: " + s);
+    const low = s.toLowerCase();
+    assert(!popupHtml.toLowerCase().includes(low) && !popupSource.toLowerCase().includes(low), "jargon or counter: " + s);
   }
   assert(!manifest.permissions.includes("declarativeNetRequestFeedback"), "no counting permission");
 });

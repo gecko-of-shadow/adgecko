@@ -109,6 +109,19 @@ async function worker(store) {
   return w;
 }
 
+Deno.test("worker: the toolbar shows the working icon while list blocking is on, the off icon otherwise", async () => {
+  const shown = async (settings) => {
+    const w = await worker({ settings });
+    return w.iconCalls.at(-1).path;
+  };
+  const on = await shown({ v: 1, enabled: true, features: {} });
+  assert(on[16] === "../icons/icon16-working.png" && on[48] === "../icons/icon48-working.png" && on[128] === "../icons/icon128-working.png", JSON.stringify(on));
+  for (const settings of [{ v: 1, enabled: false, features: {} }, { v: 1, enabled: true, features: { network: false } }]) {
+    const off = await shown(settings);
+    assert(off[16] === "../icons/icon16-off.png" && off[48] === "../icons/icon48-off.png" && off[128] === "../icons/icon128-off.png", JSON.stringify(off));
+  }
+});
+
 Deno.test("worker: migrates the old keys at start and derives the old keys back from new settings", async () => {
   const w = await worker({ generalEnabled: true, generalAllowedOrigins: ["https://news.example"] });
   assert(w.store.settings && w.store.siteOverrides && w.store.siteOverrides["news.example"].enabled === false, JSON.stringify(w.store.siteOverrides));

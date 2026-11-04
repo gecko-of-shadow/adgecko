@@ -368,6 +368,9 @@ Deno.test("Fix on YouTube turns off only the sponsored-tile helper; the stuck-st
   assertEquals(yt.el["fix-site"].disabled, false);
   await yt.el["fix-site"].fire("click");
   assertEquals(storage.siteOverrides["www.youtube.com"], { features: { youtubeCosmetic: false } }, "only the hide-type helper");
+  const tw = await openPopup({ pageHref: "https://www.twitch.tv/somechannel", storage, streamTop: true });
+  await tw.el["fix-site"].fire("click");
+  assertEquals(storage.siteOverrides["www.twitch.tv"], { features: { twitchDisplay: false } }, "on Twitch only the banner hiding");
   const kick = await openPopup({ pageHref: "https://kick.com/somechannel", stored: { settings: { v: 1, enabled: true, features: {} } }, streamTop: true });
   assertEquals(kick.el["site-host"].textContent, "kick.com");
   assertEquals(kick.el["fix-site"].disabled, true, "nothing to fix on Kick: the ad skip stays on");

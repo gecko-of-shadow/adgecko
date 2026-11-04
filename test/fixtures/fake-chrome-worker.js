@@ -14,6 +14,7 @@ export function loadWorker(opts = {}) {
   const later = (fn, ms = 1) => setTimeout(fn, opts.jitter ? Math.floor(Math.random() * opts.jitter) : ms);
   const dnr = { dynamic: [], session: [], staticOn: true, threatOn: true, updates: 0, errors: [] , gets: 0};
   const fetched = [];
+  const iconCalls = [];
   let bytesRead = 0;
   const runtime = {
     id: EXT,
@@ -93,7 +94,7 @@ export function loadWorker(opts = {}) {
         later(() => withErr(undefined, cb));
       },
     },
-    action: { setIcon(_o, cb) { if (cb) cb(); }, setTitle() {} },
+    action: { setIcon(o, cb) { iconCalls.push(o); if (cb) cb(); }, setTitle() {} },
     // Like Chrome before 150 when opts.strictAlarms: unknown keys throw.
     alarms: opts.noAlarms ? undefined : {
       create(name, info, cb) {
@@ -136,7 +137,7 @@ export function loadWorker(opts = {}) {
   const fireAlarm = (name) => { for (const f of alarmListeners) f({ name, scheduledTime: Date.now() }); };
   const install = (details = { reason: "update" }) => { for (const f of installListeners) f(details); };
   return {
-    chrome, store, dnr, send, alarms, alarmCreates, fireAlarm, install, fetched,
+    chrome, store, dnr, send, iconCalls, alarms, alarmCreates, fireAlarm, install, fetched,
     get alarmListenerCount() { return alarmListeners.length; },
     get bytesRead() { return bytesRead; }, resetBytes() { bytesRead = 0; },
     get peakBytes() { return peakBytes; }, totalBytes,
