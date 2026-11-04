@@ -14,15 +14,17 @@ const GU = self.GeneralAdblockUpdate;
 const GS = self.GeneralSettings;
 const KEYS = GS.STORAGE_KEYS;
 
+// Relative to this worker (src/). Bare "icons/..." fails in Chrome with "Failed
+// to fetch"; a leading "/" works but the packager only follows relative paths.
 const ICON_WORKING = {
-  16: "icons/icon16-working.png",
-  48: "icons/icon48-working.png",
-  128: "icons/icon128-working.png",
+  16: "../icons/icon16-working.png",
+  48: "../icons/icon48-working.png",
+  128: "../icons/icon128-working.png",
 };
 const ICON_OFF = {
-  16: "icons/icon16-off.png",
-  48: "icons/icon48-off.png",
-  128: "icons/icon128-off.png",
+  16: "../icons/icon16-off.png",
+  48: "../icons/icon48-off.png",
+  128: "../icons/icon128-off.png",
 };
 
 // Security review L-5: every DNR write (dynamic rules, enabled rulesets,
@@ -91,7 +93,8 @@ function setIcon(enabled) {
   const path = enabled ? ICON_WORKING : ICON_OFF;
   try {
     chrome.action.setIcon({ path }, () => {
-      void chrome.runtime.lastError;
+      const err = chrome.runtime.lastError;
+      if (err) console.warn("twitch-adblock: toolbar icon not set:", err.message);
     });
     chrome.action.setTitle({
       title: enabled

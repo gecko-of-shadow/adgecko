@@ -35,12 +35,27 @@ Deno.test("every icon path the extension references exists at its declared size"
   const refs = new Map();
   for (const [size, path] of Object.entries(manifest.icons)) refs.set(path, Number(size));
   for (const [size, path] of Object.entries(manifest.action.default_icon)) refs.set(path, Number(size));
-  for (const m of backgroundSource.matchAll(/(\d+): "(icons\/[^"]+\.png)"/g)) refs.set(m[2], Number(m[1]));
+  for (const m of backgroundSource.matchAll(/(\d+): "(?:\.\.\/)?(icons\/[^"]+\.png)"/g)) refs.set(m[2], Number(m[1]));
   for (const m of (popupHtml + popupSource).matchAll(/\.\.\/(icons\/icon(\d+)[^"]*\.png)/g)) refs.set(m[1], Number(m[2]));
   assert(refs.size === 9, `expected the 9 icon files to be referenced, got ${[...refs.keys()]}`);
   for (const [path, size] of refs) {
     const img = await png(path);
     assert(img.width === size && img.height === size, `${path} is ${img.width}x${img.height}, want ${size}x${size}`);
+  }
+});
+
+// A relative setIcon path resolves against the worker's own folder, not the
+// extension root. Bare "icons/..." pointed at src/icons/ and every call failed
+// in real Chrome ("Failed to fetch"), while the fakes in the tests accepted it.
+// A leading "/" works in Chrome but scripts/lib/package_files.py cannot see it.
+Deno.test("the worker's setIcon paths reach icons/ from where the worker runs", async () => {
+  const paths = [...backgroundSource.matchAll(/\d+: "([^"]+\.png)"/g)].map((m) => m[1]);
+  assert(paths.length === 6, `expected 3 working and 3 off paths, got ${paths}`);
+  for (const p of paths) {
+    const { pathname } = new URL(p, `chrome-extension://id/${manifest.background.service_worker}`);
+    assert(pathname.startsWith("/icons/"), `${p} resolves to ${pathname} from the worker`);
+    assert(p.startsWith("../"), `${p}: use ../icons/ (the packager reads relative paths only)`);
+    await Deno.stat(new URL(pathname.slice(1), ROOT));
   }
 });
 
