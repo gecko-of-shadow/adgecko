@@ -351,8 +351,8 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
-    const run = async (win, loc) => {
-      const store = { settings: { v: 1, enabled: true, features: {} }, siteOverrides: { "news.example": { features: { guardClipboard: false } } } };
+    const run = async (win, loc, siteOverrides = { "news.example": { features: { guardClipboard: false } } }) => {
+      const store = { settings: { v: 1, enabled: true, features: {} }, siteOverrides };
       const chrome = { runtime: { lastError: undefined, onMessage: { addListener() {} } }, storage: { local: { get(_k, cb) { cb(structuredClone(store)); } }, onChanged: { addListener() {} } } };
       let port = null;
       win.addEventListener("gk-p1", (e) => { port = port || e.ports[0]; }, true);
@@ -373,6 +373,9 @@ Deno.test({
     const sandboxed = Object.assign(new EventTarget(), { origin: "null" });
     sandboxed.top = {};
     assert(await run(sandboxed, { hostname: "" }) === true, "opaque origin keeps the defaults");
+    const allowed = Object.assign(new EventTarget(), { origin: "https://shop.example" });
+    allowed.top = {};
+    assert(await run(allowed, { hostname: "shop.example" }, { "shop.example": { enabled: false } }) === true, "Allow this site leaves the ClickFix guard on in the page");
   },
 });
 

@@ -98,10 +98,34 @@ Deno.test("the site switch on a stream site turns our own helpers off there (ven
 });
 
 // README and docs/allow-a-page.md say exactly this.
-Deno.test("the site switch on an ordinary site stops the lists, the box hiding and both page guards, not the threat tier", () => {
+Deno.test("the site switch on an ordinary site stops the lists, the box hiding and the pop-up guard, not the threat tier or the ClickFix guard", () => {
   const off = F.resolve({ v: 1, enabled: true, features: { guardPopups: true } }, { "news.example": { enabled: false } }, "news.example");
-  assert(!off.network && !off.cosmetic && !off.guardClipboard && !off.guardPopups, JSON.stringify(off));
+  assert(!off.network && !off.cosmetic && !off.guardPopups, JSON.stringify(off));
   assert(off.threatTier && off.threatFeed, "malware rules stay on: " + JSON.stringify(off));
+  assert(off.guardClipboard === true, "ClickFix guard stays on: " + JSON.stringify(off));
+});
+
+Deno.test("Allow keeps the ClickFix guard on, but only Allow: the other switches still turn it off", () => {
+  const allow = { "news.example": { enabled: false } };
+  const on = { v: 1, enabled: true, features: {} };
+  assert(F.resolve(on, allow, "sub.news.example").guardClipboard === true, "a subdomain follows its parent's Allow");
+  assert(F.resolve({ ...on, enabled: false }, allow, "news.example").guardClipboard === false, "the master switch still wins");
+  assert(F.resolve({ ...on, features: { guardClipboard: false } }, allow, "news.example").guardClipboard === false, "the global switch still wins");
+  const fixed = { "news.example": { enabled: false, features: { guardClipboard: false } } };
+  assert(F.resolve(on, fixed, "news.example").guardClipboard === false, "Fix this site, kept, then Allow: the guard stays off as chosen");
+  assert(F.resolve(on, { "news.example": { features: { guardClipboard: false } } }, "news.example").guardClipboard === false, "Fix this site alone");
+  assert(F.FEATURES.filter((f) => f.keepOnAllow).map((f) => f.id).join() === "guardClipboard", "the clipboard guard is the only feature Allow keeps");
+});
+
+Deno.test("Allow on a stream site resolves exactly as it did before the ClickFix change", () => {
+  const s = { v: 1, enabled: true, features: {} };
+  for (const host of ["www.youtube.com", "kick.com", "www.twitch.tv"]) {
+    const got = F.resolve(s, { [host]: { enabled: false } }, host);
+    for (const f of F.FEATURES) {
+      if (f.apply === "always" || f.available === false || !f.perSite) continue;
+      assert(got[f.id] === false, host + " " + f.id + " is off under Allow");
+    }
+  }
 });
 
 Deno.test("legacy mirror: lists switch and allowed origins come from settings, never a stream site", () => {

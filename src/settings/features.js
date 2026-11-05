@@ -26,6 +26,8 @@
   //        always (cannot be switched off: no `scripting` permission and
   //        vendored code is not edited; owner decision D-3)
   // perSite: may be overridden for one site
+  // keepOnAllow: the site switch ("Allow this site") leaves it on, on ordinary
+  //        sites; its own per-site entry (Fix this site) still counts
   // sites: where the feature acts ("ordinary" = every site except STREAM_SITES)
   const FEATURES = Object.freeze([
     { id: "network", label: "Block ads and trackers (filter lists)", layer: "dnr", default: true, apply: "live", perSite: true, sites: ["ordinary"] },
@@ -38,7 +40,7 @@
     { id: "youtubeWatchdog", label: "YouTube: reload a stuck video start", layer: "main", default: true, apply: "live", perSite: true, sites: ["youtube.com"], scripts: ["src/youtube.js"] },
     { id: "youtubeCosmetic", label: "YouTube: remove sponsored feed tiles (script part)", layer: "main", default: true, apply: "live", perSite: true, sites: ["youtube.com"], scripts: ["src/youtube.js"] },
     { id: "kick", label: "Kick: skip in-stream ads", layer: "main", default: true, apply: "live", perSite: true, sites: ["kick.com"], scripts: ["src/kick.js"] },
-    { id: "guardClipboard", label: "Stop pages from copying shell commands (ClickFix)", layer: "main", default: true, apply: "live", perSite: true, sites: ["ordinary"], scripts: ["src/guards/clipboard.js"] },
+    { id: "guardClipboard", label: "Stop pages from copying shell commands (ClickFix)", layer: "main", default: true, apply: "live", perSite: true, keepOnAllow: true, sites: ["ordinary"], scripts: ["src/guards/clipboard.js"] },
     { id: "guardPopups", label: "Block pop-ups opened without a click", layer: "main", default: false, apply: "live", perSite: true, sites: ["ordinary"], scripts: ["src/guards/popups.js"] },
     { id: "guardMiners", label: "Block crypto-miner scripts", layer: "dnr", default: true, apply: "live", perSite: false, sites: ["ordinary"], available: false },
   ]);
@@ -121,7 +123,7 @@
       if (f.available === false) { out[f.id] = false; continue; }
       let on = s.enabled && s.features[f.id];
       if (o && f.perSite) {
-        if (o.entry.enabled === false) on = false;
+        if (o.entry.enabled === false && !(f.keepOnAllow && !isStreamHost(host))) on = false;
         else if (o.entry.features && typeof o.entry.features[f.id] === "boolean") on = s.enabled && o.entry.features[f.id];
       }
       out[f.id] = !!on;
