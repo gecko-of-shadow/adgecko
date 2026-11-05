@@ -599,7 +599,9 @@ function installGeneralAdblockUpdate(target) {
             const ctrl = typeof AbortController === "function" ? new AbortController() : null;
             const timer = ctrl ? setTimeout(() => ctrl.abort(), deps.fetchTimeoutMs || FETCH_TIMEOUT_MS) : 0;
             try {
-              const r = await deps.fetch(url, { headers, cache: "no-cache", credentials: "omit", signal: ctrl ? ctrl.signal : undefined });
+              // redirect "error", as in the feed client: a list comes from its own
+              // host or not at all. A redirect counts as a failed source.
+              const r = await deps.fetch(url, { headers, cache: "no-cache", credentials: "omit", redirect: "error", signal: ctrl ? ctrl.signal : undefined });
               if (r.ok || (r.status === 304 && headers["If-None-Match"] !== undefined) || (r.status === 304 && headers["If-Modified-Since"] !== undefined)) {
                 // Security review L-2: the body is read while the timeout still
                 // runs, and cut at MAX_LIST_BYTES, so a slow or huge answer

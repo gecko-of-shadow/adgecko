@@ -38,7 +38,7 @@ function fakeDeps({ responses, enabled = true, failUpdate = false }) {
   const state = {}; let dynamic = []; const calls = []; let staticOn = true; const cosmetic = []; const data = {};
   const deps = {
     calls, cosmetic, data, get staticOn() { return staticOn; }, get dynamic() { return dynamic; }, t: 1e12,
-    fetch: async (url, init) => { calls.push({ url, headers: init.headers }); const r = responses(url, init); if (r instanceof Error) throw r; return r; },
+    fetch: async (url, init) => { calls.push({ url, headers: init.headers, redirect: init.redirect }); const r = responses(url, init); if (r instanceof Error) throw r; return r; },
     now: () => deps.t,
     getState: async () => structuredClone(state),
     setState: async (p) => Object.assign(state, structuredClone(p)),
@@ -241,4 +241,12 @@ Deno.test("list download: a stalled body times out and an oversized body is refu
   assert(await U.readListText(new Response("||a.example^\n||b.example^"), 1000) === "||a.example^\n||b.example^", "normal body");
   assert(await U.readListText(new Response("x".repeat(20), { headers: { "Content-Length": "20" } }), 10).then(() => false, () => true), "Content-Length over the cap");
   assert(U.MAX_LIST_BYTES >= 8 * 1024 * 1024, "cap leaves room for the biggest list");
+});
+
+Deno.test("list fetches refuse redirects, on mirrors too; a refused redirect falls through to the next mirror", async () => {
+  const d = fakeDeps({ responses: (url) => (/easylist\.to/.test(url) ? new TypeError("Failed to fetch") : ok(url)) });
+  const r = await U.refresh(d, {});
+  assert(r.ok, JSON.stringify(r));
+  assert(d.calls.length > U.SOURCES.length && d.calls.every((c) => c.redirect === "error"), "a list fetch can follow a redirect");
+  assert(d.calls.some((c) => c.url.includes("ublockorigin.github.io/uAssets/thirdparties")), "mirror was not tried");
 });
