@@ -434,3 +434,14 @@ Deno.test("privacy check: no finding prints a matched path, whatever kind of hit
   const clean = await inRepo({ patterns: FAKE_ROW, head: { "docs/my clean notes.md": "a zqplumbus line\n" } });
   assert(clean.code === 1 && clean.visible.includes("file=docs/my clean notes.md,line=1"), clean.visible);
 });
+
+Deno.test("privacy check: a path git quoted is never printed, and a diff header's tab is not part of a path", async () => {
+  const rows = "[m.re.compile(data[1], m.re.I)]";
+  const quoted = String.raw`"b/docs/my\tzqplumbus.md"`;
+  assert(await pyCall("m.printable_path(data[0], " + rows + ")", [quoted, FAKE_ROW]) === "<redacted>", "a quoted path was printed");
+  assert(await pyCall("m.printable_path(data[0], " + rows + ")", ["commit abc1234", FAKE_ROW]) === "commit abc1234", "a commit label changed");
+  assert(await pyCall("m.diff_path(data, 'b/')", "b/docs/my notes.md\t") === "docs/my notes.md", "tab kept");
+  // One segment hides, but a second match across a slash must take the whole path.
+  const two = await inRepo({ patterns: "zqother\nzq/plumbus", head: { "docs/zqother/zq/plumbus.md": "fine\n" } });
+  assert(two.code === 1 && !two.visible.includes("zq/plumbus") && !two.visible.includes("zqother"), two.visible);
+});

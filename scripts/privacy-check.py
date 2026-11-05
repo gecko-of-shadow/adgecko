@@ -425,7 +425,11 @@ def redact_path(path, personal):
 
 def printable_path(path, personal):
     """Every path goes through here on its way to the log, by what it holds,
-    so no difference between how git spells a path can let one past."""
+    so no difference between how git spells a path can let one past. A path
+    git quoted holds escapes that can join a word and hide it from \\b, so it
+    is not printed at all."""
+    if path.startswith('"'):
+        return REDACTED
     return redact_path(path, personal) if path_kinds(path, personal) else path
 
 
