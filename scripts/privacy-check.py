@@ -20,7 +20,8 @@ Always checked, without any secret (security review M-7):
   * metadata in changed images (EXIF, XMP, comments, PNG text chunks other
     than "Software");
   * commit author/committer names and e-mails and commit messages in range.
-Data files whose job is to list hosts (src/rules/*.json) skip the IP check.
+Data files whose job is to list hosts (src/rules/*.json) skip the IP check, and
+their quoted lower-case hostnames skip the personal-string check.
 A line that must keep such a value for a good reason can carry the marker
 "privacy-check: allow" (never honoured for secrets or personal strings).
 --all scans every tracked file (maintainers; not used by CI).
@@ -54,7 +55,9 @@ HOME_KIND = "home-directory path"
 IMAGE_KIND = "image metadata"
 ALLOW_MARKER = "privacy-check: allow"
 # Paths whose content is host data by design (blocklists): no IP check.
-IP_EXEMPT_RE = re.compile(r"^src/rules/[^/]+\.json$")
+HOST_DATA_RE = re.compile(r"^src/rules/[^/]+\.json$")
+# A whole quoted hostname. The last label starts with a letter, so an IP is not one.
+QUOTED_HOST_RE = re.compile(r'"[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z][a-z0-9-]+"')
 
 DOC_NETS = [ipaddress.ip_network(n) for n in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24", "2001:db8::/32")]
 # Not after "Name/" (version tokens such as "Chrome/155.0.0.0").
@@ -122,7 +125,7 @@ def generic_kinds(line, path=None):
     if ALLOW_MARKER in line:
         return []
     found = []
-    if not (path and IP_EXEMPT_RE.match(path)) and bad_ip(line):
+    if not (path and HOST_DATA_RE.match(path)) and bad_ip(line):
         found.append(IP_KIND)
     if bad_email(line):
         found.append(EMAIL_KIND)
@@ -312,7 +315,9 @@ def write_summary(text):
 
 def kinds_for(line, personal, path=None, generic=True):
     found = []
-    if any(pattern.search(line) for pattern in personal):
+    # Third-party hostnames in host data may hold these words, and only those.
+    text = QUOTED_HOST_RE.sub('""', line) if path and HOST_DATA_RE.match(path) else line
+    if any(pattern.search(text) for pattern in personal):
         found.append(PERSONAL_KIND)
     if any(pattern.search(line) for pattern in GENERIC_SECRET_PATTERNS):
         found.append(SECRET_KIND)

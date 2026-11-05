@@ -31,7 +31,12 @@ jobs:
         with:
           deno-version: v2.9.8
 
+      # Security review M-6: pull request code must not run with the secret, so
+      # the tests get it on pushes to main only. Elsewhere the two tests that
+      # need it show as ignored.
       - name: Run tests
+        env:
+          PRIVACY_PATTERNS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.PRIVACY_PATTERNS || '' }}
         run: deno test --no-lock --allow-read --allow-run --allow-env test/
 
   privacy:

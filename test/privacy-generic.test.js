@@ -8,7 +8,7 @@ const ROOT = new URL("..", import.meta.url);
 const dec = new TextDecoder();
 const j = (...parts) => parts.join("");
 // The owner's words come from PRIVACY_PATTERNS at run time, so this file names nobody.
-// Without it, including in the CI tests job, two tests pass without checking. Run them locally with it set.
+// Without it two tests show as ignored. CI gives it to the tests job on pushes to main only.
 const personalWords = (Deno.env.get("PRIVACY_PATTERNS") ?? "").split("\n").map((w) => w.trim()).filter(Boolean);
 
 async function pyCall(expr, input) {
@@ -72,6 +72,36 @@ Deno.test("privacy check: public IPs, e-mails, home paths and token shapes are f
   assert(r[0].length === 0 && r[1].includes("obvious secret"), JSON.stringify(r));
 });
 
+Deno.test("privacy check: a personal word may sit in a quoted hostname in src/rules/*.json, and nowhere else", async () => {
+  const word = "zqword";
+  const ip = j("93.184", ".216.34");
+  const host = "\"ads." + word + ".example\"";
+  const rule = "src/rules/general-network.json";
+  const cases = [
+    [rule, "[" + host + ",\"b.example\"]", false],
+    ["docs/x.md", host, true],
+    ["src/rules/sub/x.json", host, true],
+    ["src/rules/x.txt", host, true],
+    [null, host, true],
+    [rule, "{\"urlFilter\":\"||" + word + ".example^\"}", true],
+    [rule, "{\"note\":\"" + word + "\"}", true],
+    [rule, j("\"", word, "@", "mail.example\""), true],
+    [rule, "\"ADS." + word + ".EXAMPLE\"", true],
+    [rule, "\"" + ip + "\"", true],
+  ];
+  const patterns = [word, ip.replaceAll(".", "[.]")];
+  const compile = "[m.re.compile(x, m.re.I) for x in data[0]]";
+  const got = await pyCall("(lambda P: [m.PERSONAL_KIND in m.kinds_for(l, P, p) for p, l in data[1]])(" + compile + ")", [patterns, cases.map(([p, l]) => [p, l])]);
+  cases.forEach(([p, l, want], i) => assert(got[i] === want, p + " | " + l + " -> " + got[i]));
+  // The exemption does not reach secrets, and it covers removed lines in a diff too.
+  const token = j("\"ghp", "_", "B".repeat(36), "\"");
+  const secret = await pyCall("(lambda P: m.kinds_for(data[1], P, data[2]))(" + compile + ")", [patterns, host + "," + token, rule]);
+  assert(JSON.stringify(secret) === JSON.stringify(["obvious secret"]), JSON.stringify(secret));
+  const diff = (path) => ["diff --git a/" + path + " b/" + path, "--- a/" + path, "+++ b/" + path, "@@ -1 +1 @@", "-" + host, "+\"b.example\""].join("\n");
+  const scanned = await pyCall("(lambda P: [(lambda f: (m.scan_diff(d, P, f), sorted(f))[1])(set()) for d in data[1]])(" + compile + ")", [patterns, [diff("src/rules/x.json"), diff("docs/x.md")]]);
+  assert(JSON.stringify(scanned) === JSON.stringify([[], [["docs/x.md", 1, "forbidden personal string"]]]), JSON.stringify(scanned));
+});
+
 Deno.test("privacy check: image metadata (EXIF, XMP, comments, PNG text) is found, a plain image is not", async () => {
   const b64 = (bytes) => btoa(String.fromCharCode(...bytes));
   const be32 = (n) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
@@ -121,15 +151,21 @@ Deno.test("CI workflow: actions pinned to commit SHAs, no persisted credentials,
   assert(/git show "\$PR_BASE_SHA:scripts\/privacy-check\.py" > "\$RUNNER_TEMP\/privacy-check\.py"/.test(workflow), "base checker");
   assert(/run: python3 -u -I "\$RUNNER_TEMP\/privacy-check\.py"/.test(workflow), "runs the copied checker");
   assert(/REQUIRE_PATTERNS: \$\{\{ github\.event_name == 'push' && github\.ref == 'refs\/heads\/main' \}\}/.test(workflow), "required on main");
+  // Pull request code never runs with the secret: the tests job gets it on pushes to main only.
+  assert(/name: Run tests\s+env:\s+PRIVACY_PATTERNS: \$\{\{ github\.event_name == 'push' && github\.ref == 'refs\/heads\/main' && secrets\.PRIVACY_PATTERNS \|\| '' \}\}/.test(workflow), "tests job: secret on main pushes only");
+  assert(workflow.split("secrets.PRIVACY_PATTERNS").length === 3, "secret used only by the checker step and the tests step");
   // No expression interpolation inside run: scripts (values go through env).
   const runBlocks = [...workflow.matchAll(/run: \|?\n?([\s\S]*?)(?=\n\s*- name:|\n\s*$|$)/g)].map((m) => m[1]);
   for (const b of runBlocks) assert(!b.includes("${{"), "expression inside run: " + b.slice(0, 80));
   assert(!/pull_request_target/.test(workflow) && /permissions:\s*\n\s*contents: read/.test(workflow), "permissions");
 });
 
-Deno.test("no personal machine references in code, tests or docs (L-1)", async () => {
-  if (personalWords.length === 0) return;
-  await noHits("(" + personalWords.join("|") + ")'s (pc|log|reload)", [".", ":!analysis"]);
+Deno.test({
+  name: "no personal machine references in code, tests or docs (L-1)",
+  ignore: personalWords.length === 0,
+  fn: async () => {
+    await noHits("(" + personalWords.join("|") + ")'s (pc|log|reload)", [".", ":!analysis"]);
+  },
 });
 
 // The art record says "the owner". The whole tree is checked too, except the
@@ -137,13 +173,21 @@ Deno.test("no personal machine references in code, tests or docs (L-1)", async (
 // Exit code 1 means git grep ran and found nothing; anything else must not pass.
 async function noHits(pattern, paths) {
   const out = await new Deno.Command("git", { args: ["grep", "-n", "-I", "-i", "-w", "-E", pattern, "--", ...paths], cwd: ROOT, stdout: "piped" }).output();
-  assert(out.code === 1, "personal references:\n" + (dec.decode(out.stdout).trim() || "git grep failed"));
+  // Path and line only: a hit's text may not be masked in the log.
+  const hits = dec.decode(out.stdout).trim().split("\n").map((l) => l.split(":").slice(0, 2).join(":")).join("\n");
+  assert(out.code === 1, "personal references:\n" + (hits || "git grep failed"));
 }
 
-Deno.test("the design record and the art sources carry no personal name or place", async () => {
-  if (personalWords.length === 0) return;
-  await noHits(personalWords.join("|"), ["docs/design/*.md", "docs/design/screenshots/*.md", "icons/source", "src/popup.css", "src/popup.js", "src/popup.html", "test/popup-design.test.js"]);
-  await noHits(personalWords.join("|"), [".", ":!src/rules/*.json"]); // the whole tree, minus third-party hostnames
+Deno.test({
+  name: "the design record and the art sources carry no personal name or place",
+  ignore: personalWords.length === 0,
+  fn: async () => {
+    // A secret in the wrong format compiles and matches nothing, so it must still find these hostnames.
+    const live = await new Deno.Command("git", { args: ["grep", "-q", "-I", "-i", "-w", "-E", personalWords.join("|"), "--", "src/rules/*.json"], cwd: ROOT, stdout: "null", stderr: "null" }).output();
+    assert(live.code === 0, "PRIVACY_PATTERNS found nothing in src/rules/*.json: is the secret in the right format?");
+    await noHits(personalWords.join("|"), ["docs/design/*.md", "docs/design/screenshots/*.md", "icons/source", "src/popup.css", "src/popup.js", "src/popup.html", "test/popup-design.test.js"]);
+    await noHits(personalWords.join("|"), [".", ":!src/rules/*.json"]); // the whole tree, minus third-party hostnames
+  },
 });
 
 Deno.test("privacy check: removing a public IP in a diff is fine, adding one is not", async () => {
