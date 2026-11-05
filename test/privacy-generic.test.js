@@ -375,7 +375,7 @@ Deno.test("the secret's positive control names the real cause", async () => {
 Deno.test("privacy check: a file with a NUL byte and an image are scanned by printable runs, and the log shows no text", async () => {
   const hit = await inRepo({ patterns: FAKE_ROW, head: { "tool.bin": "\0\0a zqplumbus run\0\0" } });
   assert(hit.code === 1 && hit.visible.includes("file=tool.bin,line=1::forbidden personal string") && !hit.visible.includes("zqplumbus"), hit.visible);
-  const image = await inRepo({ patterns: FAKE_ROW, head: { "art.png": "not pixels, a zqplumbus run" } });
+  const image = await inRepo({ patterns: FAKE_ROW, head: { "art.png": "\0\0not pixels, a zqplumbus run" } });
   assert(image.code === 1 && image.visible.includes("file=art.png"), image.visible);
   const generic = await inRepo({ head: { "tool.bin": j("\0", "someone", "@", "gmail", ".com", "\0") } });
   assert(generic.code === 1 && generic.visible.includes("e-mail address"), generic.visible);
