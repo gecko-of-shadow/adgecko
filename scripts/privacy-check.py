@@ -214,15 +214,11 @@ def emit(command, message, path=None, line=None):
 
 
 def git_text(args):
-    proc = subprocess.run(
-        ["git", "-c", "core.quotepath=false", *args],
-        capture_output=True,
-        text=True,
-        errors="replace",
-    )
+    proc = subprocess.run(["git", "-c", "core.quotepath=false", *args], capture_output=True)
     if proc.returncode != 0:
         return None
-    return proc.stdout
+    # Bytes, not text=True: that mode turns a bare CR into a line break.
+    return proc.stdout.decode("utf-8", errors="replace")
 
 
 def zero_sha(value):
@@ -290,9 +286,20 @@ def escape_command_data(value):
     return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
+def lines_of(text):
+    """Split on newline only. str.splitlines() also splits on CR, U+2028, U+2029
+    and other separators, so a forged line after one could change how a diff
+    is read and hide what follows it."""
+    return text.split("\n")
+
+
+def secret_rows(raw):
+    return [line.rstrip("\r") for line in lines_of(raw)]
+
+
 def publish_masks(raw):
     """Register pattern lines with the log masker. This must be the first output."""
-    for line in raw.splitlines():
+    for line in secret_rows(raw):
         if line.startswith("\ufeff"):
             line = line.lstrip("\ufeff")
         cleaned = line.strip()
@@ -313,7 +320,7 @@ def load_personal_patterns(raw):
         write_summary("PRIVACY_PATTERNS secret is not set. Personal-string checks were skipped.\n")
         return []
     patterns = []
-    for index, line in enumerate(raw.splitlines(), start=1):
+    for index, line in enumerate(secret_rows(raw), start=1):
         if line.startswith("\ufeff"):
             line = line.lstrip("\ufeff")
         line = line.strip()
@@ -418,7 +425,7 @@ def scan_file(path, personal, findings):
     if b"\0" in data:
         return True
     text = data.decode("utf-8", errors="replace")
-    for lineno, line in enumerate(text.splitlines(), start=1):
+    for lineno, line in enumerate(lines_of(text), start=1):
         kinds = kinds_for(line, personal, path)
         if kinds and not remember(findings, path, lineno, kinds):
             emit("error", "A changed file matched but its path could not be reported")
@@ -447,7 +454,7 @@ def scan_diff(diff, personal, findings):
     old_line = 0
     new_line = 0
     in_hunk = False
-    for raw in diff.splitlines():
+    for raw in lines_of(diff):
         if raw.startswith("diff --git "):
             in_hunk = False
             old_path = None
@@ -499,22 +506,20 @@ def scan_diff(diff, personal, findings):
 def scan_commits(base, head, personal, findings):
     """Author/committer names and e-mails and the messages of commits in range."""
     spec = head if base is None else base + ".." + head
-    args = ["log", "--format=%h%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x1e", spec]
+    # Every field follows a NUL, which no field can hold, so a message cannot
+    # forge a record.
+    args = ["log", "--format=%x00%h%x00%an%x00%ae%x00%cn%x00%ce%x00%B", spec]
     if base is None:
         args.insert(1, "-1")
     out = git_text(args)
     if out is None:
         emit("error", "Could not read commit metadata")
         return False
-    for record in out.split("\x1e"):
-        record = record.strip("\n")
-        if not record:
-            continue
-        parts = record.split("\x00")
-        if len(parts) < 6:
-            continue
+    fields = out.split("\0")[1:]
+    for start in range(0, len(fields), 6):
+        parts = fields[start:start + 6]
         sha = parts[0]
-        lines = parts[1:5] + parts[5].splitlines()
+        lines = parts[1:5] + lines_of("".join(parts[5:]))
         for index, text in enumerate(lines, start=1):
             kinds = kinds_for(text, personal)
             if kinds and not remember(findings, "commit " + sha, index, kinds):

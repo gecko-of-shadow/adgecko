@@ -295,3 +295,30 @@ Deno.test("privacy check: a word row finds camelCase, underscore and hyphen join
   const message = await inRepo({ patterns: FAKE_ROW, message: "Tidy myZqplumbus setup", head: { "a.md": "fine\n" } });
   assert(message.code === 1 && !message.visible.includes("yZqplumbus"), "commit message: " + message.visible);
 });
+
+Deno.test("privacy check: no separator but newline can end a diff line", async () => {
+  const ip = j("93.184", ".216.34");
+  const head = ["diff --git a/x.md b/x.md", "--- a/x.md", "+++ b/x.md", "@@ -1 +1,2 @@", " context"];
+  for (const sep of ["\u2028", "\u2029", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\r"]) {
+    const label = "U+" + sep.codePointAt(0).toString(16);
+    // Split wrongly, the tail reads as a removed line, which the IP check skips.
+    const asRemoved = await pyCall("(lambda f: (m.scan_diff(data, [], f), sorted(f))[1])(set())", head.concat(["+new" + sep + "-old " + ip]).join("\n"));
+    assert(JSON.stringify(asRemoved) === JSON.stringify([["x.md", 2, "IP address"]]), label + " hid a line: " + JSON.stringify(asRemoved));
+    // Split wrongly, a forged header would end the hunk and hide the next line.
+    const asHeader = await pyCall("(lambda f: (m.scan_diff(data, [], f), sorted(f))[1])(set())", head.concat(["+ok" + sep + "diff --git a/z b/z", "+next " + ip]).join("\n"));
+    assert(JSON.stringify(asHeader) === JSON.stringify([["x.md", 3, "IP address"]]), label + " forged a header: " + JSON.stringify(asHeader));
+  }
+});
+
+Deno.test("privacy check: a bare CR from git cannot end a hunk and hide a removed line", async () => {
+  const base = { "a.md": "old\rdiff --git a/q b/q\na zqplumbus line\n" };
+  const r = await inRepo({ patterns: FAKE_ROW, base, head: { "a.md": "fresh\n" } });
+  assert(r.code === 1, "a removed line was hidden: " + r.visible);
+});
+
+Deno.test("privacy check: a record separator in a commit message cannot hide the rest of it", async () => {
+  const r = await inRepo({ patterns: FAKE_ROW, message: "Tidy up\x1ea zqplumbus line", head: { "a.md": "fine\n" } });
+  assert(r.code === 1, "a message tail was hidden: " + r.visible);
+  const clean = await inRepo({ patterns: FAKE_ROW, message: "Tidy up\x1ea fine line\n\nMore detail", head: { "a.md": "fine\n" } });
+  assert(clean.code === 0, clean.visible);
+});
