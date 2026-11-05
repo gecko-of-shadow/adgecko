@@ -419,16 +419,22 @@ def redact_path(path, personal):
     """The path to print: printing a matched path would print the match."""
     parts = [REDACTED if path_kinds(part, personal) else part for part in path.split("/")]
     safe = "/".join(parts)
-    return safe if safe != path else REDACTED
+    # A match across a slash, or one no single segment shows, hides the whole path.
+    return REDACTED if path_kinds(safe, personal) else safe
 
 
-def scan_paths(entries, personal, findings, shown):
+def printable_path(path, personal):
+    """Every path goes through here on its way to the log, by what it holds,
+    so no difference between how git spells a path can let one past."""
+    return redact_path(path, personal) if path_kinds(path, personal) else path
+
+
+def scan_paths(entries, personal, findings):
     for status, path in entries:
         kinds = path_kinds(path, personal, removed=status == "D")
         if not kinds:
             continue
-        shown[path] = redact_path(path, personal)
-        remember(findings, shown[path], 1, [kind + PATH_SUFFIX for kind in kinds])
+        remember(findings, path, 1, [kind + PATH_SUFFIX for kind in kinds])
 
 
 def remember(findings, path, line, kinds):
@@ -492,6 +498,8 @@ def parse_hunk(header):
 
 
 def diff_path(header, prefix):
+    # git ends a --- or +++ line with a tab when the path holds whitespace.
+    header = header.rstrip("\t")
     if header == "/dev/null":
         return None
     if header.startswith(prefix):
@@ -606,7 +614,6 @@ def main():
         return 1
 
     findings = set()
-    shown = {}
     if "--all" in sys.argv[1:]:
         tracked = git_text(["ls-files", "-z"])
         if tracked is None:
@@ -622,7 +629,7 @@ def main():
             emit("error", "Could not list the tree")
             return 1
         entries = files + [("M", path) for path in tree]
-    scan_paths(entries, personal, findings, shown)
+    scan_paths(entries, personal, findings)
     for status, path in files:
         if status == "D" or not in_repo(path) or os.path.islink(path) or not os.path.isfile(path):
             continue
@@ -635,7 +642,7 @@ def main():
 
     if findings:
         for path, line, kind in sorted(findings):
-            emit("error", kind, shown.get(path, path), line)
+            emit("error", kind, printable_path(path, personal), line)
         write_summary(f"Privacy check failed on {len(findings)} finding(s).\n")
         print(f"Privacy check failed on {len(findings)} finding(s).", flush=True)
         return 1

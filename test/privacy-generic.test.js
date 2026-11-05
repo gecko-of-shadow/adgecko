@@ -418,3 +418,19 @@ Deno.test("privacy check: the tests job masks the bare word of a word row, in CI
   const source = await Deno.readTextFile(new URL("privacy-generic.test.js", import.meta.url));
   assert(/if \(Deno\.env\.get\("GITHUB_ACTIONS"\) === "true"\) bareWordMasks\(personalWords\)/.test(source), "a local run must not print the words");
 });
+
+Deno.test("privacy check: no finding prints a matched path, whatever kind of hit named it", async () => {
+  const mail = j("someone", "@", "gmail", ".com");
+  const shown = (r) => assert(r.code === 1 && !/zqplumbus/i.test(r.visible), r.visible);
+  // git ends a diff header with a tab when the path holds a space.
+  shown(await inRepo({ patterns: FAKE_ROW, head: { "docs/my zqplumbus notes.md": "a zqplumbus line\n" } }));
+  shown(await inRepo({ patterns: FAKE_ROW, head: { "docs/my ZQPLUMBUS notes.md": "a zqplumbus line\n" } }));
+  shown(await inRepo({ patterns: FAKE_ROW, head: { "docs/my zqplumbus notes.md": "write to " + mail + "\n" } }));
+  shown(await inRepo({ patterns: FAKE_ROW, base: { "my zqplumbus notes.md": "a zqplumbus line\n" }, head: { "my zqplumbus notes.md": null } }));
+  shown(await inRepo({ patterns: "my-zqplumbus", head: { "docs/ok my-zqplumbus b.md": "a my-zqplumbus line\n" } }));
+  // A row that spans a slash leaves no segment to hide, so the whole path goes.
+  const span = await inRepo({ patterns: "zq/plumbus", head: { "docs/zq/plumbus.md": "fine\n" } });
+  assert(span.code === 1 && !span.visible.includes("zq/plumbus") && span.visible.includes("<redacted>"), span.visible);
+  const clean = await inRepo({ patterns: FAKE_ROW, head: { "docs/my clean notes.md": "a zqplumbus line\n" } });
+  assert(clean.code === 1 && clean.visible.includes("file=docs/my clean notes.md,line=1"), clean.visible);
+});
