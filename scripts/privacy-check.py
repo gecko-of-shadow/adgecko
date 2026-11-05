@@ -27,6 +27,10 @@ Every changed file path is checked like a line of text, the whole tree's paths
 too on pushes to main and with --all. A path that was deleted or renamed away
 counts for personal strings and secrets only, as removed lines do. The allow
 marker does not apply to paths.
+Binary files (images, and any file with a NUL byte) have no lines, so their
+printable runs of 6 or more characters are scanned, as the strings tool shows
+them. Compressed pixels can spell a match by chance: those exact blobs are in
+BINARY_NOISE_BLOBS, and a changed file has a new blob and is scanned again.
 Data files whose job is to list hosts (src/rules/*.json) skip the IP check, and
 their quoted lower-case hostnames skip the personal-string check.
 A line that must keep such a value for a good reason can carry the marker
@@ -39,6 +43,7 @@ block. Each non-empty pattern line is registered with
 ::add-mask:: before any other output.
 """
 
+import hashlib
 import ipaddress
 import os
 import re
@@ -143,6 +148,21 @@ def generic_kinds(line, path=None):
 
 
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".tif", ".tiff")
+STRING_RUN_RE = re.compile(rb"[\x20-\x7e\t]{6,}")
+# PNGs whose compressed pixel bytes spell a match by chance: on 2026-11-05 every
+# hit in these sat inside an IDAT chunk, none in text or metadata. Listed by git
+# blob id, never by path, so any changed version is scanned again.
+BINARY_NOISE_BLOBS = frozenset((
+    "0abbd64e7e70bd3567cc639eb37512c5507dd4f4",
+    "3e3a8a17fe7caf3be6cc90e704e1c862086a5f49",
+    "414df8b6d4be8ecd57e3c211819e2ba3e550470c",
+    "66c480a50ae1efab16d806b79883d31f570ba75e",
+    "698fb345138d4bdd76a696250e603eea23d8dc4e",
+    "862c248a0db6c5f045fcae3dc20bdc28d81bf34e",
+    "884d3cab3f653ae597213c2615b059bdea0079cd",
+    "cb0dc42a98593be6c48d97568edf53b985303c46",
+    "f63204f8520b29c7c6a6f622aba7e75f748bb31c",
+))
 
 
 def image_metadata(data, path):
@@ -354,12 +374,12 @@ def split_joins(text):
     return JOIN_CHARS_RE.sub(" ", CASE_CHANGE_RE.sub(" ", text))
 
 
-def kinds_for(line, personal, path=None, generic=True):
+def kinds_for(line, personal, path=None, generic=True, joins=True):
     found = []
     # Third-party hostnames in host data may hold these words, and only those.
     text = QUOTED_HOST_RE.sub('""', line) if path and HOST_DATA_RE.match(path) else line
     if personal:
-        views = (text, split_joins(text))
+        views = (text, split_joins(text)) if joins else (text,)
         if any(pattern.search(view) for pattern in personal for view in views):
             found.append(PERSONAL_KIND)
     if any(pattern.search(line) for pattern in GENERIC_SECRET_PATTERNS):
@@ -410,6 +430,23 @@ def in_repo(path):
     return ".." not in path.split("/")
 
 
+def blob_sha(data):
+    """The id git gives these bytes, so a listed blob is one exact file version."""
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def scan_binary(path, data, personal, findings):
+    if blob_sha(data) in BINARY_NOISE_BLOBS:
+        return True
+    for run in STRING_RUN_RE.finditer(data):
+        # Random bytes change case at every turn, so the join split stays off.
+        kinds = kinds_for(run.group(0).decode("ascii"), personal, path, joins=False)
+        if kinds and not remember(findings, path, 1, kinds):
+            emit("error", "A changed file matched but its path could not be reported")
+            return False
+    return True
+
+
 def scan_file(path, personal, findings):
     if not in_repo(path) or os.path.islink(path):
         return True
@@ -418,12 +455,11 @@ def scan_file(path, personal, findings):
     except OSError:
         emit("error", "Could not read a changed file")
         return False
-    if path.lower().endswith(IMAGE_EXT):
-        if image_metadata(data, path) and not remember(findings, path, 1, [IMAGE_KIND]):
-            return False
-        return True
-    if b"\0" in data:
-        return True
+    is_image = path.lower().endswith(IMAGE_EXT)
+    if is_image and image_metadata(data, path) and not remember(findings, path, 1, [IMAGE_KIND]):
+        return False
+    if is_image or b"\0" in data:
+        return scan_binary(path, data, personal, findings)
     text = data.decode("utf-8", errors="replace")
     for lineno, line in enumerate(lines_of(text), start=1):
         kinds = kinds_for(line, personal, path)

@@ -349,3 +349,38 @@ Deno.test("the secret's positive control names the real cause", async () => {
   assert(refreshed.includes("a list refresh removed every matching hostname") && !refreshed.includes("not in CI format"), refreshed);
   assert(await controlFailure(["doubleclick"]) === null, "a hostname that is in the rule files must pass");
 });
+
+Deno.test("privacy check: a file with a NUL byte and an image are scanned by printable runs, and the log shows no text", async () => {
+  const hit = await inRepo({ patterns: FAKE_ROW, head: { "tool.bin": "\0\0a zqplumbus run\0\0" } });
+  assert(hit.code === 1 && hit.visible.includes("file=tool.bin,line=1::forbidden personal string") && !hit.visible.includes("zqplumbus"), hit.visible);
+  const image = await inRepo({ patterns: FAKE_ROW, head: { "art.png": "not pixels, a zqplumbus run" } });
+  assert(image.code === 1 && image.visible.includes("file=art.png"), image.visible);
+  const generic = await inRepo({ head: { "tool.bin": j("\0", "someone", "@", "gmail", ".com", "\0") } });
+  assert(generic.code === 1 && generic.visible.includes("e-mail address"), generic.visible);
+  const clean = await inRepo({ patterns: FAKE_ROW, head: { "tool.bin": "\0\0an ordinary run\0\0" } });
+  assert(clean.code === 0, clean.visible);
+});
+
+Deno.test("privacy check: a printable run needs 6 characters, and the join split stays off in binary", async () => {
+  const six = await inRepo({ patterns: String.raw`zqplum`, head: { "tool.bin": "\0zqplum\0" } });
+  assert(six.code === 1, "a run of 6 was skipped");
+  const five = await inRepo({ patterns: String.raw`zqplu`, head: { "tool.bin": "\0zqplu\0" } });
+  assert(five.code === 0, "a run of 5 was scanned");
+  const joined = await inRepo({ patterns: FAKE_ROW, head: { "tool.bin": "\0myZqplumbusHouse\0" } });
+  assert(joined.code === 0, joined.visible);
+});
+
+Deno.test("privacy check: a listed blob is skipped only byte for byte, and only for its strings", async () => {
+  const mail = j("\0", "someone", "@", "gmail", ".com", "\0");
+  // data: [the listed bytes, what is added to them before the scan].
+  const scan = "(lambda b, f: (setattr(m, 'BINARY_NOISE_BLOBS', frozenset([m.blob_sha(b)])), m.scan_binary('x.png', b + data[1].encode(), [], f), sorted(f))[2])(data[0].encode(), set())";
+  assert((await pyCall(scan, [mail, ""])).length === 0, "a listed blob was reported");
+  const changed = await pyCall(scan, [mail, "\0"]);
+  assert(changed.length === 1 && changed[0][2] === "e-mail address", "a changed blob was not scanned: " + JSON.stringify(changed));
+  // scan_file checks metadata before the list, so a listing cannot excuse it.
+  const png = "89504e470d0a1a0a" + "00000005" + "74455874" + "4175746f00" + "00000000";
+  const meta = await pyCall("(lambda b, f: (setattr(m, 'BINARY_NOISE_BLOBS', frozenset([m.blob_sha(b)])), setattr(m, 'open', lambda *a: __import__('io').BytesIO(b)), m.scan_file('x.png', [], f), sorted(f))[3])(bytes.fromhex(data), set())", png);
+  assert(JSON.stringify(meta) === JSON.stringify([["x.png", 1, "image metadata"]]), JSON.stringify(meta));
+  const id = await pyCall("[m.blob_sha(data.encode()), sorted(len(x) for x in m.BINARY_NOISE_BLOBS)[0], sorted(len(x) for x in m.BINARY_NOISE_BLOBS)[-1]]", "hello\n");
+  assert(id[0] === "ce013625030ba8dba906f756967f9e9ca394464a" && id[1] === 40 && id[2] === 40, JSON.stringify(id));
+});
