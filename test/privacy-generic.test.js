@@ -278,3 +278,20 @@ Deno.test("privacy check: on main every path in the tree is scanned, elsewhere o
   const main = await inRepo({ ...spec, main: true });
   assert(main.code === 1 && main.visible.includes("old/<redacted>") && !main.visible.includes("zqplumbus"), main.visible);
 });
+
+Deno.test("privacy check: a word row finds camelCase, underscore and hyphen joins, in lines, paths and commit messages", async () => {
+  const joined = ["myZqplumbus", "zqplumbusHouse", "someZqplumbusHouse", "my_zqplumbus", "zqplumbus_file", "ZQPLUMBUS_TOKEN", "my-zqplumbus", "zqplumbus-file", "HTTPZqplumbus", "a__zqplumbus--b"];
+  const notJoined = ["zqplumbusy", "azqplumbus", "ZqplumbusyHouse", "my_azqplumbus", "zq_plumbus", "zq plumbus"];
+  const rows = "[m.re.compile(data['row'], m.re.I)]";
+  const got = await pyCall("[m.kinds_for(l, " + rows + ", 'docs/x.md') for l in data['lines']]", { row: FAKE_ROW, lines: joined.concat(notJoined) });
+  joined.forEach((l, i) => assert(got[i].includes("forbidden personal string"), "missed: " + l));
+  notJoined.forEach((l, i) => assert(got[joined.length + i].length === 0, "false positive: " + l));
+  // The hostname exemption still holds, and only for a quoted hostname.
+  const host = await pyCall("[m.kinds_for(data['host'], " + rows + ", 'src/rules/x.json'), m.kinds_for(data['camel'], " + rows + ", 'src/rules/x.json')]",
+    { row: FAKE_ROW, host: '"zqplumbus-ads.example.com"', camel: '{"class": "myZqplumbus"}' });
+  assert(host[0].length === 0 && host[1].length === 1, JSON.stringify(host));
+  assert((await inRepo({ patterns: FAKE_ROW, head: { "docs/myZqplumbusNotes.md": "fine\n" } })).code === 1, "camelCase path passed");
+  assert((await inRepo({ patterns: FAKE_ROW, head: { "docs/my_zqplumbus_notes.md": "fine\n" } })).code === 1, "underscore path passed");
+  const message = await inRepo({ patterns: FAKE_ROW, message: "Tidy myZqplumbus setup", head: { "a.md": "fine\n" } });
+  assert(message.code === 1 && !message.visible.includes("yZqplumbus"), "commit message: " + message.visible);
+});

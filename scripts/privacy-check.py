@@ -2,10 +2,13 @@
 """Scan a pull request or main push for forbidden strings.
 
 Personal-string regexes come from the PRIVACY_PATTERNS environment variable,
-one case-insensitive expression per line. If that variable is missing or
-empty, personal-string checks are skipped and the job stays green with a
-warning annotation, except when REQUIRE_PATTERNS is "true" (CI sets it on
-pushes to main): then a missing secret fails the job.
+one case-insensitive expression per line. Each line of text is tested as it
+stands and again with camelCase, underscore and hyphen joins split into
+separate words, so a \\bword\\b row also finds fooWord and foo_word.
+
+If that variable is missing or empty, personal-string checks are skipped and
+the job stays green with a warning annotation, except when REQUIRE_PATTERNS is
+"true" (CI sets it on pushes to main): then a missing secret fails the job.
 
 Always checked, without any secret (security review M-7):
   * obvious secrets: private-key blocks, GitHub/OpenAI/Anthropic/AWS/Google
@@ -190,6 +193,8 @@ PERSONAL_KIND = "forbidden personal string"
 SECRET_KIND = "obvious secret"
 PATH_SUFFIX = " in a file path"
 REDACTED = "<redacted>"
+CASE_CHANGE_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+JOIN_CHARS_RE = re.compile(r"[_-]+")
 FILE_EXT_RE = re.compile(r"\.[A-Za-z][A-Za-z0-9]*(?=/|$)")
 
 
@@ -337,12 +342,19 @@ def write_summary(text):
         handle.write(text)
 
 
+def split_joins(text):
+    """Word boundaries do not fall inside fooWord or foo_word. Here they do."""
+    return JOIN_CHARS_RE.sub(" ", CASE_CHANGE_RE.sub(" ", text))
+
+
 def kinds_for(line, personal, path=None, generic=True):
     found = []
     # Third-party hostnames in host data may hold these words, and only those.
     text = QUOTED_HOST_RE.sub('""', line) if path and HOST_DATA_RE.match(path) else line
-    if any(pattern.search(text) for pattern in personal):
-        found.append(PERSONAL_KIND)
+    if personal:
+        views = (text, split_joins(text))
+        if any(pattern.search(view) for pattern in personal for view in views):
+            found.append(PERSONAL_KIND)
     if any(pattern.search(line) for pattern in GENERIC_SECRET_PATTERNS):
         found.append(SECRET_KIND)
     if generic:
