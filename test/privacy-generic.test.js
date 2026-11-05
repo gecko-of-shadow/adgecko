@@ -3,6 +3,7 @@
 // hardening. Every fake value is assembled at run time so this file itself
 // never holds a real-looking address, path or token.
 import workflow from "../.github/workflows/checks.yml" with { type: "text" };
+import retiredWorkflow from "../.github/workflows/refresh-release-notes.yml" with { type: "text" };
 function assert(c, l) { if (!c) throw new Error(l); }
 const ROOT = new URL("..", import.meta.url);
 const dec = new TextDecoder();
@@ -211,6 +212,11 @@ Deno.test("CI workflow: actions pinned to commit SHAs, no persisted credentials,
   const runBlocks = [...workflow.matchAll(/run: \|?\n?([\s\S]*?)(?=\n\s*- name:|\n\s*$|$)/g)].map((m) => m[1]);
   for (const b of runBlocks) assert(!b.includes("${{"), "expression inside run: " + b.slice(0, 80));
   assert(!/pull_request_target/.test(workflow) && /permissions:\s*\n\s*contents: read/.test(workflow), "permissions");
+  // An explicit runner, so a change of what "latest" means cannot change CI unseen.
+  for (const yml of [workflow, retiredWorkflow]) {
+    const runners = [...yml.matchAll(/^\s*runs-on:\s*(\S+)/gm)].map((m) => m[1]);
+    assert(runners.length > 0 && runners.every((r) => r === "ubuntu-24.04"), "runner: " + runners.join());
+  }
 });
 
 Deno.test({

@@ -9,6 +9,6 @@ permissions: {}
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "Release notes ship with the GitHub release. Nothing to refresh."

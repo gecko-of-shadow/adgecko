@@ -10,9 +10,10 @@ permissions:
   contents: read
 
 # Actions are pinned to full commit SHAs (security review L-13), resolved on
-# 2026-11-02 with `git ls-remote` against each action's own repository:
-#   actions/checkout v4 / v4.4.0 -> 11d5960a326750d5838078e36cf38b85af677262
-#   denoland/setup-deno v2 / v2.0.5 -> 22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+# 2026-11-05 with `git ls-remote` against each action's own repository. Both are
+# the current release and run on Node 24 (runs.using in action.yml at that tag):
+#   actions/checkout v7.0.1 -> 3d3c42e5aac5ba805825da76410c181273ba90b1
+#   denoland/setup-deno v2.0.5 -> 22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
 # To update: `git ls-remote https://github.com/<owner>/<action> refs/tags/<tag>`
 # (use the `^{}` line for an annotated tag) and replace the SHA and comment.
 #
@@ -23,10 +24,10 @@ permissions:
 jobs:
   tests:
     name: tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -45,10 +46,10 @@ jobs:
 
   privacy:
     name: privacy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
