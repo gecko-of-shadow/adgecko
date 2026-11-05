@@ -5,6 +5,8 @@ name: refresh release notes
 on:
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
