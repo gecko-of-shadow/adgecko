@@ -24,7 +24,7 @@ Branch: `claude/new-session-903x8r` (based on main `c995b58`).
 
 
 
-<time> | what | why | evidence
+what | why | evidence
 No earlier notes on branch; started fresh | Session rule START | `ls docs/agent-notes` empty before this file
 Baseline tests on main | Need before/after counts | `deno test --no-lock --allow-read --allow-run --allow-env test/` -> `ok | 252 passed | 0 failed`
 Install path 1: release zip v0.2.21 | Only published release; v0.2.19/v0.2.20 are drafts | GitHub list_releases: v0.2.21 draft=false; v0.2.20, v0.2.19 draft=true
