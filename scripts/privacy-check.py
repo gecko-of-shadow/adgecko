@@ -20,14 +20,19 @@ Always checked, without any secret (security review M-7):
   * metadata in changed images (EXIF, XMP, comments, PNG text chunks other
     than "Software");
   * commit author/committer names and e-mails and commit messages in range.
+Every changed file path is checked like a line of text, the whole tree's paths
+too on pushes to main and with --all. A path that was deleted or renamed away
+counts for personal strings and secrets only, as removed lines do. The allow
+marker does not apply to paths.
 Data files whose job is to list hosts (src/rules/*.json) skip the IP check, and
 their quoted lower-case hostnames skip the personal-string check.
 A line that must keep such a value for a good reason can carry the marker
 "privacy-check: allow" (never honoured for secrets or personal strings).
 --all scans every tracked file (maintainers; not used by CI).
 
-Prints file paths and line numbers only. Does not print patterns, matches,
-or the environment block. Each non-empty pattern line is registered with
+Prints file paths and line numbers only, with any part of a path that matched
+replaced by <redacted>. Does not print patterns, matches, or the environment
+block. Each non-empty pattern line is registered with
 ::add-mask:: before any other output.
 """
 
@@ -183,6 +188,9 @@ def image_metadata(data, path):
 
 PERSONAL_KIND = "forbidden personal string"
 SECRET_KIND = "obvious secret"
+PATH_SUFFIX = " in a file path"
+REDACTED = "<redacted>"
+FILE_EXT_RE = re.compile(r"\.[A-Za-z][A-Za-z0-9]*(?=/|$)")
 
 
 def emit(command, message, path=None, line=None):
@@ -241,20 +249,36 @@ def resolve_range():
 
 def changed_files(base, head):
     if base is None:
-        out = git_text(["diff-tree", "--no-commit-id", "--name-status", "-r", "--root", head])
+        out = git_text(["diff-tree", "--no-commit-id", "--name-status", "-r", "--root", "-z", head])
     else:
-        out = git_text(["diff", "--name-status", "--find-renames", base, head])
+        out = git_text(["diff", "--name-status", "--find-renames", "-z", base, head])
     if out is None:
         return None
+    # -z: NUL-separated and unquoted, so an odd path cannot split a record.
+    tokens = out.split("\0")
     files = []
-    for line in out.splitlines():
-        if not line.strip():
-            continue
-        parts = line.split("\t")
-        status = parts[0]
-        path = parts[-1]
-        files.append((status[0], path))
+    index = 0
+    while index < len(tokens):
+        status = tokens[index][:1]
+        if not status:
+            index += 1
+        elif status in ("R", "C"):
+            # Status, old path, new path. A renamed-away path is a removed path.
+            if status == "R":
+                files.append(("D", tokens[index + 1]))
+            files.append((status, tokens[index + 2]))
+            index += 3
+        else:
+            files.append((status, tokens[index + 1]))
+            index += 2
     return files
+
+
+def tree_paths(head):
+    out = git_text(["ls-tree", "-r", "-z", "--name-only", "--full-tree", head])
+    if out is None:
+        return None
+    return [path for path in out.split("\0") if path]
 
 
 def escape_command_data(value):
@@ -324,6 +348,33 @@ def kinds_for(line, personal, path=None, generic=True):
     if generic:
         found.extend(generic_kinds(line, path))
     return found
+
+
+def path_kinds(path, personal, removed=False):
+    """A path is text like any line, but no marker can excuse it."""
+    text = path.replace(ALLOW_MARKER, "")
+    # The IP check refuses a value after "name/" or before ".word", so each
+    # segment is also checked alone, without its extension.
+    found = []
+    for piece in [text] + FILE_EXT_RE.sub("", text).split("/"):
+        found += [kind for kind in kinds_for(piece, personal, generic=not removed) if kind not in found]
+    return found
+
+
+def redact_path(path, personal):
+    """The path to print: printing a matched path would print the match."""
+    parts = [REDACTED if path_kinds(part, personal) else part for part in path.split("/")]
+    safe = "/".join(parts)
+    return safe if safe != path else REDACTED
+
+
+def scan_paths(entries, personal, findings, shown):
+    for status, path in entries:
+        kinds = path_kinds(path, personal, removed=status == "D")
+        if not kinds:
+            continue
+        shown[path] = redact_path(path, personal)
+        remember(findings, shown[path], 1, [kind + PATH_SUFFIX for kind in kinds])
 
 
 def remember(findings, path, line, kinds):
@@ -487,6 +538,7 @@ def main():
         return 1
 
     findings = set()
+    shown = {}
     if "--all" in sys.argv[1:]:
         tracked = git_text(["ls-files", "-z"])
         if tracked is None:
@@ -494,6 +546,15 @@ def main():
             return 1
         files = [("M", f) for f in tracked.split("\0") if f]
         diff = ""
+    entries = files
+    if os.environ.get("REQUIRE_PATTERNS", "").lower() == "true":
+        # A push to main: every path in the tree, not only the changed ones.
+        tree = tree_paths(head)
+        if tree is None:
+            emit("error", "Could not list the tree")
+            return 1
+        entries = files + [("M", path) for path in tree]
+    scan_paths(entries, personal, findings, shown)
     for status, path in files:
         if status == "D" or not in_repo(path) or os.path.islink(path) or not os.path.isfile(path):
             continue
@@ -506,7 +567,7 @@ def main():
 
     if findings:
         for path, line, kind in sorted(findings):
-            emit("error", kind, path, line)
+            emit("error", kind, shown.get(path, path), line)
         write_summary(f"Privacy check failed on {len(findings)} finding(s).\n")
         print(f"Privacy check failed on {len(findings)} finding(s).", flush=True)
         return 1

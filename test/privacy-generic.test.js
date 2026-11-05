@@ -28,6 +28,52 @@ async function pyCall(expr, input) {
   return JSON.parse(dec.decode(out.stdout));
 }
 
+// Builds a throwaway repo in two commits and runs the checker on the second.
+// spec: base and head are { path: text } (null deletes), rename is [old, new].
+async function inRepo(spec) {
+  const code = String.raw`
+import json, os, subprocess, sys, tempfile
+spec = json.loads(sys.stdin.read())
+checker = os.path.abspath("scripts/privacy-check.py")
+def put(d, files):
+    for path, text in files.items():
+        full = os.path.join(d, path)
+        if text is None:
+            os.remove(full)
+            continue
+        os.makedirs(os.path.dirname(full) or d, exist_ok=True)
+        with open(full, "wb") as f:
+            f.write(text.encode("utf-8"))
+with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+    def git(*args):
+        return subprocess.run(["git", "-c", "user.name=zq", "-c", "user.email=zq", "-c", "core.autocrlf=false", *args], cwd=d, check=True, capture_output=True).stdout.decode().strip()
+    git("init", "-q")
+    put(d, spec.get("base", {}))
+    git("add", "-A")
+    git("commit", "-q", "--allow-empty", "-m", "base")
+    base = git("rev-parse", "HEAD")
+    put(d, spec.get("head", {}))
+    if spec.get("rename"):
+        git("mv", *spec["rename"])
+    git("add", "-A")
+    git("commit", "-q", "--allow-empty", "-m", spec.get("message", "head"))
+    env = dict(os.environ, PRIVACY_PATTERNS=spec.get("patterns", ""), GITHUB_EVENT_NAME="push", BASE_SHA=base, HEAD_SHA="HEAD",
+               REQUIRE_PATTERNS="true" if spec.get("main") else "", GITHUB_STEP_SUMMARY="")
+    r = subprocess.run([sys.executable, "-B", "-I", checker] + spec.get("args", []), cwd=d, env=env, capture_output=True)
+    print(json.dumps({"code": r.returncode, "out": r.stdout.decode("utf-8", "replace"), "err": r.stderr.decode("utf-8", "replace")}))
+`;
+  const child = new Deno.Command("python3", { args: ["-B", "-c", code], cwd: ROOT, stdin: "piped", stdout: "piped", stderr: "piped" }).spawn();
+  const w = child.stdin.getWriter();
+  await w.write(new TextEncoder().encode(JSON.stringify(spec)));
+  await w.close();
+  const out = await child.output();
+  assert(out.code === 0, dec.decode(out.stderr));
+  const r = JSON.parse(dec.decode(out.stdout));
+  r.visible = r.out.split(/\r?\n/).filter((l) => !l.startsWith("::add-mask::")).join("\n");
+  return r;
+}
+const FAKE_ROW = String.raw`\bzqplumbus\b`;
+
 Deno.test("privacy check: public IPs, e-mails, home paths and token shapes are found; documentation and placeholder values are not", async () => {
   const hit = [
     j("server at ", "93.184", ".216.34", " today"),
@@ -195,4 +241,40 @@ Deno.test("privacy check: removing a public IP in a diff is fine, adding one is 
   const diff = ["diff --git a/x.md b/x.md", "--- a/x.md", "+++ b/x.md", "@@ -1,2 +1,2 @@", " context", "-old " + ip, "+new 192.0.2.1", "diff --git a/y.md b/y.md", "--- a/y.md", "+++ b/y.md", "@@ -1 +1 @@", "-a", "+b " + ip].join("\n");
   const got = await pyCall("(lambda f: (m.scan_diff(data, [], f), sorted(f))[1])(set())", diff);
   assert(JSON.stringify(got) === JSON.stringify([["y.md", 1, "IP address"]]), JSON.stringify(got));
+});
+
+Deno.test("privacy check: a changed file path is scanned, and the log shows only a redacted path", async () => {
+  const bad = await inRepo({ patterns: FAKE_ROW, head: { "docs/zqplumbus-notes/plan.md": "fine\n" } });
+  assert(bad.code === 1, "a word in a directory name passed: " + bad.out);
+  assert(bad.visible.includes("in a file path") && bad.visible.includes("docs/<redacted>/plan.md"), bad.visible);
+  assert(!bad.visible.includes("zqplumbus") && !bad.err.includes("zqplumbus"), "the matched word was printed");
+  const clean = await inRepo({ patterns: FAKE_ROW, head: { "docs/other-notes/plan.md": "fine\n" } });
+  assert(clean.code === 0, clean.out);
+  // A hit in the contents of such a file must not print the path either.
+  const both = await inRepo({ patterns: FAKE_ROW, head: { "docs/zqplumbus.md": "a zqplumbus line\n" } });
+  assert(both.code === 1 && !both.visible.includes("zqplumbus"), both.visible);
+});
+
+Deno.test("privacy check: the generic checks cover paths too, and the allow marker does not", async () => {
+  const ip = j("93.184", ".216.34");
+  const added = await inRepo({ head: { ["docs/" + ip + ".md"]: "fine\n" } });
+  assert(added.code === 1 && added.visible.includes("IP address in a file path") && !added.visible.includes(ip), added.visible);
+  const removed = await inRepo({ base: { ["docs/" + ip + ".md"]: "fine\n" }, head: { ["docs/" + ip + ".md"]: null } });
+  assert(removed.code === 0, "removing an IP-shaped path must pass: " + removed.out);
+  const marked = await pyCall("m.path_kinds(data, [])", ip + " privacy-check: allow");
+  assert(marked.includes("IP address"), "the marker excused a path");
+});
+
+Deno.test("privacy check: a deleted or renamed-away path still counts for personal strings", async () => {
+  const deleted = await inRepo({ patterns: FAKE_ROW, base: { "zqplumbus.md": "fine\n" }, head: { "zqplumbus.md": null } });
+  assert(deleted.code === 1 && !deleted.visible.includes("zqplumbus"), deleted.visible);
+  const renamed = await inRepo({ patterns: FAKE_ROW, base: { "zqplumbus.md": "fine\n" }, rename: ["zqplumbus.md", "other.md"] });
+  assert(renamed.code === 1 && !renamed.visible.includes("zqplumbus"), renamed.visible);
+});
+
+Deno.test("privacy check: on main every path in the tree is scanned, elsewhere only changed ones", async () => {
+  const spec = { patterns: FAKE_ROW, base: { "old/zqplumbus.md": "fine\n" }, head: { "new.md": "fine\n" } };
+  assert((await inRepo(spec)).code === 0, "an untouched path failed off main");
+  const main = await inRepo({ ...spec, main: true });
+  assert(main.code === 1 && main.visible.includes("old/<redacted>") && !main.visible.includes("zqplumbus"), main.visible);
 });
