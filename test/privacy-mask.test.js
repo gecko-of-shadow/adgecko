@@ -74,6 +74,22 @@ Deno.test("a set multiline PRIVACY_PATTERNS value never appears in the visible l
   assert(parsed.visible.includes("Privacy check passed."), "scanner did not pass");
 });
 
+Deno.test("a word row masks its bare word too, and those masks still come first", async () => {
+  const word = "zqmask" + "Word";
+  const dotted = "zqmask.dot";
+  const plain = "zqmask-plain";
+  const rows = [String.raw`\b` + word + String.raw`\b`, String.raw`\b` + dotted.replace(".", "[.]") + String.raw`\b`, plain];
+  const { code, stdout } = await runScanner(rows.join("\n") + "\n");
+  assert(code === 0, "scanner failed on an empty diff");
+  const expected = [rows[0], word, rows[1], dotted, plain];
+  const lines = stdout.split(/\r?\n/);
+  assert(JSON.stringify(lines.slice(0, 5).map((l) => l.replace("::add-mask::", ""))) === JSON.stringify(expected), "masks are not first, or a bare word was not masked");
+  assert(lines.slice(0, 5).every((l) => l.startsWith("::add-mask::")), "masks are not first");
+  const parsed = splitLog(stdout);
+  assert(parsed.masks.length === 5, "a row was masked twice");
+  assert(!parsed.visible.includes(word) && !parsed.visible.includes(dotted), "a word appeared outside add-mask");
+});
+
 Deno.test("missing PRIVACY_PATTERNS still warns and does not mask", async () => {
   const { code, stdout, stderr } = await runScanner("");
   assert(code === 0, "missing secret should pass");

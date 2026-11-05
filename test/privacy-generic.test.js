@@ -11,6 +11,13 @@ const j = (...parts) => parts.join("");
 // Without it two tests show as ignored. CI gives it to the tests job on pushes to main only.
 const personalWords = (Deno.env.get("PRIVACY_PATTERNS") ?? "").split("\n").map((w) => w.trim()).filter(Boolean);
 
+// GitHub masks each secret row, which is the \\bword\\b form, and not the bare word.
+function bareWordMasks(rows) {
+  const words = rows.filter((r) => /^\\b.+\\b$/.test(r)).map((r) => r.slice(2, -2).replaceAll("[.]", "."));
+  return words.map((w) => "::add-mask::" + w);
+}
+if (Deno.env.get("GITHUB_ACTIONS") === "true") bareWordMasks(personalWords).forEach((m) => console.log(m));
+
 async function pyCall(expr, input) {
   const code = [
     "import importlib.util, json, sys",
@@ -233,10 +240,19 @@ async function controlFailure(rows) {
 // third-party hostnames in src/rules/*.json.
 // Exit code 1 means git grep ran and found nothing; anything else must not pass.
 async function noHits(pattern, paths) {
-  const out = await new Deno.Command("git", { args: ["grep", "-n", "-I", "-i", "-w", "-E", pattern, "--", ...paths], cwd: ROOT, stdout: "piped" }).output();
-  // Path and line only: a hit's text may not be masked in the log.
-  const hits = dec.decode(out.stdout).trim().split("\n").map((l) => l.split(":").slice(0, 2).join(":")).join("\n");
-  assert(out.code === 1, "personal references:\n" + (hits || "git grep failed"));
+  const out = await new Deno.Command("git", { args: ["grep", "-n", "-z", "-I", "-i", "-w", "-E", pattern, "--", ...paths], cwd: ROOT, stdout: "piped" }).output();
+  const hits = hitList(dec.decode(out.stdout), personalWords);
+  assert(out.code === 1, "personal references, path:line only:\n" + (hits || "git grep failed"));
+}
+
+// git grep -n -z lines are path NUL line NUL text. Keep path and line only, and hide
+// a path segment that matches: neither a hit's text nor its word goes to the log.
+function hitList(stdout, rows) {
+  const word = new RegExp(rows.join("|"), "i");
+  return stdout.split("\n").filter(Boolean).map((line) => {
+    const [path, lineNumber] = line.split("\0");
+    return path.split("/").map((part) => (word.test(part) ? "<redacted>" : part)).join("/") + ":" + lineNumber;
+  }).join("\n");
 }
 
 Deno.test({
@@ -383,4 +399,16 @@ Deno.test("privacy check: a listed blob is skipped only byte for byte, and only 
   assert(JSON.stringify(meta) === JSON.stringify([["x.png", 1, "image metadata"]]), JSON.stringify(meta));
   const id = await pyCall("[m.blob_sha(data.encode()), sorted(len(x) for x in m.BINARY_NOISE_BLOBS)[0], sorted(len(x) for x in m.BINARY_NOISE_BLOBS)[-1]]", "hello\n");
   assert(id[0] === "ce013625030ba8dba906f756967f9e9ca394464a" && id[1] === 40 && id[2] === 40, JSON.stringify(id));
+});
+
+Deno.test("privacy check: the gated tests' failure output is path:line, with no matched text or word", () => {
+  const stdout = "docs/a.md\x003\x00a zqplumbus line\ndocs/zqplumbus/b.md\x0012\x00more zqplumbus: text\nc:d.md\x007\x00x\n";
+  const got = hitList(stdout, [FAKE_ROW]);
+  assert(got === "docs/a.md:3\ndocs/<redacted>/b.md:12\nc:d.md:7", got);
+});
+
+Deno.test("privacy check: the tests job masks the bare word of a word row, in CI only", async () => {
+  assert(JSON.stringify(bareWordMasks([FAKE_ROW, String.raw`\bzq[.]dot\b`, "zq-plain"])) === JSON.stringify(["::add-mask::zqplumbus", "::add-mask::zq.dot"]), "bare masks");
+  const source = await Deno.readTextFile(new URL("privacy-generic.test.js", import.meta.url));
+  assert(/if \(Deno\.env\.get\("GITHUB_ACTIONS"\) === "true"\) bareWordMasks\(personalWords\)/.test(source), "a local run must not print the words");
 });

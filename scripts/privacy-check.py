@@ -39,8 +39,9 @@ A line that must keep such a value for a good reason can carry the marker
 
 Prints file paths and line numbers only, with any part of a path that matched
 replaced by <redacted>. Does not print patterns, matches, or the environment
-block. Each non-empty pattern line is registered with
-::add-mask:: before any other output.
+block. Each non-empty pattern line is registered with ::add-mask:: before any
+other output, and so is the bare word of a \\bword\\b row: the log could hold
+the word, not the row.
 """
 
 import hashlib
@@ -213,6 +214,7 @@ PERSONAL_KIND = "forbidden personal string"
 SECRET_KIND = "obvious secret"
 PATH_SUFFIX = " in a file path"
 REDACTED = "<redacted>"
+REGEX_SYNTAX_RE = re.compile(r"[\\\[\]()|*+?{}^$]")
 CASE_CHANGE_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 JOIN_CHARS_RE = re.compile(r"[_-]+")
 FILE_EXT_RE = re.compile(r"\.[A-Za-z][A-Za-z0-9]*(?=/|$)")
@@ -317,6 +319,16 @@ def secret_rows(raw):
     return [line.rstrip("\r") for line in lines_of(raw)]
 
 
+def bare_word(row):
+    """The text a \\bword\\b row stands for, or None for any other row."""
+    if not (row.startswith("\\b") and row.endswith("\\b")):
+        return None
+    word = row[2:-2].replace("[.]", ".")
+    if word == "" or REGEX_SYNTAX_RE.search(word):
+        return None
+    return word
+
+
 def publish_masks(raw):
     """Register pattern lines with the log masker. This must be the first output."""
     for line in secret_rows(raw):
@@ -328,6 +340,9 @@ def publish_masks(raw):
         print(f"::add-mask::{escape_command_data(cleaned)}", flush=True)
         if cleaned != line:
             print(f"::add-mask::{escape_command_data(line)}", flush=True)
+        word = bare_word(cleaned)
+        if word:
+            print(f"::add-mask::{escape_command_data(word)}", flush=True)
 
 
 def load_personal_patterns(raw):
