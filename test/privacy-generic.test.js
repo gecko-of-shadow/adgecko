@@ -214,6 +214,21 @@ Deno.test({
   },
 });
 
+// A secret in the wrong format compiles and matches nothing, so every row is
+// checked, and the secret must still find the hostnames in the rule files.
+// Returns null, or the real reason the control failed.
+async function controlFailure(rows) {
+  const wrong = rows.filter((row) => {
+    if (row.includes("\t")) return true;
+    try { new RegExp(row, "i"); return false; } catch { return true; }
+  }).length;
+  if (wrong) return `PRIVACY_PATTERNS: ${wrong} of ${rows.length} rows are not in CI format (one expression per line, no tabs or labels)`;
+  const live = await new Deno.Command("git", { args: ["grep", "-q", "-I", "-i", "-w", "-E", rows.join("|"), "--", "src/rules/*.json"], cwd: ROOT, stdout: "null", stderr: "null" }).output();
+  if (live.code === 0) return null;
+  if (live.code === 1) return "PRIVACY_PATTERNS is in CI format, but no hostname in src/rules/*.json matches it now: a list refresh removed every matching hostname. Nothing is wrong with the secret; this control needs a new anchor.";
+  return "git grep failed with code " + live.code;
+}
+
 // The art record says "the owner". The whole tree is checked too, except the
 // third-party hostnames in src/rules/*.json.
 // Exit code 1 means git grep ran and found nothing; anything else must not pass.
@@ -228,9 +243,8 @@ Deno.test({
   name: "the design record and the art sources carry no personal name or place",
   ignore: personalWords.length === 0,
   fn: async () => {
-    // A secret in the wrong format compiles and matches nothing, so it must still find these hostnames.
-    const live = await new Deno.Command("git", { args: ["grep", "-q", "-I", "-i", "-w", "-E", personalWords.join("|"), "--", "src/rules/*.json"], cwd: ROOT, stdout: "null", stderr: "null" }).output();
-    assert(live.code === 0, "PRIVACY_PATTERNS found nothing in src/rules/*.json: is the secret in the right format?");
+    const failure = await controlFailure(personalWords);
+    assert(failure === null, failure);
     await noHits(personalWords.join("|"), ["docs/design/*.md", "docs/design/screenshots/*.md", "icons/source", "src/popup.css", "src/popup.js", "src/popup.html", "test/popup-design.test.js"]);
     await noHits(personalWords.join("|"), [".", ":!src/rules/*.json"]); // the whole tree, minus third-party hostnames
   },
@@ -321,4 +335,17 @@ Deno.test("privacy check: a record separator in a commit message cannot hide the
   assert(r.code === 1, "a message tail was hidden: " + r.visible);
   const clean = await inRepo({ patterns: FAKE_ROW, message: "Tidy up\x1ea fine line\n\nMore detail", head: { "a.md": "fine\n" } });
   assert(clean.code === 0, clean.visible);
+});
+
+Deno.test("the secret's positive control names the real cause", async () => {
+  const format = await controlFailure(["ZQ_LABEL\tword\tzqplumbus"]);
+  assert(format.includes("1 of 1 rows are not in CI format") && !format.includes("list refresh"), format);
+  // One good row no longer carries a bad one.
+  const mixed = await controlFailure(["doubleclick", "ZQ_LABEL\tword\tzqplumbus"]);
+  assert(mixed.includes("1 of 2 rows are not in CI format"), String(mixed));
+  const broken = await controlFailure(["[zqplumbus"]);
+  assert(broken.includes("not in CI format"), broken);
+  const refreshed = await controlFailure(["zqplumbus"]);
+  assert(refreshed.includes("a list refresh removed every matching hostname") && !refreshed.includes("not in CI format"), refreshed);
+  assert(await controlFailure(["doubleclick"]) === null, "a hostname that is in the rule files must pass");
 });
