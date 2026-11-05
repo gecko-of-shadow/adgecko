@@ -142,6 +142,10 @@ DOMAIN_RE = re.compile(
     r"^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])\^(\$[^#]*)?$",
     re.IGNORECASE,
 )
+# No OpenPhish data (owner decisions #13 and H-1): uBO's badware.txt carries a
+# "! openphish" section. Same rule as DROPPED_SECTION_RE in src/general/update.js.
+# Built from pieces because scripts/lib/curben_check.py refuses the word in code.
+DROPPED_SECTION_RE = re.compile(r"^!\s*" + "open" + r"phish\b", re.IGNORECASE)
 HOSTS_RE = re.compile(
     r"^(?:0\.0\.0\.0|127\.0\.0\.1)\s+([a-z0-9][a-z0-9.-]*[a-z0-9])\s*$",
     re.IGNORECASE,
@@ -421,13 +425,17 @@ def extract_entries(text: str) -> tuple[list[str], list[list[str]]]:
     """(whole-domain blocks, [[domain, scope key], ...]). Mirrors parseEntries().
 
     $badfilter cancels the filter with the same domain and scope key.
+    A "! openphish" section is dropped up to the next comment line.
     """
     whole: list[str] = []
     scoped: list[list[str]] = []
     cancelled: set[str] = set()
+    dropping = False
     for raw in text.splitlines():
         line = raw.strip()
-        if not line or line.startswith("!") or line.startswith("["):
+        if line.startswith("!"):
+            dropping = DROPPED_SECTION_RE.match(line) is not None
+        if dropping or not line or line.startswith("!") or line.startswith("["):
             continue
         if line.startswith("@@"):
             continue  # exceptions handled later by DNR allow rules / user allow

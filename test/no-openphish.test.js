@@ -196,3 +196,39 @@ Deno.test("licence record: each list's line names concrete upstream terms", () =
   // Peter Lowe: wording kept as it was; the owner decides (NEEDS OWNER in BUILD-PROGRESS.md).
   assert(/Peter Lowe's list/.test(line("peter_lowe")), "Peter Lowe line present");
 });
+
+// Owner decision 2026-11-04: uBO badware's "! openphish" section stays out. The
+// parser and the packer both skip it, so a repack or a refresh cannot bring it
+// back. vzla-qr.com is not in the general list here: HaGeZi has it on its own.
+const SECTION_LIST = ["! Title: x", "||before.example^", "! " + OP, "||drop-a.example^", "||drop-b.example^", "", "||drop-c.example^", "! https://scan.example/1", "||after.example^", "! OPENPHISH feed", "||drop-d.example^", "! other", "||last.example^"].join("\n");
+
+Deno.test("OpenPhish section: the refresh parser drops it from its header to the next comment", () => {
+  const { domains, scoped } = U.parseEntries(SECTION_LIST);
+  assert(JSON.stringify(domains) === '["before.example","after.example","last.example"]', JSON.stringify(domains));
+  assert(scoped.length === 0, JSON.stringify(scoped));
+  assert(U.PARSER_VERSION >= 3, "saved lists from before the section rule are rebuilt");
+});
+
+Deno.test("OpenPhish section: the packer drops the same entries", async () => {
+  const code = [
+    "import importlib.util, json, sys",
+    "sys.dont_write_bytecode = True",
+    "spec = importlib.util.spec_from_file_location('pack', 'scripts/pack-filter-lists.py')",
+    "mod = importlib.util.module_from_spec(spec); sys.modules['pack'] = mod; spec.loader.exec_module(mod)",
+    `print(json.dumps(mod.extract_entries(${JSON.stringify(SECTION_LIST)})))`,
+  ].join("\n");
+  const out = await new Deno.Command("python3", { args: ["-c", code], cwd: ROOT, stdout: "piped", stderr: "piped" }).output();
+  const dec = new TextDecoder();
+  assert(out.code === 0, dec.decode(out.stderr));
+  const parsed = U.parseEntries(SECTION_LIST);
+  assert(JSON.stringify(JSON.parse(dec.decode(out.stdout))) === JSON.stringify([parsed.domains, parsed.scoped]), dec.decode(out.stdout));
+});
+
+Deno.test("OpenPhish section: the shipped rule files hold none of its hosts", async () => {
+  const hosts = ["mmitalianbeef.square.site", "bigbauer.com", "autoscurt24.de", "hk668.cc", "dc.tensgpt.com", "carrefour-enbacktoschool4.pages.dev", "sacolamobile.influenciadormagalu.com.br", "globalgrainsadf.com", "inmotiongmbh.com", "hausbank-ssk-cuxhaven.de", "gumeminlogi.webflow.io"];
+  for (const file of ["general-network", "threat-network", "threat-snapshot"]) {
+    const text = await Deno.readTextFile(new URL(`src/rules/${file}.json`, ROOT));
+    const check = file === "general-network" ? hosts : [...hosts, "vzla-qr.com"];
+    for (const h of check) assert(!text.includes(`"${h}"`), `${file} still holds ${h}`);
+  }
+});

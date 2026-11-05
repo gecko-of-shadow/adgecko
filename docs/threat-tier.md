@@ -36,6 +36,13 @@ keyless replacement. `scripts/lib/curben_check.py` enforces the exception: the
 release gate and `test/no-openphish.test.js` fail on any other Curben list or
 mirror, Curben's phishing list, or any OpenPhish source.
 
+**uBO badware's OpenPhish section is dropped too (owner decision, 2026-11-04).**
+uBO's `badware.txt` has a section headed `! openphish` (16 filters when checked).
+The packer and the list refresh skip that section, from its header to the next
+comment line, so it is neither packed nor brought back by a refresh. A host stays
+blocked only if another list has it on its own (one did: `vzla-qr.com`, from
+HaGeZi, in the general rules, not in the threat tier).
+
 **Smaller phishing coverage (owner decision #13, 2026-11-02):** Curben's
 phishing-filter is not used anywhere, because it is curated from OpenPhish. That
 list was about 30,000 of the roughly 45,000 packed malware/phishing domains.
@@ -96,7 +103,7 @@ labels are left out (UNVERIFIED blast radius, small). The packed threat
 ruleset was rebuilt with this check: 15,920 hosts (`pisz.pl`, `ru.com`,
 `webhop.me`, `3utilities.com`, `cprapid.com` and `fastvps-server.com` are
 public suffixes and are no longer blocked as a whole). After the list repack
-of 2026-11-03 it holds 15,913 hosts in 199 rules.
+of 2026-11-04 it holds 15,901 hosts in 199 rules.
 
 **Per-refresh cap.** One list refresh may add at most 2,500 new threat hosts
 and at most 20% of the previous set (the last refreshed set, or the packed

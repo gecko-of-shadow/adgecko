@@ -1,7 +1,7 @@
 {
   "packed_at_utc": "2026-11-03T20:37:57Z",
   "format": "chrome_declarativeNetRequest_rules_array",
-  "domains_total": 187014,
+  "domains_total": 187003,
   "scoped_entries_total": 5480,
   "dnr_rules_total": 2439,
   "domains_per_rule": 80,
@@ -68,8 +68,8 @@
       "sha256": "eeafc77b6eef9188fc01ffebb74f67c532bddc3367f92a27263fc71aa02ea33c",
       "role": "malware_threat",
       "priority": 35,
-      "raw": 1113,
-      "kept": 901,
+      "raw": 1101,
+      "kept": 890,
       "skipped_never": 0,
       "scoped_raw": 2204,
       "scoped_kept": 2196

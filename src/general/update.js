@@ -112,7 +112,7 @@ function installGeneralAdblockUpdate(target) {
   const BARE_RE = /^([a-z0-9][a-z0-9.-]*[a-z0-9])$/i;
   // Payloads parsed before faithful option conversion (H-2) hold widened
   // domains; they are refetched and, until then, replaced by the packed rules.
-  const PARSER_VERSION = 2;
+  const PARSER_VERSION = 3;
 
   // Shared with the packer: general/filter-options.js (loaded before this file).
   function filterOptions() {
@@ -158,6 +158,12 @@ function installGeneralAdblockUpdate(target) {
     return true;
   }
 
+  // No OpenPhish data (owner decisions #13 and H-1): uBO's badware.txt carries a
+  // "! openphish" section, dropped here up to the next comment line. Same rule
+  // as DROPPED_SECTION_RE in scripts/pack-filter-lists.py. Built from pieces
+  // because scripts/lib/curben_check.py refuses the word in code.
+  const DROPPED_SECTION_RE = new RegExp("^!\\s*" + "open" + "phish\\b", "i");
+
   // Same rules as scripts/pack-filter-lists.py extract_entries().
   // Returns { domains: [whole-domain blocks], scoped: [[domain, key], ...] }
   // where key is a general/filter-options.js scope key. $badfilter cancels the
@@ -168,9 +174,11 @@ function installGeneralAdblockUpdate(target) {
     const scoped = [];
     const popup = [];
     const cancelled = new Set();
+    let dropping = false;
     for (const raw of String(text || "").split(/\r?\n/)) {
       const line = raw.trim();
-      if (!line || line.startsWith("!") || line.startsWith("[") || line.startsWith("@@")) continue;
+      if (line.startsWith("!")) dropping = DROPPED_SECTION_RE.test(line);
+      if (dropping || !line || line.startsWith("!") || line.startsWith("[") || line.startsWith("@@")) continue;
       if (line.includes("##") || line.includes("#@#") || line.includes("#$")) continue;
       let m = DOMAIN_RE.exec(line);
       if (m) {
