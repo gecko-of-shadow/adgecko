@@ -3,8 +3,9 @@
 
 Personal-string regexes come from the PRIVACY_PATTERNS environment variable,
 one case-insensitive expression per line. Each line of text is tested as it
-stands and again with camelCase, underscore and hyphen joins split into
-separate words, so a \\bword\\b row also finds fooWord and foo_word.
+stands and again with camelCase, letter-digit, underscore and hyphen joins
+split into separate words, so a \\bword\\b row also finds fooWord, foo_word
+and word2.
 
 If that variable is missing or empty, personal-string checks are skipped and
 the job stays green with a warning annotation, except when REQUIRE_PATTERNS is
@@ -216,6 +217,7 @@ PATH_SUFFIX = " in a file path"
 REDACTED = "<redacted>"
 REGEX_SYNTAX_RE = re.compile(r"[\\\[\]()|*+?{}^$]")
 CASE_CHANGE_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+LETTER_DIGIT_RE = re.compile(r"(?<=[A-Za-z])(?=[0-9])|(?<=[0-9])(?=[A-Za-z])")
 JOIN_CHARS_RE = re.compile(r"[_-]+")
 FILE_EXT_RE = re.compile(r"\.[A-Za-z][A-Za-z0-9]*(?=/|$)")
 
@@ -385,8 +387,8 @@ def write_summary(text):
 
 
 def split_joins(text):
-    """Word boundaries do not fall inside fooWord or foo_word. Here they do."""
-    return JOIN_CHARS_RE.sub(" ", CASE_CHANGE_RE.sub(" ", text))
+    """Word boundaries do not fall inside fooWord, foo_word or word2. Here they do."""
+    return JOIN_CHARS_RE.sub(" ", LETTER_DIGIT_RE.sub(" ", CASE_CHANGE_RE.sub(" ", text)))
 
 
 def kinds_for(line, personal, path=None, generic=True, joins=True):
