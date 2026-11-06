@@ -18,8 +18,9 @@ permissions:
 # (use the `^{}` line for an annotated tag) and replace the SHA and comment.
 #
 # Repository setting: sha_pinning_required is on, so an action not pinned to a
-# full SHA fails the run. allowed_actions stays "all": patterns_allowed applies
-# to public repositories only, so "selected" could not allow setup-deno here.
+# full SHA fails the run. allowed_actions is "selected": GitHub-owned actions
+# plus patterns_allowed denoland/setup-deno@*. A new third-party action must be
+# added to patterns_allowed first, or the run is refused.
 
 jobs:
   tests:
