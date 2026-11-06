@@ -387,8 +387,14 @@ def write_summary(text):
 
 
 def split_joins(text):
-    """Word boundaries do not fall inside fooWord, foo_word or word2. Here they do."""
-    return JOIN_CHARS_RE.sub(" ", LETTER_DIGIT_RE.sub(" ", CASE_CHANGE_RE.sub(" ", text)))
+    """Word boundaries do not fall inside fooWord or foo_word. Here they do."""
+    return JOIN_CHARS_RE.sub(" ", CASE_CHANGE_RE.sub(" ", text))
+
+
+def split_digits(text):
+    """The same for word2. A view of its own: a row that holds a digit must
+    still match in split_joins, and this split would break that row apart."""
+    return LETTER_DIGIT_RE.sub(" ", split_joins(text))
 
 
 def kinds_for(line, personal, path=None, generic=True, joins=True):
@@ -396,7 +402,7 @@ def kinds_for(line, personal, path=None, generic=True, joins=True):
     # Third-party hostnames in host data may hold these words, and only those.
     text = QUOTED_HOST_RE.sub('""', line) if path and HOST_DATA_RE.match(path) else line
     if personal:
-        views = (text, split_joins(text)) if joins else (text,)
+        views = (text, split_joins(text), split_digits(text)) if joins else (text,)
         if any(pattern.search(view) for pattern in personal for view in views):
             found.append(PERSONAL_KIND)
     if any(pattern.search(line) for pattern in GENERIC_SECRET_PATTERNS):

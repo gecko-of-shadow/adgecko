@@ -329,6 +329,13 @@ Deno.test("privacy check: a word row finds camelCase, letter-digit, underscore a
   assert((await inRepo({ patterns: FAKE_ROW, head: { "docs/myZqplumbusNotes.md": "fine\n" } })).code === 1, "camelCase path passed");
   assert((await inRepo({ patterns: FAKE_ROW, head: { "docs/my_zqplumbus_notes.md": "fine\n" } })).code === 1, "underscore path passed");
   assert((await inRepo({ patterns: FAKE_ROW, head: { "docs/zqplumbus2.md": "fine\n" } })).code === 1, "letter-digit path passed");
+  // A row that itself holds a digit must keep its joins: the digit split is an added view.
+  const digitRow = String.raw`\bzqplum42\b`;
+  const digitLines = ["zqplum42", "myZqplum42", "my_zqplum42", "zqplum42Notes", "ZQPLUM42_TOKEN", "zqplum42-file"];
+  const digitGot = await pyCall("[m.kinds_for(l, " + rows + ", 'docs/x.md') for l in data['lines']]", { row: digitRow, lines: digitLines });
+  digitLines.forEach((l, i) => assert(digitGot[i].includes("forbidden personal string"), "missed: " + l));
+  const digitPath = await inRepo({ patterns: digitRow, head: { "docs/my_zqplum42.md": "fine\n" } });
+  assert(digitPath.code === 1 && !digitPath.visible.toLowerCase().includes("zqplum42"), "digit row path: " + digitPath.visible);
   const message = await inRepo({ patterns: FAKE_ROW, message: "Tidy myZqplumbus setup", head: { "a.md": "fine\n" } });
   assert(message.code === 1 && !message.visible.includes("yZqplumbus"), "commit message: " + message.visible);
 });
