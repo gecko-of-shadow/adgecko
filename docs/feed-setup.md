@@ -117,3 +117,4 @@ signs, by hand or automatically (D-7). The scripts below work for either.
 - Never add code to the feed. The client accepts only block rules.
 
 <!-- CI proof line for a throwaway pull request. -->
+<!-- Second CI proof line, under selected actions. -->
