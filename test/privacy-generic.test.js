@@ -251,13 +251,28 @@ async function noHits(pattern, paths) {
   assert(out.code === 1, "personal references, path:line only:\n" + (hits || "git grep failed"));
 }
 
+// The same views as kinds_for in scripts/privacy-check.py.
+function joinViews(text) {
+  const digitLetter = (s) => s.replace(/(?<=[0-9])(?=[A-Za-z])/g, " ");
+  const joined = text.replace(/(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/g, " ").replace(/[_-]+/g, " ");
+  const letterDigit = joined.replace(/(?<=[A-Za-z])(?=[0-9])/g, " ");
+  return [text, joined, letterDigit, digitLetter(joined), digitLetter(letterDigit), joined.replace(/(?<=[0-9])(?=[A-Z])/g, " ")];
+}
+
 // git grep -n -z lines are path NUL line NUL text. Keep path and line only, and hide
-// a path segment that matches: neither a hit's text nor its word goes to the log.
+// a path segment that matches, with or without its extension, or the whole path if a
+// match crosses a slash: neither a hit's text nor its word goes to the log. A row
+// JavaScript refuses must not reach the log in a SyntaxError, so then every path is
+// hidden. JavaScript's \b sees ASCII only, so a segment that is not ASCII is hidden too.
 function hitList(stdout, rows) {
-  const word = new RegExp(rows.join("|"), "i");
+  let word = null;
+  try { word = new RegExp(rows.join("|"), "i"); } catch { /* every path is hidden below */ }
+  const matches = (text) => joinViews(text).some((view) => word.test(view));
+  const hides = (text) => word === null || /[^ -~]/.test(text) || matches(text) || matches(text.replace(/\.[A-Za-z][A-Za-z0-9]*$/, ""));
   return stdout.split("\n").filter(Boolean).map((line) => {
     const [path, lineNumber] = line.split("\0");
-    return path.split("/").map((part) => (word.test(part) ? "<redacted>" : part)).join("/") + ":" + lineNumber;
+    const safe = path.split("/").map((part) => (hides(part) ? "<redacted>" : part)).join("/");
+    return (hides(safe) ? "<redacted>" : safe) + ":" + lineNumber;
   }).join("\n");
 }
 
@@ -452,4 +467,60 @@ Deno.test("privacy check: a path git quoted is never printed, and a diff header'
   // One segment hides, but a second match across a slash must take the whole path.
   const two = await inRepo({ patterns: "zqother\nzq/plumbus", head: { "docs/zqother/zq/plumbus.md": "fine\n" } });
   assert(two.code === 1 && !two.visible.includes("zq/plumbus") && !two.visible.includes("zqother"), two.visible);
+});
+
+// A row that holds a digit: the digit may be last, first or inside the word.
+const DIGIT_LAST = String.raw`\bzorble42\b`;
+const DIGIT_FIRST = String.raw`\b42zorble\b`;
+const DIGIT_INSIDE = String.raw`\bzo2rble\b`;
+const WORD_ROW = String.raw`\bquaffix\b`;
+
+Deno.test("privacy check: a word row that holds a digit finds digit-then-letter joins, in any case and with _ and -", async () => {
+  const rows = "[m.re.compile(data['row'], m.re.I)]";
+  const cases = [
+    [DIGIT_LAST, ["zorble42file", "ZORBLE42FILE", "zorble42File", "Zorble42file", "zorble42_file", "zorble42-file", "ZORBLE42_FILE", "my_zorble42", "9zorble42", "my9zorble42", "MY9ZORBLE42", "my9Zorble42"], ["xzorble42", "zorble421", "1zorble423"]],
+    [DIGIT_FIRST, ["my42zorble", "MY42ZORBLE", "my42Zorble", "My42zorble", "42zorble_file", "42ZORBLE_FILE", "42zorble-file", "42Zorble-file", "42zorbleFile", "42zorble9", "my_42zorble"], ["42zorbles", "142zorble", "x42zorbles"]],
+    [DIGIT_INSIDE, ["myZo2rble", "ZO2RBLE_FILE", "Zo2Rble-file", "zo2rble_file", "my-zo2rble", "my9Zo2rble", "9Zo2rble", "zo2rbleFile"], ["zo2rbles", "azo2rble"]],
+    // A row with no digit keeps every join it already had.
+    [WORD_ROW, ["QUAFFIX2FILE", "quaffix2File", "quaffix2file", "FILE2QUAFFIX", "file2Quaffix", "file2quaffix", "2quaffix", "quaffix_2_file", "a2quaffix2b"], ["quaffixes", "aquaffix", "quaf2fix"]],
+  ];
+  for (const [row, joined, notJoined] of cases) {
+    const got = await pyCall("[m.kinds_for(l, " + rows + ", 'docs/x.md') for l in data['lines']]", { row, lines: joined.concat(notJoined) });
+    joined.forEach((l, i) => assert(got[i].includes("forbidden personal string"), row + " missed: " + l));
+    notJoined.forEach((l, i) => assert(got[joined.length + i].length === 0, row + " false positive: " + l));
+  }
+});
+
+Deno.test("privacy check: digit-then-letter joins are found in file paths and commit messages, and the log hides them", async () => {
+  const paths = ["docs/zorble42file.md", "docs/ZORBLE42DATA.md", "docs/Zorble42note.md", "docs/my42zorble.md", "docs/YOUR42ZORBLE.md", "docs/our42Zorble.md", "docs/zorble42_list.md", "docs/zorble42-plan.md"];
+  const head = Object.fromEntries(paths.map((p) => [p, "fine\n"]));
+  const r = await inRepo({ patterns: DIGIT_LAST + "\n" + DIGIT_FIRST, head });
+  assert(r.code === 1, "a glued path passed: " + r.visible);
+  const hits = r.visible.split("\n").filter((l) => l.includes("in a file path"));
+  assert(hits.length === paths.length, "paths found: " + hits.length + " of " + paths.length);
+  assert(!/zorble/i.test(r.visible) && !/zorble/i.test(r.err), "a matched path was printed");
+  const message = await inRepo({ patterns: DIGIT_LAST, message: "Tidy zorble42file setup", head: { "a.md": "fine\n" } });
+  assert(message.code === 1 && !/zorble/i.test(message.visible), "commit message: " + message.visible);
+});
+
+Deno.test("privacy check: a content hit prints a glued digit path redacted, with the label and nothing of the match", async () => {
+  const file = await inRepo({ patterns: DIGIT_LAST, head: { "docs/zorble42file.md": "a zorble42 line\n" } });
+  assert(file.code === 1 && file.visible.includes("file=docs/<redacted>,line=1::forbidden personal string"), file.visible);
+  assert(!/zorble/i.test(file.visible) && !/zorble/i.test(file.err), "the matched path was printed");
+  const dir = await inRepo({ patterns: DIGIT_FIRST, head: { "docs/MY42ZORBLE/plan.md": "a 42zorble line\n" } });
+  assert(dir.code === 1 && dir.visible.includes("docs/<redacted>/plan.md") && !/zorble/i.test(dir.visible), dir.visible);
+  const clean = await inRepo({ patterns: DIGIT_LAST, head: { "docs/clean42file.md": "a zorble42 line\n" } });
+  assert(clean.code === 1 && clean.visible.includes("file=docs/clean42file.md,line=1"), "a clean path was hidden: " + clean.visible);
+});
+
+Deno.test("privacy check: the gated tests' failure output hides every glued form, and a row JavaScript refuses cannot reach the log", () => {
+  const stdout = ["docs/zorble42file/a.md", "docs/myZorble42/b.md", "docs/MY42ZORBLE.md", "docs/my_zorble42/c.md", "docs/clean42file/d.md"].map((p) => p + "\x003\x00text\n").join("");
+  const got = hitList(stdout, [DIGIT_LAST, DIGIT_FIRST]);
+  assert(got === "docs/<redacted>/a.md:3\ndocs/<redacted>/b.md:3\ndocs/<redacted>:3\ndocs/<redacted>/c.md:3\ndocs/clean42file/d.md:3", got);
+  assert(hitList("zq/plumbus.md\x001\x00text\n", ["zq/plumbus"]) === "<redacted>:1", "a row across a slash");
+  assert(hitList("docs/zorble42.md\x001\x00text\n", ["^zorble42$"]) === "docs/<redacted>:1", "a row that needs the extension gone");
+  assert(hitList("docs/zorblé/a.md\x001\x00text\n", [WORD_ROW]) === "docs/<redacted>/a.md:1", "a segment that is not ASCII");
+  // Python takes (?P<x>...) and JavaScript does not: the error names the whole pattern.
+  const refused = hitList("docs/zorble42/a.md\x002\x00text\n", ["(?P<zorble42>x)"]);
+  assert(refused === "<redacted>:2", refused);
 });

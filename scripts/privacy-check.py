@@ -3,9 +3,13 @@
 
 Personal-string regexes come from the PRIVACY_PATTERNS environment variable,
 one case-insensitive expression per line. Each line of text is tested as it
-stands and again with camelCase, letter-digit, underscore and hyphen joins
-split into separate words, so a \\bword\\b row also finds fooWord, foo_word
-and word2.
+stands and again with camelCase, underscore, hyphen and letter-digit joins
+split into separate words, so a \\bword\\b row also finds fooWord, foo_word,
+word2 and 2word, and a \\bword2\\b row finds word2file. Letter-to-digit and
+digit-to-letter joins are each split alone and then together, so a row with a
+digit at one end stays whole in one view. Not every row can: one with a digit
+inside it or at both ends, or with its own _, - or capital join, can still
+miss a glued form (9wo2rd, 2word2x, wo_rd2).
 
 If that variable is missing or empty, personal-string checks are skipped and
 the job stays green with a warning annotation, except when REQUIRE_PATTERNS is
@@ -216,8 +220,11 @@ SECRET_KIND = "obvious secret"
 PATH_SUFFIX = " in a file path"
 REDACTED = "<redacted>"
 REGEX_SYNTAX_RE = re.compile(r"[\\\[\]()|*+?{}^$]")
-CASE_CHANGE_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
-LETTER_DIGIT_RE = re.compile(r"(?<=[A-Za-z])(?=[0-9])|(?<=[0-9])(?=[A-Za-z])")
+# No digit in the case split: it would cut a row such as \b2word\b in 2WORD_X.
+CASE_CHANGE_RE = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+LETTER_DIGIT_RE = re.compile(r"(?<=[A-Za-z])(?=[0-9])")
+DIGIT_LETTER_RE = re.compile(r"(?<=[0-9])(?=[A-Za-z])")
+DIGIT_UPPER_RE = re.compile(r"(?<=[0-9])(?=[A-Z])")
 JOIN_CHARS_RE = re.compile(r"[_-]+")
 FILE_EXT_RE = re.compile(r"\.[A-Za-z][A-Za-z0-9]*(?=/|$)")
 
@@ -392,9 +399,19 @@ def split_joins(text):
 
 
 def split_digits(text):
-    """The same for word2. A view of its own: a row that holds a digit must
-    still match in split_joins, and this split would break that row apart."""
-    return LETTER_DIGIT_RE.sub(" ", split_joins(text))
+    """The same for word2 and 2word, as views of their own. Each split breaks
+    some rows apart, so a row that ends in a digit needs digit-to-letter alone,
+    one that starts with a digit needs letter-to-digit alone, and a row with no
+    digit needs both. A digit before a capital is a camelCase join on its own,
+    which keeps wo2rd whole in 9Wo2rd."""
+    joined = split_joins(text)
+    letter_digit = LETTER_DIGIT_RE.sub(" ", joined)
+    return (
+        letter_digit,
+        DIGIT_LETTER_RE.sub(" ", joined),
+        DIGIT_LETTER_RE.sub(" ", letter_digit),
+        DIGIT_UPPER_RE.sub(" ", joined),
+    )
 
 
 def kinds_for(line, personal, path=None, generic=True, joins=True):
@@ -402,7 +419,7 @@ def kinds_for(line, personal, path=None, generic=True, joins=True):
     # Third-party hostnames in host data may hold these words, and only those.
     text = QUOTED_HOST_RE.sub('""', line) if path and HOST_DATA_RE.match(path) else line
     if personal:
-        views = (text, split_joins(text), split_digits(text)) if joins else (text,)
+        views = (text, split_joins(text), *split_digits(text)) if joins else (text,)
         if any(pattern.search(view) for pattern in personal for view in views):
             found.append(PERSONAL_KIND)
     if any(pattern.search(line) for pattern in GENERIC_SECRET_PATTERNS):
