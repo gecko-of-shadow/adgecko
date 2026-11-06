@@ -115,3 +115,5 @@ signs, by hand or automatically (D-7). The scripts below work for either.
 - Never put a private key in the repo, the extension, the feed host or a
   chat. Only public keys go in `src/feed/keys.js`.
 - Never add code to the feed. The client accepts only block rules.
+
+<!-- CI proof line for a throwaway pull request. -->
