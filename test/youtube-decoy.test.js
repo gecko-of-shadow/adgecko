@@ -9,7 +9,7 @@ function fresh() {
 const NOW = Date.UTC(2026, 9, 16) ;
 const url = (expire) => "https://rr3---sn-k2mn5pqr.googlevideo.com/videoplayback?expire=" + expire + "&ip=203.0.113.68&itag=18&mn=ZAbCd%2CE2GhI&fvip=3";
 
-Deno.test("decoy: expire years in the past is a decoy (seen on a test PC)", () => {
+Deno.test("decoy: expire years in the past is a decoy (seen on a test machine)", () => {
   assert(fresh().isDecoyStreamUrl(url(1508648445), NOW), "2017 expire flagged");
 });
 Deno.test("decoy: real future / recent expiry is not a decoy", () => {

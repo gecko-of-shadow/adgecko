@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-11-06)
 
 - Renamed to Adgecko: the name in Chrome, the toolbar tooltip, the popup, the settings page, the docs and the release zip (`adgecko-<version>.zip`). The repository is now gecko-of-shadow/adgecko.
 - New icon (concept E, picked 2026-11-02): a neon purple gecko head on a dark rounded square, snapping its tongue at a pixel "ad". Hand-drawn SVG sources with a separate 16 px pixel cut; the toolbar icon lights the pixel "ad" while blocking is on and turns grey when it is off. `scripts/build-icons.mjs` can render with a local Chrome / Chrome for Testing (`CHROME_PATH`). How the art was chosen: `docs/design/README.md`.

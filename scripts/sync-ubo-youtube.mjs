@@ -69,7 +69,7 @@ const skipped = [];
 const perHost = Object.fromEntries(HOSTS.map((h) => [h, { js: new Map(), jsEx: new Set(), css: new Set(), cssEx: new Set() }]));
 const networkLines = [];
 // Local additions, each the Chrome-scriptlet form of a uAssets filter that uBO
-// only applies on Firefox (cap_html_filtering $replace branch). A test-PC
+// only applies on Firefox (cap_html_filtering $replace branch). A test-machine
 // trace (2026-10-16): SPA starts sat ~4s on a SABR wait when get_watch kept
 // "adPlacements" (the Chromium branch only rewrites "adSlots" there).
 texts.local = [
@@ -142,7 +142,7 @@ const TOGGLES = {
   "json-edit-fetch-response.js": "jsonEditFetch",
 };
 // rpnt (105-byte wait-reply reload + UA hint), inboundEdit (/player request markers)
-// and nanoStb are on as in uBO Lite's default ruleset (test PC 2026-10-16: uBOL
+// and nanoStb are on as in uBO Lite's default ruleset (test machine 2026-10-16: uBOL
 // got the same 105-byte waits but started in ~1s). rmnt/domBypass stay off.
 const PATCHES = [[
   "    const editObj = obj => {\n        let clone;",
