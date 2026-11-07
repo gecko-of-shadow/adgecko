@@ -192,16 +192,16 @@ Deno.test("worker: threatTier off disables the threat ruleset and removes refres
 
 Deno.test("worker: siteInfo answers the popup; the settings page may message the worker, content scripts may not", async () => {
   const w = await worker({ settings: { v: 1, enabled: true, features: {} }, siteOverrides: { "news.example": { features: { cosmetic: false } } } });
-  const info = await w.send({ source: "twitch-adblock-general", type: "siteInfo", origin: "https://news.example" });
+  const info = await w.send({ source: "adgecko-general", type: "siteInfo", origin: "https://news.example" });
   assert(info.ok && info.host === "news.example" && !info.stream && info.siteEnabled, JSON.stringify(info));
   const cos = info.features.find((f) => f.id === "cosmetic");
   assert(cos && cos.on === false && cos.site === false && cos.perSite, JSON.stringify(cos));
   assert(!info.features.some((f) => f.id === "kick" || f.id === "youtubeWatchdog"), "only features for this site");
-  const yt = await w.send({ source: "twitch-adblock-general", type: "siteInfo", origin: "https://www.youtube.com" });
+  const yt = await w.send({ source: "adgecko-general", type: "siteInfo", origin: "https://www.youtube.com" });
   assert(yt.stream && yt.features.some((f) => f.id === "youtubeWatchdog") && !yt.features.some((f) => f.id === "cosmetic"), JSON.stringify(yt.features.map((f) => f.id)));
-  const page = await w.send({ source: "twitch-adblock-general", type: "siteInfo", origin: "https://news.example" }, { id: EXT, tab: { id: 3 }, url: "chrome-extension://" + EXT + "/src/settings.html" });
+  const page = await w.send({ source: "adgecko-general", type: "siteInfo", origin: "https://news.example" }, { id: EXT, tab: { id: 3 }, url: "chrome-extension://" + EXT + "/src/settings.html" });
   assert(page && page.ok, "settings page tab accepted");
-  const cs = await w.send({ source: "twitch-adblock-general", type: "revertLists" }, { id: EXT, tab: { id: 3 }, url: "https://evil.example/src/settings.html" });
+  const cs = await w.send({ source: "adgecko-general", type: "revertLists" }, { id: EXT, tab: { id: 3 }, url: "https://evil.example/src/settings.html" });
   assert(cs === undefined, "content script refused");
 });
 
@@ -217,7 +217,7 @@ Deno.test("safety net: no switch state removes a stream site's allows or blocks 
   ];
   for (const st of states) {
     const w = await worker(Object.assign({}, st));
-    await w.send({ source: "twitch-adblock-general", type: "applyGeneralState" });
+    await w.send({ source: "adgecko-general", type: "applyGeneralState" });
     await settle(200);
     const rules = (w.dnr.staticOn ? general : []).concat(uboYoutube, w.dnr.threatOn ? threat : [], w.dnr.dynamic, w.dnr.session);
     assert(!w.dnr.dynamic.some((r) => r.priority === 10000 && F.isStreamHost(r.condition.initiatorDomains[0])), "allow-page rule for a stream host");

@@ -147,7 +147,7 @@ const TOGGLES = {
 const PATCHES = [[
   "    const editObj = obj => {\n        let clone;",
   [
-    "    // twitch-adblock: a root filter \"[?.key]\" can only match an object that",
+    "    // adgecko: a root filter \"[?.key]\" can only match an object that",
     "    // carries that key, or an array with an element that does, so skip the",
     "    // full stringify/parse clone otherwise. On JSON.stringify this ran on",
     "    // every call (top CPU item on the homepage).",

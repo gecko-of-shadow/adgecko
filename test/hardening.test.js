@@ -37,8 +37,8 @@ Deno.test("no web-accessible resources: the fallback hide sheet comes from the w
 Deno.test("no product-named markers in pages: neutral Symbol.for ids, DOM ids and no marker properties", () => {
   for (const f of OWNED_PAGE.concat(GENERATED)) {
     const c = code(read(f));
-    assert(!/Symbol\.for\(["']twitch-adblock/.test(c), f + " uses a product-named Symbol.for");
-    assert(!/\.id = "twitch-adblock|getElementById\("twitch-adblock|STYLE_ID = "twitch-adblock/.test(c), f + " uses a product-named DOM id");
+    assert(!/Symbol\.for\(["']adgecko/.test(c), f + " uses a product-named Symbol.for");
+    assert(!/\.id = "adgecko|getElementById\("adgecko|STYLE_ID = "adgecko/.test(c), f + " uses a product-named DOM id");
     assert(!/__kickAdblock|__twitchAdblock/.test(c), f + " sets a marker property on page objects");
   }
   assert(read("src/youtube.js").includes('Symbol.for("gk.y")') && read("src/youtube.js").includes('Symbol.for("gk.u")'), "youtube.js neutral ids");
@@ -50,7 +50,7 @@ Deno.test("diagnostic logging is off by default in the page", () => {
   assert(/ diag: false, /.test(yt), "youtube.js OPTS.diag defaults to false");
   for (const line of code(yt).split("\n")) {
     if (!/console\.log\(/.test(line)) continue;
-    assert(/OPTS\.diag\)|if \(!OPTS\.diag\) return;|^\s*console\.log\("twitch-adblock: \[\+" \+ \(Date\.now\(\) - navAt\)/.test(line), "ungated youtube.js log: " + line.trim());
+    assert(/OPTS\.diag\)|if \(!OPTS\.diag\) return;|^\s*console\.log\("adgecko: \[\+" \+ \(Date\.now\(\) - navAt\)/.test(line), "ungated youtube.js log: " + line.trim());
   }
   const kick = code(read("src/kick.js"));
   assert(/const DEBUG = false;/.test(kick), "kick.js DEBUG off");
@@ -98,9 +98,9 @@ Deno.test("guards and their flag script also run in about:blank-style frames of 
 
 // Security review M-10: the store description says what the extension does
 // (ads, the malware tier, the page guards). The name is the owner's call.
-Deno.test("manifest description covers ads, the malware tier and the page guards; name unchanged", () => {
+Deno.test("manifest description covers ads, the malware tier and the page guards; the name is Adgecko", () => {
   const d = manifest.description;
   assert(d.length <= 132, "Chrome Web Store limit: " + d.length);
   assert(/ads/i.test(d) && /malware/i.test(d) && /copying shell commands/i.test(d), d);
-  assert(manifest.name === "twitch-adblock", "the product name is not changed by this build");
+  assert(manifest.name === "Adgecko", "the product name is Adgecko");
 });

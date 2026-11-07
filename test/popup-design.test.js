@@ -20,7 +20,7 @@ Deno.test("popup layout: header, site, status, Fix card, Allow button, folded Sh
     at = i;
   }
   assert(!/<details[^>]*\bopen\b/.test(popupHtml), "Show more is folded by default");
-  assert(/<h1 id="product">Gecko Adblock<\/h1>/.test(popupHtml), "product name");
+  assert(/<h1 id="product">Adgecko<\/h1>/.test(popupHtml), "product name");
   assert(/id="open-settings"[^>]*aria-label="Settings"/.test(popupHtml), "gear has a label");
   assert(/<img id="brand-icon"[^>]*alt=""/.test(popupHtml), "decorative icon");
   assert([...popupHtml.matchAll(/<script\b/g)].length === 1 && popupHtml.includes('<script src="popup.js"></script>'), "only popup.js");

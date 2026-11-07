@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Curben / OpenPhish source rule (owner decisions #13 and #18b, 2026-11-02).
 
-The ONE list from Curben's project (curbengh / malware-filter) that Gecko
-Adblock may use is urlhaus-filter: URLhaus data (abuse.ch, CC0), source id
+The ONE list from Curben's project (curbengh / malware-filter) that Adgecko
+may use is urlhaus-filter: URLhaus data (abuse.ch, CC0), source id
 `urlhaus_hosts`, fetched only from
 
     https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt

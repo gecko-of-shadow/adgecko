@@ -1,5 +1,5 @@
 (function () {
-  // Gecko Adblock popup (design rules, update 2026-11-02): icon,
+  // Adgecko popup (design rules, update 2026-11-02): icon,
   // name and gear; the site; one status line; "Something broke? / Fix this
   // site"; Allow this site / Block again; a folded "Show more". Advanced
   // switches and the per-site list live on the settings page (the gear).
@@ -251,7 +251,7 @@
   function notifyBackground(type, extra) {
     return new Promise((resolve) => {
       try {
-        chrome.runtime.sendMessage(Object.assign({ source: "twitch-adblock-general", type }, extra || {}), (response) => {
+        chrome.runtime.sendMessage(Object.assign({ source: "adgecko-general", type }, extra || {}), (response) => {
           void chrome.runtime.lastError;
           resolve(response || null);
         });

@@ -58,7 +58,7 @@ async function send(onMessage, message, sender) {
 
 Deno.test("background messages: the popup is answered", async () => {
   const onMessage = loadWorker();
-  const r = await send(onMessage, { source: "twitch-adblock-general", type: "applyGeneralState" }, { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" });
+  const r = await send(onMessage, { source: "adgecko-general", type: "applyGeneralState" }, { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" });
   assert(r.keepOpen === true && r.response && r.response.ok, "popup answered: " + JSON.stringify(r));
 });
 
@@ -70,7 +70,7 @@ Deno.test("background messages: content scripts and other extensions are ignored
     undefined,
   ]) {
     for (const type of ["updateLists", "applyGeneralState"]) {
-      const r = await send(onMessage, { source: "twitch-adblock-general", type }, sender);
+      const r = await send(onMessage, { source: "adgecko-general", type }, sender);
       assert(r.keepOpen === undefined && r.response === undefined, type + " from " + JSON.stringify(sender) + " was handled");
     }
   }
@@ -82,24 +82,24 @@ Deno.test("background messages: a guard event from our content script sets that 
   const rec = { badges: [], session: {} };
   const onMessage = loadWorker(rec);
   const tabSender = { id: EXT, tab: { id: 7 }, frameId: 0, url: "https://news.example/" };
-  let r = await send(onMessage, { source: "twitch-adblock-general", type: "guardEvent", kind: "clipboard" }, tabSender);
+  let r = await send(onMessage, { source: "adgecko-general", type: "guardEvent", kind: "clipboard" }, tabSender);
   assert(r.keepOpen === undefined && r.response === undefined, "no answer to a content script");
   assert(rec.badges.some((b) => b[0] === "text" && b[1] === 7 && b[2] === " ") && rec.badges.some((b) => b[0] === "color" && b[1] === 7 && b[2] === "#e81cd8"), JSON.stringify(rec.badges));
   assert(rec.session.tabSignals && rec.session.tabSignals[7].kind === "clipboard", "remembered for the popup");
   // Narrow: unknown kinds, no tab, other extensions: nothing.
   const before = rec.badges.length;
-  await send(onMessage, { source: "twitch-adblock-general", type: "guardEvent", kind: "flags" }, { id: EXT, tab: { id: 8 } });
-  await send(onMessage, { source: "twitch-adblock-general", type: "guardEvent", kind: "popup" }, { id: EXT });
-  await send(onMessage, { source: "twitch-adblock-general", type: "guardEvent", kind: "popup" }, { id: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", tab: { id: 9 } });
+  await send(onMessage, { source: "adgecko-general", type: "guardEvent", kind: "flags" }, { id: EXT, tab: { id: 8 } });
+  await send(onMessage, { source: "adgecko-general", type: "guardEvent", kind: "popup" }, { id: EXT });
+  await send(onMessage, { source: "adgecko-general", type: "guardEvent", kind: "popup" }, { id: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", tab: { id: 9 } });
   assert(rec.badges.length === before, "ignored: " + JSON.stringify(rec.badges.slice(before)));
   // A content script cannot read or clear signals.
-  r = await send(onMessage, { source: "twitch-adblock-general", type: "tabSignal", tabId: 7 }, tabSender);
+  r = await send(onMessage, { source: "adgecko-general", type: "tabSignal", tabId: 7 }, tabSender);
   assert(r.response === undefined, "tabSignal answered a content script");
   // The popup reads it once and the dot is cleared.
-  r = await send(onMessage, { source: "twitch-adblock-general", type: "tabSignal", tabId: 7 }, { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" });
+  r = await send(onMessage, { source: "adgecko-general", type: "tabSignal", tabId: 7 }, { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" });
   assert(r.response && r.response.ok && r.response.signal.kind === "clipboard", JSON.stringify(r));
   assert(rec.badges.at(-1)[0] === "text" && rec.badges.at(-1)[1] === 7 && rec.badges.at(-1)[2] === "", "dot cleared");
-  r = await send(onMessage, { source: "twitch-adblock-general", type: "tabSignal", tabId: 7 }, { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" });
+  r = await send(onMessage, { source: "adgecko-general", type: "tabSignal", tabId: 7 }, { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" });
   assert(r.response.signal === null, "read once");
 });
 
@@ -116,7 +116,7 @@ Deno.test("the list status text carries no date of its own", () => {
 
 const popupSender = { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" };
 const guard = (documentId) => ({ id: EXT, tab: { id: 7 }, frameId: 0, documentId, url: "https://news.example/" });
-const ping = { source: "twitch-adblock-general", type: "guardEvent", kind: "clipboard" };
+const ping = { source: "adgecko-general", type: "guardEvent", kind: "clipboard" };
 
 // Chrome clears a tab's badge when the tab navigates, but the stored signal
 // stays, so the popup used to blame the next page for the last page's block.
@@ -126,7 +126,7 @@ Deno.test("background messages: with no dot on the tab the popup gets no message
   await send(onMessage, ping, guard("doc-1"));
   assert(rec.session.tabSignals[7], "remembered");
   rec.shown[7] = ""; // the tab navigated
-  const r = await send(onMessage, { source: "twitch-adblock-general", type: "tabSignal", tabId: 7 }, popupSender);
+  const r = await send(onMessage, { source: "adgecko-general", type: "tabSignal", tabId: 7 }, popupSender);
   assert(r.response.ok && r.response.signal === null, "stale signal handed out: " + JSON.stringify(r.response));
   assert(!rec.session.tabSignals[7], "stale signal kept");
 });

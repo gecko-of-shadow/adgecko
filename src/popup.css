@@ -1,4 +1,4 @@
-/* Gecko Adblock popup (design rules, update 2026-11-02).
+/* Adgecko popup (design rules, update 2026-11-02).
    Neon purple by default; a high-contrast theme turns on by itself with
    prefers-contrast: more (unless "Purple" is picked in settings) or by the
    manual switch in settings (data-theme="contrast"). With forced-colors the

@@ -58,7 +58,7 @@ function dnrExclusive(op) {
   dnrQueue = slot;
   return prev.then(() => new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      console.warn("twitch-adblock: a DNR update took over " + DNR_SECTION_MAX_MS / 1000 + " s; not waiting for it any longer");
+      console.warn("adgecko: a DNR update took over " + DNR_SECTION_MAX_MS / 1000 + " s; not waiting for it any longer");
       release();
       resolve(DNR_TIMED_OUT);
     }, DNR_SECTION_MAX_MS);
@@ -94,12 +94,12 @@ function setIcon(enabled) {
   try {
     chrome.action.setIcon({ path }, () => {
       const err = chrome.runtime.lastError;
-      if (err) console.warn("twitch-adblock: toolbar icon not set:", err.message);
+      if (err) console.warn("adgecko: toolbar icon not set:", err.message);
     });
     chrome.action.setTitle({
       title: enabled
-        ? "twitch-adblock · lists on"
-        : "twitch-adblock · lists off",
+        ? "Adgecko · lists on"
+        : "Adgecko · lists off",
     });
   } catch {
     /* action API unavailable in tests */
@@ -387,11 +387,11 @@ function ensureListAllowRule() {
       const rule = GU.listAllowRule(chrome.runtime.id, feed && feed.ok ? [new URL(feed.origin).hostname] : []);
       chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [rule.id], addRules: [rule] }, () => {
         const err = chrome.runtime.lastError;
-        if (err) console.warn("twitch-adblock: list allow rule:", err.message);
+        if (err) console.warn("adgecko: list allow rule:", err.message);
         resolve();
       });
     } catch (e) {
-      console.warn("twitch-adblock: list allow rule:", e && e.message);
+      console.warn("adgecko: list allow rule:", e && e.message);
       resolve();
     }
   });
@@ -475,7 +475,7 @@ async function localRemove(keys) {
 function recordWriteError(e, keys) {
   const record = { message: String(e && e.message || e), keys: [].concat(keys || []).slice(0, 3), at: Date.now() };
   lastWriteError = record;
-  console.warn("twitch-adblock: storage write failed:", record.message);
+  console.warn("adgecko: storage write failed:", record.message);
   // Small key, so this usually still fits when a big payload write did not.
   // Raw set (no recursion into recordWriteError); same queue as setListState.
   const run = stateQueue.then(async () => {
@@ -672,9 +672,9 @@ let refreshing = null;
 function listStatusText(state, result, writeError) {
   const errs = Object.values(state.lastErrors || {});
   const notes = Object.values(state.lastNotes || {});
-  if (notes.length) console.log("twitch-adblock: list mirrors used:", notes);
-  if (errs.length || !result.ok) console.warn("twitch-adblock: list refresh problems:", errs.length ? errs : result.reason);
-  else console.log("twitch-adblock: list refresh", result);
+  if (notes.length) console.log("adgecko: list mirrors used:", notes);
+  if (errs.length || !result.ok) console.warn("adgecko: list refresh problems:", errs.length ? errs : result.reason);
+  else console.log("adgecko: list refresh", result);
   const errText = errs.length ? " Problems: " + errs.join("; ") + "." : (!result.ok && result.reason ? " Problem: " + result.reason + "." : "");
   const werr = writeError || state.lastError;
   const storageText = werr && werr.message ? " Storage error: " + werr.message + "." : "";
@@ -803,7 +803,7 @@ function createRefreshAlarm() {
     try {
       chrome.alarms.create(REFRESH_ALARM, info, done);
     } catch (e) {
-      console.warn("twitch-adblock: refresh alarm:", e && e.message);
+      console.warn("adgecko: refresh alarm:", e && e.message);
     }
   }
 }
@@ -816,7 +816,7 @@ function ensureRefreshAlarm() {
       if (!alarm) createRefreshAlarm();
     });
   } catch (e) {
-    console.warn("twitch-adblock: refresh alarm:", e && e.message);
+    console.warn("adgecko: refresh alarm:", e && e.message);
   }
 }
 
@@ -994,7 +994,7 @@ function takeTabSignal(tabId) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!message || message.source !== "twitch-adblock-general") return;
+  if (!message || message.source !== "adgecko-general") return;
   // Popup and settings page only. A content-script sender carries a tab and
   // the page's URL; it must never trigger a refresh or a revert. The settings
   // page opens in a tab too, so it is recognised by its extension URL.

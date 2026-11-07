@@ -22,7 +22,7 @@
   }));
   const send = (type) => new Promise((resolve) => {
     try {
-      chrome.runtime.sendMessage({ source: "twitch-adblock-general", type }, (r) => {
+      chrome.runtime.sendMessage({ source: "adgecko-general", type }, (r) => {
         void chrome.runtime.lastError;
         resolve(r || null);
       });

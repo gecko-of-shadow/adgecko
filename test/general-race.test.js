@@ -11,7 +11,7 @@ new Function(`${updateSource}\nreturn installGeneralAdblockUpdate;`)()(U);
 const listRules = (w) => w.dnr.dynamic.filter((r) => U.isOurRule(r.id) && r.id < U.KEPT_RULE_ID_BASE).length;
 const allowHosts = (w) => w.dnr.dynamic.filter((r) => r.id >= U.ALLOW_RULE_ID_BASE && r.id < U.ALLOW_RULE_ID_BASE + 10000)
   .map((r) => r.condition.initiatorDomains[0]);
-const MSG = { source: "twitch-adblock-general", type: "applyGeneralState" };
+const MSG = { source: "adgecko-general", type: "applyGeneralState" };
 
 // What popup.js does on a click: save the setting, then message the worker.
 async function popupWrite(w, patch) {
@@ -85,7 +85,7 @@ Deno.test("switching lists off while a list refresh swaps rules in leaves lists 
     off.then(() => { offDone = true; });
     return realGet((rules) => Promise.race([off, new Promise((r) => setTimeout(r, 300))]).then(() => cb(rules)));
   };
-  await w.send({ source: "twitch-adblock-general", type: "updateLists" });
+  await w.send({ source: "adgecko-general", type: "updateLists" });
   assert(off, "precondition: the refresh swapped list rules in");
   await off;
   await settle(300);

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gecko Adblock settings</title>
+  <title>Adgecko settings</title>
   <style>
     /* Same themes as the popup (src/popup.css): purple by default, high contrast by the
        "Popup look" switch (data-theme="contrast") or prefers-contrast: more (unless
@@ -57,12 +57,12 @@
 </head>
 <body>
   <main>
-    <h1>Gecko Adblock settings</h1>
+    <h1>Adgecko settings</h1>
     <p id="status" role="status"></p>
 
     <section aria-labelledby="h-master">
       <h2 id="h-master">Everything</h2>
-      <label><input id="master" type="checkbox" checked> <span>Gecko Adblock is on (turns every switchable feature off when unchecked)</span></label>
+      <label><input id="master" type="checkbox" checked> <span>Adgecko is on (turns every switchable feature off when unchecked)</span></label>
       <p class="note">The Twitch ad-free stream swap and the uBlock Origin YouTube scriptlets are always on while the extension is enabled: they are vendored, unmodified code that this extension cannot switch off without extra permissions. To stop them, turn the extension off in chrome://extensions. A site's own switch in the popup turns off this extension's other helpers on that site.</p>
     </section>
 

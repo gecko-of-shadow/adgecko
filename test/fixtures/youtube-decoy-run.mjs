@@ -7,8 +7,8 @@ import "./memory-storage.mjs";
 globalThis.window = globalThis;
 globalThis.self = globalThis;
 const SCENARIO = Deno.env.get("SCENARIO") || "manifest";
-localStorage.removeItem("twitch-adblock-ubo-opts");
-localStorage.removeItem("twitch-adblock-yt-opts");
+localStorage.removeItem("adgecko-ubo-opts");
+localStorage.removeItem("adgecko-yt-opts");
 import { withYtOpts } from "./source-opts.mjs";
 // Options go into the source (youtube.js no longer reads localStorage).
 const YT_OPTS = SCENARIO === "late-hooks" ? { hooksUnderUbo: true } : {};
@@ -91,6 +91,6 @@ emit(entry(DECOY, 0, 5000));
 fire("yt-navigate-finish", {});
 out.armStaleEntry = lastArm();
 
-localStorage.removeItem("twitch-adblock-yt-opts");
+localStorage.removeItem("adgecko-yt-opts");
 log(JSON.stringify(out));
 Deno.exit(0);

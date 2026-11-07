@@ -162,7 +162,7 @@ async function newPage(browser) {
   page.__cdp = await page.createCDPSession();
   await page.__cdp.send("Performance.enable");
   page.__log = [];
-  page.on("console", (m) => { if (m.text().startsWith("twitch-adblock")) page.__log.push(m.text()); });
+  page.on("console", (m) => { if (m.text().startsWith("adgecko")) page.__log.push(m.text()); });
   page.__errors = [];
   page.on("pageerror", (e) => page.__errors.push(String(e.message).slice(0, 160)));
   return page;
@@ -263,8 +263,8 @@ async function runOnce(variant, run) {
       const p = await browser.newPage();
       await p.goto("https://www.youtube.com/robots.txt");
       await p.evaluate((o) => {
-        if (o) localStorage.setItem("twitch-adblock-ubo-opts", JSON.stringify(o));
-        else localStorage.removeItem("twitch-adblock-ubo-opts");
+        if (o) localStorage.setItem("adgecko-ubo-opts", JSON.stringify(o));
+        else localStorage.removeItem("adgecko-ubo-opts");
       }, variant.opts ?? null);
       await p.close();
     }

@@ -45,7 +45,7 @@ const CTX = {
 
 async function worldWith(opts = {}) {
   const w = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: ["https://allowed.example"], threatAllowDomains: opts.overrides || [] } });
-  await w.send({ source: "twitch-adblock-general", type: "applyGeneralState" });
+  await w.send({ source: "adgecko-general", type: "applyGeneralState" });
   if (opts.overrides) {
     await new Promise((r) => w.chrome.storage.local.set({ threatAllowDomains: opts.overrides.slice() }, r));
   }

@@ -261,7 +261,7 @@ Deno.test("keygen/sign helpers: a signed file verifies with the printed public k
   const sig = await signBytes(bytes, pair.privateRecord);
   const r = await globalThis.GeckoFeedVerify.verifyFeed(bytes, sig, { feedKeys: { "feed-x": pair.publicKey }, killKeys: {}, now: NOW, storedSerial: 0 });
   assert(r.ok, JSON.stringify(r));
-  assert(isInside("D:/My Code/twitch-adblock/keys/k.json", "D:/My Code/twitch-adblock") && !isInside("G:/other/k.json", "D:/My Code/twitch-adblock"), "isInside");
+  assert(isInside("D:/My Code/adgecko/keys/k.json", "D:/My Code/adgecko") && !isInside("G:/other/k.json", "D:/My Code/adgecko"), "isInside");
   // The CLI refuses an output path inside the repo (nothing is generated).
   const target = new URL("../scripts/should-not-exist.key.json", import.meta.url);
   const out = await new Deno.Command("deno", { args: ["run", "--allow-read", "--allow-write", "scripts/feed-keygen.mjs", "--key-id", "t-1", "--out", "scripts/should-not-exist.key.json"], cwd: new URL("..", import.meta.url) }).output();

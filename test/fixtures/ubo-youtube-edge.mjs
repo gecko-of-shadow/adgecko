@@ -5,7 +5,7 @@
 import "./memory-storage.mjs";
 globalThis.window = globalThis;
 globalThis.self = globalThis;
-localStorage.removeItem("twitch-adblock-ubo-opts");
+localStorage.removeItem("adgecko-ubo-opts");
 class Node { appendChild(c) { return c; } }
 globalThis.Node = Node;
 globalThis.document = {

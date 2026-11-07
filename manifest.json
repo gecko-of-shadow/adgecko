@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "twitch-adblock",
+  "name": "Adgecko",
   "version": "0.2.21",
   "minimum_chrome_version": "137",
   "description": "Blocks ads on Twitch, YouTube, Kick and other sites, blocks known malware sites, and stops pages from copying shell commands.",
@@ -44,7 +44,7 @@
   },
   "action": {
     "default_popup": "src/popup.html",
-    "default_title": "twitch-adblock",
+    "default_title": "Adgecko",
     "default_icon": {
       "16": "icons/icon16-working.png",
       "48": "icons/icon48-working.png",
