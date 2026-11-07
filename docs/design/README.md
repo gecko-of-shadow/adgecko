@@ -1,4 +1,4 @@
-# Gecko Adblock artwork: how the art was chosen
+# Adgecko artwork: how the art was chosen
 
 This folder keeps the design pictures and the record of how the icon and the
 popup look were picked. It is documentation only: `docs/` is not part of the
@@ -42,7 +42,7 @@ holds only `manifest.json`, `src/` and `icons/`).
    The owner liked **A** the most. Name ideas offered with them
    (StreamWard, Purple Aegis, Clutch Shield, HexGuard) are in the project
    decision notes. **The final product name is NOT decided** (the manifest
-   still says `twitch-adblock`, the UI says "Gecko Adblock").
+   still says `twitch-adblock`, the UI says "Gecko Adblock"). Later decided: Adgecko.
 
 3. **Why shields were dropped.** The owner changed course: every ad blocker
    uses a shield, so a shield makes the extension look like all the rest. The

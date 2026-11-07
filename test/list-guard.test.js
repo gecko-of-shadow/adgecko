@@ -141,7 +141,7 @@ Deno.test("Revert lists drops refreshed payloads and dynamic list/threat rules, 
 Deno.test("worker: the popup's revertLists message reverts and writes a status line", async () => {
   const w = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [], listState: { schema: 2, dynamicActive: true, lists: {} }, "listData:easylist": { domains: ["x.example"], parser: 2 } } });
   await settle(50);
-  const r = await w.send({ source: "twitch-adblock-general", type: "revertLists" });
+  const r = await w.send({ source: "adgecko-general", type: "revertLists" });
   assert(r && r.ok, JSON.stringify(r));
   assert(!("listData:easylist" in w.store) && w.store.listState.revertedAt > 0, "reverted");
   assert(/Reverted to the packed lists/.test(w.store.generalListStatus), w.store.generalListStatus);

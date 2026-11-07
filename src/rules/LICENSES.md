@@ -17,7 +17,7 @@ Additional credits: **Peter Lowe** (ad/tracking server list);
 `urlhaus_hosts` is curbengh's urlhaus-filter (malware-filter project):
 URLhaus malware-host data from abuse.ch (CC0 1.0); the urlhaus-filter
 repository is CC0 1.0 and MIT. It is the only list from that project that
-Gecko Adblock uses, fetched only from
+Adgecko uses, fetched only from
 `https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt`.
 No phishing-feed data: the project's phishing list stays dropped (owner
 decisions #13 and #18b). `scripts/lib/curben_check.py` enforces this in the

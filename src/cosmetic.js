@@ -83,7 +83,7 @@ function installCosmeticHide(api) {
   function askWorkerForCss() {
     return new Promise((resolve, reject) => {
       try {
-        chrome.runtime.sendMessage({ source: "twitch-adblock-general", type: "cosmeticCss" }, (r) => {
+        chrome.runtime.sendMessage({ source: "adgecko-general", type: "cosmeticCss" }, (r) => {
           const err = chrome.runtime.lastError;
           if (err || !r || typeof r.css !== "string") reject(new Error("cosmetic css unavailable"));
           else resolve(r.css);

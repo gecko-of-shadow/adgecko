@@ -53,7 +53,7 @@
       const now = Date.now();
       if (now - lastPing < 2000) return;
       lastPing = now;
-      chrome.runtime.sendMessage({ source: "twitch-adblock-general", type: "guardEvent", kind: d.g }, () => void chrome.runtime.lastError);
+      chrome.runtime.sendMessage({ source: "adgecko-general", type: "guardEvent", kind: d.g }, () => void chrome.runtime.lastError);
     } catch {
       // no dot
     }

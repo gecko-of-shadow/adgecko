@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Release smoke for twitch-adblock: package, security, hosts, deno, light fuzz.
+# Release smoke for Adgecko: package, security, hosts, deno, light fuzz.
 # Local only — does not phone home. Requires deno, python3, and ripgrep (rg).
 #
 # General-adblock beta (Phase 0): allows declarativeNetRequest + storage + alarms

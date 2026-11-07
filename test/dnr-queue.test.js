@@ -14,7 +14,7 @@ function assert(c, l) { if (!c) throw new Error(l); }
 
 const U = {};
 new Function(`${updateSource}\nreturn installGeneralAdblockUpdate;`)()(U);
-const APPLY = { source: "twitch-adblock-general", type: "applyGeneralState" };
+const APPLY = { source: "adgecko-general", type: "applyGeneralState" };
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const listRules = (w) => w.dnr.dynamic.filter((r) => U.isOurRule(r.id) && r.id < U.KEPT_RULE_ID_BASE).length;
 const threatRules = (w) => w.dnr.dynamic.filter((r) => U.isThreatRule(r.id));
@@ -84,7 +84,7 @@ Deno.test("L-5: switching the threat tier off and on while a refresh swaps rules
   };
   const w = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [], settings: { v: 1, enabled: true, features: {} } }, listFetch });
   await settle(50);
-  const res = await w.send({ source: "twitch-adblock-general", type: "updateLists" });
+  const res = await w.send({ source: "adgecko-general", type: "updateLists" });
   assert(toggled, "precondition: the refresh rebuilt the threat rules");
   await toggled;
   await drain(w);
@@ -112,7 +112,7 @@ Deno.test("L-5: an apply run that lands during 'Revert lists' cannot rebuild fro
     if (!racer && [].concat(keys).some((k) => String(k).startsWith("listData:"))) racer = w.send(APPLY);
     return r;
   };
-  const res = await w.send({ source: "twitch-adblock-general", type: "revertLists" });
+  const res = await w.send({ source: "adgecko-general", type: "revertLists" });
   assert(racer, "precondition: an apply ran during the revert");
   await racer;
   await drain(w);
@@ -135,7 +135,7 @@ Deno.test("L-5: the queue is not held while lists download (a click during a ref
     return listResponse(url);
   };
   w = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [] }, listFetch });
-  const res = await w.send({ source: "twitch-adblock-general", type: "updateLists" });
+  const res = await w.send({ source: "adgecko-general", type: "updateLists" });
   await drain(w);
   assert(clickResult === "done", "the lists switch waited for the download: " + clickResult);
   // The click finished during the downloads, so the refresh's check before
@@ -181,7 +181,7 @@ Deno.test("L-5: a lists switch that lands after the refresh's own check is honou
     }
     return realSet(items, cb);
   };
-  const res = await w.send({ source: "twitch-adblock-general", type: "updateLists" });
+  const res = await w.send({ source: "adgecko-general", type: "updateLists" });
   await drain(w);
   assert(triggered, "precondition: the refresh stored its list metadata");
   assert(res && res.result && res.result.reason === "lists off; cached", "refresh: " + JSON.stringify(res && res.result));

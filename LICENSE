@@ -1,4 +1,4 @@
-Gecko Adblock (repository twitch-adblock)
+Adgecko (repository gecko-of-shadow/adgecko)
 Copyright (C) 2026 gecko-of-shadow
 
 This program is free software: you can redistribute it and/or modify it
@@ -21,7 +21,7 @@ Parts made by others keep their own licences and notices:
   - Public Suffix List data in src/threat/psl.js and src/guards/popups.js:
     Mozilla Public License 2.0, https://publicsuffix.org/.
 
-The name "Gecko Adblock" and the gecko icon are not covered by this licence;
+The name "Adgecko" and the gecko icon are not covered by this licence;
 see "License and brand" in README.md.
 
 The full text of the GNU General Public License version 3 follows (from

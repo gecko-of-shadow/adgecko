@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🦎 twitch-adblock
+# 🦎 Adgecko
 
-<img src="icons/icon128-working.png" width="128" height="128" alt="Gecko Adblock icon: a neon purple gecko head on a dark rounded square, its tongue snapping a cluster of pixel squares (an ad)">
+<img src="icons/icon128-working.png" width="128" height="128" alt="Adgecko icon: a neon purple gecko head on a dark rounded square, its tongue snapping a cluster of pixel squares (an ad)">
 
 **A Chrome extension (Manifest V3, version 0.2.21) that blocks ads on Twitch, YouTube, Kick, and other websites.**<br>
 It works inside Chrome: no separate program, no account.
@@ -31,12 +31,12 @@ It works inside Chrome: no separate program, no account.
 ## Install
 
 1. Get the files and unzip them. Pick one:
-   - **Release zip:** [twitch-adblock-0.2.21.zip](https://github.com/gecko-of-shadow/twitch-adblock/releases/download/v0.2.21/twitch-adblock-0.2.21.zip) ([release v0.2.21](https://github.com/gecko-of-shadow/twitch-adblock/releases/tag/v0.2.21), [all releases](https://github.com/gecko-of-shadow/twitch-adblock/releases)). The 0.2.21 zip came out before the "Allow this page" fix, so in that copy the button always stays grey.
+   - **Release zip:** [adgecko-0.2.21.zip](https://github.com/gecko-of-shadow/adgecko/releases/download/v0.2.21/adgecko-0.2.21.zip) ([release v0.2.21](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.2.21), [all releases](https://github.com/gecko-of-shadow/adgecko/releases)). The 0.2.21 zip came out before the "Allow this page" fix, so in that copy the button always stays grey.
    - **Newest code:** click the green **Code** button on this page, then **Download ZIP**. A copy from **Download ZIP** has the fix. It may be newer than the last numbered release; Chrome still shows the version number of that release.
 2. In Chrome, type `chrome://extensions` in the address bar and press Enter. If you had an older copy loaded, remove it first.
 3. Turn on **Developer mode** (top right). This switch lets Chrome add an extension from a folder on your computer.
 4. Click **Load unpacked** and pick the unzipped folder: the one with `manifest.json` directly inside it. Keep the folder where it is. Chrome runs the extension from that folder.
-5. Optional: click the puzzle-piece icon next to the address bar, then the pin next to **twitch-adblock**. The gecko then stays visible in your toolbar (the row of icons to the right of the address bar).
+5. Optional: click the puzzle-piece icon next to the address bar, then the pin next to **Adgecko**. The gecko then stays visible in your toolbar (the row of icons to the right of the address bar).
 
 ## How to use
 
@@ -76,14 +76,14 @@ Full details, permissions, and the list sites: [docs/permissions-and-privacy.md]
 
 - The code is open source under the GNU General Public License version 3 ([LICENSE](LICENSE)). Copyright (C) 2026 gecko-of-shadow.
 - Parts made by others keep their own licences: TwitchAdSolutions (MIT), uBlock Origin and uAssets (GPLv3), the EasyList authors' lists, and the other filter lists, including the one Curben list used (curbengh's urlhaus-filter: URLhaus data, CC0). Details: [docs/credits.md](docs/credits.md) and [src/rules/LICENSES.md](src/rules/LICENSES.md).
-- **Brand:** the name "Gecko Adblock" and the gecko icon are gecko-of-shadow's brand. They are not covered by the code licence: if you share a changed copy, give it your own name and icon. This is not a trademark claim beyond that.
+- **Brand:** the name "Adgecko" and the gecko icon are gecko-of-shadow's brand. They are not covered by the code licence: if you share a changed copy, give it your own name and icon. This is not a trademark claim beyond that.
 
 ## Links
 
 - **Docs:** [How it works](docs/how-it-works.md) · [Allow a site](docs/allow-a-page.md) · [Permissions and privacy](docs/permissions-and-privacy.md) · [Threat tier](docs/threat-tier.md) · [Signed threat feed setup](docs/feed-setup.md)
 - **Permissions:** exactly `storage`, `declarativeNetRequest`, `alarms`, and the listed hosts (all for downloading public filter lists). [Full list](docs/permissions-and-privacy.md#permissions)
 - **Credits and licenses:** TwitchAdSolutions (MIT), uBlock Origin and uAssets (GPLv3), the EasyList authors and the other lists. [Details and license files](docs/credits.md) · [LICENSE](LICENSE)
-- **Development:** there is no build step. From a git clone, load the repository root (the directory that contains `manifest.json`); `docs/`, `test/`, and `scripts/` are not part of the running extension. The version is the `version` field in `manifest.json`. The release zip root is `manifest.json`, `src/`, and `icons/`, and `scripts/pack-zip.sh` writes `twitch-adblock-<version>.zip` containing the same three.
+- **Development:** there is no build step. From a git clone, load the repository root (the directory that contains `manifest.json`); `docs/`, `test/`, and `scripts/` are not part of the running extension. The version is the `version` field in `manifest.json`. The release zip root is `manifest.json`, `src/`, and `icons/`, and `scripts/pack-zip.sh` writes `adgecko-<version>.zip` containing the same three.
 
 <details>
 <summary>Development commands</summary>

@@ -1,4 +1,4 @@
-# Gecko Adblock design rules (the owner, 2026-11-02) - for AFTER the current build
+# Adgecko design rules (the owner, 2026-11-02) - for AFTER the current build
 - Icon: concept E, neon Twitch-purple gecko head snapping its tongue at a glitchy ad pixel (icon-E-gecko-snap.jpg). No shields.
 - Popup: popup-1 style (popup-1-picked.jpg). "ads snapped today" counter needs real counting code; permission need UNVERIFIED.
 - Simple and clean: show only what's needed. No animations, no mood icons, no tour.
