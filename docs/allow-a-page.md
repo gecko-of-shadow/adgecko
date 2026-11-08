@@ -60,7 +60,7 @@ If the button is grey and does nothing, the window says why, in the status line 
   - You are on a Chrome page, like a new tab or `chrome://extensions`. Allowing only works on normal websites.
   - The page was already open before you installed or reloaded the extension. Reload the page, then open the window again.
 
-The 0.2.21 zip came out before the "Allow this page" fix, so in that copy the button always stays grey. A copy from **Download ZIP** has the fix.
+A copy from **Download ZIP** has the fix.
 
 ## For developers
 

@@ -138,6 +138,16 @@ NEVER_BLOCK_SUFFIXES = (
     "kickusercontent.com",
 )
 
+# hCaptcha widget hosts, kept apart from the stream hosts above.
+NEVER_BLOCK_CAPTCHA = (
+    # hCaptcha widget hosts: blocking them leaves the demo widget blank.
+    "hcaptcha.com",
+)
+
+# Hosts the shipped-rule test checks: each one found in a shipped rule file must
+# have a recorded approved source in meta.json "sentinel_sources".
+SENTINEL_HOSTS = ("mmitalianbeef.square.site", "bigbauer.com", "autoscurt24.de", "hk668.cc", "dc.tensgpt.com", "carrefour-enbacktoschool4.pages.dev", "sacolamobile.influenciadormagalu.com.br", "globalgrainsadf.com", "inmotiongmbh.com", "hausbank-ssk-cuxhaven.de", "gumeminlogi.webflow.io")
+
 DOMAIN_RE = re.compile(
     r"^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])\^(\$[^#]*)?$",
     re.IGNORECASE,
@@ -362,7 +372,7 @@ def fetch(url: str, name: str) -> tuple[str, str]:
 
 def is_never_block(domain: str) -> bool:
     d = domain.lower().rstrip(".")
-    for suf in NEVER_BLOCK_SUFFIXES:
+    for suf in NEVER_BLOCK_SUFFIXES + NEVER_BLOCK_CAPTCHA:
         if d == suf or d.endswith("." + suf):
             return True
     return False
@@ -667,6 +677,14 @@ def main() -> int:
     for name in stats:
         stats[name]["scoped_raw"] = scoped_stats[name]["raw"]
         stats[name]["scoped_kept"] = scoped_stats[name]["kept"]
+    sentinel_sources = {
+        h: sorted(
+            n
+            for n in ordered_names
+            if h in buckets[n] or any(e[0] == h for e in scoped_buckets[n])
+        )
+        for h in SENTINEL_HOSTS
+    }
     rules = domains_to_dnr_rules(domains, scoped)
 
     # Block batches only. merge-dnr-rules.py owns general-network.json so the
@@ -708,6 +726,7 @@ def main() -> int:
             for name in ordered_names
         },
         "never_block_suffixes": list(NEVER_BLOCK_SUFFIXES),
+        "sentinel_sources": sentinel_sources,
         "manifest_hint": {
             "permissions": ["declarativeNetRequest"],
             "declarative_net_request": {

@@ -4,7 +4,7 @@
 
 <img src="icons/icon128-working.png" width="128" height="128" alt="Adgecko icon: a neon purple gecko head on a dark rounded square, its tongue snapping a cluster of pixel squares (an ad)">
 
-**A Chrome extension (Manifest V3, version 0.3.0) that blocks ads on Twitch, YouTube, Kick, and other websites.**<br>
+**A Chrome extension (Manifest V3, version 0.3.1) that blocks ads on Twitch, YouTube, Kick, and other websites.**<br>
 It works inside Chrome: no separate program, no account.
 
 <img src="icons/icon48-working.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is on: purple gecko, the pixel ad at its tongue lit up bright"> &nbsp; <img src="icons/icon48-off.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is off: the same gecko in grey, pixel ad not lit">
@@ -31,7 +31,7 @@ It works inside Chrome: no separate program, no account.
 ## Install
 
 1. Get the files and unzip them. Pick one:
-   - **Release zip:** [adgecko-0.3.0.zip](https://github.com/gecko-of-shadow/adgecko/releases/download/v0.3.0/adgecko-0.3.0.zip) ([release v0.3.0](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.0), [all releases](https://github.com/gecko-of-shadow/adgecko/releases)). The 0.2.21 zip came out before the "Allow this page" fix, so in that copy the button always stays grey.
+   - **Release zip:** [adgecko-0.3.1.zip](https://github.com/gecko-of-shadow/adgecko/releases/download/v0.3.1/adgecko-0.3.1.zip) ([release v0.3.1](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.1), [all releases](https://github.com/gecko-of-shadow/adgecko/releases)).
    - **Newest code:** click the green **Code** button on this page, then **Download ZIP**. A copy from **Download ZIP** has the fix. It may be newer than the last numbered release; Chrome still shows the version number of that release.
 2. In Chrome, type `chrome://extensions` in the address bar and press Enter. If you had an older copy loaded, remove it first.
 3. Turn on **Developer mode** (top right). This switch lets Chrome add an extension from a folder on your computer.

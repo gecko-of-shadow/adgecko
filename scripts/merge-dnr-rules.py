@@ -8,6 +8,7 @@ Does not edit playback files.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -84,6 +85,77 @@ YT_AD_BLOCK_PRIORITY = EXCLUSION_PRIORITY + 1
 YT_INITIATORS = ["youtube.com", "youtube-nocookie.com", "youtubekids.com"]
 YT_AD_HOSTS = ["doubleclick.net"]
 
+# Must match NEVER_BLOCK_CAPTCHA in scripts/pack-filter-lists.py.
+HCAPTCHA_SUFFIXES = ("hcaptcha.com",)
+
+
+def drop_hcaptcha(blocks: list[dict]) -> tuple[list[dict], int]:
+    """Remove hCaptcha hosts from every block rule's requestDomains; drop a rule
+    left with no domains. Returns (rules, number of hosts removed)."""
+    out: list[dict] = []
+    removed = 0
+    for rule in blocks:
+        if rule.get("action", {}).get("type") != "block":
+            out.append(rule)
+            continue
+        domains = rule.get("condition", {}).get("requestDomains", [])
+        kept = []
+        for d in domains:
+            h = d.lower().rstrip(".")
+            if any(h == suf or h.endswith("." + suf) for suf in HCAPTCHA_SUFFIXES):
+                removed += 1
+            else:
+                kept.append(d)
+        if domains and not kept:
+            continue
+        if len(kept) != len(domains):
+            rule = {**rule, "condition": {**rule["condition"], "requestDomains": kept}}
+        out.append(rule)
+    return out, removed
+
+
+_HC_PROBE_URLS = [
+    scheme + "://" + host + path
+    for scheme in ("http", "https")
+    for host in ("hcaptcha.com", "a.hcaptcha.com", "sentry.hcaptcha.com", "stats.hcaptcha.com")
+    for path in ("/", "/1/api.js")
+]
+_URLFILTER_HOST_RE = re.compile(r"^\|\|([^/^*|]+)(?:[\^/*]|$)")
+
+
+def _is_hcaptcha_host(host: str) -> bool:
+    h = host.lower().rstrip(".")
+    return any(h == suf or h.endswith("." + suf) for suf in HCAPTCHA_SUFFIXES)
+
+
+def drop_hcaptcha_filter_rules(blocks: list[dict]) -> tuple[list[dict], int]:
+    """Drop block rules whose urlFilter is domain-anchored on an hCaptcha host, or
+    whose regexFilter matches an hCaptcha probe URL. Allow and other non-block
+    rules are kept. Returns (rules, number of rules dropped)."""
+    out: list[dict] = []
+    dropped = 0
+    for rule in blocks:
+        if rule.get("action", {}).get("type") == "block":
+            cond = rule.get("condition", {})
+            hit = False
+            uf = cond.get("urlFilter")
+            if isinstance(uf, str):
+                m = _URLFILTER_HOST_RE.match(uf)
+                if m and _is_hcaptcha_host(m.group(1)):
+                    hit = True
+            rf = cond.get("regexFilter")
+            if not hit and isinstance(rf, str):
+                try:
+                    rx = re.compile(rf)
+                    hit = any(rx.search(u) for u in _HC_PROBE_URLS)
+                except re.error:
+                    hit = False
+            if hit:
+                dropped += 1
+                continue
+        out.append(rule)
+    return out, dropped
+
 # Ordinary-site trackers that sit under a never-block parent (googleapis.com)
 # or that we keep even when a list drops them. Not stream hosts.
 EXTRA_TRACKER_DOMAINS = [
@@ -115,6 +187,10 @@ def main() -> int:
     if not isinstance(blocks, list):
         print("block rules must be a JSON array", file=sys.stderr)
         return 2
+    blocks, hcaptcha_removed = drop_hcaptcha(blocks)
+    print(f"removed {hcaptcha_removed} hCaptcha host(s) from block rules")
+    blocks, hcaptcha_dropped = drop_hcaptcha_filter_rules(blocks)
+    print(f"dropped {hcaptcha_dropped} hCaptcha block rule(s) by urlFilter/regexFilter")
 
     renumbered = []
     rid = BLOCK_ID_START

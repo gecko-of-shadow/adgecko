@@ -1,11 +1,11 @@
 {
-  "merged_at_utc": "2026-11-05T01:21:01Z",
+  "merged_at_utc": "2026-11-08T02:42:14Z",
   "ruleset_id": "general",
   "path": "src/rules/general-network.json",
   "allow_rules": 3,
-  "block_rules": 2440,
+  "block_rules": 2530,
   "youtube_ad_block_rules": 1,
-  "rule_count": 2444,
+  "rule_count": 2534,
   "exclusion_priority": 2000000,
   "site_domains": [
     "twitch.tv",
@@ -26,7 +26,7 @@
   ],
   "block_id_start": 100,
   "source_blocks": "scripts/pack-filter-lists.py",
-  "extra_tracker_rule_id": 2539,
+  "extra_tracker_rule_id": 2629,
   "extra_tracker_domains": [
     "facebook.net",
     "fundingchoicesmessages.google.com",

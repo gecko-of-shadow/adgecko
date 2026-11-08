@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 (2026-11-07)
+
+- Filter lists: hCaptcha checkboxes show again. hcaptcha.com and its subdomains are never blocked, in the packed lists and in list updates; lookalike hosts are still blocked.
+- Filter lists repacked on 2026-11-07 with this fix: 2,534 rules in general-network.json and 200 threat rules.
+- Tests: a regression test for the hCaptcha hosts, and the OpenPhish guard records which approved list supplied each sentinel host in the general rules; threat files stay strict.
+
 ## 0.3.0 (2026-11-06)
 
 - Renamed to Adgecko: the name in Chrome, the toolbar tooltip, the popup, the settings page, the docs and the release zip (`adgecko-<version>.zip`). The repository is now gecko-of-shadow/adgecko.

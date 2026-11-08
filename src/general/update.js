@@ -106,6 +106,10 @@ function installGeneralAdblockUpdate(target) {
     "youtubei.googleapis.com", "googleapis.com", "gstatic.com", "kick.com", "kick-streamer.com",
     "live-video.net", "youtube-nocookie.com", "youtubekids.com", "kickusercontent.com",
   ];
+  // hCaptcha widget hosts: kept apart from the stream hosts above.
+  const NEVER_BLOCK_CAPTCHA = [
+    "hcaptcha.com",
+  ];
 
   const DOMAIN_RE = /^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])\^(\$[^#]*)?$/i;
   const HOSTS_RE = /^(?:0\.0\.0\.0|127\.0\.0\.1)\s+([a-z0-9][a-z0-9.-]*[a-z0-9])\s*$/i;
@@ -129,7 +133,7 @@ function installGeneralAdblockUpdate(target) {
 
   function isNeverBlock(domain) {
     const d = String(domain || "").toLowerCase().replace(/\.$/, "");
-    return NEVER_BLOCK_SUFFIXES.some((s) => d === s || d.endsWith("." + s));
+    return NEVER_BLOCK_SUFFIXES.concat(NEVER_BLOCK_CAPTCHA).some((s) => d === s || d.endsWith("." + s));
   }
 
   // Security review L-3: a list line naming a public suffix ("co.uk") or a

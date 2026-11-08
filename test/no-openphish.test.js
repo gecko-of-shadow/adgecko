@@ -224,11 +224,69 @@ Deno.test("OpenPhish section: the packer drops the same entries", async () => {
   assert(JSON.stringify(JSON.parse(dec.decode(out.stdout))) === JSON.stringify([parsed.domains, parsed.scoped]), dec.decode(out.stdout));
 });
 
-Deno.test("OpenPhish section: the shipped rule files hold none of its hosts", async () => {
-  const hosts = ["mmitalianbeef.square.site", "bigbauer.com", "autoscurt24.de", "hk668.cc", "dc.tensgpt.com", "carrefour-enbacktoschool4.pages.dev", "sacolamobile.influenciadormagalu.com.br", "globalgrainsadf.com", "inmotiongmbh.com", "hausbank-ssk-cuxhaven.de", "gumeminlogi.webflow.io"];
+// A sentinel host is accepted only when the committed pack metadata records at
+// least one approved source that listed it, and none of those is a banned one.
+const BAD_SOURCE = new RegExp(OP + "|" + PF + "|" + CP, "i");
+function sentinelVerdict(host, map, approved) {
+  const srcs = (map && map[host]) || [];
+  if (!srcs.length) return "no recorded source for " + host;
+  const good = srcs.filter((s) => approved.includes(s) && !BAD_SOURCE.test(s));
+  return good.length ? null : "only unapproved or banned sources for " + host;
+}
+
+Deno.test("OpenPhish guard: no configured source is an OpenPhish or Curben phishing-filter source", async () => {
+  for (const s of U.SOURCES) {
+    for (const v of [s.name, s.url, ...(s.mirrors || [])]) assert(!BAD_SOURCE.test(v), "runtime source: " + v);
+  }
+  const code = [
+    "import importlib.util, json, sys",
+    "sys.dont_write_bytecode = True",
+    "spec = importlib.util.spec_from_file_location('pack', 'scripts/pack-filter-lists.py')",
+    "mod = importlib.util.module_from_spec(spec); sys.modules['pack'] = mod; spec.loader.exec_module(mod)",
+    "print(json.dumps({'sources': [[n, s['url']] for n, s in mod.SOURCES.items()], 'sentinels': list(mod.SENTINEL_HOSTS)}))",
+  ].join("\n");
+  const out = await new Deno.Command("python3", { args: ["-c", code], cwd: ROOT, stdout: "piped", stderr: "piped" }).output();
+  const dec = new TextDecoder();
+  assert(out.code === 0, dec.decode(out.stderr));
+  const packer = JSON.parse(dec.decode(out.stdout));
+  assert(packer.sources.length > 0, "packer sources read");
+  for (const [n, u] of packer.sources) assert(!BAD_SOURCE.test(n) && !BAD_SOURCE.test(u), "packer source: " + n);
+});
+
+Deno.test("OpenPhish guard: sentinel verdict fails on zero or only banned sources", () => {
+  const approved = ["hagezi_pro_mini", "easylist"];
+  assert(sentinelVerdict("x.example", { "x.example": ["hagezi_pro_mini"] }, approved) === null, "approved source passes");
+  assert(sentinelVerdict("x.example", {}, approved) !== null, "zero sources fails");
+  assert(sentinelVerdict("x.example", { "x.example": [] }, approved) !== null, "empty list fails");
+  assert(sentinelVerdict("x.example", { "x.example": [CP] }, approved) !== null, "banned-only fails");
+  assert(sentinelVerdict("x.example", { "x.example": [CP, "unknown_list"] }, approved) !== null, "unapproved-only fails");
+});
+
+Deno.test("OpenPhish section: the shipped rule files hold none of its hosts without an approved recorded source", async () => {
+  const code = [
+    "import importlib.util, json, sys",
+    "sys.dont_write_bytecode = True",
+    "spec = importlib.util.spec_from_file_location('pack', 'scripts/pack-filter-lists.py')",
+    "mod = importlib.util.module_from_spec(spec); sys.modules['pack'] = mod; spec.loader.exec_module(mod)",
+    "print(json.dumps({'sources': list(mod.SOURCES.keys()), 'sentinels': list(mod.SENTINEL_HOSTS)}))",
+  ].join("\n");
+  const out = await new Deno.Command("python3", { args: ["-c", code], cwd: ROOT, stdout: "piped", stderr: "piped" }).output();
+  const dec = new TextDecoder();
+  assert(out.code === 0, dec.decode(out.stderr));
+  const { sources, sentinels } = JSON.parse(dec.decode(out.stdout));
+  const approved = sources.filter((n) => !BAD_SOURCE.test(n));
+  const map = meta.sentinel_sources || {};
   for (const file of ["general-network", "threat-network", "threat-snapshot"]) {
     const text = await Deno.readTextFile(new URL(`src/rules/${file}.json`, ROOT));
-    const check = file === "general-network" ? hosts : [...hosts, "vzla-qr.com"];
-    for (const h of check) assert(!text.includes(`"${h}"`), `${file} still holds ${h}`);
+    for (const h of sentinels) {
+      if (!text.includes(`"${h}"`)) continue;
+      if (file === "general-network") {
+        const why = sentinelVerdict(h, map, approved);
+        assert(why === null, `${file} holds ${h}: ${why}`);
+      } else {
+        assert(false, `${file} still holds ${h}`);
+      }
+    }
+    if (file !== "general-network") assert(!text.includes('"vzla-qr.com"'), `${file} still holds vzla-qr.com`);
   }
 });
