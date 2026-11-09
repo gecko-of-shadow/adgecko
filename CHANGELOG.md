@@ -1,8 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.3.3 (2026-11-09)
 
-- Lists: the captcha never-block hosts have one source, `src/rules/never-block-captcha.json`. The packer, the rule merger and the YouTube sync read it, and the packer writes `src/general/never-block-captcha.js` from it for the service worker (list refresh and threat tier), so a new captcha vendor is one edit plus `python3 scripts/pack-filter-lists.py --never-block-captcha-js`. The parity test checks every layer and the generated file against that JSON. Packed rules are unchanged; lookalike hosts are still blocked.
+Release candidate. Dates in this file are the owner's local date (America/Edmonton, UTC-6); the dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.
+
+- Lists: the captcha never-block hosts have one source, `src/rules/never-block-captcha.json`. The packer, the rule merger and the YouTube sync read it, and the packer writes `src/general/never-block-captcha.js` from it for the service worker (list refresh and threat tier), so a new captcha vendor is one edit plus `python3 scripts/pack-filter-lists.py --never-block-captcha-js`. The parity test checks every layer, the generated file and the packed `_ad_` media rule's exclusion in `src/rules/ubo-youtube-network.json` against that JSON. Packed rules are unchanged; lookalike hosts are still blocked.
+- Lists: a fresh install fetches the lists right away from `runtime.onInstalled`, the same refresh as the settings page's "Update lists", instead of running on the packed lists until the first alarm 5 to 30 minutes later. Updates and reloads keep their saved lists and wait for the alarm as before.
+- Lists: `imasdk.googleapis.com` (the IMA ad SDK) stays blocked by the refreshed rules as well as by the packed ruleset. The packer and the list refresh share one exception list under the broad `googleapis.com` never-block suffix; the player API hosts (`youtubei`, `play`, `fonts`) stay never-blocked, and the threat tier is unchanged. A test keeps the packer, the refresh, the merger and the packed file in agreement.
+- Lists: the HaGeZi Pro mini protected-host cap adapts instead of being fixed at 64. A refresh is accepted when it names at most `last accepted count + 10` protected hosts, and never more than `2 x last accepted count` (when that count is at least 1), so a poisoned copy is still caught even inside the margin. The count of the last accepted copy is stored with that list's refresh state (`protectedHits`, written only when a refresh is accepted; a rejected refresh leaves it unchanged). With no stored count yet (a first load, or an install upgraded from 0.3.2) the cap is the seed 64, the old fixed value. Every other list keeps its fixed cap of 25. The packer applies no cap; it only skips never-block hosts.
+- Lists: `src/rules/meta.json` now records the rule count of the shipped `general-network.json` after the merge (`general_network_rules_total`, written by `scripts/merge-dnr-rules.py`) next to the packer's list-rule count, and a test checks every packed total (list rules, whole-domain and scoped entries, threat rules and hosts) against the files. 0.3.2 had meta 2,536 list rules next to 2,541 rules in the file with nothing tying the two together.
+- CI: a weekly workflow (`.github/workflows/ubo-youtube-drift.yml`, Mondays 06:00 UTC and on demand) runs `scripts/sync-ubo-youtube.mjs` against current uAssets with the local-patch layer and fails when the sync errors, a local patch no longer finds its upstream shape, or the shipped `src/vendor/ubo-youtube.js`, `ubo-youtube.css` or `src/rules/ubo-youtube-network.json` would change. It commits nothing, opens nothing, and uses no secret (read-only token).
+- Tests: the two storage tests that provoke a `QUOTA_BYTES` write failure on purpose now capture and assert the worker's warning instead of printing it, so the run shows no quota noise; the production warning is unchanged.
+
+### Roll back to 0.3.2
+
+1. Download `adgecko-0.3.2.zip` from the existing v0.3.2 release: <https://github.com/gecko-of-shadow/adgecko/releases/download/v0.3.2/adgecko-0.3.2.zip>
+2. Unzip it to a folder. In Windows PowerShell 5.1:
+
+```powershell
+Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\adgecko-0.3.2.zip" -DestinationPath "$env:USERPROFILE\Downloads\adgecko-0.3.2" -Force
+```
+
+3. In Chrome, open `chrome://extensions`, turn on **Developer mode**, **Remove** (or turn off) Adgecko 0.3.3, click **Load unpacked**, and pick the 0.3.2 folder.
 
 ## 0.3.2 (2026-11-09)
 
