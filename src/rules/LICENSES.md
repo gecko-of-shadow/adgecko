@@ -3,7 +3,7 @@
 This directory ships **trimmed / converted** copies of public filter lists
 for Chrome MV3 `declarativeNetRequest`. Full upstream lists are not reproduced.
 
-Packed at: `2026-11-09T03:01:28Z` (UTC).
+Packed at: `2026-11-09T09:18:22Z` (UTC).
 
 ## Required credit
 
@@ -43,14 +43,14 @@ release gate and the tests.
 
 - URL: `https://easylist.to/easylist/easylist.txt`
 - Role: `ads`
-- SHA-256 of downloaded bytes: `5fd80d41b45871d591af0e1d613179548515fde68fa3d5ef530c7dd0974295ce`
+- SHA-256 of downloaded bytes: `1b46157e76c2513e9c33cfe440a845bcc5d00997327264771c327d3230896530`
 - License / terms: EasyList - dual-licensed GNU GPL-3.0-or-later OR CC BY-SA 3.0-or-later. Credit: "The EasyList authors". https://easylist.to/pages/licence.html
 
 ### easyprivacy
 
 - URL: `https://easylist.to/easylist/easyprivacy.txt`
 - Role: `privacy`
-- SHA-256 of downloaded bytes: `c8fbdef081769be7de2e3cd438bee7d579af0f7ed12986377ec4ef36bacd58ed`
+- SHA-256 of downloaded bytes: `f1bfde2a04e33e818d1bd08ff1b3630b7f1e743e24465270713c40e8d613f2f5`
 - License / terms: EasyPrivacy - same EasyList dual license (GPL-3.0-or-later OR CC BY-SA 3.0-or-later). Credit: "The EasyList authors".
 
 ### hagezi_pro_mini
@@ -78,7 +78,7 @@ release gate and the tests.
 
 - URL: `https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt`
 - Role: `ads`
-- SHA-256 of downloaded bytes: `10d666ef90498b219e699f698a603bb3d38cd90e06df9bb8e4af729bd63f2040`
+- SHA-256 of downloaded bytes: `7d7a83183693819eb77f7f19678f44b0274ee23fbeea0271e0e62af5ec9173a6`
 - License / terms: AdGuard Base filter (EasyList already removed) - GPL-3.0 (AdguardFilters repository LICENSE, checked 2026-11-02). Credit: AdGuard. https://github.com/AdguardTeam/AdguardFilters
 
 ## How we use them

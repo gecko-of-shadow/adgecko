@@ -11,6 +11,7 @@ Release candidate. Dates in this file are the owner's local date (America/Edmont
 - Lists: `src/rules/meta.json` now records the rule count of the shipped `general-network.json` after the merge (`general_network_rules_total`, written by `scripts/merge-dnr-rules.py`) next to the packer's list-rule count, and a test checks every packed total (list rules, whole-domain and scoped entries, threat rules and hosts) against the files. 0.3.2 had meta 2,536 list rules next to 2,541 rules in the file with nothing tying the two together.
 - CI: a weekly workflow (`.github/workflows/ubo-youtube-drift.yml`, Mondays 06:00 UTC and on demand) runs `scripts/sync-ubo-youtube.mjs` against current uAssets with the local-patch layer and fails when the sync errors, a local patch no longer finds its upstream shape, or the shipped `src/vendor/ubo-youtube.js`, `ubo-youtube.css` or `src/rules/ubo-youtube-network.json` would change. It commits nothing, opens nothing, and uses no secret (read-only token).
 - Tests: the two storage tests that provoke a `QUOTA_BYTES` write failure on purpose now capture and assert the worker's warning instead of printing it, so the run shows no quota noise; the production warning is unchanged.
+- Filter lists repacked 2026-11-09 09:18 UTC: 192,715 whole-domain and 5,345 scoped entries in 2,508 list rules (2,513 rules in `general-network.json`), and 15,827 threat hosts in 198 rules. YouTube keeps 4 rules.
 
 ### Roll back to 0.3.2
 
