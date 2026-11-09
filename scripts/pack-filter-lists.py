@@ -431,8 +431,18 @@ def fetch(url: str, name: str) -> tuple[str, str]:
     return text, digest
 
 
+# Ad hosts under a broad never-block suffix that must stay blocked in every
+# path (the packed ruleset also blocks them through the merger's extra tracker
+# rule, scripts/merge-dnr-rules.py EXTRA_TRACKER_DOMAINS). Same list as
+# NEVER_BLOCK_EXCEPTIONS in src/general/update.js (test/imasdk-never-block.test.js).
+NEVER_BLOCK_EXCEPTIONS = ("imasdk.googleapis.com",)
+
+
 def is_never_block(domain: str) -> bool:
     d = domain.lower().rstrip(".")
+    for exc in NEVER_BLOCK_EXCEPTIONS:
+        if d == exc or d.endswith("." + exc):
+            return False
     for suf in NEVER_BLOCK_SUFFIXES + NEVER_BLOCK_CAPTCHA:
         if d == suf or d.endswith("." + suf):
             return True

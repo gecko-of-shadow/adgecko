@@ -135,8 +135,16 @@ function installGeneralAdblockUpdate(target) {
     return !!(res && res.key === "" && !res.cancel);
   }
 
+  // Ad hosts that sit under a broad never-block suffix and must stay blocked
+  // in every path: the packed ruleset blocks them through the merger's extra
+  // tracker rule (scripts/merge-dnr-rules.py EXTRA_TRACKER_DOMAINS), so a
+  // refreshed list that names them keeps blocking them too. Same list as
+  // NEVER_BLOCK_EXCEPTIONS in scripts/pack-filter-lists.py (parity test).
+  const NEVER_BLOCK_EXCEPTIONS = ["imasdk.googleapis.com"];
+
   function isNeverBlock(domain) {
     const d = String(domain || "").toLowerCase().replace(/\.$/, "");
+    if (NEVER_BLOCK_EXCEPTIONS.some((s) => d === s || d.endsWith("." + s))) return false;
     return NEVER_BLOCK_SUFFIXES.concat(NEVER_BLOCK_CAPTCHA).some((s) => d === s || d.endsWith("." + s));
   }
 
@@ -1017,7 +1025,7 @@ function installGeneralAdblockUpdate(target) {
     MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, PROTECTED_HITS_MAX_BY_LIST, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, protectedHits, revertLists,
     removeThreatRules, rebuildThreatRules,
     LIST_RULE_ID_BASE, KEPT_RULE_ID_BASE, ALLOW_RULE_ID_BASE, SOURCES, LIST_HOSTS,
-    isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules, keepsWholeDomain,
+    isNeverBlock, NEVER_BLOCK_EXCEPTIONS, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules, keepsWholeDomain,
     shouldRun, listDue, refresh, describeError, LIST_ALLOW_RULE_ID, listAllowRule, applyEnabled, isListUrl,
   });
 }
