@@ -838,7 +838,7 @@ applyCachedFeed();
 // manifest icon back. Repaint from storage only: no DNR call, no queue.
 getSettings().then((s) => setIcon(s.generalEnabled !== false));
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   ensureCosmetic();
   ensureRefreshAlarm();
   syncThreatAllowRules();
@@ -848,11 +848,12 @@ chrome.runtime.onInstalled.addListener(() => {
     const patch = {};
     if (stored.generalEnabled === undefined) patch.generalEnabled = true;
     if (!Array.isArray(stored.generalAllowedOrigins)) patch.generalAllowedOrigins = [];
-    if (Object.keys(patch).length) {
-      localSet(patch).catch(() => {}).then(() => applyGeneralState());
-    } else {
-      applyGeneralState();
-    }
+    const applied = Object.keys(patch).length ? localSet(patch).catch(() => {}).then(() => applyGeneralState()) : applyGeneralState();
+    // A fresh install fetches the lists right away, the same refresh as the
+    // settings page's "Update lists" (the first alarm is 5 to 30 minutes out,
+    // so the packed lists alone would run until then). Updates and reloads
+    // keep their saved lists and wait for the alarm.
+    if (details && details.reason === "install") Promise.resolve(applied).catch(() => {}).then(() => refreshLists(true));
   });
 });
 

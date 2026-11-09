@@ -175,6 +175,27 @@ Deno.test("refresh after migration rebuilds the same rules from the per-list key
   assert(listRules > 0 && w.dnr.staticOn && w.dnr.errors.length === 0, "dynamic lists active: " + listRules);
 });
 
+// ---- fresh install ----
+
+Deno.test("a fresh install fetches the lists from onInstalled without a click; an update waits for the alarm", async () => {
+  const counter = { n: 0 };
+  const w = loadWorker({ store: {}, listFetch: countingFetch(counter) });
+  await settle(50);
+  assert(counter.n === 0 && dataKeys(w.store).length === 0, "nothing fetched before install");
+  w.install({ reason: "install" });
+  for (let i = 0; i < 80 && !(w.store.listState && w.store.listState.lastRunAt); i++) await settle(100);
+  assert(counter.n >= U.SOURCES.length, "every list fetched on install: " + counter.n);
+  assert(dataKeys(w.store).length === U.SOURCES.length, "payloads stored: " + dataKeys(w.store).length);
+  assert(w.store.listState && w.store.listState.dynamicActive && w.store.listState.lastRunAt, "refresh ran: " + JSON.stringify(w.store.listState && w.store.listState.lastRunAt));
+  assert(w.store.generalEnabled === true, "defaults written too");
+  const upd = { n: 0 };
+  const w2 = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [], listState: refreshedState(U.SOURCES) }, listFetch: countingFetch(upd) });
+  await settle(50);
+  w2.install({ reason: "update" });
+  await settle(600);
+  assert(upd.n === 0, "an update does not refetch outside the alarm: " + upd.n);
+});
+
 // ---- write errors ----
 
 Deno.test("a failed payload write is recorded in state and shown in the list status text", async () => {
