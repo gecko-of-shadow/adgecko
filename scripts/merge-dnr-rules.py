@@ -16,6 +16,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "rules" / "general-network.json"
 META_OUT = ROOT / "src" / "rules" / "dnr-merge-meta.json"
+# The packer's metadata; the merger records the post-merge rule count of the
+# shipped file there, so meta.json and general-network.json cannot drift
+# (test/meta-counts.test.js). dnr_rules_total stays the list-rule count.
+PACK_META = ROOT / "src" / "rules" / "meta.json"
 LIST_BLOCKS = (
     Path(sys.argv[1])
     if len(sys.argv) > 1
@@ -280,8 +284,19 @@ def main() -> int:
         "extra_tracker_domains": list(EXTRA_TRACKER_DOMAINS),
     }
     META_OUT.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    record_merged_total(len(merged), meta["merged_at_utc"])
     print(json.dumps(meta, indent=2))
     return 0
+
+
+def record_merged_total(count: int, merged_at: str) -> None:
+    """Write the shipped general-network.json rule count into src/rules/meta.json."""
+    if not PACK_META.is_file():
+        return
+    data = json.loads(PACK_META.read_text(encoding="utf-8"))
+    data["general_network_rules_total"] = count
+    data["general_network_merged_at_utc"] = merged_at
+    PACK_META.write_text(json.dumps(data, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

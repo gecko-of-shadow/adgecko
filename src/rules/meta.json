@@ -150,5 +150,7 @@
         }
       ]
     }
-  }
+  },
+  "general_network_rules_total": 2541,
+  "general_network_merged_at_utc": "2026-11-09T03:01:34Z"
 }
