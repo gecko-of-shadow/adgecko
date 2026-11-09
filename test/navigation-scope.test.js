@@ -7,6 +7,7 @@
 // eloqua.com failed although the lists only meant their page parts.
 import "../src/general/filter-options.js";
 import "../src/threat/psl.js";
+import "../src/general/never-block-captcha.js";
 import "../src/threat/protected-hosts.js";
 import "../src/threat/compile.js";
 import source from "../src/general/update.js" with { type: "text" };

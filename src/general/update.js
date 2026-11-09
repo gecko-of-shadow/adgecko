@@ -106,10 +106,14 @@ function installGeneralAdblockUpdate(target) {
     "youtubei.googleapis.com", "googleapis.com", "gstatic.com", "kick.com", "kick-streamer.com",
     "live-video.net", "youtube-nocookie.com", "youtubekids.com", "kickusercontent.com",
   ];
-  // hCaptcha widget hosts: kept apart from the stream hosts above.
-  const NEVER_BLOCK_CAPTCHA = [
-    "hcaptcha.com",
-  ];
+  // Captcha widget hosts, kept apart from the stream hosts above. The ONE list
+  // is src/rules/never-block-captcha.json, loaded as the generated
+  // general/never-block-captcha.js (importScripts, before this file).
+  const captchaData = typeof globalThis !== "undefined" && globalThis.GeckoNeverBlockCaptcha;
+  if (!captchaData || !Array.isArray(captchaData.SUFFIXES) || !captchaData.SUFFIXES.length) {
+    throw new Error("update.js: load general/never-block-captcha.js first");
+  }
+  const NEVER_BLOCK_CAPTCHA = captchaData.SUFFIXES.slice();
 
   const DOMAIN_RE = /^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])\^(\$[^#]*)?$/i;
   const HOSTS_RE = /^(?:0\.0\.0\.0|127\.0\.0\.1)\s+([a-z0-9][a-z0-9.-]*[a-z0-9])\s*$/i;
@@ -131,8 +135,16 @@ function installGeneralAdblockUpdate(target) {
     return !!(res && res.key === "" && !res.cancel);
   }
 
+  // Ad hosts that sit under a broad never-block suffix and must stay blocked
+  // in every path: the packed ruleset blocks them through the merger's extra
+  // tracker rule (scripts/merge-dnr-rules.py EXTRA_TRACKER_DOMAINS), so a
+  // refreshed list that names them keeps blocking them too. Same list as
+  // NEVER_BLOCK_EXCEPTIONS in scripts/pack-filter-lists.py (parity test).
+  const NEVER_BLOCK_EXCEPTIONS = ["imasdk.googleapis.com"];
+
   function isNeverBlock(domain) {
     const d = String(domain || "").toLowerCase().replace(/\.$/, "");
+    if (NEVER_BLOCK_EXCEPTIONS.some((s) => d === s || d.endsWith("." + s))) return false;
     return NEVER_BLOCK_SUFFIXES.concat(NEVER_BLOCK_CAPTCHA).some((s) => d === s || d.endsWith("." + s));
   }
 
@@ -446,7 +458,7 @@ function installGeneralAdblockUpdate(target) {
 
   function listMeta(m) {
     const out = {};
-    for (const k of ["url", "etag", "lastModified", "fetchedAt", "expiresMs", "count", "cosmetic", "parser", "genericCount", "rejectedCount", "rejectedGeneric"]) if (m && m[k] !== undefined) out[k] = m[k];
+    for (const k of ["url", "etag", "lastModified", "fetchedAt", "expiresMs", "count", "cosmetic", "parser", "genericCount", "rejectedCount", "rejectedGeneric", "protectedHits"]) if (m && m[k] !== undefined) out[k] = m[k];
     return out;
   }
 
@@ -460,9 +472,17 @@ function installGeneralAdblockUpdate(target) {
   const PROTECTED_HITS_MAX = 25;
   // HaGeZi Pro mini names many telemetry hosts under the broad googleapis.com
   // never-block suffix (31 on the 2026-11-08 pack, 29 unique on 2026-11-09).
-  // That is the list, not a poisoned dump of stream edges. A jump past this
-  // cap is still rejected. Every other list stays at PROTECTED_HITS_MAX.
-  const PROTECTED_HITS_MAX_BY_LIST = { hagezi_pro_mini: 64 };
+  // That is the list, not a poisoned dump of stream edges, so its cap adapts:
+  // cap = the hit count of the last accepted copy (stored as protectedHits in
+  // that list's meta, written only when a refresh is accepted) +
+  // PROTECTED_HITS_MARGIN. A count above PROTECTED_HITS_SPIKE x the last
+  // accepted count (when that count is at least 1) is rejected too, so a
+  // poisoned copy is still caught even when the margin would allow it. With
+  // no accepted count stored yet the cap is the seed, the old fixed value.
+  // Every other list stays at PROTECTED_HITS_MAX.
+  const PROTECTED_HITS_SEED_BY_LIST = { hagezi_pro_mini: 64 };
+  const PROTECTED_HITS_MARGIN = 10;
+  const PROTECTED_HITS_SPIKE = 2;
   const MAX_GENERIC_SELECTORS = 30000; // EasyList ~13,600
   const MAX_PAGE_ROOT_SITE_RULES = 100; // EasyList ~17 ("aads.com##HTML")
 
@@ -485,12 +505,19 @@ function installGeneralAdblockUpdate(target) {
   const CONFIRM_RATIO = 0.10;
   const confirmed = (n, rejected) => rejected > 0 && Math.abs(n - rejected) / rejected <= CONFIRM_RATIO;
 
-  function protectedHitsCap(listName) {
-    const named = listName && PROTECTED_HITS_MAX_BY_LIST[listName];
-    return named > PROTECTED_HITS_MAX ? named : PROTECTED_HITS_MAX;
+  // The protected-host cap for one list. `prev` is that list's stored meta
+  // (its protectedHits is the hit count of the last accepted copy).
+  function protectedHitsCap(listName, prev) {
+    const seed = listName && PROTECTED_HITS_SEED_BY_LIST[listName];
+    if (!(seed > 0)) return PROTECTED_HITS_MAX;
+    const last = prev && Number.isInteger(prev.protectedHits) && prev.protectedHits >= 0 ? prev.protectedHits : null;
+    if (last === null) return seed;
+    const cap = last + PROTECTED_HITS_MARGIN;
+    return last >= 1 ? Math.min(cap, last * PROTECTED_HITS_SPIKE) : cap;
   }
 
-  function checkListChange(prev, parsed, cosmetic, listName) {
+  // `hits` may be passed in when the caller already computed protectedHits(parsed).
+  function checkListChange(prev, parsed, cosmetic, listName, hits) {
     const total = parsed.domains.length + parsed.scoped.length;
     if (prev && prev.parser === PARSER_VERSION && prev.count > 0) {
       const ratio = Math.abs(total - prev.count) / prev.count;
@@ -498,8 +525,8 @@ function installGeneralAdblockUpdate(target) {
         return "size changed by " + Math.round(ratio * 100) + "% in one refresh (" + prev.count + " -> " + total + ")";
       }
     }
-    const hits = protectedHits(parsed);
-    const cap = protectedHitsCap(listName);
+    if (!hits) hits = protectedHits(parsed);
+    const cap = protectedHitsCap(listName, prev);
     if (hits.length > cap) return "names " + hits.length + " protected stream hosts (e.g. " + hits.slice(0, 3).join(", ") + ")";
     if (cosmetic) {
       const g = (cosmetic.generic || []).length;
@@ -649,7 +676,8 @@ function installGeneralAdblockUpdate(target) {
           const payload = { domains: parsed.domains, scoped: parsed.scoped, parser: PARSER_VERSION };
           if (parsed.popup) payload.popup = parsed.popup;
           if (src.cosmetic && CP) payload.cosmetic = CP.parseCosmetic(text);
-          const rejected = checkListChange(meta, parsed, payload.cosmetic, src.name);
+          const hits = protectedHits(parsed);
+          const rejected = checkListChange(meta, parsed, payload.cosmetic, src.name, hits);
           if (rejected) {
             rejections[src.name] = { reason: rejected, at: now };
             // Remember the rejected sizes: the same size next time is accepted.
@@ -674,6 +702,8 @@ function installGeneralAdblockUpdate(target) {
             count: total,
             cosmetic: !!payload.cosmetic,
             parser: PARSER_VERSION,
+            // Accepted copy only: the next refresh's adaptive cap starts here.
+            protectedHits: hits.length,
           };
           if (payload.cosmetic) lists[src.name].genericCount = (payload.cosmetic.generic || []).length;
           if (payload.cosmetic) cosmeticChanged = true;
@@ -1010,10 +1040,10 @@ function installGeneralAdblockUpdate(target) {
     POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, FETCH_TIMEOUT_MS, MAX_LIST_BYTES, readListText, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
     RETIRED_LISTS, dropRetiredLists, PARSER_VERSION, parseEntries, mergeScoped, staleParserLists,
     THREAT_RULE_ID_BASE, THREAT_RULE_ID_END, DYNAMIC_RULE_LIMIT, isThreatRule, isOurRule, applyThreatRules,
-    MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, PROTECTED_HITS_MAX_BY_LIST, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, protectedHits, revertLists,
+    MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, PROTECTED_HITS_SEED_BY_LIST, PROTECTED_HITS_MARGIN, PROTECTED_HITS_SPIKE, protectedHitsCap, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, protectedHits, revertLists,
     removeThreatRules, rebuildThreatRules,
     LIST_RULE_ID_BASE, KEPT_RULE_ID_BASE, ALLOW_RULE_ID_BASE, SOURCES, LIST_HOSTS,
-    isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules, keepsWholeDomain,
+    isNeverBlock, NEVER_BLOCK_EXCEPTIONS, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules, keepsWholeDomain,
     shouldRun, listDue, refresh, describeError, LIST_ALLOW_RULE_ID, listAllowRule, applyEnabled, isListUrl,
   });
 }

@@ -103,6 +103,7 @@ REQUIRED=(
   src/vendor/LICENSE-uBlock.md
   src/vendor/LICENSE-uBlock-GPLv3.txt
   src/general/filter-options.js
+  src/general/never-block-captcha.js
   src/general/update.js
   src/general/cosmetic-parse.js
   src/settings/features.js
@@ -140,7 +141,7 @@ REQUIRED=(
 # Shippable paths. Cosmetic hide, popup worker, list rules, and stream exclusion module.
 # Must cover every path scripts/lib/package_files.py derives (test/packaging.test.js
 # checks that); settings page, guards, threat tier and signed-feed client added 2026-11-02.
-ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/popup\.css|src/settings\.html|src/settings\.js|src/settings/(features|flags)\.js|src/guards/(clipboard|popups)\.js|src/threat/(psl|protected-hosts|compile)\.js|src/feed/(config|keys|canonical|schema|verify|compile|client)\.js|src/rules/threat-(network|snapshot|meta)\.json|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|cosmetic-parse|exclusions|filter-options|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/vendor/ubo-youtube(-isolated)?\.js|src/vendor/ubo-youtube\.css|src/vendor/ubo-youtube-meta\.json|src/vendor/LICENSE-uBlock\.md|src/vendor/LICENSE-uBlock-GPLv3\.txt|src/rules/ubo-youtube-network\.json|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/rules/cosmetic-rules\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/youtube-ads\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/popup\.css|src/settings\.html|src/settings\.js|src/settings/(features|flags)\.js|src/guards/(clipboard|popups)\.js|src/threat/(psl|protected-hosts|compile)\.js|src/feed/(config|keys|canonical|schema|verify|compile|client)\.js|src/rules/threat-(network|snapshot|meta)\.json|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|cosmetic-parse|exclusions|filter-options|never-block-captcha|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/vendor/ubo-youtube(-isolated)?\.js|src/vendor/ubo-youtube\.css|src/vendor/ubo-youtube-meta\.json|src/vendor/LICENSE-uBlock\.md|src/vendor/LICENSE-uBlock-GPLv3\.txt|src/rules/ubo-youtube-network\.json|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/rules/cosmetic-rules\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/youtube-ads\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
 
 # YouTube is the beta script (spinner + search cards). The Twitch vendor stays at main.
 PLAYBACK_FILES=(
@@ -205,6 +206,28 @@ if DERIVE_OUT="$(python3 "$ROOT/scripts/lib/package_files.py" --root "$PKG" 2>&1
 else
   printf '%s\n' "$DERIVE_OUT"
   fail "manifest / importScripts paths missing from the package"
+fi
+# --zip: the zip must hold exactly the derived list (nothing extra either).
+# Repo mode cannot do this: the tree holds docs/, test/ and scripts/ too.
+# The list is derived from this checkout when it is at the zip's version (the
+# zip cannot vouch for itself: an optional file is "derived" once it is in the
+# tree); otherwise from the unzipped tree, which still rejects every file the
+# manifest, worker and pages do not name.
+if [[ -n "$ZIP" ]]; then
+  DERIVE_ROOT="$PKG"
+  ROOT_VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$ROOT/manifest.json" 2>/dev/null || true)"
+  if [[ "$ROOT_VERSION" == "$EXPECT_VERSION" ]]; then
+    DERIVE_ROOT="$ROOT"
+    echo "  deriving the package list from this checkout (manifest $ROOT_VERSION)"
+  else
+    echo "  checkout is at ${ROOT_VERSION:-?}, zip at $EXPECT_VERSION: deriving the package list from the zip itself"
+  fi
+  if CHECK_OUT="$(python3 "$ROOT/scripts/lib/package_files.py" --root "$DERIVE_ROOT" --check-zip "$ZIP" 2>&1 | tr -d '\r')"; then
+    pass "zip holds exactly the derived package files, nothing else"
+  else
+    printf '%s\n' "$CHECK_OUT"
+    fail "zip contents differ from the derived package list"
+  fi
 fi
 if [[ -f "$PKG/src/popup.html" && -f "$PKG/src/popup.js" ]]; then
   pass "popup is packaged"
@@ -708,16 +731,19 @@ PY
 section "5. Deno bug / logic / memory / race / youtube"
 if [[ -n "${TEST_ROOT}" && -d "${TEST_ROOT}/test" ]]; then
   set +e
-  (cd "$TEST_ROOT" && deno test --no-lock --allow-read --allow-run --allow-env test/) 2>&1 | tee /tmp/gate-deno.txt
+  # NO_COLOR: plain summary line (no escape codes in the PASS line or CI log).
+  (cd "$TEST_ROOT" && NO_COLOR=1 deno test --no-lock --allow-read --allow-run --allow-env test/) 2>&1 | tee /tmp/gate-deno.txt
   DENO_RC=${PIPESTATUS[0]}
   set -e
   if [[ "$DENO_RC" -eq 0 ]]; then
-    SUMMARY="$(rg -n 'passed|failed' /tmp/gate-deno.txt | tail -1 || true)"
+    SUMMARY="$(rg 'passed|failed' /tmp/gate-deno.txt | tail -1 || true)"
     pass "deno test ($SUMMARY)"
   else
     fail "deno test failed (exit $DENO_RC)"
   fi
-  if rg -q 'FAILED|failed \(' /tmp/gate-deno.txt; then
+  # A failing test prints "... FAILED"; the summary "N failed" with N >= 1.
+  # ("0 failed (3m)" must not match: with no ignored tests it ends that way.)
+  if rg -q '\bFAILED\b|[1-9][0-9]* failed' /tmp/gate-deno.txt; then
     fail "deno reported failures"
   fi
 else

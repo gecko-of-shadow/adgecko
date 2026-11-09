@@ -1,6 +1,7 @@
 // Block B: list state split from list payloads, migration from the old one-key
 // layout, storage write errors surfaced, and the 3 h "gecko-refresh" alarm.
 import { loadWorker, refreshedState, settle } from "./fixtures/fake-chrome-worker.js";
+import "../src/general/never-block-captcha.js";
 import updateSource from "../src/general/update.js" with { type: "text" };
 import popupSource from "../src/popup.js" with { type: "text" };
 import cosmeticSource from "../src/cosmetic.js" with { type: "text" };
@@ -157,11 +158,13 @@ Deno.test("migration fits next to the old data (peak = old blob + one list) and 
   assert(!("generalListRefresh" in w.store), "migrated under quota " + quota + ", peak " + w.peakBytes);
   assert(w.peakBytes <= quota, "peak over quota");
   // Too tight even for one list: nothing is lost and the error is recorded.
-  const tight = loadWorker({ store: seedOld(), quotaBytes: total + 5000 });
+  const tight = loadWorker({ store: seedOld(), quotaBytes: total + 5000, captureWarnings: true });
   await settle(800);
   const oldBlob = tight.store.generalListRefresh;
   assert(oldBlob && U.SOURCES.every((s) => Array.isArray(oldBlob.lists[s.name].domains) && oldBlob.lists[s.name].domains.length === 30000), "old data intact");
   assert(tight.store.listState && /quota/i.test(tight.store.listState.lastError.message), "error recorded: " + JSON.stringify(tight.store.listState));
+  // The production warning fires for the intentional quota failure (captured, not printed).
+  assert(tight.warnings.length > 0 && tight.warnings.every((t) => /storage write failed: QUOTA_BYTES quota exceeded/.test(t)), "quota warnings: " + JSON.stringify(tight.warnings));
 });
 
 Deno.test("refresh after migration rebuilds the same rules from the per-list keys", async () => {
@@ -172,15 +175,40 @@ Deno.test("refresh after migration rebuilds the same rules from the per-list key
   assert(listRules > 0 && w.dnr.staticOn && w.dnr.errors.length === 0, "dynamic lists active: " + listRules);
 });
 
+// ---- fresh install ----
+
+Deno.test("a fresh install fetches the lists from onInstalled without a click; an update waits for the alarm", async () => {
+  const counter = { n: 0 };
+  const w = loadWorker({ store: {}, listFetch: countingFetch(counter) });
+  await settle(50);
+  assert(counter.n === 0 && dataKeys(w.store).length === 0, "nothing fetched before install");
+  w.install({ reason: "install" });
+  for (let i = 0; i < 80 && !(w.store.listState && w.store.listState.lastRunAt); i++) await settle(100);
+  assert(counter.n >= U.SOURCES.length, "every list fetched on install: " + counter.n);
+  assert(dataKeys(w.store).length === U.SOURCES.length, "payloads stored: " + dataKeys(w.store).length);
+  assert(w.store.listState && w.store.listState.dynamicActive && w.store.listState.lastRunAt, "refresh ran: " + JSON.stringify(w.store.listState && w.store.listState.lastRunAt));
+  assert(w.store.generalEnabled === true, "defaults written too");
+  const upd = { n: 0 };
+  const w2 = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [], listState: refreshedState(U.SOURCES) }, listFetch: countingFetch(upd) });
+  await settle(50);
+  w2.install({ reason: "update" });
+  await settle(600);
+  assert(upd.n === 0, "an update does not refetch outside the alarm: " + upd.n);
+});
+
 // ---- write errors ----
 
 Deno.test("a failed payload write is recorded in state and shown in the list status text", async () => {
   const counter = { n: 0 };
   const setError = (items) => (Object.keys(items).some((k) => k.startsWith("listData:")) ? "QUOTA_BYTES quota exceeded" : null);
-  const w = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [] }, listFetch: countingFetch(counter), setError });
+  const w = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [] }, listFetch: countingFetch(counter), setError, captureWarnings: true });
   await settle(50);
   const res = await w.send({ source: "adgecko-general", type: "updateLists" });
   assert(res && res.ok === false, "refresh reports failure " + JSON.stringify(res));
+  // One production warning per failed payload write, plus the refresh-problems summary; nothing else.
+  const quotaWarns = w.warnings.filter((t) => /storage write failed: QUOTA_BYTES quota exceeded/.test(t));
+  assert(quotaWarns.length === U.SOURCES.length, "one warning per list write: " + quotaWarns.length + " of " + U.SOURCES.length);
+  assert(w.warnings.every((t) => /QUOTA_BYTES quota exceeded|list refresh problems/.test(t)), "unexpected warnings: " + JSON.stringify(w.warnings));
   const st = w.store.listState;
   assert(st.lastError && /quota/i.test(st.lastError.message), "lastError in state: " + JSON.stringify(st.lastError));
   assert(/Storage error: QUOTA_BYTES quota exceeded/.test(w.store.generalListStatus), "status: " + w.store.generalListStatus);

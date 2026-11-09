@@ -1,9 +1,9 @@
 {
-  "packed_at_utc": "2026-11-09T03:01:28Z",
+  "packed_at_utc": "2026-11-09T09:18:22Z",
   "format": "chrome_declarativeNetRequest_rules_array",
-  "domains_total": 194896,
-  "scoped_entries_total": 5350,
-  "dnr_rules_total": 2536,
+  "domains_total": 192715,
+  "scoped_entries_total": 5345,
+  "dnr_rules_total": 2508,
   "domains_per_rule": 80,
   "max_dnr_rules_budget": 28000,
   "headroom_note": "Reserve remaining static rule quota for stream-site allow rules (DNR agent).",
@@ -32,25 +32,25 @@
     },
     "easylist": {
       "url": "https://easylist.to/easylist/easylist.txt",
-      "sha256": "5fd80d41b45871d591af0e1d613179548515fde68fa3d5ef530c7dd0974295ce",
+      "sha256": "1b46157e76c2513e9c33cfe440a845bcc5d00997327264771c327d3230896530",
       "role": "ads",
       "priority": 70,
-      "raw": 45072,
-      "kept": 44716,
-      "skipped_never": 3,
-      "scoped_raw": 2209,
-      "scoped_kept": 1074
+      "raw": 42118,
+      "kept": 41763,
+      "skipped_never": 2,
+      "scoped_raw": 2203,
+      "scoped_kept": 1067
     },
     "easyprivacy": {
       "url": "https://easylist.to/easylist/easyprivacy.txt",
-      "sha256": "c8fbdef081769be7de2e3cd438bee7d579af0f7ed12986377ec4ef36bacd58ed",
+      "sha256": "f1bfde2a04e33e818d1bd08ff1b3630b7f1e743e24465270713c40e8d613f2f5",
       "role": "privacy",
       "priority": 50,
-      "raw": 43375,
-      "kept": 42647,
+      "raw": 43379,
+      "kept": 42652,
       "skipped_never": 7,
-      "scoped_raw": 3945,
-      "scoped_kept": 1572
+      "scoped_raw": 3948,
+      "scoped_kept": 1574
     },
     "hagezi_pro_mini": {
       "url": "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt",
@@ -58,7 +58,7 @@
       "role": "ads_trackers",
       "priority": 40,
       "raw": 99478,
-      "kept": 79688,
+      "kept": 80454,
       "skipped_never": 29,
       "scoped_raw": 0,
       "scoped_kept": 0
@@ -87,11 +87,11 @@
     },
     "adguard_base": {
       "url": "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt",
-      "sha256": "10d666ef90498b219e699f698a603bb3d38cd90e06df9bb8e4af729bd63f2040",
+      "sha256": "7d7a83183693819eb77f7f19678f44b0274ee23fbeea0271e0e62af5ec9173a6",
       "role": "ads",
       "priority": 20,
       "raw": 12745,
-      "kept": 11682,
+      "kept": 11683,
       "skipped_never": 3,
       "scoped_raw": 427,
       "scoped_kept": 202
@@ -150,5 +150,7 @@
         }
       ]
     }
-  }
+  },
+  "general_network_rules_total": 2513,
+  "general_network_merged_at_utc": "2026-11-09T09:18:48Z"
 }

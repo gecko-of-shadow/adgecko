@@ -128,8 +128,16 @@ export function loadWorker(opts = {}) {
     if (opts.listFetch) return opts.listFetch(url, init);
     throw new TypeError("Failed to fetch");
   };
+  // opts.captureWarnings: the worker's console.warn calls are collected in
+  // `warnings` (joined as text) instead of printed, so a test that provokes a
+  // write failure on purpose can assert the warning instead of spamming the
+  // run; every other console method still prints.
+  const warnings = [];
+  const workerConsole = opts.captureWarnings
+    ? Object.assign(Object.create(console), { warn: (...args) => { warnings.push(args.map(String).join(" ")); } })
+    : console;
   // Startup timer suppressed like the repo tests.
-  new Function("chrome", "importScripts", "setTimeout", "fetch", backgroundSource)(chrome, importScripts, opts.setTimeout || (() => 0), fakeFetch);
+  new Function("chrome", "importScripts", "setTimeout", "fetch", "console", backgroundSource)(chrome, importScripts, opts.setTimeout || (() => 0), fakeFetch, workerConsole);
   const send = (message, sender) => new Promise((resolve) => {
     const keep = onMessage(message, sender || { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" }, resolve);
     if (keep !== true) resolve(undefined);
@@ -137,7 +145,7 @@ export function loadWorker(opts = {}) {
   const fireAlarm = (name) => { for (const f of alarmListeners) f({ name, scheduledTime: Date.now() }); };
   const install = (details = { reason: "update" }) => { for (const f of installListeners) f(details); };
   return {
-    chrome, store, dnr, send, iconCalls, alarms, alarmCreates, fireAlarm, install, fetched,
+    chrome, store, dnr, send, iconCalls, alarms, alarmCreates, fireAlarm, install, fetched, warnings,
     get alarmListenerCount() { return alarmListeners.length; },
     get bytesRead() { return bytesRead; }, resetBytes() { bytesRead = 0; },
     get peakBytes() { return peakBytes; }, totalBytes,

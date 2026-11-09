@@ -4,7 +4,7 @@
  * Filter lists: refreshed from the "gecko-refresh" alarm (every 3 h, at most
  * one real run per 12 h, per-list expiry respected) and on popup Update.
  */
-importScripts("settings/features.js", "general-settings.js", "general/filter-options.js", "threat/psl.js", "threat/protected-hosts.js", "threat/compile.js", "general/update.js", "general/cosmetic-parse.js",
+importScripts("settings/features.js", "general-settings.js", "general/filter-options.js", "general/never-block-captcha.js", "threat/psl.js", "threat/protected-hosts.js", "threat/compile.js", "general/update.js", "general/cosmetic-parse.js",
   "feed/config.js", "feed/keys.js", "feed/canonical.js", "feed/schema.js", "feed/verify.js", "feed/compile.js", "feed/client.js");
 const TC = self.GeckoThreatCompile;
 const FC = self.GeckoFeedClient;
@@ -838,7 +838,7 @@ applyCachedFeed();
 // manifest icon back. Repaint from storage only: no DNR call, no queue.
 getSettings().then((s) => setIcon(s.generalEnabled !== false));
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   ensureCosmetic();
   ensureRefreshAlarm();
   syncThreatAllowRules();
@@ -848,11 +848,12 @@ chrome.runtime.onInstalled.addListener(() => {
     const patch = {};
     if (stored.generalEnabled === undefined) patch.generalEnabled = true;
     if (!Array.isArray(stored.generalAllowedOrigins)) patch.generalAllowedOrigins = [];
-    if (Object.keys(patch).length) {
-      localSet(patch).catch(() => {}).then(() => applyGeneralState());
-    } else {
-      applyGeneralState();
-    }
+    const applied = Object.keys(patch).length ? localSet(patch).catch(() => {}).then(() => applyGeneralState()) : applyGeneralState();
+    // A fresh install fetches the lists right away, the same refresh as the
+    // settings page's "Update lists" (the first alarm is 5 to 30 minutes out,
+    // so the packed lists alone would run until then). Updates and reloads
+    // keep their saved lists and wait for the alarm.
+    if (details && details.reason === "install") Promise.resolve(applied).catch(() => {}).then(() => refreshLists(true));
   });
 });
 

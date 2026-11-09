@@ -16,6 +16,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "rules" / "general-network.json"
 META_OUT = ROOT / "src" / "rules" / "dnr-merge-meta.json"
+# The packer's metadata; the merger records the post-merge rule count of the
+# shipped file there, so meta.json and general-network.json cannot drift
+# (test/meta-counts.test.js). dnr_rules_total stays the list-rule count.
+PACK_META = ROOT / "src" / "rules" / "meta.json"
 LIST_BLOCKS = (
     Path(sys.argv[1])
     if len(sys.argv) > 1
@@ -85,8 +89,11 @@ YT_AD_BLOCK_PRIORITY = EXCLUSION_PRIORITY + 1
 YT_INITIATORS = ["youtube.com", "youtube-nocookie.com", "youtubekids.com"]
 YT_AD_HOSTS = ["doubleclick.net"]
 
-# Must match NEVER_BLOCK_CAPTCHA in scripts/pack-filter-lists.py.
-HCAPTCHA_SUFFIXES = ("hcaptcha.com",)
+# Captcha widget hosts no block rule may name: the ONE list in
+# src/rules/never-block-captcha.json (the packer's NEVER_BLOCK_CAPTCHA reads it too).
+CAPTCHA_SUFFIXES = tuple(
+    json.loads((ROOT / "src" / "rules" / "never-block-captcha.json").read_text(encoding="utf-8"))["suffixes"]
+)
 
 
 def drop_hcaptcha(blocks: list[dict]) -> tuple[list[dict], int]:
@@ -102,7 +109,7 @@ def drop_hcaptcha(blocks: list[dict]) -> tuple[list[dict], int]:
         kept = []
         for d in domains:
             h = d.lower().rstrip(".")
-            if any(h == suf or h.endswith("." + suf) for suf in HCAPTCHA_SUFFIXES):
+            if any(h == suf or h.endswith("." + suf) for suf in CAPTCHA_SUFFIXES):
                 removed += 1
             else:
                 kept.append(d)
@@ -114,16 +121,20 @@ def drop_hcaptcha(blocks: list[dict]) -> tuple[list[dict], int]:
     return out, removed
 
 
+# Every captcha suffix, bare and under the widget subdomains hCaptcha uses.
 _HC_PROBE_URLS = [
-    scheme + "://" + host + path
+    scheme + "://" + (label + "." if label else "") + suf + path
     for scheme in ("http", "https")
-    for host in ("hcaptcha.com", "a.hcaptcha.com", "sentry.hcaptcha.com", "stats.hcaptcha.com", "widget.hcaptcha.com", "imgs.hcaptcha.com")
+    for suf in CAPTCHA_SUFFIXES
+    for label in ("", "a", "sentry", "stats", "widget", "imgs")
     for path in ("/", "/1/api.js", "/captcha")
 ]
 # Anchored urlFilter host: ||host, |https://host, optional *. and a trailing port.
 _URLFILTER_ANCHOR_RE = re.compile(r"(?i)^(?:\|\||\|https?://)(\*\.)?([^/^*|?#]+)")
-# A regex that names an hCaptcha host, not a lookalike (nothcaptcha.com, hcaptcha.com.evil).
-_REGEX_HCAPTCHA_RE = re.compile(r"(?<![a-z0-9])(?:[a-z0-9-]+\.)*hcaptcha\.com(?![a-z0-9.-])", re.I)
+# A regex that names a captcha host, not a lookalike (nothcaptcha.com, hcaptcha.com.evil).
+_REGEX_HCAPTCHA_RE = re.compile(
+    r"(?<![a-z0-9])(?:[a-z0-9-]+\.)*(?:" + "|".join(re.escape(s) for s in CAPTCHA_SUFFIXES) + r")(?![a-z0-9.-])", re.I
+)
 
 
 def _is_hcaptcha_host(host: str) -> bool:
@@ -132,7 +143,7 @@ def _is_hcaptcha_host(host: str) -> bool:
         name, _, port = h.rpartition(":")
         if port.isdigit():
             h = name
-    return any(h == suf or h.endswith("." + suf) for suf in HCAPTCHA_SUFFIXES)
+    return any(h == suf or h.endswith("." + suf) for suf in CAPTCHA_SUFFIXES)
 
 
 def _urlfilter_host(url_filter: str) -> str | None:
@@ -273,8 +284,19 @@ def main() -> int:
         "extra_tracker_domains": list(EXTRA_TRACKER_DOMAINS),
     }
     META_OUT.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    record_merged_total(len(merged), meta["merged_at_utc"])
     print(json.dumps(meta, indent=2))
     return 0
+
+
+def record_merged_total(count: int, merged_at: str) -> None:
+    """Write the shipped general-network.json rule count into src/rules/meta.json."""
+    if not PACK_META.is_file():
+        return
+    data = json.loads(PACK_META.read_text(encoding="utf-8"))
+    data["general_network_rules_total"] = count
+    data["general_network_merged_at_utc"] = merged_at
+    PACK_META.write_text(json.dumps(data, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

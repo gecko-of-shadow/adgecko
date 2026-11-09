@@ -6,6 +6,7 @@
 // a list download.
 import "../src/general/filter-options.js";
 import { loadWorker, refreshedState, settle } from "./fixtures/fake-chrome-worker.js";
+import "../src/general/never-block-captcha.js";
 import updateSource from "../src/general/update.js" with { type: "text" };
 import bundled from "../src/rules/general-network.json" with { type: "json" };
 import mergeMeta from "../src/rules/dnr-merge-meta.json" with { type: "json" };
