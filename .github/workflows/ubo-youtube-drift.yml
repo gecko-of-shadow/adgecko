@@ -1,0 +1,44 @@
+name: ubo-youtube-drift
+
+# Weekly check that the uBlock Origin YouTube port still builds from upstream
+# and still matches what the repository ships. scripts/sync-ubo-youtube.mjs
+# pulls uAssets master and the pinned uBO tag, rebuilds the YouTube layer and
+# applies the local patches (scripts/lib/youtube-local-patches.mjs); it exits
+# non-zero when a local patch no longer finds its upstream shape. Afterwards
+# the synced files must be unchanged, or this job fails. Fail-only: nothing is
+# committed, no pull request is opened, no secret is used.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Same pinned actions as checks.yml (sha_pinning_required is on).
+jobs:
+  drift:
+    name: uBO YouTube sync drift
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.8
+
+      - name: Run the uBO YouTube sync (upstream fetch, local-patch layer)
+        run: deno run -A scripts/sync-ubo-youtube.mjs
+
+      # ubo-youtube-meta.json records the run time and the uAssets commit, so
+      # it changes on every sync; it is shown for the log but not judged. The
+      # three shipped files must be byte-identical to the checkout.
+      - name: Fail on drift in the shipped YouTube files
+        run: |
+          git --no-pager diff --stat -- src/vendor/ubo-youtube-meta.json
+          git --no-pager diff --stat -- src/vendor/ubo-youtube.js src/vendor/ubo-youtube.css src/rules/ubo-youtube-network.json
+          git diff --exit-code -- src/vendor/ubo-youtube.js src/vendor/ubo-youtube.css src/rules/ubo-youtube-network.json
