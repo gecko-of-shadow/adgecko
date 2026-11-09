@@ -1,5 +1,6 @@
 // Local YouTube patches kept across scripts/sync-ubo-youtube.mjs.
 // Upstream text is not edited here; the sync applies these after it builds.
+import neverBlockCaptcha from "../../src/rules/never-block-captcha.json" with { type: "json" };
 
 // uBO's /player prune drops adPlacements and adSlots and leaves playerAds.
 // A 0.3.1 live watch then still had one playerAds entry in getPlayerResponse.
@@ -30,7 +31,9 @@ export function ensurePlayerAdsPruned(source) {
 
 // The uBO *_ad_ media rule is a substring match. A made-up hCaptcha URL that
 // contains _ad_ would match it. DNR excludedRequestDomains also covers subdomains.
-const CAPTCHA_EXCLUDED = ["hcaptcha.com"];
+// The ONE captcha list (src/rules/never-block-captcha.json); the packer, the
+// merger and the runtime read the same file.
+export const CAPTCHA_EXCLUDED = Object.freeze([...neverBlockCaptcha.suffixes]);
 
 export function excludeCaptchaFromAdMediaRule(rules) {
   for (const rule of rules || []) {

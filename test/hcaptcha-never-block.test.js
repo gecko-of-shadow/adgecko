@@ -1,3 +1,8 @@
+import "../src/general/never-block-captcha.js";
+import neverBlockCaptcha from "../src/rules/never-block-captcha.json" with { type: "json" };
+import "../src/threat/psl.js";
+import "../src/threat/protected-hosts.js";
+import { CAPTCHA_EXCLUDED, excludeCaptchaFromAdMediaRule } from "../scripts/lib/youtube-local-patches.mjs";
 import updateSource from "../src/general/update.js" with { type: "text" };
 import generalRules from "../src/rules/general-network.json" with { type: "json" };
 import threatRules from "../src/rules/threat-network.json" with { type: "json" };
@@ -103,7 +108,18 @@ Deno.test("merger drops hCaptcha hosts from stale block rules, in memory only", 
   assert(res.out[1].condition.resourceTypes[0] === "script", "scope kept on the surviving scoped rule");
 });
 
-Deno.test("parity: captcha never-block list matches across packer, runtime, merger, threat hosts and meta.json", async () => {
+// The ONE source: src/rules/never-block-captcha.json. Every layer below must
+// carry exactly that list (0.3.1 missed two layers when each had its own copy).
+const SOURCE = neverBlockCaptcha.suffixes;
+
+Deno.test("source: never-block-captcha.json holds lowercase host suffixes with hcaptcha.com", () => {
+  assert(Array.isArray(SOURCE) && SOURCE.length > 0, "suffix list");
+  assert(SOURCE.includes("hcaptcha.com"), "hcaptcha.com is the hCaptcha widget host");
+  for (const s of SOURCE) assert(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(s), "not a lowercase host suffix: " + s);
+  assert(new Set(SOURCE).size === SOURCE.length, "duplicate suffix");
+});
+
+Deno.test("parity: captcha never-block list matches the JSON source across packer, generated runtime file, runtime, merger, threat hosts, YouTube sync and meta.json", async () => {
   const script = [
     "import importlib.util, json",
     "from pathlib import Path",
@@ -113,25 +129,74 @@ Deno.test("parity: captcha never-block list matches across packer, runtime, merg
     "spec2 = importlib.util.spec_from_file_location('mdr', Path('scripts/merge-dnr-rules.py'))",
     "merger = importlib.util.module_from_spec(spec2)",
     "spec2.loader.exec_module(merger)",
-    "print(json.dumps([list(mod.NEVER_BLOCK_CAPTCHA), 'hcaptcha.com' in mod.NEVER_BLOCK_SUFFIXES, list(merger.HCAPTCHA_SUFFIXES)]))",
+    "print(json.dumps({'packer': list(mod.NEVER_BLOCK_CAPTCHA), 'stream': list(mod.NEVER_BLOCK_SUFFIXES), 'merger': list(merger.CAPTCHA_SUFFIXES),",
+    "  'generated': mod.render_never_block_captcha_js(mod.NEVER_BLOCK_CAPTCHA), 'probes': merger._HC_PROBE_URLS,",
+    "  'regex_hits': [bool(merger._REGEX_HCAPTCHA_RE.search('https://widget.' + s + '/1/api.js')) for s in mod.NEVER_BLOCK_CAPTCHA],",
+    "  'regex_lookalikes': [bool(merger._REGEX_HCAPTCHA_RE.search(u)) for s in mod.NEVER_BLOCK_CAPTCHA for u in ('https://not' + s + '/', 'https://' + s + '.evil.example/')]}))",
   ].join("\n");
   const py = JSON.parse(await runPython(script));
-  assert(JSON.stringify(py[0]) === '["hcaptcha.com"]', "packer captcha list: " + JSON.stringify(py[0]));
-  assert(py[1] === false, "packer NEVER_BLOCK_SUFFIXES still holds hcaptcha.com");
-  assert(JSON.stringify(py[2]) === JSON.stringify(py[0]), "merger captcha list drifted: " + JSON.stringify(py[2]));
-  const c = /const NEVER_BLOCK_CAPTCHA = \[([\s\S]*?)\];/.exec(updateSource);
-  const runtime = JSON.parse("[" + c[1].replace(/,\s*$/, "") + "]");
-  assert(JSON.stringify(runtime) === JSON.stringify(py[0]), "runtime captcha list: " + JSON.stringify(runtime));
+  const want = JSON.stringify(SOURCE);
+  // Packer (NEVER_BLOCK_CAPTCHA, is_never_block) and merger read the JSON.
+  assert(JSON.stringify(py.packer) === want, "packer captcha list: " + JSON.stringify(py.packer));
+  assert(JSON.stringify(py.merger) === want, "merger captcha list: " + JSON.stringify(py.merger));
+  for (const s of SOURCE) {
+    assert(!py.stream.includes(s), "packer NEVER_BLOCK_SUFFIXES holds captcha host " + s);
+    assert(py.probes.includes("https://" + s + "/") && py.probes.includes("https://widget." + s + "/1/api.js"), "merger probe URLs omit " + s);
+  }
+  assert(py.regex_hits.every(Boolean), "merger regex misses a source host");
+  assert(!py.regex_lookalikes.some(Boolean), "merger regex matches a lookalike");
+  // The generated runtime file is what the packer would write now.
+  const generated = await Deno.readTextFile(new URL("../src/general/never-block-captcha.js", import.meta.url));
+  assert(generated === py.generated, "src/general/never-block-captcha.js is stale: run python3 scripts/pack-filter-lists.py --never-block-captcha-js");
+  assert(JSON.stringify(globalThis.GeckoNeverBlockCaptcha.SUFFIXES) === want, "generated global: " + JSON.stringify(globalThis.GeckoNeverBlockCaptcha.SUFFIXES));
+  // Runtime list refresh (update.js) and its stream list.
+  for (const s of SOURCE) assert(U.isNeverBlock(s) && U.isNeverBlock("a." + s), "runtime isNeverBlock misses " + s);
+  assert(!/const NEVER_BLOCK_CAPTCHA = \[\s*"/.test(updateSource), "update.js carries its own captcha literal again");
   const m = /const NEVER_BLOCK_SUFFIXES = \[([\s\S]*?)\];/.exec(updateSource);
-  assert(m && !/"hcaptcha\.com"/.test(m[1]), "runtime NEVER_BLOCK_SUFFIXES still holds hcaptcha.com");
-  const ph = await Deno.readTextFile(new URL("../src/threat/protected-hosts.js", import.meta.url));
-  const cap = /const CAPTCHA = Object\.freeze\(\[([\s\S]*?)\]\);/.exec(ph);
-  const threat = JSON.parse("[" + cap[1].replace(/,\s*$/, "") + "]");
-  assert(JSON.stringify(threat) === JSON.stringify(py[0]), "threat captcha list: " + JSON.stringify(threat));
+  for (const s of SOURCE) assert(m && !m[1].includes('"' + s + '"'), "runtime NEVER_BLOCK_SUFFIXES holds " + s);
+  // Threat tier (protected-hosts.js).
+  const PH = globalThis.GeckoProtectedHosts;
+  assert(JSON.stringify(PH.CAPTCHA) === want, "threat captcha list: " + JSON.stringify(PH.CAPTCHA));
+  for (const s of SOURCE) {
+    assert(PH.protectedReason(s) === "protected: " + s && PH.protectedReason("a." + s) === "protected: " + s, "threat tier does not protect " + s);
+    assert(!PH.SUFFIX.includes(s), "captcha host in the stream SUFFIX list: " + s);
+  }
+  // YouTube sync (_ad_ rule exclusion).
+  assert(JSON.stringify(CAPTCHA_EXCLUDED) === want, "YouTube sync captcha list: " + JSON.stringify(CAPTCHA_EXCLUDED));
+  const rule = { action: { type: "block" }, condition: { urlFilter: "_ad_" } };
+  excludeCaptchaFromAdMediaRule([rule]);
+  assert(JSON.stringify(rule.condition.excludedRequestDomains) === want, "_ad_ exclusion: " + JSON.stringify(rule.condition.excludedRequestDomains));
+  // Packed metadata (written by the packer from the same list).
   const meta = JSON.parse(await Deno.readTextFile(new URL("../src/rules/meta.json", import.meta.url)));
-  for (const host of py[0]) assert(meta.never_block_suffixes.includes(host), "meta.json never_block_suffixes omits " + host);
-  const stream = new Set(meta.never_block_suffixes.filter((host) => !py[0].includes(host)));
-  assert(stream.size === meta.never_block_suffixes.length - py[0].length, "captcha host listed twice in meta");
+  for (const host of SOURCE) assert(meta.never_block_suffixes.includes(host), "meta.json never_block_suffixes omits " + host);
+  const stream = new Set(meta.never_block_suffixes.filter((host) => !SOURCE.includes(host)));
+  assert(stream.size === meta.never_block_suffixes.length - SOURCE.length, "captcha host listed twice in meta");
+  assert(JSON.stringify(meta.never_block_suffixes) === JSON.stringify([...py.stream, ...SOURCE]), "meta.json never_block_suffixes differs from what the packer writes");
+});
+
+Deno.test("load order: the generated captcha list loads before protected-hosts.js and update.js everywhere, and both refuse to load without it", async () => {
+  const worker = await Deno.readTextFile(new URL("../src/general-background.js", import.meta.url));
+  const order = /importScripts\(([\s\S]*?)\);/.exec(worker)[1];
+  const i = order.indexOf('"general/never-block-captcha.js"');
+  assert(i >= 0 && i < order.indexOf('"threat/protected-hosts.js"') && i < order.indexOf('"general/update.js"'), "worker import order");
+  for (const f of ["../scripts/feed-sign.mjs", "../scripts/build-threat-rules.mjs"]) {
+    const src = await Deno.readTextFile(new URL(f, import.meta.url));
+    const j = src.indexOf('"src/general/never-block-captcha.js"');
+    assert(j >= 0 && j < src.indexOf('"src/threat/protected-hosts.js"'), f + " loads protected-hosts.js before the captcha list");
+  }
+  const ph = await Deno.readTextFile(new URL("../src/threat/protected-hosts.js", import.meta.url));
+  let threw = false;
+  try { new Function("self", ph)({ GeckoPublicSuffix: globalThis.GeckoPublicSuffix }); } catch (e) { threw = /never-block-captcha/.test(String(e)); }
+  assert(threw, "protected-hosts.js loaded without the captcha list");
+  threw = false;
+  const saved = globalThis.GeckoNeverBlockCaptcha;
+  try {
+    delete globalThis.GeckoNeverBlockCaptcha;
+    try { new Function(`${updateSource}\nreturn installGeneralAdblockUpdate;`)()({}); } catch (e) { threw = /never-block-captcha/.test(String(e)); }
+  } finally {
+    globalThis.GeckoNeverBlockCaptcha = saved;
+  }
+  assert(threw, "update.js loaded without the captcha list");
 });
 
 Deno.test("merger: an allow rule naming hcaptcha.com survives unchanged, a matching block rule is cleaned", async () => {

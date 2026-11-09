@@ -1,6 +1,7 @@
 // Block B: list state split from list payloads, migration from the old one-key
 // layout, storage write errors surfaced, and the 3 h "gecko-refresh" alarm.
 import { loadWorker, refreshedState, settle } from "./fixtures/fake-chrome-worker.js";
+import "../src/general/never-block-captcha.js";
 import updateSource from "../src/general/update.js" with { type: "text" };
 import popupSource from "../src/popup.js" with { type: "text" };
 import cosmeticSource from "../src/cosmetic.js" with { type: "text" };

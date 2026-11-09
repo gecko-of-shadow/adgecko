@@ -7,6 +7,7 @@
 // (section 2c); these tests run it on the repo and on copies with each
 // forbidden case injected. CHANGELOG and docs are not scanned: they may say
 // the list was removed.
+import "../src/general/never-block-captcha.js";
 import updateSource from "../src/general/update.js" with { type: "text" };
 import packerSource from "../scripts/pack-filter-lists.py" with { type: "text" };
 import licenses from "../src/rules/LICENSES.md" with { type: "text" };

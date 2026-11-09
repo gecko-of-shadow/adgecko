@@ -3,6 +3,7 @@
 // "Allow this domain" box; per-refresh cap on new threat hosts.
 import "../src/general/filter-options.js";
 import "../src/threat/psl.js";
+import "../src/general/never-block-captcha.js";
 import "../src/threat/protected-hosts.js";
 import "../src/threat/compile.js";
 import "../src/feed/canonical.js";

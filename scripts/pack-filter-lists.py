@@ -138,11 +138,54 @@ NEVER_BLOCK_SUFFIXES = (
     "kickusercontent.com",
 )
 
-# hCaptcha widget hosts, kept apart from the stream hosts above.
-NEVER_BLOCK_CAPTCHA = (
-    # hCaptcha widget hosts: blocking them leaves the demo widget blank.
-    "hcaptcha.com",
-)
+# Captcha widget hosts (hCaptcha: blocking them leaves the widget blank), kept
+# apart from the stream hosts above. The ONE list is src/rules/never-block-captcha.json;
+# the merger, the YouTube sync and (through the generated
+# src/general/never-block-captcha.js) the runtime read the same file.
+NEVER_BLOCK_CAPTCHA_JSON = ROOT / "src" / "rules" / "never-block-captcha.json"
+NEVER_BLOCK_CAPTCHA_JS = ROOT / "src" / "general" / "never-block-captcha.js"
+
+
+def load_never_block_captcha() -> tuple[str, ...]:
+    data = json.loads(NEVER_BLOCK_CAPTCHA_JSON.read_text(encoding="utf-8"))
+    suffixes = data["suffixes"]
+    if not isinstance(suffixes, list) or not suffixes or any(
+        not isinstance(s, str) or s != s.lower().strip().rstrip(".") or "." not in s for s in suffixes
+    ):
+        raise SystemExit(f"{NEVER_BLOCK_CAPTCHA_JSON}: suffixes must be non-empty lowercase host names")
+    if len(set(suffixes)) != len(suffixes):
+        raise SystemExit(f"{NEVER_BLOCK_CAPTCHA_JSON}: duplicate suffix")
+    return tuple(suffixes)
+
+
+NEVER_BLOCK_CAPTCHA = load_never_block_captcha()
+
+
+def render_never_block_captcha_js(suffixes: tuple[str, ...]) -> str:
+    """The classic script the service worker loads (importScripts, before
+    threat/protected-hosts.js and general/update.js) so the runtime sees the
+    same list without fetching JSON at load. Tests import it for its global."""
+    items = ", ".join(json.dumps(s, ensure_ascii=True) for s in suffixes)
+    return (
+        "// GENERATED from src/rules/never-block-captcha.json by scripts/pack-filter-lists.py.\n"
+        "// Do not edit; change the JSON and run: python3 scripts/pack-filter-lists.py --never-block-captcha-js\n"
+        "// Captcha widget host suffixes no tier may block (the host and every\n"
+        "// subdomain; lookalikes stay blockable). Classic script: the worker loads it\n"
+        "// with importScripts before threat/protected-hosts.js and general/update.js,\n"
+        "// which throw without it; tests import it for its global.\n"
+        "(function (root) {\n"
+        "  root.GeckoNeverBlockCaptcha = Object.freeze({ SUFFIXES: Object.freeze([" + items + "]) });\n"
+        "})(typeof self !== \"undefined\" ? self : globalThis);\n"
+    )
+
+
+def write_never_block_captcha_js() -> bool:
+    """Write the generated runtime file. Returns True when it changed."""
+    text = render_never_block_captcha_js(NEVER_BLOCK_CAPTCHA)
+    if NEVER_BLOCK_CAPTCHA_JS.exists() and NEVER_BLOCK_CAPTCHA_JS.read_text(encoding="utf-8") == text:
+        return False
+    NEVER_BLOCK_CAPTCHA_JS.write_text(text, encoding="utf-8", newline="\n")
+    return True
 
 # Hosts the shipped-rule test checks. Each one found in a shipped rule file must
 # have a recorded approved source in meta.json "sentinel_sources".
@@ -670,6 +713,10 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
 
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    if write_never_block_captcha_js():
+        print(f"wrote {NEVER_BLOCK_CAPTCHA_JS.relative_to(ROOT)}")
+    if "--never-block-captcha-js" in sys.argv[1:]:
+        return 0
     fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     digests: dict[str, str] = {}
     buckets: dict[str, list[str]] = {}
@@ -743,8 +790,8 @@ def main() -> int:
             }
             for name in ordered_names
         },
-        # Captcha suffixes are kept in their own constant and also recorded here,
-        # so the packed metadata matches every host the packer actually skips.
+        # Captcha suffixes (src/rules/never-block-captcha.json) are recorded
+        # here too, so the packed metadata matches every host the packer skips.
         "never_block_suffixes": list(NEVER_BLOCK_SUFFIXES) + list(NEVER_BLOCK_CAPTCHA),
         "sentinel_sources": sentinel_sources,
         "manifest_hint": {

@@ -4,7 +4,7 @@
  * Filter lists: refreshed from the "gecko-refresh" alarm (every 3 h, at most
  * one real run per 12 h, per-list expiry respected) and on popup Update.
  */
-importScripts("settings/features.js", "general-settings.js", "general/filter-options.js", "threat/psl.js", "threat/protected-hosts.js", "threat/compile.js", "general/update.js", "general/cosmetic-parse.js",
+importScripts("settings/features.js", "general-settings.js", "general/filter-options.js", "general/never-block-captcha.js", "threat/psl.js", "threat/protected-hosts.js", "threat/compile.js", "general/update.js", "general/cosmetic-parse.js",
   "feed/config.js", "feed/keys.js", "feed/canonical.js", "feed/schema.js", "feed/verify.js", "feed/compile.js", "feed/client.js");
 const TC = self.GeckoThreatCompile;
 const FC = self.GeckoFeedClient;

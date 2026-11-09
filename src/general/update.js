@@ -106,10 +106,14 @@ function installGeneralAdblockUpdate(target) {
     "youtubei.googleapis.com", "googleapis.com", "gstatic.com", "kick.com", "kick-streamer.com",
     "live-video.net", "youtube-nocookie.com", "youtubekids.com", "kickusercontent.com",
   ];
-  // hCaptcha widget hosts: kept apart from the stream hosts above.
-  const NEVER_BLOCK_CAPTCHA = [
-    "hcaptcha.com",
-  ];
+  // Captcha widget hosts, kept apart from the stream hosts above. The ONE list
+  // is src/rules/never-block-captcha.json, loaded as the generated
+  // general/never-block-captcha.js (importScripts, before this file).
+  const captchaData = typeof globalThis !== "undefined" && globalThis.GeckoNeverBlockCaptcha;
+  if (!captchaData || !Array.isArray(captchaData.SUFFIXES) || !captchaData.SUFFIXES.length) {
+    throw new Error("update.js: load general/never-block-captcha.js first");
+  }
+  const NEVER_BLOCK_CAPTCHA = captchaData.SUFFIXES.slice();
 
   const DOMAIN_RE = /^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])\^(\$[^#]*)?$/i;
   const HOSTS_RE = /^(?:0\.0\.0\.0|127\.0\.0\.1)\s+([a-z0-9][a-z0-9.-]*[a-z0-9])\s*$/i;

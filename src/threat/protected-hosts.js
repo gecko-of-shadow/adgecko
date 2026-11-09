@@ -38,12 +38,15 @@
   ]);
   const EXACT = Object.freeze(["googleapis.com", "gstatic.com", "storage.googleapis.com"]);
   const ALL = Object.freeze(SUFFIX.concat(EXACT));
-  // Captcha widget hosts the ordinary lists never block (NEVER_BLOCK_CAPTCHA
-  // in the packer and in src/general/update.js). A threat rule must not block
-  // them either. Kept off SUFFIX so they are not treated as stream sites.
-  const CAPTCHA = Object.freeze([
-    "hcaptcha.com",
-  ]);
+  // Captcha widget hosts the ordinary lists never block. A threat rule must
+  // not block them either. The ONE list is src/rules/never-block-captcha.json,
+  // loaded as the generated general/never-block-captcha.js (importScripts,
+  // before this file). Kept off SUFFIX so they are not treated as stream sites.
+  const captchaData = root.GeckoNeverBlockCaptcha;
+  if (!captchaData || !Array.isArray(captchaData.SUFFIXES) || !captchaData.SUFFIXES.length) {
+    throw new Error("protected-hosts.js: load general/never-block-captcha.js first");
+  }
+  const CAPTCHA = Object.freeze(captchaData.SUFFIXES.slice());
 
   const HOST_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
   // Two-label hosts that look like a public suffix ("co.uk", "com.au"): a

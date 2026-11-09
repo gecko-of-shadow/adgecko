@@ -3,6 +3,7 @@
 // files plus the dynamic rules the worker really creates.
 import "../src/general/filter-options.js";
 import "../src/threat/psl.js";
+import "../src/general/never-block-captcha.js";
 import "../src/threat/protected-hosts.js";
 import "../src/threat/compile.js";
 import updateSource from "../src/general/update.js" with { type: "text" };

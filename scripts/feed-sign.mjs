@@ -21,7 +21,8 @@ if (!keyPath || !feedPath) {
 }
 const ROOT = new URL("..", import.meta.url);
 // psl.js first: protected-hosts.js refuses every host without it (follow-up review).
-for (const f of ["src/threat/psl.js", "src/threat/protected-hosts.js", "src/feed/canonical.js", "src/feed/schema.js"]) await import(new URL(f, ROOT).href);
+// never-block-captcha.js (generated captcha list) too: protected-hosts.js throws without it.
+for (const f of ["src/threat/psl.js", "src/general/never-block-captcha.js", "src/threat/protected-hosts.js", "src/feed/canonical.js", "src/feed/schema.js"]) await import(new URL(f, ROOT).href);
 const C = globalThis.GeckoFeedCanonical;
 const S = globalThis.GeckoFeedSchema;
 
