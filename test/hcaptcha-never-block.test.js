@@ -166,6 +166,10 @@ Deno.test("parity: captcha never-block list matches the JSON source across packe
   const rule = { action: { type: "block" }, condition: { urlFilter: "_ad_" } };
   excludeCaptchaFromAdMediaRule([rule]);
   assert(JSON.stringify(rule.condition.excludedRequestDomains) === want, "_ad_ exclusion: " + JSON.stringify(rule.condition.excludedRequestDomains));
+  // The packed YouTube ruleset (what ships) carries the same exclusion on its _ad_ media rule.
+  const packedAd = youtubeRules.filter((r) => r.action && r.action.type === "block" && r.condition && r.condition.urlFilter === "_ad_");
+  assert(packedAd.length === 1, "packed ubo-youtube-network.json _ad_ rules: " + packedAd.length);
+  assert(JSON.stringify(packedAd[0].condition.excludedRequestDomains) === want, "packed _ad_ exclusion: " + JSON.stringify(packedAd[0].condition.excludedRequestDomains));
   // Packed metadata (written by the packer from the same list).
   const meta = JSON.parse(await Deno.readTextFile(new URL("../src/rules/meta.json", import.meta.url)));
   for (const host of SOURCE) assert(meta.never_block_suffixes.includes(host), "meta.json never_block_suffixes omits " + host);
