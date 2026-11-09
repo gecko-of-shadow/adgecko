@@ -144,9 +144,27 @@ NEVER_BLOCK_CAPTCHA = (
     "hcaptcha.com",
 )
 
-# Hosts the shipped-rule test checks: each one found in a shipped rule file must
+# Hosts the shipped-rule test checks. Each one found in a shipped rule file must
 # have a recorded approved source in meta.json "sentinel_sources".
-SENTINEL_HOSTS = ("mmitalianbeef.square.site", "bigbauer.com", "autoscurt24.de", "hk668.cc", "dc.tensgpt.com", "carrefour-enbacktoschool4.pages.dev", "sacolamobile.influenciadormagalu.com.br", "globalgrainsadf.com", "inmotiongmbh.com", "hausbank-ssk-cuxhaven.de", "gumeminlogi.webflow.io")
+# All eleven were sampled from the section of uBO badware that DROPPED_SECTION_RE
+# skips (checked 2026-11-09 against that list and HaGeZi Pro mini). Nine are only
+# in that dropped section, so an empty source list is the record and they must
+# not ship. Two are also on HaGeZi Pro mini, which is why that list is named.
+SENTINEL_HOSTS = (
+    # Dropped badware section only. No approved list carries them.
+    "mmitalianbeef.square.site",
+    "bigbauer.com",
+    "autoscurt24.de",
+    "hk668.cc",
+    "dc.tensgpt.com",
+    "carrefour-enbacktoschool4.pages.dev",
+    "sacolamobile.influenciadormagalu.com.br",
+    "inmotiongmbh.com",
+    "gumeminlogi.webflow.io",
+    # Also on HaGeZi Pro mini (approved ads/trackers list).
+    "globalgrainsadf.com",
+    "hausbank-ssk-cuxhaven.de",
+)
 
 DOMAIN_RE = re.compile(
     r"^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])\^(\$[^#]*)?$",
@@ -725,7 +743,9 @@ def main() -> int:
             }
             for name in ordered_names
         },
-        "never_block_suffixes": list(NEVER_BLOCK_SUFFIXES),
+        # Captcha suffixes are kept in their own constant and also recorded here,
+        # so the packed metadata matches every host the packer actually skips.
+        "never_block_suffixes": list(NEVER_BLOCK_SUFFIXES) + list(NEVER_BLOCK_CAPTCHA),
         "sentinel_sources": sentinel_sources,
         "manifest_hint": {
             "permissions": ["declarativeNetRequest"],

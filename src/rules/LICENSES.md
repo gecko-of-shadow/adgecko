@@ -3,7 +3,7 @@
 This directory ships **trimmed / converted** copies of public filter lists
 for Chrome MV3 `declarativeNetRequest`. Full upstream lists are not reproduced.
 
-Packed at: `2026-11-08T02:42:04Z` (UTC).
+Packed at: `2026-11-09T03:01:28Z` (UTC).
 
 ## Required credit
 
@@ -36,49 +36,49 @@ release gate and the tests.
 
 - URL: `https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt`
 - Role: `malware_threat`
-- SHA-256 of downloaded bytes: `5d512cf7450d455f2f6480a45585145bf3179727c06bce2595f270362b3f12bc`
+- SHA-256 of downloaded bytes: `32d5055d6be549d3fa61095773d558976de64fc684593c04b7650014ad354c75`
 - License / terms: urlhaus-filter by curbengh (malware-filter project) - repository CC0 1.0 and MIT License; URLhaus data by abuse.ch - CC0 1.0 (not endorsed by abuse.ch). The one Curben list we use (owner decision #18b): URLhaus malware data only. https://gitlab.com/malware-filter/urlhaus-filter
 
 ### easylist
 
 - URL: `https://easylist.to/easylist/easylist.txt`
 - Role: `ads`
-- SHA-256 of downloaded bytes: `935a71f899484ea31c9d33bc5f6878d539ed4226076d9360cb68b6f86101d7eb`
+- SHA-256 of downloaded bytes: `5fd80d41b45871d591af0e1d613179548515fde68fa3d5ef530c7dd0974295ce`
 - License / terms: EasyList - dual-licensed GNU GPL-3.0-or-later OR CC BY-SA 3.0-or-later. Credit: "The EasyList authors". https://easylist.to/pages/licence.html
 
 ### easyprivacy
 
 - URL: `https://easylist.to/easylist/easyprivacy.txt`
 - Role: `privacy`
-- SHA-256 of downloaded bytes: `b3e5e27ae271a2670132fbaf447e29d48c0b3c398d1fac1b2a3fae7b5ca818fc`
+- SHA-256 of downloaded bytes: `c8fbdef081769be7de2e3cd438bee7d579af0f7ed12986377ec4ef36bacd58ed`
 - License / terms: EasyPrivacy - same EasyList dual license (GPL-3.0-or-later OR CC BY-SA 3.0-or-later). Credit: "The EasyList authors".
 
 ### hagezi_pro_mini
 
 - URL: `https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt`
 - Role: `ads_trackers`
-- SHA-256 of downloaded bytes: `24ee827554c2b4715ae5fd3853f5344ccbadb2d01f6ddf74bdf5cf72dbb4ce8e`
+- SHA-256 of downloaded bytes: `a88c1ee35789339a6c5ff35c0bcdf34d568059a9a7b2f47a163c87a93ebb58ae`
 - License / terms: HaGeZi DNS Blocklists (Pro mini) - GPL-3.0 (repository LICENSE, checked 2026-11-02). Credit: HaGeZi. https://github.com/hagezi/dns-blocklists
 
 ### ublock_badware
 
 - URL: `https://ublockorigin.github.io/uAssets/filters/badware.txt`
 - Role: `malware_threat`
-- SHA-256 of downloaded bytes: `37b5d90d9c351bdf6d46e93dec309912f4c210d68af169a8b1acf52c62fa0089`
+- SHA-256 of downloaded bytes: `5183a92da27a5e3cee2cd5245776204e076a628dc07fa9accd160fd216782f9d`
 - License / terms: uBlock Origin badware filters (uAssets) - GPL-3.0 (repository LICENSE, checked 2026-11-02). Credit: Raymond Hill and uBlock Origin contributors. https://github.com/uBlockOrigin/uAssets
 
 ### dandelion_antimalware
 
 - URL: `https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt`
 - Role: `malware_threat`
-- SHA-256 of downloaded bytes: `e37ecec8e9797d1f1d5c2cb118fbd340029472a1f2ba6ccc7c7c2d6259317cf0`
+- SHA-256 of downloaded bytes: `e7c7f6bbd7565fd918a8890e3b3520aa6a7f142c22ac0a879bfe46fd76824007`
 - License / terms: Dandelion Sprout's Anti-Malware List - Dandelicence v1.4 (use and redistribution with or without changes and with or without commercial purpose; keep the licence text or a link to it; checked 2026-11-02): https://github.com/DandelionSprout/adfilt/blob/master/LICENSE.md. Credit: Dandelion Sprout.
 
 ### adguard_base
 
 - URL: `https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt`
 - Role: `ads`
-- SHA-256 of downloaded bytes: `6d8ee5908814c022e55c92ee7d7d40a4830f4086ea30c3157e7b0da071269479`
+- SHA-256 of downloaded bytes: `10d666ef90498b219e699f698a603bb3d38cd90e06df9bb8e4af729bd63f2040`
 - License / terms: AdGuard Base filter (EasyList already removed) - GPL-3.0 (AdguardFilters repository LICENSE, checked 2026-11-02). Credit: AdGuard. https://github.com/AdguardTeam/AdguardFilters
 
 ## How we use them

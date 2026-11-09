@@ -103,7 +103,7 @@ labels are left out (UNVERIFIED blast radius, small). The packed threat
 ruleset was rebuilt with this check: 15,920 hosts (`pisz.pl`, `ru.com`,
 `webhop.me`, `3utilities.com`, `cprapid.com` and `fastvps-server.com` are
 public suffixes and are no longer blocked as a whole). After the list repack
-of 2026-11-04 it holds 15,901 hosts in 199 rules.
+of 2026-11-09 03:01 UTC it holds 15,827 hosts in 198 rules.
 
 **Per-refresh cap.** One list refresh may add at most 2,500 new threat hosts
 and at most 20% of the previous set (the last refreshed set, or the packed
@@ -129,6 +129,7 @@ tier. "Allow this site" in the popup lifts it for links followed from that
 site; Settings -> "Allow this domain" lifts it everywhere, also for a typed
 address. The packed `general-network.json` was repacked on 2026-11-03
 (20:37Z) with both fixes; it no longer holds `pisz.pl` or `0.0.0.1`.
+The current pack is 2026-11-09 03:01 UTC (`src/rules/meta.json`).
 
 `youtubekids.com` and `kickusercontent.com` were added to the build prompt's
 list (fail-open): they are in the manifest's stream-site exclusions.

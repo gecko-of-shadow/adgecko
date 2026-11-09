@@ -1,9 +1,28 @@
 # Changelog
 
+## 0.3.2 (2026-11-09)
+
+- Lists: a HaGeZi Pro mini refresh is accepted when it names the protected hosts that list really carries (about 30, mostly under googleapis.com). The same check stays at 25 hosts for every other list, and a larger HaGeZi jump is still rejected.
+- Lists: hcaptcha.com is in the packed never-block list, matching the packer and the list updater. The threat tier refuses those same captcha hosts. Lookalike names are still blocked.
+- YouTube: the `_ad_` media rule no longer matches an hCaptcha address. Player responses also drop `playerAds`, which had left one placement in the player after the other ad fields were removed.
+- Docs: the 0.3.1 repack date below is the UTC date stored on the packed files.
+- Filter lists repacked 2026-11-09 03:01 UTC: 194,896 whole-domain and 5,350 scoped entries in 2,536 list rules (2,541 rules in `general-network.json`), and 15,827 threat hosts in 198 rules. YouTube keeps 4 rules.
+
+### Roll back to 0.3.1
+
+1. Download `adgecko-0.3.1.zip` from the existing v0.3.1 release: <https://github.com/gecko-of-shadow/adgecko/releases/download/v0.3.1/adgecko-0.3.1.zip>
+2. Unzip it to a folder. In Windows PowerShell 5.1:
+
+```powershell
+Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\adgecko-0.3.1.zip" -DestinationPath "$env:USERPROFILE\Downloads\adgecko-0.3.1" -Force
+```
+
+3. In Chrome, open `chrome://extensions`, turn on **Developer mode**, **Remove** (or turn off) Adgecko 0.3.2, click **Load unpacked**, and pick the 0.3.1 folder.
+
 ## 0.3.1 (2026-11-07)
 
 - Filter lists: hCaptcha checkboxes show again. hcaptcha.com and its subdomains are never blocked, in the packed lists and in list updates; lookalike hosts are still blocked.
-- Filter lists repacked on 2026-11-07 with this fix: 2,534 rules in general-network.json and 200 threat rules.
+- Filter lists repacked 2026-11-08 02:42 UTC (the time in `src/rules/meta.json`; the earlier note said 2026-11-07): 2,534 rules in general-network.json and 200 threat rules.
 - Tests: a regression test for the hCaptcha hosts, and the OpenPhish guard records which approved list supplied each sentinel host in the general rules; threat files stay strict.
 
 ## 0.3.0 (2026-11-06)

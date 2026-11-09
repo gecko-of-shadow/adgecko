@@ -1884,7 +1884,7 @@ if (uboOn("nanoStb")) try {
 }
 
 if (uboOn("pruneFetch")) try {
-	jsonPruneFetchResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\/player(\\?|$)/");
+	jsonPruneFetchResponse("playerAds adPlacements adSlots playerResponse.playerAds playerResponse.adPlacements playerResponse.adSlots [].playerResponse.playerAds [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\/player(\\?|$)/");
 } catch (e) {
 }
 
@@ -1904,7 +1904,7 @@ if (uboOn("pruneFetch")) try {
 }
 
 if (uboOn("pruneXhr")) try {
-	jsonPruneXhrResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\/player(?:\\?.+)?$/");
+	jsonPruneXhrResponse("playerAds adPlacements adSlots playerResponse.playerAds playerResponse.adPlacements playerResponse.adSlots [].playerResponse.playerAds [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\/player(?:\\?.+)?$/");
 } catch (e) {
 }
 

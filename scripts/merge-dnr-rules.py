@@ -117,21 +117,40 @@ def drop_hcaptcha(blocks: list[dict]) -> tuple[list[dict], int]:
 _HC_PROBE_URLS = [
     scheme + "://" + host + path
     for scheme in ("http", "https")
-    for host in ("hcaptcha.com", "a.hcaptcha.com", "sentry.hcaptcha.com", "stats.hcaptcha.com")
-    for path in ("/", "/1/api.js")
+    for host in ("hcaptcha.com", "a.hcaptcha.com", "sentry.hcaptcha.com", "stats.hcaptcha.com", "widget.hcaptcha.com", "imgs.hcaptcha.com")
+    for path in ("/", "/1/api.js", "/captcha")
 ]
-_URLFILTER_HOST_RE = re.compile(r"^\|\|([^/^*|]+)(?:[\^/*]|$)")
+# Anchored urlFilter host: ||host, |https://host, optional *. and a trailing port.
+_URLFILTER_ANCHOR_RE = re.compile(r"(?i)^(?:\|\||\|https?://)(\*\.)?([^/^*|?#]+)")
+# A regex that names an hCaptcha host, not a lookalike (nothcaptcha.com, hcaptcha.com.evil).
+_REGEX_HCAPTCHA_RE = re.compile(r"(?<![a-z0-9])(?:[a-z0-9-]+\.)*hcaptcha\.com(?![a-z0-9.-])", re.I)
 
 
 def _is_hcaptcha_host(host: str) -> bool:
     h = host.lower().rstrip(".")
+    if ":" in h:
+        name, _, port = h.rpartition(":")
+        if port.isdigit():
+            h = name
     return any(h == suf or h.endswith("." + suf) for suf in HCAPTCHA_SUFFIXES)
 
 
+def _urlfilter_host(url_filter: str) -> str | None:
+    m = _URLFILTER_ANCHOR_RE.match(url_filter.strip())
+    if not m:
+        return None
+    return m.group(2)
+
+
+def _regex_names_hcaptcha(pattern: str) -> bool:
+    text = pattern.replace("\\.", ".")
+    return _REGEX_HCAPTCHA_RE.search(text) is not None
+
+
 def drop_hcaptcha_filter_rules(blocks: list[dict]) -> tuple[list[dict], int]:
-    """Drop block rules whose urlFilter is domain-anchored on an hCaptcha host, or
-    whose regexFilter matches an hCaptcha probe URL. Allow and other non-block
-    rules are kept. Returns (rules, number of rules dropped)."""
+    """Drop block rules whose urlFilter is anchored on an hCaptcha host, or whose
+    regexFilter names an hCaptcha host or matches an hCaptcha probe URL.
+    Allow and other non-block rules are kept. Returns (rules, number dropped)."""
     out: list[dict] = []
     dropped = 0
     for rule in blocks:
@@ -140,16 +159,19 @@ def drop_hcaptcha_filter_rules(blocks: list[dict]) -> tuple[list[dict], int]:
             hit = False
             uf = cond.get("urlFilter")
             if isinstance(uf, str):
-                m = _URLFILTER_HOST_RE.match(uf)
-                if m and _is_hcaptcha_host(m.group(1)):
+                host = _urlfilter_host(uf)
+                if host and _is_hcaptcha_host(host):
                     hit = True
             rf = cond.get("regexFilter")
             if not hit and isinstance(rf, str):
-                try:
-                    rx = re.compile(rf)
-                    hit = any(rx.search(u) for u in _HC_PROBE_URLS)
-                except re.error:
-                    hit = False
+                if _regex_names_hcaptcha(rf):
+                    hit = True
+                else:
+                    try:
+                        rx = re.compile(rf)
+                        hit = any(rx.search(u) for u in _HC_PROBE_URLS)
+                    except re.error:
+                        hit = False
             if hit:
                 dropped += 1
                 continue

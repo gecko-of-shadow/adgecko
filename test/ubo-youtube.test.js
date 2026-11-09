@@ -1,6 +1,8 @@
 // The uBO YouTube port: generated bundle behaviour, DNR rules, manifest wiring, provenance.
 import manifest from "../manifest.json" with { type: "json" };
 import rules from "../src/rules/ubo-youtube-network.json" with { type: "json" };
+import { ruleMatches } from "./fixtures/dnr-matcher.js";
+import { ensurePlayerAdsPruned, excludeCaptchaFromAdMediaRule } from "../scripts/lib/youtube-local-patches.mjs";
 import meta from "../src/vendor/ubo-youtube-meta.json" with { type: "json" };
 import youtubeSource from "../src/youtube.js" with { type: "text" };
 import { unwrapMain } from "./fixtures/main-source.mjs";
@@ -20,9 +22,8 @@ async function runBundle(opts) {
 Deno.test("uBO bundle: player fetch loses adPlacements/adSlots exactly as uBO's json-prune-fetch-response/rpfr", async () => {
   const r = await runBundle();
   assert(r.marker, "layer marker set for youtube.js");
-  assert(!("adPlacements" in r.player) && !("adSlots" in r.player), "player ads pruned " + JSON.stringify(r.player));
+  assert(!("adPlacements" in r.player) && !("adSlots" in r.player) && !("playerAds" in r.player), "player ads pruned " + JSON.stringify(r.player));
   assert(r.player.playabilityStatus.status === "OK" && r.player.streamingData, "playback fields kept");
-  assert(Array.isArray(r.player.playerAds), "playerAds untouched on www (uBO's www rules don't prune it)");
   assert(r.next.adPlacements, "non-matching url (/next) untouched");
   assert(r.reel.entries.length === 1 && r.reel.entries[0].command.reelWatchEndpoint.videoId === "v1", "reel_watch_sequence isAd entry pruned");
   assert(r.parsedEntries === 1, "JSON.parse prune of entries.[-]...isAd");
@@ -63,8 +64,8 @@ Deno.test("fixture runs at the same time keep their own uBO options (no shared s
 Deno.test("uBO bundle carries the exact uAssets prune paths and is pinned", async () => {
   const js = await Deno.readTextFile(new URL("../src/vendor/ubo-youtube.js", import.meta.url));
   for (const call of [
-    'jsonPruneFetchResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\\\/player(\\\\?|$)/")',
-    'jsonPruneXhrResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\\\/player(?:\\\\?.+)?$/")',
+    'jsonPruneFetchResponse("playerAds adPlacements adSlots playerResponse.playerAds playerResponse.adPlacements playerResponse.adSlots [].playerResponse.playerAds [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\\\/player(\\\\?|$)/")',
+    'jsonPruneXhrResponse("playerAds adPlacements adSlots playerResponse.playerAds playerResponse.adPlacements playerResponse.adSlots [].playerResponse.playerAds [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\\\/player(?:\\\\?.+)?$/")',
     'jsonPrune("entries.[-].command.reelWatchEndpoint.adClientParams.isAd")',
     'trustedReplaceFetchResponse("\\"adPlacements\\"","\\"no_ads\\"","player?")',
     'setConstant("ytInitialPlayerResponse.adPlacements","undefined")',
@@ -88,6 +89,33 @@ Deno.test("uBO DNR: decoy videoplayback expire filter blocks absurd expiries onl
   const re = new RegExp(r.condition.regexFilter);
   for (const e of ["7694650297", "7965383766", "6301177760", "9571572721", "1508648445"]) assert(re.test(`https://rr2---sn-x.googlevideo.com/videoplayback?expire=${e}&ei=a`), "decoy " + e);
   assert(!re.test("https://rr2---sn-x.googlevideo.com/videoplayback?expire=1792300000&ei=a"), "real 2026 expiry passes");
+});
+
+Deno.test("uBO _ad_ media rule still blocks ad media and does not match an hCaptcha host", () => {
+  const rule = rules.find((r) => r.condition && r.condition.urlFilter === "_ad_");
+  assert(rule && rule.action.type === "block" && rule.condition.resourceTypes.includes("media"), "rule present");
+  assert((rule.condition.excludedRequestDomains || []).includes("hcaptcha.com"), "captcha host excluded");
+  const req = (url) => ({ url, type: "media", initiator: "www.youtube.com", method: "get" });
+  assert(ruleMatches(rule, req("https://ads.example/video_ad_clip.mp4")), "a third-party _ad_ media url still matches");
+  assert(!ruleMatches(rule, req("https://hcaptcha.com/x_ad_y.mp4")), "hcaptcha.com _ad_ url matched");
+  assert(!ruleMatches(rule, req("https://a.hcaptcha.com/media_ad_file")), "hCaptcha subdomain matched");
+  assert(ruleMatches(rule, req("https://nothcaptcha.com/video_ad_x.mp4")), "lookalike should still match");
+});
+
+Deno.test("playerAds prune and captcha exclusion are local patches a re-sync keeps", () => {
+  const upstream = [
+    'jsonPruneFetchResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\\\/player(\\\\?|$)/");',
+    'jsonPruneXhrResponse("adPlacements adSlots playerResponse.adPlacements playerResponse.adSlots [].playerResponse.adPlacements [].playerResponse.adSlots","","propsToMatch","/\\\\/player(?:\\\\?.+)?$/");',
+  ].join("\n");
+  const once = ensurePlayerAdsPruned(upstream);
+  assert(once.patched === 2 && once.source.includes("playerResponse.playerAds") && !once.source.includes('jsonPruneFetchResponse("adPlacements adSlots '), "patch");
+  const twice = ensurePlayerAdsPruned(once.source);
+  assert(twice.patched === 0 && twice.source === once.source, "idempotent");
+  const rulesIn = [{ id: 4, action: { type: "block" }, condition: { urlFilter: "_ad_", resourceTypes: ["media"] } }, { id: 1, action: { type: "block" }, condition: { urlFilter: "||doubleclick.net^" } }];
+  excludeCaptchaFromAdMediaRule(rulesIn);
+  assert(rulesIn[0].condition.excludedRequestDomains[0] === "hcaptcha.com" && !rulesIn[1].condition.excludedRequestDomains, "only the _ad_ rule");
+  excludeCaptchaFromAdMediaRule(rulesIn);
+  assert(rulesIn[0].condition.excludedRequestDomains.length === 1, "not duplicated");
 });
 
 Deno.test("manifest: uBO layers load before youtube.js; ruleset enabled", () => {

@@ -13,6 +13,7 @@
 //   src/vendor/ubo-youtube-meta.json     commits used, ported and skipped filters
 // uBlock Origin and uAssets are GPLv3; see src/vendor/LICENSE-uBlock.md.
 import { widenYoutubeExpireWindow } from "./lib/youtube-expire-window.mjs";
+import { ensurePlayerAdsPruned, excludeCaptchaFromAdMediaRule } from "./lib/youtube-local-patches.mjs";
 const ROOT = decodeURIComponent(new URL("..", import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, "$1");
 const arg = (k, d) => { const i = Deno.args.indexOf(k); return i >= 0 ? Deno.args[i + 1] : d; };
 const run = async (cmd, cwd) => {
@@ -261,6 +262,11 @@ for (const [body, hosts] of groups) {
 }
 if (world === "MAIN") js += "\n// Tells src/youtube.js that uBO's filters own player-response pruning.\ntry { Object.defineProperty(globalThis, Symbol.for(" + JSON.stringify(MARKER_MAIN) + "), { value: true }); } catch (e) {\n}\n";
 js += "\n// <<<< end of private namespace\n})();\n";
+if (world === "MAIN") {
+  const pruned = ensurePlayerAdsPruned(js);
+  if (pruned.patched !== 2 && pruned.patched !== 0) throw new Error("playerAds prune patch applied " + pruned.patched + " time(s)");
+  js = pruned.source;
+}
 await Deno.writeTextFile(ROOT + (world === "MAIN" ? "src/vendor/ubo-youtube.js" : "src/vendor/ubo-youtube-isolated.js"), js);
 }
 
@@ -292,6 +298,7 @@ rules.forEach((r, i) => { r.id = i + 1; });
 // Upstream's videoplayback?expire= decoy window is only widened after real links
 // break; widen it locally (allow-only) or stop here. See scripts/lib/youtube-expire-window.mjs.
 const expireFix = widenYoutubeExpireWindow(rules);
+excludeCaptchaFromAdMediaRule(expireFix.rules);
 console.log("videoplayback expire window: " + expireFix.action);
 await Deno.writeTextFile(ROOT + "src/rules/ubo-youtube-network.json", JSON.stringify(expireFix.rules, null, 1) + "\n");
 for (const x of networkLines) ported.network.push(x.line);

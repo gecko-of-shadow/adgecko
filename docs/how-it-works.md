@@ -37,7 +37,7 @@ Covers `kick.com` and subdomains.
 Covers other http and https sites. The README and the popup call these "ordinary sites".
 
 - `declarativeNetRequest` blocks domains from the packed lists, and `src/cosmetic.js` hides leftover ad boxes.
-- The packed snapshot in `src/rules/meta.json` is 187,003 whole-domain and 5,480 scoped entries in 2,439 rules (lists downloaded 2026-11-03 20:37 UTC).
+- The packed snapshot in `src/rules/meta.json` is 194,896 whole-domain and 5,350 scoped entries in 2,536 list rules (lists downloaded 2026-11-09 03:01 UTC). The merged `general-network.json` has 2,541 rules.
 - A site is blocked from opening (Chrome shows "blocked by an extension") only when a list says so with an explicit `$document` filter, or when it is a known malware host (the threat tier). A whole-domain entry blocks the site's pieces inside other pages, not opening it. Filters that name only types to skip (`$~script`) never block opening the site. Twitch, YouTube, Kick and their player hosts, and a few affiliate redirectors people click on purpose, are never blocked from opening by the lists. To open such a page anyway: settings page -> **Allow this domain** ([Allow a site](allow-a-page.md#a-page-chrome-says-is-blocked)).
 - Twitch, YouTube (including `youtu.be`, nocookie, Kids, and the video CDNs), and Kick are excluded from this general pass.
 - Ordinary-site blocking starts **on**.

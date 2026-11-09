@@ -38,6 +38,12 @@
   ]);
   const EXACT = Object.freeze(["googleapis.com", "gstatic.com", "storage.googleapis.com"]);
   const ALL = Object.freeze(SUFFIX.concat(EXACT));
+  // Captcha widget hosts the ordinary lists never block (NEVER_BLOCK_CAPTCHA
+  // in the packer and in src/general/update.js). A threat rule must not block
+  // them either. Kept off SUFFIX so they are not treated as stream sites.
+  const CAPTCHA = Object.freeze([
+    "hcaptcha.com",
+  ]);
 
   const HOST_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
   // Two-label hosts that look like a public suffix ("co.uk", "com.au"): a
@@ -72,6 +78,7 @@
     const labels = h.split(".");
     if (labels.length === 2 && SUFFIX_LIKE_FIRST_LABEL.has(labels[0])) return "looks like a public suffix";
     for (const p of SUFFIX) if (under(h, p)) return "protected: " + p;
+    for (const p of CAPTCHA) if (under(h, p)) return "protected: " + p;
     for (const p of ALL) if (under(p, h)) return "ancestor of protected " + p;
     const local = localAddressReason(h);
     if (local) return local;
@@ -84,5 +91,5 @@
     return protectedReason(host) !== null;
   }
 
-  root.GeckoProtectedHosts = Object.freeze({ SUFFIX, EXACT, ALL, normalizeHost, protectedReason, isProtectedHost, localAddressReason });
+  root.GeckoProtectedHosts = Object.freeze({ SUFFIX, EXACT, ALL, CAPTCHA, normalizeHost, protectedReason, isProtectedHost, localAddressReason });
 })(typeof self !== "undefined" ? self : globalThis);

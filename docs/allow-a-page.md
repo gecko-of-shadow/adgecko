@@ -60,8 +60,6 @@ If the button is grey and does nothing, the window says why, in the status line 
   - You are on a Chrome page, like a new tab or `chrome://extensions`. Allowing only works on normal websites.
   - The page was already open before you installed or reloaded the extension. Reload the page, then open the window again.
 
-A copy from **Download ZIP** has the fix.
-
 ## For developers
 
 - Why some pages give no answer: [How the popup finds the page](how-it-works.md#how-the-popup-finds-the-page).

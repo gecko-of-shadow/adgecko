@@ -93,6 +93,22 @@ Deno.test("a list that shrinks by more than 25% is rejected; a 10% change is acc
   assert(!d.state.lastErrors.peter_lowe && d.state.lists.peter_lowe.count === 18000, "10% shrink accepted");
 });
 
+Deno.test("HaGeZi may name the protected hosts that list really carries; every other list stays at 25", async () => {
+  assert(U.PROTECTED_HITS_MAX === 25, "default cap");
+  assert(U.PROTECTED_HITS_MAX_BY_LIST.hagezi_pro_mini > 31 && U.PROTECTED_HITS_MAX_BY_LIST.hagezi_pro_mini < 100, "HaGeZi cap");
+  const d = await primed();
+  const sane = Array.from({ length: 40 }, (_, i) => `||api${i}.googleapis.com^`);
+  const poison = Array.from({ length: 30 }, (_, i) => `||edge${i}.ttvnw.net^`);
+  d.fetch = async (url) => res(listText(tagOf(url), 20000, url.includes("pro.mini") ? sane : url.includes("pgl.yoyo") ? poison : []));
+  await U.refresh(d, { manual: true });
+  assert(!d.state.lastErrors.hagezi_pro_mini, "hagezi rejected: " + JSON.stringify(d.state.lastErrors.hagezi_pro_mini));
+  assert(/names 30 protected stream hosts/.test(d.state.lastErrors.peter_lowe || ""), "other list cap moved: " + JSON.stringify(d.state.lastErrors));
+  const tooMany = Array.from({ length: U.PROTECTED_HITS_MAX_BY_LIST.hagezi_pro_mini + 1 }, (_, i) => `||api${i}.googleapis.com^`);
+  d.fetch = async (url) => res(listText(tagOf(url), 20000, url.includes("pro.mini") ? tooMany : []));
+  await U.refresh(d, { manual: true });
+  assert(new RegExp("names " + tooMany.length + " protected stream hosts").test(d.state.lastErrors.hagezi_pro_mini || ""), "oversize hagezi accepted: " + JSON.stringify(d.state.lastErrors.hagezi_pro_mini));
+});
+
 Deno.test("a list naming many protected stream hosts is rejected as poisoned; a few are tolerated and never blocked", async () => {
   const d = await primed();
   const poison = Array.from({ length: 30 }, (_, i) => `||edge${i}.ttvnw.net^`);

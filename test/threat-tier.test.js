@@ -157,6 +157,20 @@ Deno.test("compiler: every stream fixture host is rejected by protected-hosts, a
   for (const p of SECTION5) assert(PH.ALL.includes(p), "section-5 host missing from protected list: " + p);
 });
 
+Deno.test("compiler: captcha widget hosts are never threat-blocked, lookalikes still can be", () => {
+  for (const h of PH.CAPTCHA) {
+    assert(PH.protectedReason(h) && PH.protectedReason("a." + h), "captcha host not protected: " + h);
+    assert(!PH.SUFFIX.includes(h), "captcha host was added to the stream suffix list: " + h);
+  }
+  for (const h of ["nothcaptcha.com", "hcaptcha.com.evil.example", "nothinghcaptcha.com"]) {
+    assert(PH.protectedReason(h) === null, "lookalike rejected: " + h + " (" + PH.protectedReason(h) + ")");
+  }
+  const res = TC.compileThreatRules(["hcaptcha.com", "sentry.hcaptcha.com", "nothcaptcha.com"], { idBase: 3 });
+  assert(JSON.stringify(res.accepted) === '["nothcaptcha.com"]' && res.rules.length === 1, JSON.stringify(res));
+  const isH = (d) => d === "hcaptcha.com" || d.endsWith(".hcaptcha.com");
+  for (const r of threat) for (const d of r.condition.requestDomains || []) assert(!isH(d), "shipped threat rule names " + d);
+});
+
 Deno.test("compiler: protected entries, their subdomains and their ancestors are rejected; bucket hosts and ordinary hosts pass", () => {
   const reject = ["twitch.tv", "edge.twitch.tv", "a.b.ttvnw.net", "youtubei.googleapis.com", "x.fonts.googleapis.com", "www.google.com",
     "googleapis.com", "gstatic.com", "storage.googleapis.com", "google.com", "tv", "net", "com", "co.uk", "com.au",

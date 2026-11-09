@@ -1,4 +1,8 @@
 import updateSource from "../src/general/update.js" with { type: "text" };
+import generalRules from "../src/rules/general-network.json" with { type: "json" };
+import threatRules from "../src/rules/threat-network.json" with { type: "json" };
+import threatSnapshot from "../src/rules/threat-snapshot.json" with { type: "json" };
+import youtubeRules from "../src/rules/ubo-youtube-network.json" with { type: "json" };
 
 const U = {};
 new Function(`${updateSource}\nreturn installGeneralAdblockUpdate;`)()(U);
@@ -99,22 +103,35 @@ Deno.test("merger drops hCaptcha hosts from stale block rules, in memory only", 
   assert(res.out[1].condition.resourceTypes[0] === "script", "scope kept on the surviving scoped rule");
 });
 
-Deno.test("parity: packer and runtime captcha lists hold exactly hcaptcha.com, outside NEVER_BLOCK_SUFFIXES", async () => {
+Deno.test("parity: captcha never-block list matches across packer, runtime, merger, threat hosts and meta.json", async () => {
   const script = [
     "import importlib.util, json",
     "from pathlib import Path",
     "spec = importlib.util.spec_from_file_location('pfl', Path('scripts/pack-filter-lists.py'))",
     "mod = importlib.util.module_from_spec(spec)",
     "spec.loader.exec_module(mod)",
-    "print(json.dumps([list(mod.NEVER_BLOCK_CAPTCHA), 'hcaptcha.com' in mod.NEVER_BLOCK_SUFFIXES]))",
+    "spec2 = importlib.util.spec_from_file_location('mdr', Path('scripts/merge-dnr-rules.py'))",
+    "merger = importlib.util.module_from_spec(spec2)",
+    "spec2.loader.exec_module(merger)",
+    "print(json.dumps([list(mod.NEVER_BLOCK_CAPTCHA), 'hcaptcha.com' in mod.NEVER_BLOCK_SUFFIXES, list(merger.HCAPTCHA_SUFFIXES)]))",
   ].join("\n");
   const py = JSON.parse(await runPython(script));
   assert(JSON.stringify(py[0]) === '["hcaptcha.com"]', "packer captcha list: " + JSON.stringify(py[0]));
   assert(py[1] === false, "packer NEVER_BLOCK_SUFFIXES still holds hcaptcha.com");
+  assert(JSON.stringify(py[2]) === JSON.stringify(py[0]), "merger captcha list drifted: " + JSON.stringify(py[2]));
   const c = /const NEVER_BLOCK_CAPTCHA = \[([\s\S]*?)\];/.exec(updateSource);
-  assert(c && JSON.stringify(JSON.parse("[" + c[1].replace(/,\s*$/, "") + "]")) === '["hcaptcha.com"]', "runtime captcha list");
+  const runtime = JSON.parse("[" + c[1].replace(/,\s*$/, "") + "]");
+  assert(JSON.stringify(runtime) === JSON.stringify(py[0]), "runtime captcha list: " + JSON.stringify(runtime));
   const m = /const NEVER_BLOCK_SUFFIXES = \[([\s\S]*?)\];/.exec(updateSource);
   assert(m && !/"hcaptcha\.com"/.test(m[1]), "runtime NEVER_BLOCK_SUFFIXES still holds hcaptcha.com");
+  const ph = await Deno.readTextFile(new URL("../src/threat/protected-hosts.js", import.meta.url));
+  const cap = /const CAPTCHA = Object\.freeze\(\[([\s\S]*?)\]\);/.exec(ph);
+  const threat = JSON.parse("[" + cap[1].replace(/,\s*$/, "") + "]");
+  assert(JSON.stringify(threat) === JSON.stringify(py[0]), "threat captcha list: " + JSON.stringify(threat));
+  const meta = JSON.parse(await Deno.readTextFile(new URL("../src/rules/meta.json", import.meta.url)));
+  for (const host of py[0]) assert(meta.never_block_suffixes.includes(host), "meta.json never_block_suffixes omits " + host);
+  const stream = new Set(meta.never_block_suffixes.filter((host) => !py[0].includes(host)));
+  assert(stream.size === meta.never_block_suffixes.length - py[0].length, "captcha host listed twice in meta");
 });
 
 Deno.test("merger: an allow rule naming hcaptcha.com survives unchanged, a matching block rule is cleaned", async () => {
@@ -138,6 +155,29 @@ Deno.test("merger: an allow rule naming hcaptcha.com survives unchanged, a match
   assert(res.removed === 1, "removed count: " + res.removed);
 });
 
+function isHcaptchaHost(host) {
+  const h = String(host || "").toLowerCase().replace(/\.$/, "");
+  return h === "hcaptcha.com" || h.endsWith(".hcaptcha.com");
+}
+
+Deno.test("shipped block rules name no hCaptcha host", () => {
+  const sets = [["general", generalRules], ["threat", threatRules], ["youtube", youtubeRules]];
+  for (const [name, rules] of sets) {
+    for (const rule of rules) {
+      if (!rule.action || rule.action.type !== "block") continue;
+      for (const host of (rule.condition && rule.condition.requestDomains) || []) {
+        assert(!isHcaptchaHost(host), name + " blocks " + host);
+      }
+      const uf = rule.condition && rule.condition.urlFilter;
+      if (typeof uf === "string") assert(!/(^|\|\|)(\*\.)?hcaptcha\.com([\/^:*?]|$)/i.test(uf), name + " urlFilter " + uf);
+      const rf = rule.condition && rule.condition.regexFilter;
+      if (typeof rf === "string") assert(!/(?<![a-z0-9])hcaptcha\\.com(?![a-z0-9.-])/i.test(rf.replace(/\\\./g, ".")), name + " regexFilter");
+    }
+  }
+  const snap = JSON.stringify(threatSnapshot);
+  assert(!/(^|[^a-z0-9-])hcaptcha\.com(?![a-z0-9.-])/i.test(snap), "threat snapshot names an hCaptcha host");
+});
+
 Deno.test("runtime isNeverBlock, mergeDomains and mergeScoped drop hCaptcha hosts and keep lookalikes", () => {
   for (const h of ["hcaptcha.com", "a.hcaptcha.com", "sentry.hcaptcha.com", "stats.hcaptcha.com", "A.HCAPTCHA.COM."]) {
     assert(U.isNeverBlock(h), "should never block " + h);
@@ -151,6 +191,34 @@ Deno.test("runtime isNeverBlock, mergeDomains and mergeScoped drop hCaptcha host
   const scoped = U.mergeScoped({ peter_lowe: hosts.map((h) => [h, "p=|t=script|x="]) }, []);
   const names = scoped.map((e) => e[0]);
   assert(JSON.stringify(names) === '["nothinghcaptcha.com","hcaptcha.com.evil.example"]', "mergeScoped: " + JSON.stringify(names));
+});
+
+Deno.test("merger urlFilter and regex gaps: case, https anchor, port, wildcard and a subdomain the probe list omitted", async () => {
+  const script = [
+    "import importlib.util, json",
+    "from pathlib import Path",
+    "spec = importlib.util.spec_from_file_location('mdr', Path('scripts/merge-dnr-rules.py'))",
+    "mod = importlib.util.module_from_spec(spec)",
+    "spec.loader.exec_module(mod)",
+    "def rule(i, cond):",
+    "    return {'id': i, 'priority': 1, 'action': {'type': 'block'}, 'condition': cond}",
+    "blocks = [",
+    "    rule(1, {'urlFilter': '||HCAPTCHA.COM^'}),",
+    "    rule(2, {'urlFilter': '|https://widget.hcaptcha.com/1/api.js'}),",
+    "    rule(3, {'urlFilter': '||hcaptcha.com:443/'}),",
+    "    rule(4, {'urlFilter': '||*.hcaptcha.com^'}),",
+    "    rule(5, {'regexFilter': r'imgs\\.hcaptcha\\.com/captcha'}),",
+    "    rule(6, {'urlFilter': '||nothcaptcha.com^'}),",
+    "    rule(7, {'urlFilter': '||hcaptcha.com.evil.example^'}),",
+    "    rule(8, {'regexFilter': r'nothcaptcha\\.com'}),",
+    "    rule(9, {'regexFilter': r'hcaptcha\\.com\\.evil\\.example'}),",
+    "]",
+    "out, dropped = mod.drop_hcaptcha_filter_rules(blocks)",
+    "print(json.dumps({'ids': [r['id'] for r in out], 'dropped': dropped}))",
+  ].join("\n");
+  const res = JSON.parse(await runPython(script));
+  assert(res.dropped === 5, "dropped count: " + res.dropped);
+  assert(JSON.stringify(res.ids) === "[6,7,8,9]", "kept ids: " + JSON.stringify(res.ids));
 });
 
 Deno.test("merger drops hCaptcha block rules by urlFilter and regexFilter, keeps lookalikes and non-block rules", async () => {

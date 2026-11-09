@@ -456,7 +456,13 @@ function installGeneralAdblockUpdate(target) {
   // known good copy (the payload already stored) stays in use and the reason
   // is recorded in state.lastRejected[name].
   const MAX_CHANGE_RATIO = 0.25;
-  const PROTECTED_HITS_MAX = 25; // real lists name at most ~6 (2026-11-02)
+  // Other lists name at most a handful of protected stream hosts (2026-11-02).
+  const PROTECTED_HITS_MAX = 25;
+  // HaGeZi Pro mini names many telemetry hosts under the broad googleapis.com
+  // never-block suffix (31 on the 2026-11-08 pack, 29 unique on 2026-11-09).
+  // That is the list, not a poisoned dump of stream edges. A jump past this
+  // cap is still rejected. Every other list stays at PROTECTED_HITS_MAX.
+  const PROTECTED_HITS_MAX_BY_LIST = { hagezi_pro_mini: 64 };
   const MAX_GENERIC_SELECTORS = 30000; // EasyList ~13,600
   const MAX_PAGE_ROOT_SITE_RULES = 100; // EasyList ~17 ("aads.com##HTML")
 
@@ -479,7 +485,12 @@ function installGeneralAdblockUpdate(target) {
   const CONFIRM_RATIO = 0.10;
   const confirmed = (n, rejected) => rejected > 0 && Math.abs(n - rejected) / rejected <= CONFIRM_RATIO;
 
-  function checkListChange(prev, parsed, cosmetic) {
+  function protectedHitsCap(listName) {
+    const named = listName && PROTECTED_HITS_MAX_BY_LIST[listName];
+    return named > PROTECTED_HITS_MAX ? named : PROTECTED_HITS_MAX;
+  }
+
+  function checkListChange(prev, parsed, cosmetic, listName) {
     const total = parsed.domains.length + parsed.scoped.length;
     if (prev && prev.parser === PARSER_VERSION && prev.count > 0) {
       const ratio = Math.abs(total - prev.count) / prev.count;
@@ -488,7 +499,8 @@ function installGeneralAdblockUpdate(target) {
       }
     }
     const hits = protectedHits(parsed);
-    if (hits.length > PROTECTED_HITS_MAX) return "names " + hits.length + " protected stream hosts (e.g. " + hits.slice(0, 3).join(", ") + ")";
+    const cap = protectedHitsCap(listName);
+    if (hits.length > cap) return "names " + hits.length + " protected stream hosts (e.g. " + hits.slice(0, 3).join(", ") + ")";
     if (cosmetic) {
       const g = (cosmetic.generic || []).length;
       if (g > MAX_GENERIC_SELECTORS) return "too many generic hide rules (" + g + ")";
@@ -637,7 +649,7 @@ function installGeneralAdblockUpdate(target) {
           const payload = { domains: parsed.domains, scoped: parsed.scoped, parser: PARSER_VERSION };
           if (parsed.popup) payload.popup = parsed.popup;
           if (src.cosmetic && CP) payload.cosmetic = CP.parseCosmetic(text);
-          const rejected = checkListChange(meta, parsed, payload.cosmetic);
+          const rejected = checkListChange(meta, parsed, payload.cosmetic, src.name);
           if (rejected) {
             rejections[src.name] = { reason: rejected, at: now };
             // Remember the rejected sizes: the same size next time is accepted.
@@ -998,7 +1010,7 @@ function installGeneralAdblockUpdate(target) {
     POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, FETCH_TIMEOUT_MS, MAX_LIST_BYTES, readListText, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
     RETIRED_LISTS, dropRetiredLists, PARSER_VERSION, parseEntries, mergeScoped, staleParserLists,
     THREAT_RULE_ID_BASE, THREAT_RULE_ID_END, DYNAMIC_RULE_LIMIT, isThreatRule, isOurRule, applyThreatRules,
-    MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, protectedHits, revertLists,
+    MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, PROTECTED_HITS_MAX_BY_LIST, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, protectedHits, revertLists,
     removeThreatRules, rebuildThreatRules,
     LIST_RULE_ID_BASE, KEPT_RULE_ID_BASE, ALLOW_RULE_ID_BASE, SOURCES, LIST_HOSTS,
     isNeverBlock, parseList, parseExpires, mergeDomains, buildListRules, keptBundledRules, keepsWholeDomain,

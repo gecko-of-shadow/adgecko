@@ -1,6 +1,6 @@
 {
-  "built_at_utc": "2026-11-08T02:42:18Z",
-  "lists_packed_at_utc": "2026-11-08T02:42:04Z",
+  "built_at_utc": "2026-11-09T03:01:34Z",
+  "lists_packed_at_utc": "2026-11-09T03:01:28Z",
   "priority": 2000010,
   "resource_types": [
     "main_frame",
@@ -20,32 +20,32 @@
   "sources": {
     "urlhaus_hosts": {
       "sha256_matches_meta": true,
-      "whole_domains": 562,
+      "whole_domains": 544,
       "scoped_entries": 0,
-      "threat_hosts": 562,
+      "threat_hosts": 544,
       "popup_only_hosts": 0,
-      "added": 562
+      "added": 544
     },
     "ublock_badware": {
       "sha256_matches_meta": true,
-      "whole_domains": 1110,
+      "whole_domains": 1111,
       "scoped_entries": 2204,
-      "threat_hosts": 3296,
+      "threat_hosts": 3297,
       "popup_only_hosts": 0,
-      "added": 3294
+      "added": 3295
     },
     "dandelion_antimalware": {
       "sha256_matches_meta": true,
-      "whole_domains": 11821,
-      "scoped_entries": 309,
-      "threat_hosts": 12121,
+      "whole_domains": 11729,
+      "scoped_entries": 308,
+      "threat_hosts": 12028,
       "popup_only_hosts": 0,
-      "added": 12085
+      "added": 11993
     }
   },
-  "hosts_total": 15936,
+  "hosts_total": 15827,
   "popup_only_hosts_total": 0,
-  "rule_count": 200,
+  "rule_count": 198,
   "rejected_total": 5,
   "rejected_by_reason": {
     "public suffix 3utilities.com": 1,

@@ -1,9 +1,9 @@
 {
-  "packed_at_utc": "2026-11-08T02:42:04Z",
+  "packed_at_utc": "2026-11-09T03:01:28Z",
   "format": "chrome_declarativeNetRequest_rules_array",
-  "domains_total": 194336,
-  "scoped_entries_total": 5344,
-  "dnr_rules_total": 2529,
+  "domains_total": 194896,
+  "scoped_entries_total": 5350,
+  "dnr_rules_total": 2536,
   "domains_per_rule": 80,
   "max_dnr_rules_budget": 28000,
   "headroom_note": "Reserve remaining static rule quota for stream-site allow rules (DNR agent).",
@@ -21,54 +21,54 @@
     },
     "urlhaus_hosts": {
       "url": "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt",
-      "sha256": "5d512cf7450d455f2f6480a45585145bf3179727c06bce2595f270362b3f12bc",
+      "sha256": "32d5055d6be549d3fa61095773d558976de64fc684593c04b7650014ad354c75",
       "role": "malware_threat",
       "priority": 90,
-      "raw": 562,
-      "kept": 562,
+      "raw": 544,
+      "kept": 544,
       "skipped_never": 0,
       "scoped_raw": 0,
       "scoped_kept": 0
     },
     "easylist": {
       "url": "https://easylist.to/easylist/easylist.txt",
-      "sha256": "935a71f899484ea31c9d33bc5f6878d539ed4226076d9360cb68b6f86101d7eb",
+      "sha256": "5fd80d41b45871d591af0e1d613179548515fde68fa3d5ef530c7dd0974295ce",
       "role": "ads",
       "priority": 70,
-      "raw": 44701,
-      "kept": 44345,
+      "raw": 45072,
+      "kept": 44716,
       "skipped_never": 3,
       "scoped_raw": 2209,
       "scoped_kept": 1074
     },
     "easyprivacy": {
       "url": "https://easylist.to/easylist/easyprivacy.txt",
-      "sha256": "b3e5e27ae271a2670132fbaf447e29d48c0b3c398d1fac1b2a3fae7b5ca818fc",
+      "sha256": "c8fbdef081769be7de2e3cd438bee7d579af0f7ed12986377ec4ef36bacd58ed",
       "role": "privacy",
       "priority": 50,
-      "raw": 43354,
-      "kept": 42625,
+      "raw": 43375,
+      "kept": 42647,
       "skipped_never": 7,
-      "scoped_raw": 3939,
-      "scoped_kept": 1566
+      "scoped_raw": 3945,
+      "scoped_kept": 1572
     },
     "hagezi_pro_mini": {
       "url": "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt",
-      "sha256": "24ee827554c2b4715ae5fd3853f5344ccbadb2d01f6ddf74bdf5cf72dbb4ce8e",
+      "sha256": "a88c1ee35789339a6c5ff35c0bcdf34d568059a9a7b2f47a163c87a93ebb58ae",
       "role": "ads_trackers",
       "priority": 40,
-      "raw": 98927,
-      "kept": 79486,
-      "skipped_never": 31,
+      "raw": 99478,
+      "kept": 79688,
+      "skipped_never": 29,
       "scoped_raw": 0,
       "scoped_kept": 0
     },
     "ublock_badware": {
       "url": "https://ublockorigin.github.io/uAssets/filters/badware.txt",
-      "sha256": "37b5d90d9c351bdf6d46e93dec309912f4c210d68af169a8b1acf52c62fa0089",
+      "sha256": "5183a92da27a5e3cee2cd5245776204e076a628dc07fa9accd160fd216782f9d",
       "role": "malware_threat",
       "priority": 35,
-      "raw": 1110,
+      "raw": 1111,
       "kept": 850,
       "skipped_never": 0,
       "scoped_raw": 2204,
@@ -76,18 +76,18 @@
     },
     "dandelion_antimalware": {
       "url": "https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt",
-      "sha256": "e37ecec8e9797d1f1d5c2cb118fbd340029472a1f2ba6ccc7c7c2d6259317cf0",
+      "sha256": "e7c7f6bbd7565fd918a8890e3b3520aa6a7f142c22ac0a879bfe46fd76824007",
       "role": "malware_threat",
       "priority": 30,
-      "raw": 11821,
-      "kept": 11230,
+      "raw": 11729,
+      "kept": 11213,
       "skipped_never": 0,
-      "scoped_raw": 309,
+      "scoped_raw": 308,
       "scoped_kept": 306
     },
     "adguard_base": {
       "url": "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt",
-      "sha256": "6d8ee5908814c022e55c92ee7d7d40a4830f4086ea30c3157e7b0da071269479",
+      "sha256": "10d666ef90498b219e699f698a603bb3d38cd90e06df9bb8e4af729bd63f2040",
       "role": "ads",
       "priority": 20,
       "raw": 12745,
@@ -117,7 +117,8 @@
     "live-video.net",
     "youtube-nocookie.com",
     "youtubekids.com",
-    "kickusercontent.com"
+    "kickusercontent.com",
+    "hcaptcha.com"
   ],
   "sentinel_sources": {
     "mmitalianbeef.square.site": [],
@@ -127,14 +128,14 @@
     "dc.tensgpt.com": [],
     "carrefour-enbacktoschool4.pages.dev": [],
     "sacolamobile.influenciadormagalu.com.br": [],
+    "inmotiongmbh.com": [],
+    "gumeminlogi.webflow.io": [],
     "globalgrainsadf.com": [
       "hagezi_pro_mini"
     ],
-    "inmotiongmbh.com": [],
     "hausbank-ssk-cuxhaven.de": [
       "hagezi_pro_mini"
-    ],
-    "gumeminlogi.webflow.io": []
+    ]
   },
   "manifest_hint": {
     "permissions": [

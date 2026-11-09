@@ -1,5 +1,9 @@
 # twitch-adblock
 
+> Archived copy from 2026-10-24. The current install steps are in the [README](../README.md). The 0.2.21 zip linked below is an old release, not the current one.
+
+
+
 ![Gecko Adblocker](docs/gecko-avatar.jpg)
 
 **Watch the live stream. Ads stay off your screen.**
