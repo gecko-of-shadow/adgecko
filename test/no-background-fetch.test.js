@@ -1,3 +1,4 @@
+import "../src/general/never-block-captcha.js";
 import updateSource from "../src/general/update.js" with { type: "text" };
 import exclusionsSource from "../src/general/exclusions.js" with { type: "text" };
 import togglesSource from "../src/general/toggles.js" with { type: "text" };

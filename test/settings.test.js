@@ -3,6 +3,7 @@
 import "../src/settings/features.js";
 import "../src/general/filter-options.js";
 import "../src/threat/psl.js";
+import "../src/general/never-block-captcha.js";
 import "../src/threat/protected-hosts.js";
 import "../src/threat/compile.js";
 import manifest from "../manifest.json" with { type: "json" };

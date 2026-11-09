@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Lists: the captcha never-block hosts have one source, `src/rules/never-block-captcha.json`. The packer, the rule merger and the YouTube sync read it, and the packer writes `src/general/never-block-captcha.js` from it for the service worker (list refresh and threat tier), so a new captcha vendor is one edit plus `python3 scripts/pack-filter-lists.py --never-block-captcha-js`. The parity test checks every layer and the generated file against that JSON. Packed rules are unchanged; lookalike hosts are still blocked.
+
 ## 0.3.2 (2026-11-09)
 
 - Lists: a HaGeZi Pro mini refresh is accepted when it names the protected hosts that list really carries (about 30, mostly under googleapis.com). The same check stays at 25 hosts for every other list, and a larger HaGeZi jump is still rejected.

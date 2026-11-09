@@ -2,6 +2,7 @@
 // this page" both write storage (storage.onChanged -> applyGeneralState) and send an
 // "applyGeneralState" message, so every click starts two runs at once.
 import { loadWorker, refreshedState, settle } from "./fixtures/fake-chrome-worker.js";
+import "../src/general/never-block-captcha.js";
 import updateSource from "../src/general/update.js" with { type: "text" };
 function assert(c, l) { if (!c) throw new Error(l); }
 

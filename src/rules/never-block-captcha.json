@@ -1,0 +1,6 @@
+{
+  "_note": "The ONE list of captcha widget host suffixes no tier may block (the entry and every subdomain; lookalikes such as nothcaptcha.com or hcaptcha.com.evil stay blockable). Read by scripts/pack-filter-lists.py (NEVER_BLOCK_CAPTCHA, meta.json never_block_suffixes and the generated src/general/never-block-captcha.js), scripts/merge-dnr-rules.py and scripts/lib/youtube-local-patches.mjs. The runtime (src/threat/protected-hosts.js, src/general/update.js) reads the generated file. After editing: python3 scripts/pack-filter-lists.py --never-block-captcha-js (test/hcaptcha-never-block.test.js fails while the generated file is stale). Not shipped in the zip.",
+  "suffixes": [
+    "hcaptcha.com"
+  ]
+}

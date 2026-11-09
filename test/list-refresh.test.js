@@ -1,4 +1,5 @@
 import "../src/general/filter-options.js";
+import "../src/general/never-block-captcha.js";
 import source from "../src/general/update.js" with { type: "text" };
 import cosSource from "../src/general/cosmetic-parse.js" with { type: "text" };
 import bundled from "../src/rules/general-network.json" with { type: "json" };

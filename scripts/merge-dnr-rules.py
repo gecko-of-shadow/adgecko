@@ -85,8 +85,11 @@ YT_AD_BLOCK_PRIORITY = EXCLUSION_PRIORITY + 1
 YT_INITIATORS = ["youtube.com", "youtube-nocookie.com", "youtubekids.com"]
 YT_AD_HOSTS = ["doubleclick.net"]
 
-# Must match NEVER_BLOCK_CAPTCHA in scripts/pack-filter-lists.py.
-HCAPTCHA_SUFFIXES = ("hcaptcha.com",)
+# Captcha widget hosts no block rule may name: the ONE list in
+# src/rules/never-block-captcha.json (the packer's NEVER_BLOCK_CAPTCHA reads it too).
+CAPTCHA_SUFFIXES = tuple(
+    json.loads((ROOT / "src" / "rules" / "never-block-captcha.json").read_text(encoding="utf-8"))["suffixes"]
+)
 
 
 def drop_hcaptcha(blocks: list[dict]) -> tuple[list[dict], int]:
@@ -102,7 +105,7 @@ def drop_hcaptcha(blocks: list[dict]) -> tuple[list[dict], int]:
         kept = []
         for d in domains:
             h = d.lower().rstrip(".")
-            if any(h == suf or h.endswith("." + suf) for suf in HCAPTCHA_SUFFIXES):
+            if any(h == suf or h.endswith("." + suf) for suf in CAPTCHA_SUFFIXES):
                 removed += 1
             else:
                 kept.append(d)
@@ -114,16 +117,20 @@ def drop_hcaptcha(blocks: list[dict]) -> tuple[list[dict], int]:
     return out, removed
 
 
+# Every captcha suffix, bare and under the widget subdomains hCaptcha uses.
 _HC_PROBE_URLS = [
-    scheme + "://" + host + path
+    scheme + "://" + (label + "." if label else "") + suf + path
     for scheme in ("http", "https")
-    for host in ("hcaptcha.com", "a.hcaptcha.com", "sentry.hcaptcha.com", "stats.hcaptcha.com", "widget.hcaptcha.com", "imgs.hcaptcha.com")
+    for suf in CAPTCHA_SUFFIXES
+    for label in ("", "a", "sentry", "stats", "widget", "imgs")
     for path in ("/", "/1/api.js", "/captcha")
 ]
 # Anchored urlFilter host: ||host, |https://host, optional *. and a trailing port.
 _URLFILTER_ANCHOR_RE = re.compile(r"(?i)^(?:\|\||\|https?://)(\*\.)?([^/^*|?#]+)")
-# A regex that names an hCaptcha host, not a lookalike (nothcaptcha.com, hcaptcha.com.evil).
-_REGEX_HCAPTCHA_RE = re.compile(r"(?<![a-z0-9])(?:[a-z0-9-]+\.)*hcaptcha\.com(?![a-z0-9.-])", re.I)
+# A regex that names a captcha host, not a lookalike (nothcaptcha.com, hcaptcha.com.evil).
+_REGEX_HCAPTCHA_RE = re.compile(
+    r"(?<![a-z0-9])(?:[a-z0-9-]+\.)*(?:" + "|".join(re.escape(s) for s in CAPTCHA_SUFFIXES) + r")(?![a-z0-9.-])", re.I
+)
 
 
 def _is_hcaptcha_host(host: str) -> bool:
@@ -132,7 +139,7 @@ def _is_hcaptcha_host(host: str) -> bool:
         name, _, port = h.rpartition(":")
         if port.isdigit():
             h = name
-    return any(h == suf or h.endswith("." + suf) for suf in HCAPTCHA_SUFFIXES)
+    return any(h == suf or h.endswith("." + suf) for suf in CAPTCHA_SUFFIXES)
 
 
 def _urlfilter_host(url_filter: str) -> str | None:

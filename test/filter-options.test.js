@@ -3,6 +3,7 @@
 // refresh and the packer. Both sides must give identical output for the shared
 // fixture test/fixtures/filter-options-cases.json.
 import "../src/general/filter-options.js";
+import "../src/general/never-block-captcha.js";
 import updateSource from "../src/general/update.js" with { type: "text" };
 import cases from "./fixtures/filter-options-cases.json" with { type: "json" };
 import generalRules from "../src/rules/general-network.json" with { type: "json" };
