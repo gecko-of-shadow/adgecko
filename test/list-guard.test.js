@@ -94,20 +94,87 @@ Deno.test("a list that shrinks by more than 25% is rejected; a 10% change is acc
   assert(!d.state.lastErrors.peter_lowe && d.state.lists.peter_lowe.count === 18000, "10% shrink accepted");
 });
 
-Deno.test("HaGeZi may name the protected hosts that list really carries; every other list stays at 25", async () => {
-  assert(U.PROTECTED_HITS_MAX === 25, "default cap");
-  assert(U.PROTECTED_HITS_MAX_BY_LIST.hagezi_pro_mini > 31 && U.PROTECTED_HITS_MAX_BY_LIST.hagezi_pro_mini < 100, "HaGeZi cap");
-  const d = await primed();
-  const sane = Array.from({ length: 40 }, (_, i) => `||api${i}.googleapis.com^`);
-  const poison = Array.from({ length: 30 }, (_, i) => `||edge${i}.ttvnw.net^`);
-  d.fetch = async (url) => res(listText(tagOf(url), 20000, url.includes("pro.mini") ? sane : url.includes("pgl.yoyo") ? poison : []));
+// ---- adaptive HaGeZi protected-host cap (0.3.3) ----
+// cap = last accepted hit count + PROTECTED_HITS_MARGIN, never above
+// PROTECTED_HITS_SPIKE x that count (when it is at least 1); seed 64 with no
+// stored count; every other list keeps the fixed PROTECTED_HITS_MAX.
+const HZ = "hagezi_pro_mini";
+const apiHosts = (n) => Array.from({ length: n }, (_, i) => `||api${i}.googleapis.com^`);
+const hagezi = (url) => url.includes("pro.mini");
+async function primedWithHits(n) {
+  const d = fakeDeps((url) => res(listText(tagOf(url), 20000, hagezi(url) ? apiHosts(n) : [])));
+  const r = await U.refresh(d, {});
+  assert(r.ok && !d.state.lastErrors[HZ], "prime with " + n + " hits: " + JSON.stringify(d.state.lastErrors));
+  assert(d.state.lists[HZ].protectedHits === n, "stored hit count: " + d.state.lists[HZ].protectedHits);
+  return d;
+}
+const hageziRefresh = async (d, n) => {
+  d.fetch = async (url) => res(listText(tagOf(url), 20000, hagezi(url) ? apiHosts(n) : []));
   await U.refresh(d, { manual: true });
-  assert(!d.state.lastErrors.hagezi_pro_mini, "hagezi rejected: " + JSON.stringify(d.state.lastErrors.hagezi_pro_mini));
-  assert(/names 30 protected stream hosts/.test(d.state.lastErrors.peter_lowe || ""), "other list cap moved: " + JSON.stringify(d.state.lastErrors));
-  const tooMany = Array.from({ length: U.PROTECTED_HITS_MAX_BY_LIST.hagezi_pro_mini + 1 }, (_, i) => `||api${i}.googleapis.com^`);
-  d.fetch = async (url) => res(listText(tagOf(url), 20000, url.includes("pro.mini") ? tooMany : []));
+};
+
+Deno.test("adaptive cap: the constants and the formula", () => {
+  assert(U.PROTECTED_HITS_MAX === 25 && U.PROTECTED_HITS_SEED_BY_LIST[HZ] === 64 && U.PROTECTED_HITS_MARGIN === 10 && U.PROTECTED_HITS_SPIKE === 2, "constants");
+  assert(U.protectedHitsCap(HZ, undefined) === 64 && U.protectedHitsCap(HZ, {}) === 64 && U.protectedHitsCap(HZ, { count: 5 }) === 64, "seed without a stored count");
+  assert(U.protectedHitsCap(HZ, { protectedHits: 30 }) === 40, "30 + 10");
+  assert(U.protectedHitsCap(HZ, { protectedHits: 4 }) === 8, "2 x 4 wins over 4 + 10");
+  assert(U.protectedHitsCap(HZ, { protectedHits: 0 }) === 10, "0 + 10, no 2x rule at 0");
+  assert(U.protectedHitsCap("peter_lowe", { protectedHits: 20 }) === 25 && U.protectedHitsCap("easylist", undefined) === 25, "other lists fixed at 25");
+});
+
+Deno.test("adaptive cap: a sane next HaGeZi count within the margin is accepted and becomes the new baseline", async () => {
+  const d = await primedWithHits(30);
+  await hageziRefresh(d, 40);
+  assert(!d.state.lastErrors[HZ], "40 after 30 rejected: " + JSON.stringify(d.state.lastErrors[HZ]));
+  assert(d.state.lists[HZ].protectedHits === 40, "baseline moved to 40: " + d.state.lists[HZ].protectedHits);
+});
+
+Deno.test("adaptive cap: a count above the last accepted count + margin is rejected", async () => {
+  const d = await primedWithHits(30);
+  await hageziRefresh(d, 41);
+  assert(/names 41 protected stream hosts/.test(d.state.lastErrors[HZ] || ""), "41 after 30 accepted: " + JSON.stringify(d.state.lastErrors[HZ]));
+});
+
+Deno.test("adaptive cap: a spike above 2x the last accepted count is rejected even inside the margin", async () => {
+  const d = await primedWithHits(4);
+  await hageziRefresh(d, 9);
+  assert(/names 9 protected stream hosts/.test(d.state.lastErrors[HZ] || ""), "9 after 4 accepted: " + JSON.stringify(d.state.lastErrors[HZ]));
+  await hageziRefresh(d, 8);
+  assert(!d.state.lastErrors[HZ], "8 after 4 (exactly 2x) rejected: " + JSON.stringify(d.state.lastErrors[HZ]));
+});
+
+Deno.test("adaptive cap: with no stored count the cap is the seed 64 (an upgrade from 0.3.2 or a first load)", async () => {
+  const ok = fakeDeps((url) => res(listText(tagOf(url), 20000, hagezi(url) ? apiHosts(64) : [])));
+  await U.refresh(ok, {});
+  assert(!ok.state.lastErrors[HZ] && ok.state.lists[HZ].protectedHits === 64, "64 on first load: " + JSON.stringify(ok.state.lastErrors[HZ]));
+  const over = fakeDeps((url) => res(listText(tagOf(url), 20000, hagezi(url) ? apiHosts(65) : [])));
+  await U.refresh(over, {});
+  assert(/names 65 protected stream hosts/.test(over.state.lastErrors[HZ] || ""), "65 on first load accepted: " + JSON.stringify(over.state.lastErrors[HZ]));
+  // A 0.3.2 install has HaGeZi meta without protectedHits: the seed applies once, then the count is stored.
+  const d = await primedWithHits(30);
+  delete d.state.lists[HZ].protectedHits;
+  await hageziRefresh(d, 60);
+  assert(!d.state.lastErrors[HZ] && d.state.lists[HZ].protectedHits === 60, "upgrade path: " + JSON.stringify(d.state.lastErrors[HZ]));
+});
+
+Deno.test("adaptive cap: a rejected refresh leaves the stored count unchanged; the next sane copy is judged against it", async () => {
+  const d = await primedWithHits(30);
+  const payload = JSON.stringify(d.data[HZ]);
+  await hageziRefresh(d, 41);
+  assert(d.state.lastErrors[HZ] && d.state.lists[HZ].protectedHits === 30, "stored count after a rejection: " + d.state.lists[HZ].protectedHits);
+  assert(JSON.stringify(d.data[HZ]) === payload, "last good copy kept");
+  await hageziRefresh(d, 40);
+  assert(!d.state.lastErrors[HZ] && d.state.lists[HZ].protectedHits === 40, "40 judged against 30: " + JSON.stringify(d.state.lastErrors[HZ]));
+});
+
+Deno.test("adaptive cap: every other list still rejects above 25 protected hosts, whatever it carried before", async () => {
+  const d = fakeDeps((url) => res(listText(tagOf(url), 20000, url.includes("pgl.yoyo") ? apiHosts(20) : [])));
+  await U.refresh(d, {});
+  assert(!d.state.lastErrors.peter_lowe && d.state.lists.peter_lowe.protectedHits === 20, "20 accepted for another list");
+  d.fetch = async (url) => res(listText(tagOf(url), 20000, url.includes("pgl.yoyo") ? apiHosts(26) : hagezi(url) ? apiHosts(40) : []));
   await U.refresh(d, { manual: true });
-  assert(new RegExp("names " + tooMany.length + " protected stream hosts").test(d.state.lastErrors.hagezi_pro_mini || ""), "oversize hagezi accepted: " + JSON.stringify(d.state.lastErrors.hagezi_pro_mini));
+  assert(/names 26 protected stream hosts/.test(d.state.lastErrors.peter_lowe || ""), "26 for another list accepted: " + JSON.stringify(d.state.lastErrors.peter_lowe));
+  assert(/names 40 protected stream hosts/.test(d.state.lastErrors[HZ] || ""), "HaGeZi at 40 from a 0 baseline is above 0 + 10: " + JSON.stringify(d.state.lastErrors[HZ]));
 });
 
 Deno.test("a list naming many protected stream hosts is rejected as poisoned; a few are tolerated and never blocked", async () => {
