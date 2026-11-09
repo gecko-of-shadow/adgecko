@@ -201,7 +201,8 @@ Deno.test("CI workflow: actions pinned to commit SHAs, no persisted credentials,
   const uses = [...workflow.matchAll(/^\s*uses:\s*(\S+)/gm)].map((m) => m[1]);
   assert(uses.length >= 3 && uses.every((u) => /@[0-9a-f]{40}$/.test(u)), "unpinned: " + uses.join());
   const checkouts = workflow.split(/\n(?=\s*- name:)/).filter((s) => /uses:\s*actions\/checkout@/.test(s));
-  assert(checkouts.length === 2 && checkouts.every((s) => /persist-credentials:\s*false/.test(s)), "persist-credentials");
+  // One checkout per job (tests, privacy, release-gate), none keeping the token.
+  assert(checkouts.length === 3 && checkouts.every((s) => /persist-credentials:\s*false/.test(s)), "persist-credentials");
   assert(/git show "\$PR_BASE_SHA:scripts\/privacy-check\.py" > "\$RUNNER_TEMP\/privacy-check\.py"/.test(workflow), "base checker");
   assert(/run: python3 -u -I "\$RUNNER_TEMP\/privacy-check\.py"/.test(workflow), "runs the copied checker");
   assert(/REQUIRE_PATTERNS: \$\{\{ github\.event_name == 'push' && github\.ref == 'refs\/heads\/main' \}\}/.test(workflow), "required on main");
