@@ -81,3 +81,36 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
         # -I: isolated mode (no PYTHON* variables, no script-dir imports).
         run: python3 -u -I "$RUNNER_TEMP/privacy-check.py"
+
+  # Release gate: pack the zip the way a release does, then run
+  # scripts/release-gate.sh on the checkout (allow-list, permissions, DNR,
+  # dangerous-API scan, deno tests, vendor parse) and on that zip (exact
+  # derived file list). fetch-depth 0: section 1b compares the playback files
+  # against origin/main. No secret: the two PRIVACY_PATTERNS tests show as ignored.
+  release-gate:
+    name: release-gate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.8
+
+      # The runner image ships ripgrep; install it only if that changes.
+      - name: Ensure ripgrep
+        run: command -v rg >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ripgrep)
+
+      - name: Pack the release zip
+        run: bash scripts/pack-zip.sh "$RUNNER_TEMP/adgecko-release.zip"
+
+      - name: Release gate on the checkout
+        run: bash scripts/release-gate.sh
+
+      - name: Release gate on the zip
+        run: bash scripts/release-gate.sh --zip "$RUNNER_TEMP/adgecko-release.zip"
