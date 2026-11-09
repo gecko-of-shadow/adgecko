@@ -36,9 +36,14 @@ jobs:
 
       # ubo-youtube-meta.json records the run time and the uAssets commit, so
       # it changes on every sync; it is shown for the log but not judged. The
-      # three shipped files must be byte-identical to the checkout.
+      # four shipped files must match the checkout apart from their one banner
+      # line that names the uAssets commit (-I ignores exactly that line), so
+      # a new upstream commit that leaves the YouTube filters unchanged passes
+      # and any change to the generated code, styles or DNR rules fails.
       - name: Fail on drift in the shipped YouTube files
+        env:
+          SHIPPED: src/vendor/ubo-youtube.js src/vendor/ubo-youtube-isolated.js src/vendor/ubo-youtube.css src/rules/ubo-youtube-network.json
         run: |
           git --no-pager diff --stat -- src/vendor/ubo-youtube-meta.json
-          git --no-pager diff --stat -- src/vendor/ubo-youtube.js src/vendor/ubo-youtube.css src/rules/ubo-youtube-network.json
-          git diff --exit-code -- src/vendor/ubo-youtube.js src/vendor/ubo-youtube.css src/rules/ubo-youtube-network.json
+          git --no-pager diff --stat -- $SHIPPED
+          git diff --exit-code -I '^(//|/\*) Filters: uBlockOrigin/uAssets@[0-9a-f]{40} ' -- $SHIPPED
