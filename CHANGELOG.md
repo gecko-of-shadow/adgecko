@@ -2,7 +2,7 @@
 
 ## 0.3.3 (2026-11-09)
 
-Release candidate. Dates in this file are the owner's local date (America/Edmonton, UTC-6); the dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.
+Release candidate. Dates in this file are the owner's local date (UTC-6); the dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.
 
 - Lists: the captcha never-block hosts have one source, `src/rules/never-block-captcha.json`. The packer, the rule merger and the YouTube sync read it, and the packer writes `src/general/never-block-captcha.js` from it for the service worker (list refresh and threat tier), so a new captcha vendor is one edit plus `python3 scripts/pack-filter-lists.py --never-block-captcha-js`. The parity test checks every layer, the generated file and the packed `_ad_` media rule's exclusion in `src/rules/ubo-youtube-network.json` against that JSON. Packed rules are unchanged; lookalike hosts are still blocked.
 - Lists: a fresh install fetches the lists right away from `runtime.onInstalled`, the same refresh as the settings page's "Update lists", instead of running on the packed lists until the first alarm 5 to 30 minutes later. Updates and reloads keep their saved lists and wait for the alarm as before.
