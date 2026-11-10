@@ -186,6 +186,18 @@ Deno.test("clipboard guard: the visitor's own copy works; copy buttons, swapped 
   p.select(DANGEROUS[5]);
   assert(p.document.execCommand("copy") === false, "execCommand after a selection swap");
   assert(p.input("copy", { clipboardData: new p.window.DataTransfer() }).prevented, "native copy after a selection swap is cancelled");
+  // Cut (Ctrl+X, Shift+Delete), Ctrl+Insert and a non-Latin layout's Ctrl+C
+  // are the visitor's own copy too; Ctrl+V and a bare key are not.
+  for (const ev of [{ key: "x", ctrlKey: true }, { key: "X", metaKey: true }, { key: "Delete", shiftKey: true }, { key: "Insert", ctrlKey: true }, { key: "\u0441", code: "KeyC", ctrlKey: true }, { key: "\u0447", code: "KeyX", ctrlKey: true }]) {
+    p.select(cmd);
+    p.input("keydown", ev);
+    assert(!p.input("cut", { clipboardData: new p.window.DataTransfer() }).prevented, "own cut/copy goes through: " + JSON.stringify(ev));
+  }
+  for (const ev of [{ key: "v", ctrlKey: true }, { key: "x" }, { key: "Delete" }, { key: "j", code: "KeyC", ctrlKey: true }, { key: "Enter", code: "KeyC", ctrlKey: true }]) {
+    p.select(cmd);
+    p.input("keydown", ev);
+    assert(p.input("cut", { clipboardData: new p.window.DataTransfer() }).prevented, "not a copy gesture: " + JSON.stringify(ev));
+  }
   // Another key than Ctrl+C clears the gesture.
   p.select(cmd);
   p.input("keydown", { key: "c", ctrlKey: true });
