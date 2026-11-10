@@ -357,3 +357,14 @@ Deno.test("stream hosts: the packer's never-block list covers every registry hos
   const hosts = [...block.matchAll(/"([a-z0-9.-]+)"/g)].map((m) => m[1]);
   for (const h of F.STREAM_SITES) assert(hosts.some((s) => h === s || h.endsWith("." + s)), "packer could block " + h);
 });
+
+Deno.test("per-site switches apply on a single-label host (localhost) and never through a bare TLD", () => {
+  const o = { localhost: { enabled: false, features: { cosmetic: false } }, com: { enabled: false } };
+  const own = F.overrideFor(F.normalizeOverrides(o), "localhost");
+  assert(own && own.host === "localhost", "localhost finds its own override");
+  const r = F.resolve(F.defaultSettings(), o, "localhost");
+  assert(r.cosmetic === false && r.network === false, "the site switch counts on localhost");
+  assert(r.guardClipboard === true, "keepOnAllow still holds");
+  assert(F.overrideFor(F.normalizeOverrides(o), "example.com") === null, "a TLD entry is not a parent of example.com");
+  assert(F.resolve(F.defaultSettings(), o, "example.com").cosmetic === true, "example.com untouched");
+});
