@@ -1,6 +1,6 @@
 {
-  "built_at_utc": "2026-11-09T09:18:49Z",
-  "lists_packed_at_utc": "2026-11-09T09:18:22Z",
+  "built_at_utc": "2026-11-11T22:41:18Z",
+  "lists_packed_at_utc": "2026-11-11T22:41:13Z",
   "priority": 2000010,
   "resource_types": [
     "main_frame",
@@ -20,19 +20,19 @@
   "sources": {
     "urlhaus_hosts": {
       "sha256_matches_meta": true,
-      "whole_domains": 544,
+      "whole_domains": 558,
       "scoped_entries": 0,
-      "threat_hosts": 544,
+      "threat_hosts": 558,
       "popup_only_hosts": 0,
-      "added": 544
+      "added": 558
     },
     "ublock_badware": {
       "sha256_matches_meta": true,
-      "whole_domains": 1111,
+      "whole_domains": 1114,
       "scoped_entries": 2204,
-      "threat_hosts": 3297,
+      "threat_hosts": 3300,
       "popup_only_hosts": 0,
-      "added": 3295
+      "added": 3298
     },
     "dandelion_antimalware": {
       "sha256_matches_meta": true,
@@ -43,9 +43,9 @@
       "added": 11993
     }
   },
-  "hosts_total": 15827,
+  "hosts_total": 15844,
   "popup_only_hosts_total": 0,
-  "rule_count": 198,
+  "rule_count": 199,
   "rejected_total": 5,
   "rejected_by_reason": {
     "public suffix 3utilities.com": 1,
