@@ -1016,7 +1016,7 @@ function installGeneralAdblockUpdate(target) {
     const removeRuleIds = existing.filter((r) => isOurRule(r.id) || isThreatRule(r.id)).map((r) => r.id);
     if (removeRuleIds.length) await deps.updateDynamicRules({ removeRuleIds, addRules: [] });
     if (deps.enabled()) await deps.setStaticEnabled(true);
-    await deps.setState({ lists: {}, dynamicActive: false, revertedAt: now, lastRunAt: now, lastRejected: {}, lastErrors: {}, threatRules: 0, threatHosts: 0, threatError: "", threatRejectedNew: 0, threatHeldAt: 0 });
+    await deps.setState({ lists: {}, dynamicActive: false, updatedAt: 0, ruleCount: 0, domainCount: 0, revertedAt: now, lastRunAt: now, lastRejected: {}, lastErrors: {}, threatRules: 0, threatHosts: 0, threatError: "", threatRejectedNew: 0, threatHeldAt: 0 });
     if (deps.revertCosmetic) {
       try {
         await deps.revertCosmetic();
