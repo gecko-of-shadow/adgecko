@@ -43,3 +43,12 @@ Deno.test("threat-meta.json matches threat-network.json", () => {
   const hosts = threatRules.reduce((n, r) => n + r.condition.requestDomains.length, 0);
   assert(threatMeta.hosts_total === hosts, "threat hosts_total " + threatMeta.hosts_total + " vs file " + hosts);
 });
+
+Deno.test("the packer runs the merger after it writes meta.json, so the merged rule count is not overwritten", () => {
+  const src = Deno.readTextFileSync(new URL("../scripts/pack-filter-lists.py", import.meta.url));
+  const main = src.slice(src.indexOf("def main()"));
+  const metaWrite = main.indexOf('(OUT_DIR / "meta.json").write_text(');
+  const merger = main.indexOf('"merge-dnr-rules.py"');
+  if (metaWrite < 0 || merger < 0) throw new Error("packer shape changed: update this test");
+  if (merger < metaWrite) throw new Error("merge-dnr-rules.py runs before meta.json is written: general_network_rules_total would be lost");
+});
