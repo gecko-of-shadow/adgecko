@@ -133,6 +133,12 @@
     return list.filter((f) => FIXABLE.includes(f.id) && f.perSite && f.available !== false && f.apply !== "always").map((f) => f.id);
   }
 
+  // The threat tier is on for this page (worker's siteInfo).
+  function threatHere() {
+    const list = info && Array.isArray(info.features) ? info.features : [];
+    return list.some((f) => f.id === "threatTier" && f.on === true);
+  }
+
   function overrideKey(host) {
     return info && info.host === host && info.overrideHost ? info.overrideHost : host;
   }
@@ -175,6 +181,9 @@
     const origin = currentOrigin();
     const host = origin ? hostOfOrigin(origin) : "";
     const allowed = origin ? siteOff(origin) : false;
+    // A stream-family host without our scripts (worker's siteInfo): there is
+    // nothing to allow or fix, so the popup says what does apply.
+    const limited = !!(origin && info && info.host === host && info.limited === true);
     if (brandIcon) {
       // Same trigger as the toolbar icon: the master switch and list blocking.
       const blocking = on && all[KEYS.enabled] !== false;
@@ -186,10 +195,11 @@
     // One status line, text first (never colour alone).
     if (!origin) siteStatus.textContent = "";
     else if (!on) siteStatus.textContent = "Off – turned off in settings";
+    else if (limited) siteStatus.textContent = threatHere() ? "Malware blocking only – ad scripts don't run on this site" : "Nothing runs on this site";
     else if (allowed) siteStatus.textContent = "Allowed – not blocking here";
     else siteStatus.textContent = "✅ Protected";
 
-    allowSite.disabled = !origin || !on;
+    allowSite.disabled = !origin || !on || limited;
     allowSite.setAttribute("aria-pressed", allowed ? "true" : "false");
     allowSite.textContent = allowed ? "Block again" : "Allow this site";
     if (!origin) {

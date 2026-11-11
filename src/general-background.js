@@ -894,6 +894,32 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.settings || changes.siteOverrides) syncFromSettings();
 });
 
+// Does a content script that loads `script` run on `host`? Read from the
+// manifest, so the popup never offers a switch for a script that is not
+// injected there (music.youtube.com is a stream site, but src/youtube.js runs
+// on www / m / the bare domain only).
+let manifestScripts = null;
+function patternMatchesHost(pattern, host) {
+  const m = /^(?:\*|https?):\/\/([^/]+)\//.exec(String(pattern || ""));
+  if (!m) return false;
+  const p = m[1].toLowerCase();
+  if (p === "*") return true;
+  if (p.startsWith("*.")) return host === p.slice(2) || host.endsWith(p.slice(1));
+  return host === p;
+}
+function scriptRunsOn(script, host) {
+  if (!manifestScripts) {
+    try {
+      manifestScripts = (chrome.runtime.getManifest() || {}).content_scripts || [];
+    } catch {
+      manifestScripts = [];
+    }
+  }
+  return manifestScripts.some((cs) => (cs.js || []).includes(script)
+    && (cs.matches || []).some((p) => patternMatchesHost(p, host))
+    && !(cs.exclude_matches || []).some((p) => patternMatchesHost(p, host)));
+}
+
 // Popup: what applies on this page. The popup cannot load the registry
 // (popup.html loads only popup.js), so the worker answers.
 async function siteInfo(origin) {
@@ -910,11 +936,16 @@ async function siteInfo(origin) {
   const effective = FEAT.resolve(stored.settings, stored.siteOverrides, host);
   const stream = !!host && FEAT.isStreamHost(host);
   const own = host ? FEAT.overrideFor(overrides, host) : null;
-  const applies = (f) => f.sites.includes("all") || (f.sites.includes("ordinary") ? !stream : f.sites.some((d) => host === d || host.endsWith("." + d)));
+  const onSite = (f) => f.sites.includes("all") || (f.sites.includes("ordinary") ? !stream : f.sites.some((d) => host === d || host.endsWith("." + d)));
+  const applies = (f) => onSite(f) && (!f.scripts || f.scripts.some((p) => scriptRunsOn(p, host)));
+  // A stream-family host where none of our scripts runs (YouTube Music,
+  // Studio, Kids, ...): only the network tiers apply there.
+  const limited = stream && !FEAT.FEATURES.some((f) => f.scripts && applies(f));
   return {
     ok: true,
     host,
     stream,
+    limited,
     enabled: s.enabled,
     siteEnabled: !(own && own.entry.enabled === false),
     overrideHost: own ? own.host : host,

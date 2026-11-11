@@ -189,6 +189,11 @@
         "*://www.youtube.com/*",
         "*://m.youtube.com/*",
         "*://youtube.com/*",
+        "*://*.youtube.com/*",
+        "*://youtubekids.com/*",
+        "*://*.youtubekids.com/*",
+        "*://youtube-nocookie.com/*",
+        "*://*.youtube-nocookie.com/*",
         "*://twitch.tv/*",
         "*://*.twitch.tv/*"
       ],
