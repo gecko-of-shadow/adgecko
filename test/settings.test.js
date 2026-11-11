@@ -200,6 +200,26 @@ Deno.test("worker: siteInfo answers the popup; the settings page may message the
   assert(!info.features.some((f) => f.id === "kick" || f.id === "youtubeWatchdog"), "only features for this site");
   const yt = await w.send({ source: "adgecko-general", type: "siteInfo", origin: "https://www.youtube.com" });
   assert(yt.stream && yt.features.some((f) => f.id === "youtubeWatchdog") && !yt.features.some((f) => f.id === "cosmetic"), JSON.stringify(yt.features.map((f) => f.id)));
+  assert(yt.limited === false, "our scripts run on www.youtube.com");
+  // YouTube-family hosts where no script of ours runs: only the network tiers
+  // are listed, so the popup offers no switch that would do nothing.
+  for (const host of ["music.youtube.com", "studio.youtube.com", "tv.youtube.com", "www.youtubekids.com", "www.youtube-nocookie.com"]) {
+    const lim = await w.send({ source: "adgecko-general", type: "siteInfo", origin: "https://" + host });
+    assert(lim.stream && lim.limited === true, host + " limited");
+    assert(eq(lim.features.map((f) => f.id), ["threatTier", "threatFeed"]), host + ": " + lim.features.map((f) => f.id));
+    assert(lim.features[0].on === true, "threat tier applies there");
+    // The top frame there has the script that tells the popup which page it is, and no page-world script.
+    const hit = (p) => { const m = /^\*:\/\/([^/]+)\//.exec(p); return !!m && (m[1].startsWith("*.") ? host === m[1].slice(2) || host.endsWith(m[1].slice(1)) : host === m[1]); };
+    const here = manifest.content_scripts.filter((c) => c.matches.some(hit) && !(c.exclude_matches || []).some(hit));
+    assert(here.some((c) => c.js.includes("src/settings/flags.js") && c.all_frames === false), host + ": flags.js answers the popup");
+    assert(!here.some((c) => c.world === "MAIN"), host + ": no page-world script");
+  }
+  for (const [host, id] of [["m.youtube.com", "youtubeWatchdog"], ["clips.twitch.tv", "twitchDisplay"], ["kick.com", "kick"], ["files.kick.com", "kick"]]) {
+    const full = await w.send({ source: "adgecko-general", type: "siteInfo", origin: "https://" + host });
+    assert(full.limited === false && full.features.some((f) => f.id === id), host + " keeps " + id);
+  }
+  const ordinary = await w.send({ source: "adgecko-general", type: "siteInfo", origin: "https://news.example" });
+  assert(ordinary.limited === false && ["network", "cosmetic", "guardClipboard", "guardPopups"].every((id) => ordinary.features.some((f) => f.id === id)), "ordinary sites unchanged");
   const page = await w.send({ source: "adgecko-general", type: "siteInfo", origin: "https://news.example" }, { id: EXT, tab: { id: 3 }, url: "chrome-extension://" + EXT + "/src/settings.html" });
   assert(page && page.ok, "settings page tab accepted");
   const cs = await w.send({ source: "adgecko-general", type: "revertLists" }, { id: EXT, tab: { id: 3 }, url: "https://evil.example/src/settings.html" });
@@ -356,4 +376,15 @@ Deno.test("stream hosts: the packer's never-block list covers every registry hos
   const block = /NEVER_BLOCK_SUFFIXES = \(([\s\S]*?)\n\)/.exec(packer)[1];
   const hosts = [...block.matchAll(/"([a-z0-9.-]+)"/g)].map((m) => m[1]);
   for (const h of F.STREAM_SITES) assert(hosts.some((s) => h === s || h.endsWith("." + s)), "packer could block " + h);
+});
+
+Deno.test("per-site switches apply on a single-label host (localhost) and never through a bare TLD", () => {
+  const o = { localhost: { enabled: false, features: { cosmetic: false } }, com: { enabled: false } };
+  const own = F.overrideFor(F.normalizeOverrides(o), "localhost");
+  assert(own && own.host === "localhost", "localhost finds its own override");
+  const r = F.resolve(F.defaultSettings(), o, "localhost");
+  assert(r.cosmetic === false && r.network === false, "the site switch counts on localhost");
+  assert(r.guardClipboard === true, "keepOnAllow still holds");
+  assert(F.overrideFor(F.normalizeOverrides(o), "example.com") === null, "a TLD entry is not a parent of example.com");
+  assert(F.resolve(F.defaultSettings(), o, "example.com").cosmetic === true, "example.com untouched");
 });

@@ -105,7 +105,9 @@
   function overrideFor(overrides, host) {
     const h = normalizeHost(host);
     const labels = h.split(".");
-    for (let i = 0; i < labels.length - 1; i++) {
+    // Never a bare top-level label ("com") as a parent, but a single-label
+    // host ("localhost", an intranet name) is its own key.
+    for (let i = 0; i < Math.max(1, labels.length - 1); i++) {
       const key = labels.slice(i).join(".");
       if (overrides[key]) return { host: key, entry: overrides[key] };
     }

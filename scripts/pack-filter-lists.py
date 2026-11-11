@@ -773,12 +773,6 @@ def main() -> int:
         json.dumps(rules, separators=(",", ":"), ensure_ascii=True) + "\n",
         encoding="utf-8",
     )
-    merged = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "merge-dnr-rules.py"), str(blocks_path)],
-        check=False,
-    )
-    if merged.returncode != 0:
-        return merged.returncode
     network_path = OUT_DIR / "general-network.json"
 
     meta = {
@@ -820,6 +814,15 @@ def main() -> int:
     (OUT_DIR / "meta.json").write_text(
         json.dumps(meta, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
     )
+    # After meta.json is written: the merger records the shipped rule count
+    # (general_network_rules_total) into that file, and a merge that ran first
+    # had its count overwritten by the fresh meta above.
+    merged = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "merge-dnr-rules.py"), str(blocks_path)],
+        check=False,
+    )
+    if merged.returncode != 0:
+        return merged.returncode
 
     (OUT_DIR / "cosmetic-sample.json").write_text(
         json.dumps(

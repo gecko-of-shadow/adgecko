@@ -185,6 +185,8 @@ function installClipboardGuard(target) {
     const keyGet = getter(protoOf(win.KeyboardEvent), "key");
     const ctrlGet = getter(protoOf(win.KeyboardEvent), "ctrlKey");
     const metaGet = getter(protoOf(win.KeyboardEvent), "metaKey");
+    const shiftGet = getter(protoOf(win.KeyboardEvent), "shiftKey");
+    const codeGet = getter(protoOf(win.KeyboardEvent), "code");
     const clipboardDataGet = getter(protoOf(win.ClipboardEvent), "clipboardData");
     const preventDefaultFn = protoOf(win.Event) && typeof win.Event.prototype.preventDefault === "function" ? win.Event.prototype.preventDefault : null;
     const DOMExceptionCtor = typeof win.DOMException === "function" ? win.DOMException : (typeof DOMException === "function" ? DOMException : Error);
@@ -259,7 +261,15 @@ function installClipboardGuard(target) {
       listenOn.addEventListener("keydown", (e) => {
         try {
           if (!e || e.isTrusted !== true) return;
-          const copyKey = (read(ctrlGet, e, "ctrlKey") || read(metaGet, e, "metaKey")) && lower(StringFn(read(keyGet, e, "key") || "")) === "c";
+          // Copy and cut shortcuts: Ctrl/Cmd+C, Ctrl/Cmd+X, Ctrl+Insert,
+          // Shift+Delete. On a non-Latin layout (Russian, Greek, ...) the
+          // key is not "c" / "x", so the physical key (code) counts there.
+          const key = lower(StringFn(read(keyGet, e, "key") || ""));
+          const code = StringFn(read(codeGet, e, "code") || "");
+          const latin = key.length === 1 && key >= "a" && key <= "z";
+          const letter = latin ? key : (key.length === 1 ? (code === "KeyC" ? "c" : code === "KeyX" ? "x" : "") : "");
+          const mod = !!(read(ctrlGet, e, "ctrlKey") || read(metaGet, e, "metaKey"));
+          const copyKey = (mod && (letter === "c" || letter === "x")) || (mod && key === "insert") || (!!read(shiftGet, e, "shiftKey") && key === "delete");
           lastCopy = copyKey ? { kind: "key", at: now(), sel: selectionText() + "\n" + fieldSelection() } : null;
         } catch {
           lastCopy = null;

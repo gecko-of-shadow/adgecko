@@ -279,6 +279,19 @@ function setThreatRuleset(on) {
   });
 }
 
+// The last rebuild installed refreshed threat rules (listState.threatRules,
+// which switching the tier off leaves as it was) but none is installed now.
+// Called inside a DNR queue section only (syncFromSettings).
+async function threatRulesMissing() {
+  try {
+    const deps = listDeps();
+    if (!((((await deps.getState()) || {}).threatRules) > 0)) return false;
+    return !(await deps.getDynamicRules()).some((r) => GU.isThreatRule(r.id));
+  } catch {
+    return false;
+  }
+}
+
 let settingsQueue = Promise.resolve();
 function syncFromSettings() {
   const run = settingsQueue.then(async () => {
@@ -302,10 +315,12 @@ function syncFromSettings() {
         const firstSync = threatOn === null;
         threatOn = nextThreat;
         await setThreatRuleset(nextThreat);
-        // At worker start only the ruleset state is lined up (the refreshed
-        // rules are already in place); a real switch rebuilds or removes them.
+        // A real switch rebuilds or removes the refreshed rules. At worker
+        // start they are normally in place already, but the switch itself may
+        // have woken this worker: "off" in the previous worker removed them
+        // and this first sync already reads "on". So look instead of assuming.
         if (!nextThreat) await GU.removeThreatRules(listDeps()).catch(() => {});
-        else if (!firstSync) await GU.rebuildThreatRules(listDeps()).catch(() => {});
+        else if (!firstSync || await threatRulesMissing()) await GU.rebuildThreatRules(listDeps()).catch(() => {});
       });
     }
   });
@@ -704,9 +719,14 @@ async function refreshLists(manual) {
     });
     let result;
     try {
-      // A new attempt starts with a clean storage-error slate.
-      lastWriteError = null;
-      await setListState({ lastError: null }).catch(() => {});
+      // A new attempt starts with a clean storage-error slate. A throttled
+      // alarm tick is not an attempt: it retries nothing, so it keeps the
+      // recorded error and (below) the status text as they are.
+      const before = await getListState().catch(() => ({}));
+      if (manual || GU.shouldRun(before, Date.now(), false)) {
+        lastWriteError = null;
+        await setListState({ lastError: null }).catch(() => {});
+      }
       // Only the rule swap runs inside the DNR queue (deps.exclusive); the
       // downloads do not hold it.
       result = await GU.refresh(Object.assign(listDeps(), { exclusive: dnrExclusive }), { manual });
@@ -715,6 +735,7 @@ async function refreshLists(manual) {
     }
     // The switch may have flipped while the refresh was swapping rules in.
     await applyGeneralState();
+    if (result && result.ran === false) return result;
     const state = await getListState().catch(() => ({}));
     const status = listStatusText(state, result, lastWriteError);
     try {
@@ -873,6 +894,32 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.settings || changes.siteOverrides) syncFromSettings();
 });
 
+// Does a content script that loads `script` run on `host`? Read from the
+// manifest, so the popup never offers a switch for a script that is not
+// injected there (music.youtube.com is a stream site, but src/youtube.js runs
+// on www / m / the bare domain only).
+let manifestScripts = null;
+function patternMatchesHost(pattern, host) {
+  const m = /^(?:\*|https?):\/\/([^/]+)\//.exec(String(pattern || ""));
+  if (!m) return false;
+  const p = m[1].toLowerCase();
+  if (p === "*") return true;
+  if (p.startsWith("*.")) return host === p.slice(2) || host.endsWith(p.slice(1));
+  return host === p;
+}
+function scriptRunsOn(script, host) {
+  if (!manifestScripts) {
+    try {
+      manifestScripts = (chrome.runtime.getManifest() || {}).content_scripts || [];
+    } catch {
+      manifestScripts = [];
+    }
+  }
+  return manifestScripts.some((cs) => (cs.js || []).includes(script)
+    && (cs.matches || []).some((p) => patternMatchesHost(p, host))
+    && !(cs.exclude_matches || []).some((p) => patternMatchesHost(p, host)));
+}
+
 // Popup: what applies on this page. The popup cannot load the registry
 // (popup.html loads only popup.js), so the worker answers.
 async function siteInfo(origin) {
@@ -889,11 +936,16 @@ async function siteInfo(origin) {
   const effective = FEAT.resolve(stored.settings, stored.siteOverrides, host);
   const stream = !!host && FEAT.isStreamHost(host);
   const own = host ? FEAT.overrideFor(overrides, host) : null;
-  const applies = (f) => f.sites.includes("all") || (f.sites.includes("ordinary") ? !stream : f.sites.some((d) => host === d || host.endsWith("." + d)));
+  const onSite = (f) => f.sites.includes("all") || (f.sites.includes("ordinary") ? !stream : f.sites.some((d) => host === d || host.endsWith("." + d)));
+  const applies = (f) => onSite(f) && (!f.scripts || f.scripts.some((p) => scriptRunsOn(p, host)));
+  // A stream-family host where none of our scripts runs (YouTube Music,
+  // Studio, Kids, ...): only the network tiers apply there.
+  const limited = stream && !FEAT.FEATURES.some((f) => f.scripts && applies(f));
   return {
     ok: true,
     host,
     stream,
+    limited,
     enabled: s.enabled,
     siteEnabled: !(own && own.entry.enabled === false),
     overrideHost: own ? own.host : host,

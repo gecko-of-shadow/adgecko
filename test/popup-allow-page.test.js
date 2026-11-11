@@ -83,7 +83,7 @@ function startFrame(href, isTop) {
 // the extension loaded, chrome://). `answerLater` holds the reply until `answer()`.
 // The fake worker answers "siteInfo" from the registry (like src/general-background.js)
 // and "tabSignal" from `signal`.
-async function openPopup({ pageHref, scripted = true, stored = {}, answerLater = false, signal = null, storage: shared = null, streamTop = false, failSet = null, failRemove = false }) {
+async function openPopup({ pageHref, scripted = true, stored = {}, answerLater = false, signal = null, storage: shared = null, streamTop = false, failSet = null, failRemove = false, limited = null }) {
   const storage = shared || Object.assign({}, stored);
   const F = globalThis.GeckoFeatures;
   // frameId -> listeners. The subframe comes first, so it would win a broadcast.
@@ -102,6 +102,8 @@ async function openPopup({ pageHref, scripted = true, stored = {}, answerLater =
     try { host = new URL(origin).hostname; } catch { return { ok: true, host: "", features: [] }; }
     const o = storage.siteOverrides || {};
     const stream = F.isStreamHost(host);
+    // A stream-family host where none of our scripts runs: the worker lists the network tiers only.
+    if (limited) return { ok: true, host, overrideHost: host, stream, limited: true, siteEnabled: true, enabled: true, features: [{ id: "threatTier", perSite: false, apply: "live", available: true, on: limited.threat }] };
     const features = F.FEATURES.filter((f) => f.sites.includes("all") || (f.sites.includes("ordinary") ? !stream : f.sites.some((d) => host === d || host.endsWith("." + d))))
       .map((f) => ({ id: f.id, perSite: f.perSite, apply: f.apply, available: f.id !== "guardMiners" }));
     return { ok: true, host, overrideHost: host, stream, siteEnabled: !(o[host] && o[host].enabled === false), enabled: true, features };
@@ -512,4 +514,18 @@ Deno.test("Show more tells the truth about the threat list when it is off", asyn
 Deno.test("the popup adds no permission", () => {
   assertEquals(manifest.permissions, ["storage", "declarativeNetRequest", "alarms"]);
   assert(!manifest.optional_permissions, "no optional permissions");
+});
+
+Deno.test("a YouTube-family site without our scripts shows its host and what really applies, with nothing to allow or fix", async () => {
+  const stored = { settings: { v: 1, enabled: true, features: {} } };
+  const music = await openPopup({ pageHref: "https://music.youtube.com/watch?v=x", stored, streamTop: true, limited: { threat: true } });
+  assertEquals(music.el["site-host"].textContent, "music.youtube.com");
+  assertEquals(music.status.textContent, "Malware blocking only – ad scripts don't run on this site");
+  assertEquals(music.button.disabled, true, "nothing to allow");
+  assertEquals(music.el["fix-site"].disabled, true, "nothing to fix");
+  assertEquals(music.note.textContent, "", "no 'open a normal page' hint");
+  const off = await openPopup({ pageHref: "https://www.youtubekids.com/", stored, streamTop: true, limited: { threat: false } });
+  assertEquals(off.status.textContent, "Nothing runs on this site");
+  const master = await openPopup({ pageHref: "https://music.youtube.com/", stored: { settings: { v: 1, enabled: false, features: {} } }, streamTop: true, limited: { threat: false } });
+  assertEquals(master.status.textContent, "Off – turned off in settings", "the master switch still wins");
 });
