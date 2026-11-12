@@ -1,0 +1,89 @@
+name: release
+
+# Publishes the GitHub release for the version in manifest.json, from main,
+# on demand: Actions -> release -> Run workflow. Before anything is created it
+# checks that the tag does not exist yet and that CHANGELOG.md has a section
+# for the version, then packs the zip with scripts/pack-zip.sh and runs
+# scripts/release-gate.sh on the checkout and on that zip (the same gate as
+# checks.yml). Only then does it create the tag v<version> on the checked-out
+# commit and the release "Adgecko <version>", with the changelog section as
+# the notes and adgecko-<version>.zip attached. Nothing is published if any
+# step fails. No secret beyond the run's own GITHUB_TOKEN.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# Same pinned actions as checks.yml (sha_pinning_required is on).
+jobs:
+  release:
+    name: release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.8
+
+      - name: Ensure ripgrep
+        run: command -v rg >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ripgrep)
+
+      - name: Read the version and check it is new
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(python3 -I -c 'import json; print(json.load(open("manifest.json"))["version"])')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version from manifest.json: $VERSION"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag v$VERSION already exists. Bump the version in manifest.json first."
+            exit 1
+          fi
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::A release v$VERSION already exists."
+            exit 1
+          fi
+
+      - name: Release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python3 -I scripts/release-notes.py "$VERSION" CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+
+      - name: Pack the release zip
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: bash scripts/pack-zip.sh "$RUNNER_TEMP/adgecko-$VERSION.zip"
+
+      - name: Release gate on the checkout
+        run: bash scripts/release-gate.sh
+
+      - name: Release gate on the zip
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: bash scripts/release-gate.sh --zip "$RUNNER_TEMP/adgecko-$VERSION.zip"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          sha256sum "$RUNNER_TEMP/adgecko-$VERSION.zip"
+          gh release create "v$VERSION" "$RUNNER_TEMP/adgecko-$VERSION.zip" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Adgecko $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md"
