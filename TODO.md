@@ -4,7 +4,7 @@ Where Adgecko stands, and what is next. Last updated 2026-11-11, when 0.3.4 was 
 
 ## Where it was left off
 
-- **Last release:** [v0.3.3](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.3), published 2026-11-09.
+- **Last release:** [v0.3.4](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.4), published 2026-11-12 (before it: v0.3.3, 2026-11-09).
 - **Last work merged:** PR #8 (2026-11-10), six fixes made *after* the v0.3.3 zip was published:
   - Settings: **Allow this site** / **Fix this site** now work on one-label hosts (`localhost`, intranet names).
   - Clipboard guard: your own cut, Ctrl+Insert and non-Latin Ctrl+C count as copying it yourself.
@@ -12,7 +12,7 @@ Where Adgecko stands, and what is next. Last updated 2026-11-11, when 0.3.4 was 
   - Lists: the status line keeps an error or "Reverted" message until a refresh really runs.
   - Packer: runs the rule merger after writing `meta.json`.
   - Popup: YouTube Music, Studio, TV, Kids and youtube-nocookie pages show the site and "Malware blocking only".
-- **Open issues / pull requests:** none, apart from the release-workflow PR.
+- **Open issues / pull requests:** none.
 - **Tests on `main`:** 570 passed, 0 failed, 2 skipped (the skips need a packing tool or a private word list that this machine does not have).
 
 **In short:** the code on `main` was ahead of the published v0.3.3 zip but still called itself 0.3.3. Release 0.3.4 is now prepared to ship those fixes.
@@ -29,7 +29,7 @@ Where Adgecko stands, and what is next. Last updated 2026-11-11, when 0.3.4 was 
 - [x] Release PR merged into `main` (#9).
 - [x] Live check in headless Chromium, with and without the extension: Twitch (page works, 5 requests blocked), Kick (video plays), the Guardian (649 requests down to 136) and weather.com (905 down to 191).
 - [ ] Try YouTube by hand in your own Chrome: YouTube refused the build machine (HTTP 429, a bot check), so it was not tested live.
-- [ ] Publish the release: after the release-workflow PR is merged, on GitHub open **Actions** -> **release** -> **Run workflow** (branch `main`). It checks, packs, gates and publishes `v0.3.4` with the zip and the changelog notes. Until then the README's zip link does not work.
+- [x] Release published 2026-11-12 by the new release workflow (`.github/workflows/release.yml`, #10): [v0.3.4](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.4) with `adgecko-0.3.4.zip` (67 files). Next release: bump the version and add its changelog section, then **Actions** -> **release** -> **Run workflow**.
 
 ### 2. Keep an eye on
 
