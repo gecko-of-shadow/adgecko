@@ -12,7 +12,7 @@ Where Adgecko stands, and what is next. Last updated 2026-11-11, when 0.3.4 was 
   - Lists: the status line keeps an error or "Reverted" message until a refresh really runs.
   - Packer: runs the rule merger after writing `meta.json`.
   - Popup: YouTube Music, Studio, TV, Kids and youtube-nocookie pages show the site and "Malware blocking only".
-- **Open issues / pull requests:** none, apart from the 0.3.4 release PR.
+- **Open issues / pull requests:** none, apart from the release-workflow PR.
 - **Tests on `main`:** 570 passed, 0 failed, 2 skipped (the skips need a packing tool or a private word list that this machine does not have).
 
 **In short:** the code on `main` was ahead of the published v0.3.3 zip but still called itself 0.3.3. Release 0.3.4 is now prepared to ship those fixes.
@@ -26,10 +26,10 @@ Where Adgecko stands, and what is next. Last updated 2026-11-11, when 0.3.4 was 
 - [x] Filter lists repacked 2026-11-11 22:41 UTC (`python3 scripts/pack-filter-lists.py`): 2,518 rules in `general-network.json`, 15,844 threat hosts in 199 rules.
 - [x] Release checks: `deno test` 570 passed / 0 failed / 2 ignored; `scripts/pack-zip.sh` packed 67 files; `scripts/release-gate.sh` CLEAN on the checkout and with `--zip`; privacy check passed.
 - [x] Smoke test of the packed zip in headless Chromium: the worker starts, the `general`, `threat` and `ubo-youtube` rulesets are on, the refresh alarm is set, and the popup and settings pages open with no errors.
-- [ ] Merge the release PR into `main`.
+- [x] Release PR merged into `main` (#9).
 - [x] Live check in headless Chromium, with and without the extension: Twitch (page works, 5 requests blocked), Kick (video plays), the Guardian (649 requests down to 136) and weather.com (905 down to 191).
 - [ ] Try YouTube by hand in your own Chrome: YouTube refused the build machine (HTTP 429, a bot check), so it was not tested live.
-- [ ] Publish the release: on GitHub, **Releases** -> **Draft a new release**, tag `v0.3.4` on `main`, title `Adgecko 0.3.4`, paste the 0.3.4 changelog section, and attach `adgecko-0.3.4.zip` (build it with `bash scripts/pack-zip.sh adgecko-0.3.4.zip`). Until then the README's zip link does not work.
+- [ ] Publish the release: after the release-workflow PR is merged, on GitHub open **Actions** -> **release** -> **Run workflow** (branch `main`). It checks, packs, gates and publishes `v0.3.4` with the zip and the changelog notes. Until then the README's zip link does not work.
 
 ### 2. Keep an eye on
 
