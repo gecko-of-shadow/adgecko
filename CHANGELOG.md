@@ -1,8 +1,31 @@
 # Changelog
 
-## 0.3.3 (2026-11-09)
+## 0.3.4 (2026-11-11)
 
-Release candidate. Dates in this file are the owner's local date (UTC-6); the dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.
+Dates in this file are the owner's local date (UTC-6); the dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.
+
+Fixes made after the 0.3.3 zip was published (merged in PR #8), and freshly packed filter lists.
+
+- Settings: **Allow this site** and **Fix this site** now take effect on a host with one label (`localhost`, an intranet name). The override was saved and shown, but the hide rules and the page guards never looked it up there.
+- Clipboard guard: your own cut (Ctrl/Cmd+X, Shift+Delete), Ctrl+Insert, and Ctrl+C on a keyboard layout where that key is not "c" (Russian, Greek and others) count as copying it yourself. They were cancelled with the "this page tried to put a command into your clipboard" notice. Only text that was selected when the key went down is let through, as before.
+- Threat lists: switching **Block known malware hosts** (or the whole extension) off and back on now brings the refreshed threat rules back even when the background worker had gone to sleep in between. Before, only the packed threat list came back until a later refresh downloaded a changed list.
+- Lists: the status line keeps a storage error, and the "Reverted to the packed lists" message, until a refresh really runs. A background check that had nothing to do used to wipe the error and, after a revert, show the discarded lists' "Last update" time again.
+- Packer: `scripts/pack-filter-lists.py` runs the rule merger after it writes `src/rules/meta.json`, so a repack keeps `general_network_rules_total` instead of needing a second merger run by hand.
+- Popup: on YouTube Music, YouTube Studio, YouTube TV, YouTube Kids and youtube-nocookie pages the popup now shows the site and says "Malware blocking only – ad scripts don't run on this site", with **Allow this site** and **Fix this site** greyed out, instead of "No web page" and a hint to reload. The YouTube ad scripts still run on `www`, `m` and the bare domain only; those other hosts get just the small script that tells the popup which page it is on. The popup lists a switch only where its script is really injected. `manifest.json` adds those hosts (`*.youtube.com`, `youtubekids.com`, `youtube-nocookie.com` and their subdomains) to the matches of that one small script; `permissions` and `host_permissions` are unchanged.
+- Filter lists repacked 2026-11-11 22:41 UTC: 193,100 whole-domain and 5,329 scoped entries in 2,513 list rules (2,518 rules in `general-network.json`), and 15,844 threat hosts in 199 rules. YouTube keeps 4 rules.
+
+### Roll back to 0.3.3
+
+1. Download `adgecko-0.3.3.zip` from the existing v0.3.3 release: <https://github.com/gecko-of-shadow/adgecko/releases/download/v0.3.3/adgecko-0.3.3.zip>
+2. Unzip it to a folder. In Windows PowerShell 5.1:
+
+```powershell
+Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\adgecko-0.3.3.zip" -DestinationPath "$env:USERPROFILE\Downloads\adgecko-0.3.3" -Force
+```
+
+3. In Chrome, open `chrome://extensions`, turn on **Developer mode**, **Remove** (or turn off) Adgecko 0.3.4, click **Load unpacked**, and pick the 0.3.3 folder.
+
+## 0.3.3 (2026-11-09)
 
 - Lists: the captcha never-block hosts have one source, `src/rules/never-block-captcha.json`. The packer, the rule merger and the YouTube sync read it, and the packer writes `src/general/never-block-captcha.js` from it for the service worker (list refresh and threat tier), so a new captcha vendor is one edit plus `python3 scripts/pack-filter-lists.py --never-block-captcha-js`. The parity test checks every layer, the generated file and the packed `_ad_` media rule's exclusion in `src/rules/ubo-youtube-network.json` against that JSON. Packed rules are unchanged; lookalike hosts are still blocked.
 - Lists: a fresh install fetches the lists right away from `runtime.onInstalled`, the same refresh as the settings page's "Update lists", instead of running on the packed lists until the first alarm 5 to 30 minutes later. Updates and reloads keep their saved lists and wait for the alarm as before.
@@ -10,12 +33,6 @@ Release candidate. Dates in this file are the owner's local date (UTC-6); the da
 - Lists: the HaGeZi Pro mini protected-host cap adapts instead of being fixed at 64. A refresh is accepted when it names at most `last accepted count + 10` protected hosts, and never more than `2 x last accepted count` (when that count is at least 1), so a poisoned copy is still caught even inside the margin. The count of the last accepted copy is stored with that list's refresh state (`protectedHits`, written only when a refresh is accepted; a rejected refresh leaves it unchanged). With no stored count yet (a first load, or an install upgraded from 0.3.2) the cap is the seed 64, the old fixed value. Every other list keeps its fixed cap of 25. The packer applies no cap; it only skips never-block hosts.
 - Lists: `src/rules/meta.json` now records the rule count of the shipped `general-network.json` after the merge (`general_network_rules_total`, written by `scripts/merge-dnr-rules.py`) next to the packer's list-rule count, and a test checks every packed total (list rules, whole-domain and scoped entries, threat rules and hosts) against the files. 0.3.2 had meta 2,536 list rules next to 2,541 rules in the file with nothing tying the two together.
 - CI: a weekly workflow (`.github/workflows/ubo-youtube-drift.yml`, Mondays 06:00 UTC and on demand) runs `scripts/sync-ubo-youtube.mjs` against current uAssets with the local-patch layer and fails when the sync errors, a local patch no longer finds its upstream shape, or the shipped `src/vendor/ubo-youtube.js`, `ubo-youtube-isolated.js`, `ubo-youtube.css` or `src/rules/ubo-youtube-network.json` would change (the generated files' one banner line naming the uAssets commit is ignored, so a new upstream commit with unchanged YouTube filters passes). It commits nothing, opens nothing, and uses no secret (read-only token).
-- Settings: **Allow this site** and **Fix this site** now take effect on a host with one label (`localhost`, an intranet name). The override was saved and shown, but the hide rules and the page guards never looked it up there.
-- Clipboard guard: your own cut (Ctrl/Cmd+X, Shift+Delete), Ctrl+Insert, and Ctrl+C on a keyboard layout where that key is not "c" (Russian, Greek and others) count as copying it yourself. They were cancelled with the "this page tried to put a command into your clipboard" notice. Only text that was selected when the key went down is let through, as before.
-- Threat lists: switching **Block known malware hosts** (or the whole extension) off and back on now brings the refreshed threat rules back even when the background worker had gone to sleep in between. Before, only the packed threat list came back until a later refresh downloaded a changed list.
-- Lists: the status line keeps a storage error, and the "Reverted to the packed lists" message, until a refresh really runs. A background check that had nothing to do used to wipe the error and, after a revert, show the discarded lists' "Last update" time again.
-- Packer: `scripts/pack-filter-lists.py` runs the rule merger after it writes `src/rules/meta.json`, so a repack keeps `general_network_rules_total` instead of needing a second merger run by hand.
-- Popup: on YouTube Music, YouTube Studio, YouTube TV, YouTube Kids and youtube-nocookie pages the popup now shows the site and says "Malware blocking only – ad scripts don't run on this site", with **Allow this site** and **Fix this site** greyed out, instead of "No web page" and a hint to reload. The YouTube ad scripts still run on `www`, `m` and the bare domain only; those other hosts get just the small script that tells the popup which page it is on. The popup lists a switch only where its script is really injected.
 - Tests: the two storage tests that provoke a `QUOTA_BYTES` write failure on purpose now capture and assert the worker's warning instead of printing it, so the run shows no quota noise; the production warning is unchanged.
 - Filter lists repacked 2026-11-09 09:18 UTC: 192,715 whole-domain and 5,345 scoped entries in 2,508 list rules (2,513 rules in `general-network.json`), and 15,827 threat hosts in 198 rules. YouTube keeps 4 rules.
 

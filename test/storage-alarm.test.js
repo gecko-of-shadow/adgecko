@@ -57,8 +57,14 @@ Deno.test("a worker without chrome.alarms still loads", async () => {
 });
 
 const listBody = (tag) => "! Expires: 4 days\n" + Array.from({ length: 30000 }, (_, i) => `||${tag}${i}.example.com^`).join("\n");
+// The worker also reads its own packed threat ruleset (the threat restore
+// after a restart); the fixture leaves that file to listFetch, so serve it
+// here without counting it as a list download.
 function countingFetch(counter, fail) {
   return async (url) => {
+    if (url.startsWith("chrome-extension://") && url.endsWith("/src/rules/threat-network.json")) {
+      return new Response(Deno.readTextFileSync(new URL("../src/rules/threat-network.json", import.meta.url)));
+    }
     counter.n++;
     if (fail) throw new TypeError("Failed to fetch");
     return new Response(listBody(new URL(url).pathname.replace(/[^a-z0-9]/gi, "").slice(-12)), { headers: { ETag: '"e"' } });

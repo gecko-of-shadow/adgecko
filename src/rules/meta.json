@@ -1,75 +1,75 @@
 {
-  "packed_at_utc": "2026-11-09T09:18:22Z",
+  "packed_at_utc": "2026-11-11T22:41:13Z",
   "format": "chrome_declarativeNetRequest_rules_array",
-  "domains_total": 192715,
-  "scoped_entries_total": 5345,
-  "dnr_rules_total": 2508,
+  "domains_total": 193100,
+  "scoped_entries_total": 5329,
+  "dnr_rules_total": 2513,
   "domains_per_rule": 80,
   "max_dnr_rules_budget": 28000,
   "headroom_note": "Reserve remaining static rule quota for stream-site allow rules (DNR agent).",
   "sources": {
     "peter_lowe": {
       "url": "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext",
-      "sha256": "68fd03880a70202368484e675c3989b0519b0c019af664f9676ab17cc302e708",
+      "sha256": "cdfa2d38f34b3d70334102df68bfd1aeefa8b537ee7c629f76644e0bd594a860",
       "role": "ads_trackers",
       "priority": 100,
-      "raw": 3560,
-      "kept": 3556,
+      "raw": 3562,
+      "kept": 3558,
       "skipped_never": 4,
       "scoped_raw": 0,
       "scoped_kept": 0
     },
     "urlhaus_hosts": {
       "url": "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt",
-      "sha256": "32d5055d6be549d3fa61095773d558976de64fc684593c04b7650014ad354c75",
+      "sha256": "7bdceef8e452435f4f65a2099a0bc4bf95e88ee3e0ea0d6f0c3146e85018bd99",
       "role": "malware_threat",
       "priority": 90,
-      "raw": 544,
-      "kept": 544,
+      "raw": 558,
+      "kept": 558,
       "skipped_never": 0,
       "scoped_raw": 0,
       "scoped_kept": 0
     },
     "easylist": {
       "url": "https://easylist.to/easylist/easylist.txt",
-      "sha256": "1b46157e76c2513e9c33cfe440a845bcc5d00997327264771c327d3230896530",
+      "sha256": "0cabcd349b0c7eb3125e182f246df07a98ca7ae548af6fca44684bf48fae5798",
       "role": "ads",
       "priority": 70,
-      "raw": 42118,
-      "kept": 41763,
+      "raw": 43105,
+      "kept": 42749,
       "skipped_never": 2,
       "scoped_raw": 2203,
-      "scoped_kept": 1067
+      "scoped_kept": 1065
     },
     "easyprivacy": {
       "url": "https://easylist.to/easylist/easyprivacy.txt",
-      "sha256": "f1bfde2a04e33e818d1bd08ff1b3630b7f1e743e24465270713c40e8d613f2f5",
+      "sha256": "405f5f04efdebf3d30e5d6a0ab5a75e3ddfa49bb96514496d0362b50e6297537",
       "role": "privacy",
       "priority": 50,
-      "raw": 43379,
-      "kept": 42652,
+      "raw": 43393,
+      "kept": 42666,
       "skipped_never": 7,
-      "scoped_raw": 3948,
-      "scoped_kept": 1574
+      "scoped_raw": 3947,
+      "scoped_kept": 1561
     },
     "hagezi_pro_mini": {
       "url": "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt",
-      "sha256": "a88c1ee35789339a6c5ff35c0bcdf34d568059a9a7b2f47a163c87a93ebb58ae",
+      "sha256": "afa262f2098078344bf6e976c584583ce83b203691c6092aa3dc5a6e7fd276f8",
       "role": "ads_trackers",
       "priority": 40,
-      "raw": 99478,
-      "kept": 80454,
-      "skipped_never": 29,
+      "raw": 99663,
+      "kept": 79787,
+      "skipped_never": 31,
       "scoped_raw": 0,
       "scoped_kept": 0
     },
     "ublock_badware": {
       "url": "https://ublockorigin.github.io/uAssets/filters/badware.txt",
-      "sha256": "5183a92da27a5e3cee2cd5245776204e076a628dc07fa9accd160fd216782f9d",
+      "sha256": "504aea5e32cef4057f7b4f29bbd03c144b8ea3089ab1a7a7465910d8bb3983a2",
       "role": "malware_threat",
       "priority": 35,
-      "raw": 1111,
-      "kept": 850,
+      "raw": 1114,
+      "kept": 861,
       "skipped_never": 0,
       "scoped_raw": 2204,
       "scoped_kept": 2196
@@ -80,21 +80,21 @@
       "role": "malware_threat",
       "priority": 30,
       "raw": 11729,
-      "kept": 11213,
+      "kept": 11214,
       "skipped_never": 0,
       "scoped_raw": 308,
       "scoped_kept": 306
     },
     "adguard_base": {
       "url": "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt",
-      "sha256": "7d7a83183693819eb77f7f19678f44b0274ee23fbeea0271e0e62af5ec9173a6",
+      "sha256": "be08c57cce2dfcd1ed34a7906430dddc183d7d96e34d642b8c5c6ca2673fe1ba",
       "role": "ads",
       "priority": 20,
-      "raw": 12745,
-      "kept": 11683,
+      "raw": 12749,
+      "kept": 11707,
       "skipped_never": 3,
-      "scoped_raw": 427,
-      "scoped_kept": 202
+      "scoped_raw": 428,
+      "scoped_kept": 201
     }
   },
   "never_block_suffixes": [
@@ -151,6 +151,6 @@
       ]
     }
   },
-  "general_network_rules_total": 2513,
-  "general_network_merged_at_utc": "2026-11-09T09:18:48Z"
+  "general_network_rules_total": 2518,
+  "general_network_merged_at_utc": "2026-11-11T22:41:18Z"
 }
