@@ -8,14 +8,16 @@
 // and then tell the visitor to paste it into Run, PowerShell or a terminal.
 // Checked: navigator.clipboard.writeText and .write, document.execCommand
 // ("copy"/"cut"), the browser's own copy/cut of the selection, and
-// DataTransfer.setData on a copy/cut event's clipboard data. Text that looks
+// DataTransfer.setData / DataTransferItemList.add on a copy/cut event's
+// clipboard data. Text that looks
 // like a dangerous command is not written unless the visitor copied exactly
 // that text themselves, or the site is on the known-safe list (documentation
 // and code hosts). A small notice says why and how to copy on purpose.
 //
 // "Copied it themselves" (security review M-2 and its follow-up review): the
 // text is part of the selection the visitor had when they pressed Ctrl/Cmd+C
-// (or opened the context menu). A button labelled "Copy" does not count: a
+// (or opened the context menu; that counts only for the browser's own copy
+// event, never for a page-initiated write). A button labelled "Copy" does not count: a
 // page can label, hide or fake anything it shows (opacity:0, off-screen text).
 // The page runs in this same JavaScript world, so everything on the decision
 // path is captured when this file runs (document_start, before any page
@@ -46,6 +48,8 @@ const promiseReject = Promise.reject;
 const getOwnDesc = Object.getOwnPropertyDescriptor;
 const getProto = Object.getPrototypeOf;
 const defineProp = Object.defineProperty;
+const freeze = Object.freeze;
+const symIterator = Symbol.iterator;
 const hasOwn = Object.prototype.hasOwnProperty;
 
 function installClipboardGuard(target) {
@@ -54,6 +58,8 @@ function installClipboardGuard(target) {
     { id: "powershell-encoded", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s-(?:e|ec|en|enc|enco|encod|encode|encoded|encodedcommand)\s+[A-Za-z0-9+/=]{16,}/i },
     { id: "powershell-download", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,400}(?:\biex\b|invoke-expression|downloadstring|downloadfile|invoke-webrequest|\biwr\b|\birm\b|invoke-restmethod|net\.webclient|start-bitstransfer|frombase64string)/i },
     { id: "powershell-hidden", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s-(?:w|win|window|windowstyle)\s+(?:h|hid|hidden)\b/i },
+    // Pipeline form "irm URL | iex" (curl/wget are PowerShell aliases too).
+    { id: "download-pipe-iex", re: /\b(?:iwr|irm|invoke-webrequest|invoke-restmethod|curl|wget)\b[^\n|]{0,300}\|\s*(?:iex|invoke-expression)\b/i },
     { id: "iex-download", re: /\b(?:iex|invoke-expression)\b[^\n]{0,40}\(?\s*(?:iwr|irm|invoke-webrequest|invoke-restmethod|new-object\s+net\.webclient)/i },
     { id: "cmd-chain", re: /\bcmd(?:\.exe)?\s+\/[ck]\b[^\n]{0,300}(?:mshta|curl|wget|bitsadmin|certutil|powershell|pwsh|rundll32|regsvr32|msiexec|start\s+\/min)/i },
     { id: "mshta", re: /\bmshta(?:\.exe)?\s+["']?(?:https?:|vbscript:|javascript:|\\\\)/i },
@@ -63,6 +69,8 @@ function installClipboardGuard(target) {
     { id: "regsvr32", re: /\bregsvr32(?:\.exe)?\s+[^\n]{0,40}\/i:\s*https?:/i },
     { id: "msiexec-remote", re: /\bmsiexec(?:\.exe)?\s+[^\n]{0,40}\/(?:i|package)\s+["']?https?:/i },
     { id: "curl-pipe-shell", re: /\b(?:curl|wget)\b[^\n|]{0,300}\|\s*(?:sudo\s+)?(?:ba|z|da)?sh\b/i },
+    // macOS form without a pipe: /bin/bash -c "$(curl -fsSL URL)".
+    { id: "shell-c-download", re: /\b(?:ba|z|da)?sh\s+-c\s+["']?\$\(\s*(?:curl|wget)\b/i },
     { id: "osascript-curl", re: /\bosascript\b[^\n]{0,200}(?:curl|do shell script)/i },
     { id: "base64-pipe-shell", re: /\bbase64\s+(?:-d|--decode|-D)\b[^\n]{0,80}\|\s*(?:ba|z)?sh\b/i },
   ];
@@ -104,8 +112,9 @@ function installClipboardGuard(target) {
   function matchDangerous(text) {
     const s = typeof text === "string" ? text : (text == null ? "" : StringFn(text));
     if (s.length < 8) return null;
-    const sample = s.length > 20000 ? apply(sSlice, s, [0, 20000]) : s;
-    for (let i = 0; i < PATTERNS.length; i++) if (matches(PATTERNS[i].re, sample)) return PATTERNS[i].id;
+    // The whole text: shells ignore leading padding, so a sample window could
+    // hide a command. Every pattern uses bounded gaps, so this stays linear.
+    for (let i = 0; i < PATTERNS.length; i++) if (matches(PATTERNS[i].re, s)) return PATTERNS[i].id;
     return null;
   }
 
@@ -168,6 +177,8 @@ function installClipboardGuard(target) {
     const flagOn = env.flagOn || (() => true);
     let lastCopy = null;
     let copyData = null; // clipboardData of the copy/cut event being dispatched
+    let copyNative = false; // that event is the browser's own copy, not one from execCommand
+    let inExec = false; // inside the wrapped execCommand("copy"/"cut")
 
     // Native getters and methods, captured now (before page scripts).
     const getter = (proto, key) => {
@@ -238,14 +249,18 @@ function installClipboardGuard(target) {
       }
     }
 
-    // true = let it through.
-    function allowed(text) {
+    // true = let it through. nativeCopy: the check is for the browser's own
+    // copy/cut event. A context-menu gesture (right-click) authorises only that
+    // native copy, never a page-initiated write: opening the menu is not a copy,
+    // and the page can set the selection itself.
+    function allowed(text, nativeCopy) {
       try {
         if (!flagOn()) return true;
         const hit = matchDangerous(text);
         if (!hit) return true;
         if (onSafeHost(hostOf(env.location))) return true;
-        if (deliberateCopy(lastCopy, now(), text)) return true;
+        const last = lastCopy && (lastCopy.kind !== "menu" || nativeCopy === true) ? lastCopy : null;
+        if (deliberateCopy(last, now(), text)) return true;
         if (env.notify) env.notify(hit);
         return false;
       } catch {
@@ -289,10 +304,12 @@ function installClipboardGuard(target) {
       // not on drag-and-drop data).
       const onCopy = (e) => {
         try {
+          copyNative = false;
           copyData = clipboardDataGet ? apply(clipboardDataGet, e, []) : e && e.clipboardData;
+          copyNative = !inExec;
           const sel = selectionText();
           const field = fieldSelection();
-          if (!allowed(sel) || (field && field !== sel && !allowed(field))) {
+          if (!allowed(sel, copyNative) || (field && field !== sel && !allowed(field, copyNative))) {
             if (preventDefaultFn) apply(preventDefaultFn, e, []);
             else e.preventDefault();
           }
@@ -341,14 +358,35 @@ function installClipboardGuard(target) {
       try {
         const wrappedWrite = new Proxy(writeOwner.write, {
           apply(fn, self, args) {
+            if (args.length === 0) return apply(fn, self, args); // native error
+            // One synchronous snapshot, taken the way the native sequence
+            // conversion reads it (the iterator). The checked items are the
+            // written ones: the native write gets this private, frozen list,
+            // so neither a custom iterator nor a swap during the awaits counts.
+            const list = [];
+            try {
+              let n = 0;
+              for (const it of args[0]) defineProp(list, n++, { value: it, writable: false, enumerable: true, configurable: false });
+              const len = n;
+              defineProp(list, symIterator, {
+                value() {
+                  let i = 0;
+                  return { next: () => (i < len ? { value: list[i++], done: false } : { value: undefined, done: true }) };
+                },
+              });
+              freeze(list);
+            } catch (error) {
+              return apply(promiseReject, PromiseCtor, [error]);
+            }
+            const call = [list];
+            for (let i = 1; i < args.length; i++) call[i] = args[i];
             const run = async () => {
               let verdict = true;
               try {
                 if (flagOn() && !onSafeHost(hostOf(env.location))) {
-                  const items = args[0];
-                  const n = items ? items.length : 0;
+                  const n = list.length;
                   for (let i = 0; i < n && verdict; i++) {
-                    const item = items[i];
+                    const item = list[i];
                     const types = apply(typesGet, item, []);
                     for (let j = 0; j < types.length && verdict; j++) {
                       const type = lower(StringFn(types[j]));
@@ -362,7 +400,7 @@ function installClipboardGuard(target) {
                 verdict = true; // not readable by us: the native call decides
               }
               if (!verdict) throw blocked();
-              return apply(fn, self, args);
+              return apply(fn, self, call);
             };
             return run();
           },
@@ -392,7 +430,12 @@ function installClipboardGuard(target) {
             } catch {
               // fail open
             }
-            return apply(fn, self, call);
+            inExec = true;
+            try {
+              return apply(fn, self, call);
+            } finally {
+              inExec = false;
+            }
           },
         });
         defineProp(execOwner, "execCommand", { value: wrappedExec, configurable: true, writable: true });
@@ -417,7 +460,7 @@ function installClipboardGuard(target) {
               call[0] = StringFn(args[0]); // once each
               call[1] = StringFn(args[1]);
               const type = lower(call[0]);
-              if ((type === "text/plain" || type === "text" || type === "text/html") && !allowed(call[1])) return undefined;
+              if ((type === "text/plain" || type === "text" || type === "text/html") && !allowed(call[1], copyNative)) return undefined;
             } catch {
               // fail open
             }
@@ -425,6 +468,36 @@ function installClipboardGuard(target) {
           },
         });
         defineProp(dtOwner, "setData", { value: wrappedSet, configurable: true, writable: true });
+      } catch {
+        // stays native
+      }
+    }
+
+    // The same data can be written with clipboardData.items.add(string, type):
+    // check it like setData, on the copy/cut event's item list only.
+    const itemsGet = getter(protoOf(DT), "items");
+    const DTIL = win.DataTransferItemList;
+    const addOwner = itemsGet && DTIL && DTIL.prototype && ownerOf(DTIL.prototype, "add");
+    if (addOwner && typeof addOwner.add === "function") {
+      try {
+        const wrappedAdd = new Proxy(addOwner.add, {
+          apply(fn, self, args) {
+            if (args.length < 2 || !copyData) return apply(fn, self, args);
+            const call = [];
+            for (let i = 0; i < args.length; i++) call[i] = args[i];
+            try {
+              if (self !== apply(itemsGet, copyData, [])) return apply(fn, self, args);
+              call[0] = StringFn(args[0]); // once each, in the native order
+              call[1] = StringFn(args[1]);
+              const type = lower(call[1]);
+              if ((type === "text/plain" || type === "text" || type === "text/html") && !allowed(call[0], copyNative)) return null;
+            } catch {
+              // fail open
+            }
+            return apply(fn, self, call);
+          },
+        });
+        defineProp(addOwner, "add", { value: wrappedAdd, configurable: true, writable: true });
       } catch {
         // stays native
       }

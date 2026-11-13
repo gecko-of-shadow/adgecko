@@ -14,7 +14,10 @@
     listStatus: "generalListStatus",
     settings: "settings",
     overrides: "siteOverrides",
-    fix: "popupFix", // { host, at, prev: { <feature id>: true | false | null } }
+    // { host, at, prev: { <feature id>: true | false | null }, others?: { <host>: { at, prev } } }
+    // The newest unanswered Fix at the top level; earlier ones (other sites)
+    // under `others`, so a Fix on a second site does not drop the first question.
+    fix: "popupFix",
     welcomed: "popupWelcomed",
     theme: "uiTheme", // "auto" | "purple" | "contrast" (settings page)
   };
@@ -70,6 +73,7 @@
   let info = null; // worker's siteInfo answer for this page
   let saveError = "";
   let note = "";
+  let busy = false; // a button's save / worker round trip is still running
 
   function packagedVersion() {
     try {
@@ -143,12 +147,59 @@
     return info && info.host === host && info.overrideHost ? info.overrideHost : host;
   }
 
-  function pendingFix(host) {
+  // Every unanswered Fix still inside its TTL, by host.
+  function fixMap() {
     const f = all[KEYS.fix];
-    if (!f || typeof f !== "object" || !host) return null;
-    if (f.host !== overrideKey(host)) return null;
-    if (typeof f.at !== "number" || Date.now() - f.at > FIX_TTL_MS) return null;
-    return f;
+    const out = {};
+    if (!f || typeof f !== "object") return out;
+    const add = (host, e) => {
+      if (typeof host !== "string" || !host || !e || typeof e !== "object") return;
+      if (typeof e.at !== "number" || Date.now() - e.at > FIX_TTL_MS) return;
+      if (!out[host] || out[host].at < e.at) out[host] = { at: e.at, prev: e.prev && typeof e.prev === "object" ? e.prev : {} };
+    };
+    if (f.others && typeof f.others === "object") for (const [h, e] of Object.entries(f.others)) add(h, e);
+    add(f.host, f);
+    return out;
+  }
+
+  // fixMap() -> [patch, removeKeys] for save(): the newest entry at the top
+  // level, the rest under `others`; no entries -> the key is removed.
+  function fixWrite(map, patch) {
+    const hosts = Object.keys(map).sort((a, b) => map[b].at - map[a].at);
+    if (!hosts.length) return [patch, [KEYS.fix]];
+    const [top, ...rest] = hosts;
+    const value = { host: top, at: map[top].at, prev: map[top].prev };
+    if (rest.length) {
+      value.others = {};
+      for (const h of rest) value.others[h] = map[h];
+    }
+    return [Object.assign({}, patch, { [KEYS.fix]: value }), []];
+  }
+
+  function pendingFix(host) {
+    if (!host) return null;
+    const e = fixMap()[host];
+    return e ? Object.assign({ host }, e) : null;
+  }
+
+  // Puts back exactly the switches one Fix changed (a change made on the
+  // settings page in between is kept). Returns true when a switch changed.
+  function undoFix(o, host, prev) {
+    if (!prev || !o[host]) return false;
+    let changed = false;
+    const entry = Object.assign({}, o[host]);
+    const features = Object.assign({}, entry.features);
+    for (const id of Object.keys(prev)) {
+      const before = features[id];
+      if (prev[id] === null) delete features[id];
+      else features[id] = prev[id];
+      if (features[id] !== before) changed = true;
+    }
+    if (Object.keys(features).length) entry.features = features;
+    else delete entry.features;
+    if (Object.keys(entry).length) o[host] = entry;
+    else delete o[host];
+    return changed;
   }
 
   function feedText() {
@@ -212,7 +263,7 @@
     const pending = pendingFix(host);
     const canFix = !!origin && on && !allowed && fixIds().length > 0;
     fixSite.hidden = !!pending;
-    fixSite.disabled = !canFix;
+    fixSite.disabled = !canFix || busy;
     fixAsk.hidden = !pending;
     fixNote.textContent = note;
 
@@ -322,42 +373,72 @@
     await notifyBackground("applyGeneralState");
   }
 
-  allowSite.addEventListener("click", async () => {
+  // A double click must not run a handler twice on stale state: the second
+  // click would read what the first one just wrote.
+  function guarded(fn) {
+    return async () => {
+      if (busy) return;
+      busy = true;
+      fixSite.disabled = true;
+      try {
+        await fn();
+      } finally {
+        busy = false;
+        render();
+      }
+    };
+  }
+
+  // Allow writes this page's own host (other addresses of the same site count
+  // separately). Block again edits the entry that holds the Allow, which can
+  // be a parent domain. An unanswered Fix on this host is undone first: Allow
+  // keeps the clipboard guard on, and Block again must not bring back a Fix
+  // the visitor never confirmed.
+  allowSite.addEventListener("click", guarded(async () => {
     const origin = currentOrigin();
     const host = origin ? hostOfOrigin(origin) : "";
     if (!host) return;
     const o = overridesCopy();
-    const key = overrideKey(host);
+    const off = siteOff(origin);
+    const key = off ? overrideKey(host) : host;
+    const fixes = fixMap();
+    if (!off && fixes[host]) {
+      undoFix(o, host, fixes[host].prev);
+      delete fixes[host];
+    }
     const entry = Object.assign({}, o[key]);
-    if (siteOff(origin)) delete entry.enabled;
+    if (off) delete entry.enabled;
     else entry.enabled = false;
     if (Object.keys(entry).length) o[key] = entry;
     else delete o[key];
     note = "";
-    await save({ [KEYS.overrides]: o }, [KEYS.fix]);
+    await save(...fixWrite(fixes, { [KEYS.overrides]: o }));
     await refreshInfo();
     render();
     await applyRules();
-  });
+  }));
 
-  fixSite.addEventListener("click", async () => {
+  // Fix writes this page's own host only, never a parent domain's entry.
+  fixSite.addEventListener("click", guarded(async () => {
     const origin = currentOrigin();
     const host = origin ? hostOfOrigin(origin) : "";
     const ids = fixIds();
     if (!host || !ids.length) return;
     const o = overridesCopy();
-    const key = overrideKey(host);
-    const entry = Object.assign({}, o[key]);
+    const entry = Object.assign({}, o[host]);
     const features = Object.assign({}, entry.features);
-    const prev = {};
+    const fixes = fixMap();
+    // An unanswered Fix on this host keeps what was there before it.
+    const prev = Object.assign({}, fixes[host] && fixes[host].prev);
     for (const id of ids) {
-      prev[id] = typeof features[id] === "boolean" ? features[id] : null;
+      if (!(id in prev)) prev[id] = typeof features[id] === "boolean" ? features[id] : null;
       features[id] = false;
     }
     entry.features = features;
-    o[key] = entry;
+    o[host] = entry;
+    fixes[host] = { at: Date.now(), prev };
     note = "";
-    await save({ [KEYS.overrides]: o, [KEYS.fix]: { host: key, at: Date.now(), prev } });
+    await save(...fixWrite(fixes, { [KEYS.overrides]: o }));
     await refreshInfo();
     render();
     await applyRules();
@@ -366,11 +447,18 @@
     } catch {
       // fake DOM
     }
-  });
+  }));
+
+  function pageHost() {
+    const origin = currentOrigin();
+    return origin ? hostOfOrigin(origin) : "";
+  }
 
   fixYes.addEventListener("click", async () => {
     note = "";
-    const saved = await save({}, [KEYS.fix]);
+    const fixes = fixMap();
+    delete fixes[pageHost()];
+    const saved = await save(...fixWrite(fixes, {}));
     render();
     if (!saved) return;
     try {
@@ -382,25 +470,13 @@
 
   // "No": put back exactly the switches Fix changed (a change made on the
   // settings page in between is kept), then point to Allow this site.
-  fixNo.addEventListener("click", async () => {
-    const f = all[KEYS.fix];
+  fixNo.addEventListener("click", guarded(async () => {
+    const host = pageHost();
+    const fixes = fixMap();
     const o = overridesCopy();
-    let changed = false;
-    if (f && typeof f === "object" && f.prev && o[f.host]) {
-      const entry = Object.assign({}, o[f.host]);
-      const features = Object.assign({}, entry.features);
-      for (const id of Object.keys(f.prev)) {
-        const before = features[id];
-        if (f.prev[id] === null) delete features[id];
-        else features[id] = f.prev[id];
-        if (features[id] !== before) changed = true;
-      }
-      if (Object.keys(features).length) entry.features = features;
-      else delete entry.features;
-      if (Object.keys(entry).length) o[f.host] = entry;
-      else delete o[f.host];
-    }
-    const saved = await save({ [KEYS.overrides]: o }, [KEYS.fix]);
+    const changed = fixes[host] ? undoFix(o, host, fixes[host].prev) : false;
+    delete fixes[host];
+    const saved = await save(...fixWrite(fixes, { [KEYS.overrides]: o }));
     note = saved && changed ? "Turned back on. If the site still breaks, use Allow this site." : "";
     await refreshInfo();
     render();
@@ -410,7 +486,7 @@
     } catch {
       // fake DOM
     }
-  });
+  }));
 
   if (openSettings) {
     openSettings.addEventListener("click", () => {

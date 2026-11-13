@@ -127,10 +127,16 @@ function enableRuleset(enabled) {
   });
 }
 
+// syncAllowRules removes only ids in [ALLOW_RULE_ID_BASE, + ALLOW_RULE_MAX):
+// build at most that many rules so an id is never left behind and re-added.
+const ALLOW_RULE_MAX = 10000;
+
 function buildAllowRules(origins) {
   const rules = [];
+  const seen = new Set();
   let id = GS.ALLOW_RULE_ID_BASE;
   for (const origin of origins || []) {
+    if (rules.length >= ALLOW_RULE_MAX) break;
     if (!origin || GS.isHardExcludedOrigin(origin)) continue;
     let host;
     try {
@@ -139,6 +145,9 @@ function buildAllowRules(origins) {
       continue;
     }
     if (!host || GS.isHardExcludedHost(host)) continue;
+    // http:// and https:// origins of one host share one initiatorDomains rule.
+    if (seen.has(host)) continue;
+    seen.add(host);
     rules.push({
       id: id++,
       priority: 10000,
@@ -179,7 +188,7 @@ function syncAllowRules(origins) {
         try {
           void chrome.runtime.lastError;
           const removeRuleIds = (existing || [])
-            .filter((r) => r.id >= GS.ALLOW_RULE_ID_BASE && r.id < GS.ALLOW_RULE_ID_BASE + 10000)
+            .filter((r) => r.id >= GS.ALLOW_RULE_ID_BASE && r.id < GS.ALLOW_RULE_ID_BASE + ALLOW_RULE_MAX)
             .map((r) => r.id);
           const addRules = buildAllowRules(origins);
           chrome.declarativeNetRequest.updateDynamicRules(
@@ -682,6 +691,7 @@ async function ensureCosmetic() {
 
 let currentEnabled = true;
 let refreshing = null;
+let refreshingManual = false;
 
 // Popup text for the list status (the popup reads only this short string).
 function listStatusText(state, result, writeError) {
@@ -699,8 +709,19 @@ function listStatusText(state, result, writeError) {
 }
 
 async function refreshLists(manual) {
-  if (refreshing) return refreshing;
-  refreshing = (async () => {
+  // A manual click does not take the result of a running automatic run (it
+  // may be a throttled no-op, and it checks only due lists): it waits for
+  // that run to end, then starts its own manual run.
+  while (refreshing) {
+    if (!manual || refreshingManual) return refreshing;
+    try {
+      await refreshing;
+    } catch {
+      // start the manual run anyway
+    }
+  }
+  refreshingManual = !!manual;
+  const run = (async () => {
     if (reverting) {
       try {
         await reverting;
@@ -748,10 +769,14 @@ async function refreshLists(manual) {
     }
     return result;
   })();
+  refreshing = run;
   try {
-    return await refreshing;
+    return await run;
   } finally {
-    refreshing = null;
+    if (refreshing === run) {
+      refreshing = null;
+      refreshingManual = false;
+    }
   }
 }
 

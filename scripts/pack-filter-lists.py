@@ -436,6 +436,9 @@ def fetch(url: str, name: str) -> tuple[str, str]:
 # rule, scripts/merge-dnr-rules.py EXTRA_TRACKER_DOMAINS). Same list as
 # NEVER_BLOCK_EXCEPTIONS in src/general/update.js (test/imasdk-never-block.test.js).
 NEVER_BLOCK_EXCEPTIONS = ("imasdk.googleapis.com",)
+# ads.twitch.tv is NOT an exception here (twitch.tv stays never-block for list
+# lines); the merger blocks it through EXTRA_TRACKER_DOMAINS instead, which is
+# what the Twitch allow's excludedRequestDomains carve-out is for.
 
 
 def is_never_block(domain: str) -> bool:
@@ -502,15 +505,35 @@ def looks_like_domain(domain: str) -> bool:
     return True
 
 
-def extract_entries(text: str) -> tuple[list[str], list[list[str]]]:
-    """(whole-domain blocks, [[domain, scope key], ...]). Mirrors parseEntries().
+IMPORTANT_RE = re.compile(r"(?:^\$|,)\s*important\s*(?:,|$)", re.IGNORECASE)
 
-    $badfilter cancels the filter with the same domain and scope key.
-    A "! openphish" section is dropped up to the next comment line.
+
+class ListEntries(tuple):
+    """(whole, scoped) as extract_entries() returns it, plus the list's
+    cross-list data: .cancel ($badfilter idents "domain\nkey"), .allow (hosts of
+    unconditional `@@||host^` exceptions) and .important (whole-domain blocks
+    marked $important, which an exception never lifts)."""
+
+    cancel: set
+    allow: set
+    important: set
+
+
+def extract_list(text: str) -> ListEntries:
+    """Mirrors parseEntries() in src/general/update.js.
+
+    $badfilter cancels the filter with the same domain and scope key, in this
+    list here and in every other list through apply_cross_list(). Only an
+    exception with no options at all (`@@||host^`) is kept, and it lifts only
+    the whole-domain block of that same host (apply_cross_list). Every other
+    `@@` line is still ignored. A "! openphish" section is dropped up to the
+    next comment line.
     """
     whole: list[str] = []
     scoped: list[list[str]] = []
     cancelled: set[str] = set()
+    allow: set[str] = set()
+    important: set[str] = set()
     dropping = False
     for raw in text.splitlines():
         line = raw.strip()
@@ -519,7 +542,10 @@ def extract_entries(text: str) -> tuple[list[str], list[list[str]]]:
         if dropping or not line or line.startswith("!") or line.startswith("["):
             continue
         if line.startswith("@@"):
-            continue  # exceptions handled later by DNR allow rules / user allow
+            em = DOMAIN_RE.match(line[2:])
+            if em and not em.group(2) and looks_like_domain(em.group(1).lower()):
+                allow.add(em.group(1).lower())
+            continue
         if "#$" in line or "##" in line or "#@#" in line:
             continue
         m = DOMAIN_RE.match(line)
@@ -533,6 +559,8 @@ def extract_entries(text: str) -> tuple[list[str], list[list[str]]]:
                 cancelled.add(domain + "\n" + key)
             elif key == "":
                 whole.append(domain)
+                if m.group(2) and IMPORTANT_RE.search(m.group(2)):
+                    important.add(domain)
             else:
                 scoped.append([domain, key])
             continue
@@ -548,7 +576,39 @@ def extract_entries(text: str) -> tuple[list[str], list[list[str]]]:
     if cancelled:
         whole = [d for d in whole if d + "\n" not in cancelled]
         scoped = [e for e in scoped if e[0] + "\n" + e[1] not in cancelled]
+    out = ListEntries((whole, scoped))
+    out.cancel = cancelled
+    out.allow = allow
+    out.important = important
+    return out
+
+
+def extract_entries(text: str) -> tuple[list[str], list[list[str]]]:
+    """(whole-domain blocks, [[domain, scope key], ...]) of one list."""
+    whole, scoped = extract_list(text)
     return whole, scoped
+
+
+def apply_cross_list(buckets: dict, scoped_buckets: dict, lists: list) -> tuple[dict, dict]:
+    """Apply every list's $badfilter cancels and unconditional same-host `@@`
+    exceptions (extract_list results in `lists`) to all buckets, before
+    merge_domains / merge_scoped. Mirrors crossListRules() in update.js.
+    Threat-tier hosts are built elsewhere and are not touched."""
+    cancel: set[str] = set()
+    allow: set[str] = set()
+    important: set[str] = set()
+    for entry in lists:
+        cancel |= getattr(entry, "cancel", set())
+        allow |= getattr(entry, "allow", set())
+        important |= getattr(entry, "important", set())
+    allow -= important
+    new_buckets = OrderedDict(
+        (n, [d for d in ds if d + "\n" not in cancel and d not in allow]) for n, ds in buckets.items()
+    )
+    new_scoped = OrderedDict(
+        (n, [e for e in es if e[0] + "\n" + e[1] not in cancel]) for n, es in scoped_buckets.items()
+    )
+    return new_buckets, new_scoped
 
 
 def extract_domains(text: str) -> list[str]:
@@ -732,6 +792,7 @@ def main() -> int:
     buckets: dict[str, list[str]] = {}
     scoped_buckets: dict[str, list[list[str]]] = {}
     cosmetic_sample: list[dict] = []
+    extracted: list = []
 
     # Fetch highest-priority first for merge order.
     ordered_names = sorted(
@@ -740,13 +801,17 @@ def main() -> int:
     for name in ordered_names:
         text, digest = fetch(SOURCES[name]["url"], name)
         digests[name] = digest
-        buckets[name], scoped_buckets[name] = extract_entries(text)
+        entry = extract_list(text)
+        extracted.append(entry)
+        buckets[name], scoped_buckets[name] = entry
         if name in ("easylist", "easyprivacy") and not cosmetic_sample:
             cosmetic_sample = extract_cosmetic_sample(text)
 
     # Rebuild buckets in priority order for merge_domains iteration.
     buckets = OrderedDict((n, buckets[n]) for n in ordered_names)
     scoped_buckets = OrderedDict((n, scoped_buckets[n]) for n in ordered_names)
+    # $badfilter and unconditional `@@||host^` across lists, as uBO does.
+    buckets, scoped_buckets = apply_cross_list(buckets, scoped_buckets, extracted)
     domains, stats = merge_domains(buckets)
     scoped, scoped_stats = merge_scoped(scoped_buckets, domains)
     for name in stats:

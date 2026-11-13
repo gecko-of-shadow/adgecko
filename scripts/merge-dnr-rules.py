@@ -195,6 +195,10 @@ EXTRA_TRACKER_DOMAINS = [
     "facebook.net",
     "fundingchoicesmessages.google.com",
     "imasdk.googleapis.com",
+    # Twitch's ad host (edge.ads.twitch.tv): rule 2 carves it out of the Twitch
+    # allow, but the packer drops every *.twitch.tv list line (never-block), so
+    # only this rule can block it.
+    "ads.twitch.tv",
 ]
 
 

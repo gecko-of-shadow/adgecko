@@ -180,21 +180,34 @@ function installGeneralAdblockUpdate(target) {
   // because scripts/lib/curben_check.py refuses the word in code.
   const DROPPED_SECTION_RE = new RegExp("^!\\s*" + "open" + "phish\\b", "i");
 
-  // Same rules as scripts/pack-filter-lists.py extract_entries().
+  const IMPORTANT_RE = /(?:^\$|,)\s*important\s*(?:,|$)/i;
+
+  // Same rules as scripts/pack-filter-lists.py extract_list().
   // Returns { domains: [whole-domain blocks], scoped: [[domain, key], ...] }
   // where key is a general/filter-options.js scope key. $badfilter cancels the
-  // filter with the same domain and scope.
-  function parseEntries(text) {
+  // filter with the same domain and scope, in this list here and in every
+  // other list at merge time (out.cancel). out.allow: hosts of unconditional
+  // `@@||host^` exceptions (no options at all); at merge time they lift the
+  // whole-domain block of that same host only, unless a list marks that block
+  // `$important` (out.important). Neither touches the threat tier.
+  function parseEntriesFull(text) {
     const FO = filterOptions();
     const whole = [];
     const scoped = [];
     const popup = [];
+    const allow = [];
+    const important = [];
     const cancelled = new Set();
     let dropping = false;
     for (const raw of String(text || "").split(/\r?\n/)) {
       const line = raw.trim();
       if (line.startsWith("!")) dropping = DROPPED_SECTION_RE.test(line);
-      if (dropping || !line || line.startsWith("!") || line.startsWith("[") || line.startsWith("@@")) continue;
+      if (dropping || !line || line.startsWith("!") || line.startsWith("[")) continue;
+      if (line.startsWith("@@")) {
+        const em = DOMAIN_RE.exec(line.slice(2));
+        if (em && !em[2] && looksLikeDomain(em[1].toLowerCase())) allow.push(em[1].toLowerCase());
+        continue;
+      }
       if (line.includes("##") || line.includes("#@#") || line.includes("#$")) continue;
       let m = DOMAIN_RE.exec(line);
       if (m) {
@@ -208,8 +221,10 @@ function installGeneralAdblockUpdate(target) {
         const [d, key, cancel] = conv;
         if (!looksLikeDomain(d)) continue;
         if (cancel) cancelled.add(d + "\n" + key);
-        else if (key === "") whole.push(d);
-        else scoped.push([d, key]);
+        else if (key === "") {
+          whole.push(d);
+          if (m[2] && IMPORTANT_RE.test(m[2])) important.push(d);
+        } else scoped.push([d, key]);
         continue;
       }
       m = HOSTS_RE.exec(line);
@@ -225,7 +240,40 @@ function installGeneralAdblockUpdate(target) {
       scoped: scoped.filter(([d, k]) => !cancelled.has(d + "\n" + k)),
     };
     if (popup.length) out.popup = popup;
+    if (cancelled.size) out.cancel = Array.from(cancelled);
+    if (allow.length) out.allow = allow;
+    if (important.length) out.important = important;
     return out;
+  }
+
+  // The per-list result only (domains, scoped, popup), as the shared fixture
+  // test/fixtures/filter-options-cases.json pins it.
+  function parseEntries(text) {
+    const out = parseEntriesFull(text);
+    delete out.cancel;
+    delete out.allow;
+    delete out.important;
+    return out;
+  }
+
+  // Cross-list $badfilter cancels and unconditional same-host @@ exceptions
+  // (nightly 0.3.5), collected from every list's payload. Payloads stored
+  // before this carry neither field and simply add nothing.
+  function crossListRules(payloads) {
+    const cancel = new Set();
+    const allow = new Set();
+    const important = new Set();
+    for (const p of Object.values(payloads || {})) {
+      if (!p) continue;
+      for (const c of Array.isArray(p.cancel) ? p.cancel : []) cancel.add(String(c));
+      for (const a of Array.isArray(p.allow) ? p.allow : []) allow.add(String(a));
+      for (const i of Array.isArray(p.important) ? p.important : []) important.add(String(i));
+    }
+    for (const i of important) allow.delete(i);
+    return {
+      keepWhole: (d) => !cancel.has(d + "\n") && !allow.has(d),
+      keepScoped: (d, k) => !cancel.has(d + "\n" + k),
+    };
   }
 
   // Whole-domain blocks only (scoped filters are not widened into these).
@@ -363,6 +411,24 @@ function installGeneralAdblockUpdate(target) {
   const MAX_NEW_THREAT_HOSTS = 2500;
   const MAX_NEW_THREAT_RATIO = 0.2;
 
+  // Fingerprint of an accepted threat host set (count + FNV-1a over the
+  // sorted hosts). Stored at acceptance and kept when the threat tier is
+  // switched off, so switching it back on re-installs that same set without
+  // judging it again against the packed baseline (nightly 0.3.5).
+  function threatSetSig(hosts) {
+    const sorted = Array.from(new Set(hosts)).sort();
+    let h = 0x811c9dc5;
+    for (const d of sorted) {
+      for (let i = 0; i < d.length; i++) {
+        h ^= d.charCodeAt(i);
+        h = Math.imul(h, 0x01000193) >>> 0;
+      }
+      h ^= 10;
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return sorted.length + ":" + h.toString(16);
+  }
+
   function threatHostsOf(rules) {
     const out = new Set();
     for (const r of rules || []) for (const d of (r && r.condition && r.condition.requestDomains) || []) out.add(d);
@@ -395,6 +461,7 @@ function installGeneralAdblockUpdate(target) {
       const budget = Math.max(0, Math.min(THREAT_RULE_ID_END - THREAT_RULE_ID_BASE, DYNAMIC_RULE_LIMIT - others - 100));
       const compiled = TC.compileThreatRules(hosts, { idBase: THREAT_RULE_ID_BASE, maxRules: budget, popupHosts });
       const previousRules = existing.filter((r) => isThreatRule(r.id));
+      const sig = threatSetSig(compiled.accepted.concat(compiled.popupAccepted));
       let previous = threatHostsOf(previousRules);
       if (!previous.size && deps.loadPackedThreatRules) {
         try {
@@ -414,7 +481,10 @@ function installGeneralAdblockUpdate(target) {
         }
         const seenBefore = !!(opts && opts.downloaded) && st.threatRejectedNew > 0 && st.threatHeldAt > 0 && now > st.threatHeldAt &&
           Math.abs(added - st.threatRejectedNew) / st.threatRejectedNew <= CONFIRM_RATIO;
-        if (tooMany && !seenBefore) {
+        // The same set as the last accepted one (e.g. the threat tier or the
+        // master switch went off and on): it was already judged, install it.
+        const acceptedBefore = !!st.threatAcceptedSig && st.threatAcceptedSig === sig;
+        if (tooMany && !seenBefore && !acceptedBefore) {
           const reason = "too many new threat hosts in one refresh (" + added + " new, " + previous.size + " before); kept the previous rules";
           // A held jump confirmed only by a later download keeps its first hold time.
           await deps.setState({ threatError: reason, threatRejectedNew: added, threatHeldAt: st.threatRejectedNew > 0 && st.threatHeldAt > 0 ? st.threatHeldAt : now });
@@ -423,7 +493,7 @@ function installGeneralAdblockUpdate(target) {
       }
       const removeRuleIds = previousRules.map((r) => r.id);
       await deps.updateDynamicRules({ removeRuleIds, addRules: compiled.rules });
-      await deps.setState({ threatRules: compiled.rules.length, threatHosts: compiled.accepted.length, threatRejected: compiled.rejected.length, threatError: "", threatRejectedNew: 0, threatHeldAt: 0, threatUpdatedAt: now });
+      await deps.setState({ threatRules: compiled.rules.length, threatHosts: compiled.accepted.length, threatRejected: compiled.rejected.length, threatError: "", threatRejectedNew: 0, threatHeldAt: 0, threatUpdatedAt: now, threatAcceptedSig: sig });
       return { ok: true, rules: compiled.rules.length };
     } catch (e) {
       const reason = String(e && e.message || e);
@@ -610,6 +680,13 @@ function installGeneralAdblockUpdate(target) {
     } catch {
       retired = [];
     }
+    // M-2: a run where no due list reached its server (offline, captive
+    // portal, every host down) is not a successful run: lastRunAt stays, so
+    // the 30-min retry applies. Rejected lists did reach their server.
+    let attempted = 0;
+    let reached = 0;
+    let allFailed = false;
+    let listsOffBefore = false;
     try {
       await deps.setState({ lastAttemptAt: now });
       const lists = {};
@@ -627,6 +704,7 @@ function installGeneralAdblockUpdate(target) {
       for (const src of SOURCES) {
         const meta = lists[src.name];
         if (!listDue(meta, now, manual, !!meta)) continue;
+        attempted += 1;
         try {
           let res = null;
           let usedUrl = "";
@@ -664,21 +742,24 @@ function installGeneralAdblockUpdate(target) {
           if (!res) throw new Error(tried.join("; "));
           if (tried.length) mirrorNotes[src.name] = tried.join("; ") + " (used " + new URL(usedUrl).hostname + ")";
           if (res.status === 304 && meta) {
+            reached += 1;
             lists[src.name] = Object.assign({}, meta, { fetchedAt: now });
             continue;
           }
           if (!res.ok) throw new Error("HTTP " + res.status);
           const text = bodyText;
-          const parsed = parseEntries(text);
+          const parsed = parseEntriesFull(text);
           const total = parsed.domains.length + parsed.scoped.length;
           const floor = src.minDomains || 50;
           if (total < floor) throw new Error("parsed too few domains (" + total + " < " + floor + ")");
           const payload = { domains: parsed.domains, scoped: parsed.scoped, parser: PARSER_VERSION };
           if (parsed.popup) payload.popup = parsed.popup;
+          for (const k of ["cancel", "allow", "important"]) if (parsed[k]) payload[k] = parsed[k];
           if (src.cosmetic && CP) payload.cosmetic = CP.parseCosmetic(text);
           const hits = protectedHits(parsed);
           const rejected = checkListChange(meta, parsed, payload.cosmetic, src.name, hits);
           if (rejected) {
+            reached += 1;
             rejections[src.name] = { reason: rejected, at: now };
             // Remember the rejected sizes: the same size next time is accepted.
             if (meta) {
@@ -692,6 +773,7 @@ function installGeneralAdblockUpdate(target) {
           if (payload.cosmetic) delete payload.cosmetic.stats;
           // Payload first; the validators go into state only once it is stored.
           await deps.setListData(src.name, payload);
+          reached += 1;
           fresh[src.name] = payload;
           lists[src.name] = {
             url: usedUrl,
@@ -732,14 +814,16 @@ function installGeneralAdblockUpdate(target) {
           // Cosmetic stays on the previous rules (or the bundled sheet).
         }
       }
+      allFailed = attempted > 0 && reached === 0;
       if (!changed) {
+        // Nothing to rebuild. The per-list errors are already recorded above.
+        if (allFailed) return { ok: false, ran: true, reason: Object.values(errors).join("; ") || "no list reached" };
         await deps.setState({ lastRunAt: now });
         return { ok: true, ran: true, reason: "unchanged" };
       }
-      if (!deps.enabled()) {
-        await deps.setState({ lastRunAt: now });
-        return { ok: true, ran: true, reason: "lists off; cached" };
-      }
+      // Lists switched off: no list rules, but the threat tier is its own
+      // feature (docs/threat-tier.md "Switches") and is still rebuilt below.
+      listsOffBefore = !deps.enabled();
     } catch (e) {
       // Download/parse failed: whatever is active now (a previous good swap
       // or the bundled ruleset) stays. Make sure something is active.
@@ -761,17 +845,35 @@ function installGeneralAdblockUpdate(target) {
     // worker's DNR queue, so no other writer (lists switch, Allow, threat
     // switch, revert) reads or writes rules in between. The downloads above
     // run outside it, so a click never waits for the network.
+    const TCR = typeof globalThis !== "undefined" && globalThis.GeckoThreatCompile;
+    const threatFresh = !!TCR && Object.keys(fresh).some((n) => TCR.THREAT_LISTS.includes(n));
     try {
       return await exclusive(deps)(async () => {
+        if (listsOffBefore) {
+          // Lists off before this run: keep the cache, add no list rules,
+          // but rebuild the refreshed threat rules from a fresh threat list.
+          if (threatFresh) {
+            try {
+              const st = (await deps.getState()) || {};
+              const threatLists = {};
+              for (const n of TCR.THREAT_LISTS) if (st.lists && st.lists[n]) threatLists[n] = st.lists[n];
+              await applyThreatRules(deps, await readPayloads(deps, threatLists, fresh), now, { downloaded: true });
+            } catch {
+              // applyThreatRules records its own errors; the packed tier stays
+            }
+          }
+          if (!allFailed) await deps.setState({ lastRunAt: now });
+          return { ok: !allFailed, ran: true, reason: "lists off; cached" };
+        }
         // The lists switch went off during the downloads (its own run already
         // removed the list rules): keep the cache, add no rules.
         if (!deps.enabled()) {
-          await deps.setState({ lastRunAt: now });
-          return { ok: true, ran: true, reason: "lists off; cached" };
+          if (!allFailed) await deps.setState({ lastRunAt: now });
+          return { ok: !allFailed, ran: true, reason: "lists off; cached" };
         }
         try {
           const result = await swap(deps, (await deps.getState()).lists, now, fresh);
-          await deps.setState({ lastRunAt: now });
+          if (!allFailed) await deps.setState({ lastRunAt: now });
           return result;
         } catch (e) {
           await fallback(deps);
@@ -857,9 +959,10 @@ function installGeneralAdblockUpdate(target) {
     const payloads = await readPayloads(deps, lists, fresh);
     const perList = {};
     const perListScoped = {};
+    const cross = crossListRules(payloads);
     for (const [n, p] of Object.entries(payloads)) {
-      perList[n] = p.domains;
-      perListScoped[n] = p.scoped || [];
+      perList[n] = p.domains.filter((d) => cross.keepWhole(d));
+      perListScoped[n] = (p.scoped || []).filter(([d, k]) => cross.keepScoped(d, k));
     }
     const missing = SOURCES.filter((x) => !perList[x.name]).map((x) => x.name);
     let domains = mergeDomains(perList);
@@ -869,12 +972,12 @@ function installGeneralAdblockUpdate(target) {
       // and scoped, each with its own scope) so a partial refresh never shrinks
       // protection and never widens a packed scoped rule.
       const seen = new Set(domains);
-      for (const d of packed) if (!seen.has(d) && !isNeverBlock(d)) { seen.add(d); domains.push(d); }
+      for (const d of packed) if (!seen.has(d) && !isNeverBlock(d) && cross.keepWhole(d)) { seen.add(d); domains.push(d); }
       domains = domains.slice(0, MAX_LIST_RULES * DOMAINS_PER_RULE);
       const seenScoped = new Set(scoped.map(([d, k]) => d + "\n" + k));
       const whole = new Set(domains);
       for (const [d, k0] of packedScoped) {
-        if (isNeverBlock(d)) continue;
+        if (isNeverBlock(d) || !cross.keepScoped(d, k0)) continue;
         const k = mergedScope(d, k0, whole);
         if (k === null) continue;
         const id = d + "\n" + k;
@@ -1016,7 +1119,7 @@ function installGeneralAdblockUpdate(target) {
     const removeRuleIds = existing.filter((r) => isOurRule(r.id) || isThreatRule(r.id)).map((r) => r.id);
     if (removeRuleIds.length) await deps.updateDynamicRules({ removeRuleIds, addRules: [] });
     if (deps.enabled()) await deps.setStaticEnabled(true);
-    await deps.setState({ lists: {}, dynamicActive: false, updatedAt: 0, ruleCount: 0, domainCount: 0, revertedAt: now, lastRunAt: now, lastRejected: {}, lastErrors: {}, threatRules: 0, threatHosts: 0, threatError: "", threatRejectedNew: 0, threatHeldAt: 0 });
+    await deps.setState({ lists: {}, dynamicActive: false, updatedAt: 0, ruleCount: 0, domainCount: 0, revertedAt: now, lastRunAt: now, lastRejected: {}, lastErrors: {}, threatRules: 0, threatHosts: 0, threatError: "", threatRejectedNew: 0, threatHeldAt: 0, threatAcceptedSig: "" });
     if (deps.revertCosmetic) {
       try {
         await deps.revertCosmetic();
@@ -1038,7 +1141,7 @@ function installGeneralAdblockUpdate(target) {
 
   Object.assign(target, {
     POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, FETCH_TIMEOUT_MS, MAX_LIST_BYTES, readListText, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
-    RETIRED_LISTS, dropRetiredLists, PARSER_VERSION, parseEntries, mergeScoped, staleParserLists,
+    RETIRED_LISTS, dropRetiredLists, PARSER_VERSION, parseEntries, parseEntriesFull, crossListRules, mergeScoped, staleParserLists,
     THREAT_RULE_ID_BASE, THREAT_RULE_ID_END, DYNAMIC_RULE_LIMIT, isThreatRule, isOurRule, applyThreatRules,
     MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, PROTECTED_HITS_SEED_BY_LIST, PROTECTED_HITS_MARGIN, PROTECTED_HITS_SPIKE, protectedHitsCap, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, protectedHits, revertLists,
     removeThreatRules, rebuildThreatRules,

@@ -97,47 +97,113 @@
     $("lists-status").textContent = lists;
   }
 
-  function renderAllow() {
-    const ul = $("allow-list");
-    clear(ul);
-    const list = Array.isArray(stored.threatAllowDomains) ? stored.threatAllowDomains : [];
-    if (!list.length) ul.appendChild(el("li", "No domains allowed."));
-    for (const d of list) {
-      const li = el("li", d + " ");
-      const rm = el("button", "Remove");
-      rm.type = "button";
-      rm.addEventListener("click", async () => {
-        await set({ threatAllowDomains: list.filter((x) => x !== d) });
-        await load();
-      });
-      li.appendChild(rm);
-      ul.appendChild(li);
+  const focused = () => {
+    try {
+      return document.activeElement || null;
+    } catch {
+      return null;
     }
+  };
+  const focus = (node) => {
+    try {
+      if (node && node.focus) node.focus();
+    } catch {
+      // fake DOM in tests
+    }
+  };
+
+  // Keyed list: rows are reused by key and only their label text changes, so
+  // a storage write never replaces the button that has keyboard focus. When the
+  // focused row goes away, focus moves to the next row's button (or the
+  // previous one when it was the last row).
+  function syncList(ul, items, emptyText, buttonText, onClick) {
+    if (!ul._rows) {
+      clear(ul);
+      ul._rows = new Map();
+    }
+    const rows = ul._rows;
+    const keys = items.map((i) => i.key);
+    const active = focused();
+    const oldKeys = [...rows.keys()];
+    let refocus = null;
+    let lost = false; // the focused row is gone
+    for (const [i, k] of oldKeys.entries()) {
+      if (keys.includes(k)) continue;
+      const row = rows.get(k);
+      if (active && row.button === active) {
+        const after = oldKeys.slice(i + 1).find((x) => keys.includes(x));
+        const before = oldKeys.slice(0, i).reverse().find((x) => keys.includes(x));
+        refocus = after || before || null;
+        lost = true;
+      }
+      ul.removeChild(row.li);
+      rows.delete(k);
+    }
+    for (const item of items) {
+      let row = rows.get(item.key);
+      if (!row) {
+        const li = el("li");
+        const label = el("span");
+        const button = el("button", buttonText);
+        button.type = "button";
+        const key = item.key;
+        button.addEventListener("click", () => onClick(key));
+        li.appendChild(label);
+        li.appendChild(button);
+        row = { li, label, button };
+        rows.set(key, row);
+        ul.appendChild(li);
+      }
+      if (row.label.textContent !== item.text) row.label.textContent = item.text;
+    }
+    // Keep the order; move rows only when it is wrong (a move can drop focus).
+    const order = [...ul.children || []].filter((n) => n !== ul._empty);
+    const want = keys.map((k) => rows.get(k).li);
+    if (order.length === want.length && order.some((n, i) => n !== want[i])) {
+      const keep = focused();
+      for (const li of want) {
+        ul.removeChild(li);
+        ul.appendChild(li);
+      }
+      if (keep && keep !== focused()) focus(keep);
+    }
+    if (!keys.length && !ul._empty) {
+      ul._empty = ul.appendChild(el("li", emptyText));
+      ul._empty.tabIndex = -1; // focus target when the last row goes
+    }
+    else if (keys.length && ul._empty) {
+      ul.removeChild(ul._empty);
+      ul._empty = null;
+    }
+    if (refocus) focus(rows.get(refocus).button);
+    else if (lost && ul._empty) focus(ul._empty);
+  }
+
+  function renderAllow() {
+    const list = Array.isArray(stored.threatAllowDomains) ? stored.threatAllowDomains : [];
+    const items = [...new Set(list)].map((d) => ({ key: d, text: d + " " }));
+    syncList($("allow-list"), items, "No domains allowed.", "Remove", async (d) => {
+      const now = Array.isArray(stored.threatAllowDomains) ? stored.threatAllowDomains : [];
+      await set({ threatAllowDomains: now.filter((x) => x !== d) });
+      await load();
+    });
   }
 
   function renderSites() {
-    const ul = $("site-list");
-    clear(ul);
     const o = F.normalizeOverrides(stored.siteOverrides);
-    const hosts = Object.keys(o).sort();
-    if (!hosts.length) ul.appendChild(el("li", "No per-site switches. Use the popup on a site to add one."));
-    for (const h of hosts) {
+    const items = Object.keys(o).sort().map((h) => {
       const e = o[h];
       const parts = [];
       if (e.enabled === false) parts.push("site switched off");
       for (const [id, on] of Object.entries(e.features || {})) parts.push((F.byId(id) || { label: id }).label + " " + (on ? "on" : "off"));
-      const li = el("li", h + ": " + parts.join(", ") + " ");
-      const rm = el("button", "Reset");
-      rm.type = "button";
-      rm.addEventListener("click", async () => {
-        const next = F.normalizeOverrides(stored.siteOverrides);
-        delete next[h];
-        await set({ siteOverrides: next });
-        await load();
-      });
-      li.appendChild(rm);
-      ul.appendChild(li);
-    }
+      return { key: h, text: h + ": " + parts.join(", ") + " " };
+    });
+    syncList($("site-list"), items, "No per-site switches. Use the popup on a site to add one.", "Reset", async (h) => {
+      const next = F.normalizeOverrides(stored.siteOverrides);
+      delete next[h];
+      await set({ siteOverrides: next });
+      await load();
+    });
   }
 
   async function load() {
