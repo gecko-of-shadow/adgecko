@@ -228,10 +228,7 @@ function installKickAdblock(target) {
   function bannerCollapseTarget(frame) {
     const parent = frame && frame.parentElement;
     if (!parent) return frame || null;
-    // A <video-player> child means the box is the player cover (its <video>
-    // may not be mounted yet or may sit in a closed shadow root): never
-    // collapse it, only the frame.
-    if (directChild(parent, "VIDEO-PLAYER") || videosInside(parent).length) return frame;
+    if (videosInside(parent).length) return frame;
     return parent;
   }
 
@@ -360,32 +357,6 @@ function installKickAdblock(target) {
   // Undo our own hide only: a newer display value set by the page is kept.
   function showCover(overlay) {
     hiddenCovers.delete(overlay);
-    undoHide(overlay);
-  }
-
-  // Boxes collapsed by the banner path: tracked like covers, so a pass after
-  // their frame left, or the kick switch going off, shows them again.
-  const collapsedBoxes = new Set();
-
-  function collapseBox(box) {
-    const style = box.style;
-    if (!hiddenBefore.has(box) || !isOurHide(style)) {
-      hiddenBefore.set(box, { value: style.getPropertyValue("display"), priority: style.getPropertyPriority("display") });
-    }
-    style.setProperty("display", "none", "important");
-    collapsedBoxes.add(box);
-  }
-
-  function expandBox(box) {
-    collapsedBoxes.delete(box);
-    try {
-      undoHide(box);
-    } catch (error) {
-      debugLog("kick failed open", error);
-    }
-  }
-
-  function undoHide(overlay) {
     const before = hiddenBefore.get(overlay);
     if (!before) return;
     hiddenBefore.delete(overlay);
@@ -409,7 +380,6 @@ function installKickAdblock(target) {
   // Kick switch off: every cover we hid is shown again.
   function releaseCovers() {
     for (const overlay of Array.from(hiddenCovers)) releaseCover(overlay);
-    for (const box of Array.from(collapsedBoxes)) expandBox(box);
   }
 
   // A new source or new metadata on a <video> is not a DOM mutation, so each
@@ -480,21 +450,13 @@ function installKickAdblock(target) {
     for (const overlay of Array.from(hiddenCovers)) {
       if (!seen.has(overlay)) releaseCover(overlay);
     }
-    const collapsed = new Set();
     for (const frame of frames) {
       try {
         const targetNode = bannerCollapseTarget(frame);
-        if (targetNode && targetNode.style) {
-          collapseBox(targetNode);
-          collapsed.add(targetNode);
-        }
+        if (targetNode && targetNode.style) targetNode.style.setProperty("display", "none", "important");
       } catch (error) {
         debugLog("kick failed open", error);
       }
-    }
-    // A box we collapsed whose ad frame is gone is shown again.
-    for (const box of Array.from(collapsedBoxes)) {
-      if (!collapsed.has(box)) expandBox(box);
     }
   }
 
@@ -529,13 +491,8 @@ function installKickAdblock(target) {
   }
 
   function coverMutation(mutations) {
-    // While a cover or box is hidden, a removal (ad controls or ad frame
-    // gone) must also run the pass, so the hide can be undone.
-    const watchRemovals = hiddenCovers.size > 0 || collapsedBoxes.size > 0;
     for (const mutation of mutations) {
-      const nodes = watchRemovals
-        ? [...Array.from(mutation.addedNodes || []), ...Array.from(mutation.removedNodes || [])]
-        : mutation.addedNodes;
+      const nodes = mutation.addedNodes;
       if (!nodes) continue;
       for (const node of nodes) {
         if (!node || node.nodeType !== 1) continue;

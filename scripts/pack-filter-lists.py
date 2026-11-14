@@ -913,7 +913,7 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
             "## How we use them",
             "",
             "- Network blocking only in `general-network.json` (domain -> DNR `requestDomains`).",
-            "- Hide rules (`##`) from " + ", ".join(COSMETIC_LISTS) + " in `cosmetic-rules.json` (built by `scripts/pack-cosmetic.mjs`).",
+            "- Hide rules (`##`) from " + ", ".join(BUNDLED_COSMETIC_LISTS) + " in `cosmetic-rules.json` (built by `scripts/pack-cosmetic.mjs`).",
             "- Cosmetic sample (generic `##` only) in `cosmetic-sample.json` for the cosmetic agent - not applied by DNR.",
             "- Twitch / YouTube / Kick (and related player hosts) are stripped from block targets here;",
             "  the DNR agent still must add higher-priority allow rules for those sites.",
@@ -932,6 +932,10 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
 # (the `cosmetic: true` SOURCES of src/general/update.js; COSMETIC_LISTS in
 # scripts/pack-cosmetic.mjs). test/wave2-lists-cosmetic-pack.test.js checks all three agree.
 COSMETIC_LISTS = ("easylist", "easyprivacy", "adguard_base")
+# The subset packed into the shipped sheet (BUNDLED_LISTS in pack-cosmetic.mjs):
+# AdGuard Base's site rules would push the zip over 7.5 MB; the first refresh
+# after install adds them.
+BUNDLED_COSMETIC_LISTS = ("easylist", "easyprivacy")
 
 
 def cosmetic_pack_command(packed_at: str) -> list[str]:

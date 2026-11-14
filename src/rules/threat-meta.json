@@ -1,6 +1,6 @@
 {
-  "built_at_utc": "2026-11-11T22:41:18Z",
-  "lists_packed_at_utc": "2026-11-11T22:41:13Z",
+  "built_at_utc": "2026-11-14T22:00:38Z",
+  "lists_packed_at_utc": "2026-11-14T22:00:32Z",
   "priority": 2000010,
   "resource_types": [
     "main_frame",
@@ -20,30 +20,30 @@
   "sources": {
     "urlhaus_hosts": {
       "sha256_matches_meta": true,
-      "whole_domains": 558,
+      "whole_domains": 574,
       "scoped_entries": 0,
-      "threat_hosts": 558,
+      "threat_hosts": 574,
       "popup_only_hosts": 0,
-      "added": 558
+      "added": 574
     },
     "ublock_badware": {
       "sha256_matches_meta": true,
-      "whole_domains": 1114,
-      "scoped_entries": 2204,
-      "threat_hosts": 3300,
+      "whole_domains": 1118,
+      "scoped_entries": 3273,
+      "threat_hosts": 3305,
       "popup_only_hosts": 0,
-      "added": 3298
+      "added": 3303
     },
     "dandelion_antimalware": {
       "sha256_matches_meta": true,
       "whole_domains": 11729,
-      "scoped_entries": 308,
+      "scoped_entries": 12031,
       "threat_hosts": 12028,
       "popup_only_hosts": 0,
       "added": 11993
     }
   },
-  "hosts_total": 15844,
+  "hosts_total": 15865,
   "popup_only_hosts_total": 0,
   "rule_count": 199,
   "rejected_total": 5,

@@ -1,7 +1,7 @@
-// Wave 2 "lists": AdGuard Base hide rules are used (cosmetic: true), the
-// refresh writes the hide list only once all three cosmetic lists are parsed,
-// and the packer rebuilds the bundled sheet (src/rules/cosmetic-rules.json)
-// from the same three lists on every list pack.
+// Wave 2 "lists": AdGuard Base site hide rules are used at runtime (cosmetic:
+// "sites"), the refresh writes the hide list only once all three cosmetic lists
+// are parsed, and the packer rebuilds the bundled sheet
+// (src/rules/cosmetic-rules.json) from EasyList + EasyPrivacy on every list pack.
 import "../src/general/filter-options.js";
 import "../src/general/never-block-captcha.js";
 import source from "../src/general/update.js" with { type: "text" };
@@ -257,36 +257,50 @@ Deno.test("refresh: EasyList hide rules over a cosmetic cap still reject the who
   }
 });
 
-Deno.test("pack-cosmetic.mjs: reads the three cached lists (CRLF too), merges them, keeps the pack time", async () => {
+// The shipped sheet holds EasyList + EasyPrivacy only (BUNDLED_LISTS): AdGuard
+// Base's site rules would push the zip over the release gate's 7.5 MB cap, and
+// the first refresh after install adds them at runtime.
+Deno.test("bundled sheet lists agree: pack-cosmetic.mjs BUNDLED_LISTS and the packer", async () => {
+  const packSrc = await Deno.readTextFile(new URL("scripts/pack-cosmetic.mjs", ROOT));
+  const m = /export const BUNDLED_LISTS = (\[[^\]]*\]);/.exec(packSrc);
+  assert(m && m[1] === '["easylist", "easyprivacy"]', "pack-cosmetic BUNDLED_LISTS " + (m && m[1]));
+  const out = await runPython([
+    "import importlib.util, json",
+    "from pathlib import Path",
+    "spec = importlib.util.spec_from_file_location('pfl', Path('scripts/pack-filter-lists.py'))",
+    "mod = importlib.util.module_from_spec(spec)",
+    "spec.loader.exec_module(mod)",
+    "print(json.dumps(list(mod.BUNDLED_COSMETIC_LISTS)))",
+  ].join("\n"));
+  assert(out.trim() === '["easylist", "easyprivacy"]', "packer " + out);
+});
+
+Deno.test("pack-cosmetic.mjs: reads the two bundled cached lists (CRLF too), ignores AdGuard, keeps the pack time", async () => {
   const res = await packIn({
-    easylist: "example.com##.from-easylist\r\n##.el-generic\r\n",
+    easylist: "example.com##.from-easylist\r\n##.el-generic\r\nexample.com##+js(set, x, 1)\r\nexample.com##p:style(color:red)\r\n",
     easyprivacy: "example.com##.from-easyprivacy\n",
-    adguard_base: "example.com##.from-adguard\r\n##.ag-generic\r\nexample.com##+js(set, x, 1)\r\nexample.com##p:style(color:red)\r\n",
+    adguard_base: "example.com##.from-adguard\r\n##.ag-generic\r\n",
   });
   assert(res.code === 0, res.stderr);
   const o = res.out;
   assert(o.packed_at_utc === "2026-11-14T01:02:03Z", o.packed_at_utc);
-  assert(JSON.stringify(o.sites["example.com"].slice().sort()) === JSON.stringify([".from-adguard", ".from-easylist", ".from-easyprivacy"]), JSON.stringify(o.sites));
-  assert(o.generic.includes(".el-generic") && !o.generic.includes(".ag-generic"), "EasyList generic kept, AdGuard generic dropped: " + JSON.stringify(o.generic));
+  assert(JSON.stringify(o.sites["example.com"].slice().sort()) === JSON.stringify([".from-easylist", ".from-easyprivacy"]), JSON.stringify(o.sites));
+  assert(o.generic.includes(".el-generic") && !o.generic.includes(".ag-generic"), "EasyList generic kept, AdGuard not bundled: " + JSON.stringify(o.generic));
   assert(!JSON.stringify(o).includes("+js") && !JSON.stringify(o).includes(":style("), "procedural rejected");
   assert(!("stats" in o), "no parse stats in the bundle");
 });
 
-Deno.test("pack-cosmetic.mjs: a missing list or a list the refresh guard would reject writes nothing", async () => {
-  const missing = await packIn({ easylist: "##.a\n", easyprivacy: "##.b\n" });
-  assert(missing.code !== 0 && missing.out === null && /adguard_base/.test(missing.stderr), JSON.stringify(missing));
+Deno.test("pack-cosmetic.mjs: a missing bundled list or a list the refresh guard would reject writes nothing", async () => {
+  const missing = await packIn({ easylist: "##.a\n" });
+  assert(missing.code !== 0 && missing.out === null && /easyprivacy/.test(missing.stderr), JSON.stringify(missing));
   const roots = [];
   for (let i = 0; i <= U.MAX_PAGE_ROOT_SITE_RULES; i++) roots.push("site" + i + ".test##html");
-  const over = await packIn({ easylist: roots.join("\n"), easyprivacy: "##.b\n", adguard_base: "x.test##.c\n" });
+  const over = await packIn({ easylist: roots.join("\n"), easyprivacy: "##.b\n" });
   assert(over.code === 4 && over.out === null && /easylist\.txt: \d+ whole-page hide rules/.test(over.stderr), JSON.stringify(over));
 });
 
-Deno.test("pack-cosmetic.mjs: AdGuard Base over a cap loses only its hide rules; the sheet is still written", async () => {
-  const roots = [];
-  for (let i = 0; i <= U.MAX_PAGE_ROOT_SITE_RULES; i++) roots.push("site" + i + ".test##html");
-  const res = await packIn({ easylist: "##.a\nexample.com##.el\n", easyprivacy: "##.b\n", adguard_base: roots.concat(["example.com##.ag"]).join("\n") });
+Deno.test("pack-cosmetic.mjs: stream sites (Twitch, YouTube, Kick) are left out of the bundled sheet", async () => {
+  const res = await packIn({ easylist: "twitch.tv##.a\nwww.youtube.com##.b\nkick.com##.c\nnottwitch.tv##.d\n", easyprivacy: "##.e\n" });
   assert(res.code === 0 && res.out, JSON.stringify(res));
-  assert(/hide rules dropped \(network rules unaffected\): adguard_base\.txt/.test(res.stderr), res.stderr);
-  assert(JSON.stringify(res.out.sites["example.com"]) === '[".el"]' && !res.out.sites["site0.test"], JSON.stringify(res.out.sites));
-  assert(res.out.generic.includes(".a") && res.out.generic.includes(".b"), JSON.stringify(res.out.generic));
+  assert(JSON.stringify(Object.keys(res.out.sites)) === '["nottwitch.tv"]', JSON.stringify(res.out.sites));
 });

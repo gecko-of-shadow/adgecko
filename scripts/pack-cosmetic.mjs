@@ -21,6 +21,14 @@ export const COSMETIC_LISTS = ["easylist", "easyprivacy", "adguard_base"];
 // Generic "##" selectors dropped (parseCosmetic sitesOnly): AdGuard's
 // `$generichide` / `$elemhide` exceptions are not supported.
 export const SITES_ONLY_LISTS = ["adguard_base"];
+// The bundled sheet (shipped in the zip) holds only these lists: AdGuard Base's
+// site rules add about 2 MB, which pushes the package over the release gate's
+// 7.5 MB cap. The runtime refresh adds AdGuard's site rules right after install
+// (runtime.onInstalled), so they arrive within minutes.
+export const BUNDLED_LISTS = ["easylist", "easyprivacy"];
+// Stream sites run their own scripts, and the cosmetic content script never
+// loads there (manifest exclude_matches): keep their hide rules out of the bundle.
+const STREAM_SITE_RE = /(^|\.)(twitch\.tv|youtube\.com|youtu\.be|youtube-nocookie\.com|youtubekids\.com|kick\.com)$/;
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -36,7 +44,7 @@ for (let i = 0; i < args.length; i++) {
   else files.push(args[i]);
 }
 if (!files.length) {
-  for (const name of COSMETIC_LISTS) {
+  for (const name of BUNDLED_LISTS) {
     const f = path.join(cacheDir, name + ".txt");
     if (!fs.existsSync(f)) {
       console.error(`cosmetic list ${name} missing from the cache (${f}); run scripts/pack-filter-lists.py first`);
@@ -83,6 +91,9 @@ if (over.length) {
 }
 for (const p of parts) delete p.stats;
 const merged = P.mergeCosmetic(parts);
+for (const bucket of [merged.sites, merged.exceptions, merged.exclusions]) {
+  for (const host of Object.keys(bucket || {})) if (STREAM_SITE_RE.test(host)) delete bucket[host];
+}
 const sheet = fs.readFileSync(path.join(root, "src/cosmetic-hide.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 const extras = [];
 const have = new Set(merged.generic);
