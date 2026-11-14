@@ -179,7 +179,7 @@
   function toAsciiHost(host) {
     if (!/[^\x00-\x7f]/.test(host)) return host;
     // Only host characters: never let "ü@evil.com" or "ü/x" parse as a URL.
-    if (!/^[a-z0-9.*\u0080-￿-]+$/.test(host)) return "";
+    if (!/^[a-z0-9.*\u0080-\uffff-]+$/.test(host)) return "";
     const any = host.endsWith(".*");
     const base = any ? host.slice(0, -2) : host;
     try {
