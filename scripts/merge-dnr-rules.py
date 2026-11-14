@@ -96,6 +96,55 @@ CAPTCHA_SUFFIXES = tuple(
 )
 
 
+# Condition fields a packed list block rule may carry besides requestDomains.
+# A rule with any other field is refused (main() fails) rather than copied
+# without it, because a dropped narrowing field widens the rule.
+SCOPED_CONDITION_KEYS = (
+    "resourceTypes",
+    "excludedResourceTypes",
+    "domainType",
+    "initiatorDomains",
+    "excludedInitiatorDomains",
+    "requestMethods",
+    "excludedRequestMethods",
+    "excludedRequestDomains",
+)
+
+
+def renumber_blocks(blocks: list[dict]) -> list[dict]:
+    """Packed list block rules -> merged block rules (ids from BLOCK_ID_START,
+    priority BLOCK_PRIORITY). Non-block rules are skipped.
+
+    The whole condition is copied: scoped list rules carry resourceTypes /
+    excludedResourceTypes / domainType and the initiator, method and denyallow
+    fields (src/general/filter-options.js keyToCondition), and dropping any of
+    them would widen the rule (H-2). A condition field outside
+    SCOPED_CONDITION_KEYS raises ValueError instead of being lost.
+    """
+    out: list[dict] = []
+    rid = BLOCK_ID_START
+    for rule in blocks:
+        if rule.get("action", {}).get("type") != "block":
+            # List-pack should be blocks only; skip stray allows from older stubs.
+            continue
+        unknown = sorted(set(rule["condition"]) - {"requestDomains", *SCOPED_CONDITION_KEYS})
+        if unknown:
+            raise ValueError(f"block rule {rule.get('id')} has condition fields the merger cannot copy: {unknown}")
+        cond = {"requestDomains": list(rule["condition"]["requestDomains"])}
+        for key in SCOPED_CONDITION_KEYS:
+            if key in rule["condition"]:
+                value = rule["condition"][key]
+                cond[key] = list(value) if isinstance(value, list) else value
+        out.append({
+            "id": rid,
+            "priority": BLOCK_PRIORITY,
+            "action": {"type": "block"},
+            "condition": cond,
+        })
+        rid += 1
+    return out
+
+
 def drop_hcaptcha(blocks: list[dict]) -> tuple[list[dict], int]:
     """Remove hCaptcha hosts from every block rule's requestDomains; drop a rule
     left with no domains. Returns (rules, number of hosts removed)."""
@@ -229,28 +278,12 @@ def main() -> int:
     blocks, hcaptcha_dropped = drop_hcaptcha_filter_rules(blocks)
     print(f"dropped {hcaptcha_dropped} hCaptcha block rule(s) by urlFilter/regexFilter")
 
-    renumbered = []
-    rid = BLOCK_ID_START
-    for rule in blocks:
-        if rule.get("action", {}).get("type") != "block":
-            # List-pack should be blocks only; skip stray allows from older stubs.
-            continue
-        # Copy the whole condition: scoped list rules carry resourceTypes /
-        # excludedResourceTypes / domainType, and dropping them would widen the
-        # rule into a whole-domain block (H-2).
-        cond = {"requestDomains": list(rule["condition"]["requestDomains"])}
-        for key in ("resourceTypes", "excludedResourceTypes", "domainType"):
-            if key in rule["condition"]:
-                value = rule["condition"][key]
-                cond[key] = list(value) if isinstance(value, list) else value
-        next_rule = {
-            "id": rid,
-            "priority": BLOCK_PRIORITY,
-            "action": {"type": "block"},
-            "condition": cond,
-        }
-        renumbered.append(next_rule)
-        rid += 1
+    try:
+        renumbered = renumber_blocks(blocks)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    rid = BLOCK_ID_START + len(renumbered)
 
     allows = build_exclusion_rules()
     yt_blocks = build_youtube_ad_block_rules()

@@ -11,7 +11,7 @@
 // given: then every type it does not list, main_frame included),
 // excludedResourceTypes, domainType (site = last two labels; a request with no
 // initiator, e.g. a typed URL, counts as third-party), requestMethods (omitted
-// = all), regexFilter, simple urlFilter (||, ^, *, |).
+// = all), excludedRequestMethods, regexFilter, simple urlFilter (||, ^, *, |).
 // The two Chrome behaviours above were checked in Chrome for Testing 155
 // (2026-11-03, throwaway probe extension, BUILD-PROGRESS "NEXT BUILD 2"):
 // `excludedResourceTypes: ["script"]` alone blocked typed and clicked
@@ -49,6 +49,7 @@ export function ruleMatches(rule, req) {
     if ((c.domainType === "thirdParty") !== third) return false;
   }
   if (c.requestMethods && !c.requestMethods.includes(req.method || "get")) return false;
+  if (c.excludedRequestMethods && c.excludedRequestMethods.includes(req.method || "get")) return false;
   if (c.regexFilter && !new RegExp(c.regexFilter).test(req.url)) return false;
   if (c.urlFilter && !urlFilterToRegExp(c.urlFilter).test(req.url)) return false;
   return true;

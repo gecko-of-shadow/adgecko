@@ -43,9 +43,10 @@ It works inside Chrome: no separate program, no account.
 Nothing to set up: it works as soon as it is installed.
 
 1. Click the gecko in the toolbar. A small window shows the site and one line: **✅ Protected**, or **Allowed – not blocking here**.
-2. **Something broke?** Click **Fix this site**. It turns off the extra filters for this site only (hidden boxes and the page guards). Reload the page and look, then answer **Did that fix it?** **Yes** keeps it. **No** turns them back on and suggests the next step.
-3. Still broken? Click **Allow this site**: the ad lists stop blocking what this site itself loads, ad boxes are no longer hidden, and the pop-up guard stops working on this site. The clipboard guard stays on. Known malware sites stay blocked, and on Twitch and YouTube the built-in ad blocking keeps running. Details: [docs/allow-a-page.md](docs/allow-a-page.md). The button turns into **Block again** to undo it.
-4. **Show more** has the list status and the version. The gear opens the settings page with every switch, the per-site list, the list update button and the popup look (Automatic, Purple or High contrast).
+2. **Something broke?** Click **Fix this site**. It turns off the extra filters for this site only (hidden boxes and the page guards). Click **Reload page** and look, then answer **Did that fix it?** **Yes** keeps it. **No** turns them back on and suggests the next step. A kept fix shows as **Protected – some filters off here (Fix this site)**, with an **Undo fix** button.
+3. Still broken? Click **Allow this site**: the ad lists stop blocking what this site itself loads, ad boxes are no longer hidden, and the pop-up guard stops working on this site. The clipboard guard stays on. Known malware sites stay blocked, and on Twitch and YouTube the built-in ad blocking keeps running. Details: [docs/allow-a-page.md](docs/allow-a-page.md). The button turns into **Block again** to undo it. After either button, **Reload page** reloads the tab (it never reloads by itself).
+4. Chrome shows "blocked by an extension" for a site you trust? Click the gecko, then **Chrome says the page is blocked? Allow its domain**. It opens the **Allow this domain** box on the settings page.
+5. **Show more** has the list status and the version. The gear opens the settings page with every switch, the per-site list, the list update button and the popup look (Automatic, Purple or High contrast).
 
 A small magenta dot on the gecko means a page guard just blocked something on that tab (for example a page trying to put a command into your clipboard). Open the window to see what; the dot then goes away (it also goes away when the tab opens another page). There are no pop-ups or counters.
 

@@ -202,7 +202,13 @@
 
   // Returns { generic: [sel], sites: {host: [sel]}, exceptions: {host: [sel]},
   //           genericExceptions: [sel], stats }
-  function parseCosmetic(text) {
+  // opts.sitesOnly (AdGuard Base, `cosmetic: "sites"` in update.js SOURCES):
+  // keep only rules scoped to a site (site.com##x, site.com#@#x). Generic
+  // "##x", "~a.com##x" and "#@#x" are dropped, because the parser does not
+  // support AdGuard's `$generichide` / `$elemhide` page exceptions, so its
+  // generic selectors would hide things on sites AdGuard exempts.
+  function parseCosmetic(text, opts) {
+    const sitesOnly = !!(opts && opts.sitesOnly);
     const genericSet = new Set();
     const sites = new Map();
     const exceptions = new Map();
@@ -214,7 +220,7 @@
     const genericExcl = new Map();
     const siteExcl = [];
     const cleanSites = new Map();
-    const stats = { lines: 0, kept: 0, skipped: 0, unscopedGeneric: 0, pageRootSite: 0 };
+    const stats = { lines: 0, kept: 0, skipped: 0, unscopedGeneric: 0, pageRootSite: 0, genericDropped: 0 };
     const add = (map, host, sel) => {
       let set = map.get(host);
       if (!set) map.set(host, (set = new Set()));
@@ -252,6 +258,11 @@
       }
       const included = include.filter((h) => !SKIP_HOST_RE.test(h));
       if (include.length && !included.length) {
+        stats.skipped += 1;
+        continue;
+      }
+      if (sitesOnly && !included.length) {
+        stats.genericDropped += 1;
         stats.skipped += 1;
         continue;
       }
@@ -393,7 +404,12 @@
   // Storage layout (chrome.storage.local): one key per host, so a page reads
   // only its own few keys plus the generic sheet.
   const KEY_GENERIC = "cosG";
+  // cosMeta stays small: every frame reads it (it gates the stored sheet, and
+  // a change to it re-runs the content script). The full key list (about
+  // 8,300 names) lives in cosKeys, which only the worker reads, for stale-key
+  // cleanup. Before 0.3.5 the list was cosMeta.keys; the worker still reads it.
   const KEY_META = "cosMeta";
+  const KEY_INDEX = "cosKeys";
   const PREFIX_SITE = "cosS:";
   const PREFIX_EXC = "cosE:";
 
@@ -404,7 +420,10 @@
     items[KEY_GENERIC] = (data.generic || []).join("\n");
     for (const [h, sels] of Object.entries(data.sites || {})) items[PREFIX_SITE + h] = sels;
     for (const [h, sels] of Object.entries(data.exceptions || {})) items[PREFIX_EXC + h] = sels;
-    items[KEY_META] = Object.assign({ keys: Object.keys(items) }, meta || {});
+    const m = Object.assign({}, meta || {});
+    delete m.keys;
+    items[KEY_META] = Object.assign({ count: Object.keys(items).length }, m);
+    items[KEY_INDEX] = Object.keys(items).concat(KEY_INDEX);
     return items;
   }
 
@@ -434,7 +453,7 @@
   }
 
   root.GeneralCosmeticParse = {
-    MAX_SELECTOR_LEN, KEY_GENERIC, KEY_META, PREFIX_SITE, PREFIX_EXC, HIDE,
+    MAX_SELECTOR_LEN, KEY_GENERIC, KEY_META, KEY_INDEX, PREFIX_SITE, PREFIX_EXC, HIDE,
     sanitizeSelector, normalizeHost, isUnscopedSelector, isPageRootSelector, parseCosmetic, mergeCosmetic, candidateHosts,
     cssForSelectors, toStorage, keysForHost, buildPageCss,
   };

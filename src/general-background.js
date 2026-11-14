@@ -649,6 +649,38 @@ async function loadBundledCosmetic() {
   return res.json();
 }
 
+function extensionVersion() {
+  try {
+    return String(chrome.runtime.getManifest().version || "");
+  } catch {
+    return "";
+  }
+}
+
+function bundledCosmeticMeta(bundled) {
+  const meta = { source: "bundled", packedAt: bundled.packed_at_utc };
+  const version = extensionVersion();
+  if (version) meta.extVersion = version;
+  return meta;
+}
+
+// cosMeta and the key index (cosKeys). A read error gives {} (as before).
+function readCosmeticState() {
+  return new Promise((resolve) => chrome.storage.local.get([CP.KEY_META, CP.KEY_INDEX], (s) => {
+    void chrome.runtime.lastError;
+    resolve(s || {});
+  }));
+}
+
+// Every stored cosmetic key: cosKeys, plus cosMeta.keys from an install
+// before 0.3.5 (or after a downgrade and upgrade, when both exist).
+function cosmeticIndexOf(state) {
+  const out = new Set(Array.isArray(state[CP.KEY_INDEX]) ? state[CP.KEY_INDEX] : []);
+  const meta = state[CP.KEY_META];
+  if (meta && Array.isArray(meta.keys)) for (const k of meta.keys) out.add(k);
+  return [...out];
+}
+
 async function writeCosmetic(data, meta) {
   if (!bundledExtras) {
     try {
@@ -659,31 +691,85 @@ async function writeCosmetic(data, meta) {
   }
   const merged = CP.mergeCosmetic([data, { generic: bundledExtras }]);
   const items = CP.toStorage(merged, meta);
-  const old = await new Promise((resolve) => chrome.storage.local.get([CP.KEY_META], (s) => {
-    void chrome.runtime.lastError;
-    resolve((s && s[CP.KEY_META] && s[CP.KEY_META].keys) || []);
-  }));
+  const old = cosmeticIndexOf(await readCosmeticState());
+  const index = items[CP.KEY_INDEX];
+  const keep = new Set(index);
+  const stale = old.filter((k) => !keep.has(k));
   const metaItem = items[CP.KEY_META];
   delete items[CP.KEY_META];
+  // Until the stale keys are removed, cosKeys lists them too: a worker stop
+  // between these writes cannot orphan them. cosMeta goes after every rule
+  // key (it is the content script's gate and change trigger).
+  if (stale.length) items[CP.KEY_INDEX] = index.concat(stale);
   await localSet(items);
   await localSet({ [CP.KEY_META]: metaItem });
-  const keep = new Set(metaItem.keys);
-  const stale = old.filter((k) => !keep.has(k));
-  if (stale.length) await localRemove(stale);
+  if (stale.length) {
+    await localRemove(stale);
+    await localSet({ [CP.KEY_INDEX]: index });
+  }
 }
 
 // First run / new version: seed storage from the bundled snapshot unless a
-// newer refreshed set is already there.
-async function ensureCosmetic() {
+// newer refreshed set is already there. Reads cosMeta before any fetch: a
+// refreshed set, or a bundled set this version already checked, costs no
+// fetch or parse of cosmetic-rules.json (this runs on every refresh alarm).
+// One run at a time: onInstalled and the refresh both call it at start-up,
+// and they share the run in flight.
+let ensuringCosmetic = null;
+function ensureCosmetic() {
+  if (!ensuringCosmetic) {
+    ensuringCosmetic = ensureCosmeticNow().finally(() => {
+      ensuringCosmetic = null;
+    });
+  }
+  return ensuringCosmetic;
+}
+
+async function ensureCosmeticNow() {
   try {
-    const bundled = await loadBundledCosmetic();
-    const meta = await new Promise((resolve) => chrome.storage.local.get([CP.KEY_META], (s) => {
-      void chrome.runtime.lastError;
-      resolve(s && s[CP.KEY_META]);
-    }));
-    if (meta && (meta.source === "refresh" || meta.packedAt === bundled.packed_at_utc)) return;
+    const state = await readCosmeticState();
+    const seen = JSON.stringify(state[CP.KEY_META] || null);
+    let meta = state[CP.KEY_META];
+    let metaDirty = false;
+    // Upgrade from 0.3.4: move the key list out of cosMeta (every frame reads
+    // cosMeta). Two writes, no rule key is rewritten.
+    if (meta && Array.isArray(meta.keys)) {
+      await localSet({ [CP.KEY_INDEX]: cosmeticIndexOf(state) });
+      meta = Object.assign({}, meta);
+      delete meta.keys;
+      metaDirty = true;
+    }
+    // Writes the slim or stamped cosMeta only if nothing (a list refresh, a
+    // revert) wrote a new cosMeta since the read above.
+    const saveMeta = async () => {
+      if (!metaDirty) return;
+      const now = await readCosmeticState();
+      if (JSON.stringify(now[CP.KEY_META] || null) !== seen) return;
+      await localSet({ [CP.KEY_META]: meta });
+    };
+    const version = extensionVersion();
+    if (meta && (meta.source === "refresh" || (version && meta.extVersion === version))) {
+      await saveMeta();
+      return;
+    }
+    let bundled;
+    try {
+      bundled = await loadBundledCosmetic();
+    } catch {
+      await saveMeta();
+      return;
+    }
     bundledExtras = bundled.extras || [];
-    await writeCosmetic(bundled, { source: "bundled", packedAt: bundled.packed_at_utc });
+    if (meta && meta.packedAt === bundled.packed_at_utc) {
+      // Same snapshot: only note that this version checked it.
+      if (version && meta.extVersion !== version) {
+        meta = Object.assign({}, meta, { extVersion: version });
+        metaDirty = true;
+      }
+      await saveMeta();
+      return;
+    }
+    await writeCosmetic(bundled, bundledCosmeticMeta(bundled));
   } catch {
     // Content script falls back to the bundled generic sheet.
   }
@@ -802,7 +888,7 @@ async function revertLists() {
       revertCosmetic: async () => {
         const bundled = await loadBundledCosmetic();
         bundledExtras = bundled.extras || [];
-        await writeCosmetic(bundled, { source: "bundled", packedAt: bundled.packed_at_utc });
+        await writeCosmetic(bundled, bundledCosmeticMeta(bundled));
       },
     });
     let result;

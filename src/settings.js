@@ -144,17 +144,21 @@
       if (!row) {
         const li = el("li");
         const label = el("span");
-        const button = el("button", buttonText);
+        const button = el("button", item.button || buttonText);
         button.type = "button";
         const key = item.key;
-        button.addEventListener("click", () => onClick(key));
+        button.addEventListener("click", () => onClick(key, rows.get(key) && rows.get(key).kind));
         li.appendChild(label);
         li.appendChild(button);
         row = { li, label, button };
         rows.set(key, row);
         ul.appendChild(li);
       }
+      row.kind = item.kind;
       if (row.label.textContent !== item.text) row.label.textContent = item.text;
+      // Same node, new words: a row can turn from Allowed into Fixed.
+      const words = item.button || buttonText;
+      if (row.button.textContent !== words) row.button.textContent = words;
     }
     // Keep the order; move rows only when it is wrong (a move can drop focus).
     const order = [...ul.children || []].filter((n) => n !== ul._empty);
@@ -189,18 +193,34 @@
     });
   }
 
+  // The switches "Fix this site" in the popup turns off (same list as popup.js).
+  const FIXABLE = ["cosmetic", "guardClipboard", "guardPopups", "youtubeCosmetic", "twitchDisplay"];
+
+  // Each row in plain words, and a button that undoes what the popup did:
+  // Block again for an Allow, Undo fix for a Fix, Reset for anything else.
+  function siteRow(h, e) {
+    const feats = Object.entries(e.features || {});
+    if (e.enabled === false) return { key: h, kind: "allowed", button: "Block again", text: h + ": Allowed – not blocking here " };
+    if (feats.length && feats.every(([id, on]) => FIXABLE.includes(id) && on === false)) {
+      return { key: h, kind: "fixed", button: "Undo fix", text: h + ": Fixed – hidden ad boxes and page guards off " };
+    }
+    const parts = feats.map(([id, on]) => (F.byId(id) || { label: id }).label + " " + (on ? "on" : "off"));
+    return { key: h, kind: "other", button: "Reset", text: h + ": " + parts.join(", ") + " " };
+  }
+
   function renderSites() {
     const o = F.normalizeOverrides(stored.siteOverrides);
-    const items = Object.keys(o).sort().map((h) => {
-      const e = o[h];
-      const parts = [];
-      if (e.enabled === false) parts.push("site switched off");
-      for (const [id, on] of Object.entries(e.features || {})) parts.push((F.byId(id) || { label: id }).label + " " + (on ? "on" : "off"));
-      return { key: h, text: h + ": " + parts.join(", ") + " " };
-    });
-    syncList($("site-list"), items, "No per-site switches. Use the popup on a site to add one.", "Reset", async (h) => {
+    const items = Object.keys(o).sort().map((h) => siteRow(h, o[h]));
+    syncList($("site-list"), items, "No per-site switches. Use the popup on a site to add one.", "Reset", async (h, kind) => {
       const next = F.normalizeOverrides(stored.siteOverrides);
-      delete next[h];
+      const e = next[h];
+      if (!e) return;
+      if (kind === "allowed") delete e.enabled;
+      else if (kind === "fixed" && e.features) {
+        for (const id of FIXABLE) if (e.features[id] === false) delete e.features[id];
+        if (!Object.keys(e.features).length) delete e.features;
+      } else delete next[h];
+      if (next[h] && !Object.keys(next[h]).length) delete next[h];
       await set({ siteOverrides: next });
       await load();
     });
@@ -271,5 +291,33 @@
     if (area !== "local") return;
     if (KEYS.some((k) => changes[k])) load();
   });
-  load();
+  // settings.html#allow (the popup's "Chrome says the page is blocked?"):
+  // bring the Allow this domain box into view and put the cursor in it. Once,
+  // after the first load: later loads come from storage writes and must not
+  // move focus.
+  function hashAllow() {
+    try {
+      return typeof location !== "undefined" && location && location.hash === "#allow";
+    } catch {
+      return false;
+    }
+  }
+  function goToAllow() {
+    const input = $("allow-domain");
+    if (!input) return;
+    try {
+      if (input.scrollIntoView) input.scrollIntoView({ block: "center" });
+    } catch {
+      // fake DOM in tests
+    }
+    focus(input);
+  }
+  load().then(() => {
+    if (hashAllow()) goToAllow();
+  });
+  try {
+    if (typeof addEventListener === "function") addEventListener("hashchange", () => { if (hashAllow()) goToAllow(); });
+  } catch {
+    // no window (tests)
+  }
 })();

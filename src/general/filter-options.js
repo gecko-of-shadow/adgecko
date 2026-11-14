@@ -8,11 +8,19 @@
 //
 // Output per filter: [domain, key] where key "" is a whole-domain block and
 // otherwise "p=<domainType>|t=<types,sorted>|x=<excluded types,sorted>"
-// (empty parts allowed), or null when the filter must be dropped.
+// (empty parts allowed), or null when the filter must be dropped. Optional
+// parts follow in this fixed order, each only when it is not empty (so a key
+// without them is byte-identical to the version 1 key):
+//   |i=<initiator hosts>   $domain= / $from= hosts   -> initiatorDomains
+//   |n=<initiator hosts>   $domain=~host entries      -> excludedInitiatorDomains
+//   |m=<methods>           $method=post|get           -> requestMethods
+//   |mx=<methods>          $method=~get               -> excludedRequestMethods
+//   |d=<request hosts>     $denyallow= hosts          -> excludedRequestDomains
+// Values are sorted, deduped and comma-separated.
 // Same input, same output in JS and Python: test/fixtures/filter-options-cases.json.
 (function (root) {
   const TABLE = /*FILTER-OPTION-TABLE-START*/{
-    "version": 1,
+    "version": 2,
     "types": {
       "script": "script",
       "image": "image",
@@ -44,7 +52,12 @@
     },
     "ignore": ["important", "match-case", "all"],
     "narrow": ["popup", "popunder"],
-    "cancel": ["badfilter"]
+    "cancel": ["badfilter"],
+    "initiator": ["domain", "from"],
+    "methods": ["connect", "delete", "get", "head", "options", "patch", "post", "put"],
+    "denyallow": ["denyallow"],
+    "extraParts": ["i", "n", "m", "mx", "d"],
+    "allDocument": ["all"]
   }/*FILTER-OPTION-TABLE-END*/;
 
   // Hosts people open on purpose (an affiliate link in an article, a shop
@@ -84,12 +97,49 @@
 
   const DOMAIN_RE = /^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])\^(\$[^#]*)?$/i;
 
+  // One plain ASCII host name (lowercase, no trailing dot). Entities
+  // ("name.*"), regexes, wildcards, IDN text and empty labels fail: DNR rejects
+  // a whole rule set update for one bad initiatorDomains entry.
+  const HOST_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/;
+  function cleanHost(v) {
+    const h = String(v || "").trim().toLowerCase().replace(/\.$/, "");
+    return HOST_RE.test(h) ? h : null;
+  }
+
+  // Sorted, deduped values of a Set.
+  const sortedOf = (set) => Array.from(set).sort();
+
+  // Parts object -> key. p, t and x are always written; the extra parts only
+  // when not empty, in TABLE.extraParts order.
+  function buildKey(parts) {
+    let key = "p=" + (parts.p || "") + "|t=" + (parts.t || "") + "|x=" + (parts.x || "");
+    for (const k of TABLE.extraParts) if (parts[k]) key += "|" + k + "=" + parts[k];
+    return key;
+  }
+
+  function parseKey(key) {
+    const parts = {};
+    for (const seg of String(key || "").split("|")) {
+      const i = seg.indexOf("=");
+      if (i < 0) continue;
+      parts[seg.slice(0, i)] = seg.slice(i + 1);
+    }
+    return parts;
+  }
+
   // Options string (with or without the leading "$") -> { key, cancel } or null.
   function convertOptions(opts) {
     const raw = String(opts || "").replace(/^\$/, "").trim();
     if (!raw) return { key: "", cancel: false };
     const types = new Set();
     const excluded = new Set();
+    const incl = new Set();
+    const excl = new Set();
+    const methods = new Set();
+    const exMethods = new Set();
+    const deny = new Set();
+    let hadIncl = false;
+    let hadInitiator = false;
     let party = "";
     let narrowed = false;
     let cancel = false;
@@ -105,6 +155,49 @@
         party = p;
         continue;
       }
+      const eq = part.indexOf("=");
+      if (eq > 0) {
+        const name = part.slice(0, eq);
+        const values = part.slice(eq + 1).split("|");
+        if (TABLE.initiator.includes(name)) {
+          // $domain=a.com|~b.a.com: initiator scope. A bad include entry is
+          // skipped (the rule only gets narrower); a bad exclude entry drops
+          // the filter (skipping it would widen the rule).
+          hadInitiator = true;
+          for (const v0 of values) {
+            const v = v0.trim();
+            const neg = v.startsWith("~");
+            const h = cleanHost(neg ? v.slice(1) : v);
+            if (neg) {
+              if (!h) return null;
+              excl.add(h);
+            } else {
+              hadIncl = true;
+              if (h) incl.add(h);
+            }
+          }
+          continue;
+        }
+        if (name === "method") {
+          for (const v0 of values) {
+            const v = v0.trim();
+            const neg = v.startsWith("~");
+            const m = neg ? v.slice(1) : v;
+            if (!TABLE.methods.includes(m)) return null;
+            (neg ? exMethods : methods).add(m);
+          }
+          continue;
+        }
+        if (TABLE.denyallow.includes(name)) {
+          for (const v0 of values) {
+            const h = cleanHost(v0);
+            if (!h) return null; // "~host" or an entity: cannot be exact
+            deny.add(h);
+          }
+          continue;
+        }
+        return null;
+      }
       const neg = part.startsWith("~");
       const name = neg ? part.slice(1) : part;
       if (Object.prototype.hasOwnProperty.call(TABLE.types, name)) {
@@ -116,12 +209,23 @@
     // Popups are not a request type: they narrow a type list, and a filter that
     // was only about popups (or popups plus a party) has nothing left to block.
     if (narrowed && !types.size) return null;
+    // Every include entry was skipped: an empty initiator list would widen.
+    if (hadIncl && !incl.size) return null;
+    // Mixed $method=post|~get has no exact DNR form.
+    if (methods.size && exMethods.size) return null;
     let t = Array.from(types);
     let x = Array.from(excluded);
     if (t.length) {
       t = t.filter((v) => !excluded.has(v));
       if (!t.length) return null;
       x = [];
+    }
+    // A $domain= scoped filter never blocks a navigation: a top-level page
+    // load has no meaningful initiator. With nothing else left, drop it (an
+    // empty type list would mean every type).
+    if (hadInitiator && t.includes("main_frame")) {
+      t = t.filter((v) => v !== "main_frame");
+      if (!t.length) return null;
     }
     // `$~document`: navigations are never blocked unless a filter asks for
     // them, so a negated main_frame adds nothing (keyToCondition puts it back
@@ -130,8 +234,14 @@
     x = x.filter((v) => v !== "main_frame");
     t.sort();
     x.sort();
-    if (!party && !t.length && !x.length) return { key: "", cancel };
-    return { key: "p=" + party + "|t=" + t.join(",") + "|x=" + x.join(","), cancel };
+    const parts = {
+      p: party, t: t.join(","), x: x.join(","),
+      i: sortedOf(incl).join(","), n: sortedOf(excl).join(","),
+      m: sortedOf(methods).join(","), mx: sortedOf(exMethods).join(","),
+      d: sortedOf(deny).join(","),
+    };
+    if (!party && !t.length && !x.length && !TABLE.extraParts.some((k) => parts[k])) return { key: "", cancel };
+    return { key: buildKey(parts), cancel };
   }
 
   // Key -> DNR condition fields (merged into { requestDomains }).
@@ -153,6 +263,11 @@
       if (k === "p") out.domainType = v;
       if (k === "t") out.resourceTypes = v.split(",");
       if (k === "x") out.excludedResourceTypes = v.split(",");
+      if (k === "i") out.initiatorDomains = v.split(",");
+      if (k === "n") out.excludedInitiatorDomains = v.split(",");
+      if (k === "m") out.requestMethods = v.split(",");
+      if (k === "mx") out.excludedRequestMethods = v.split(",");
+      if (k === "d") out.excludedRequestDomains = v.split(",");
     }
     if (out.excludedResourceTypes && !out.resourceTypes) {
       out.excludedResourceTypes = Array.from(new Set(out.excludedResourceTypes.concat("main_frame"))).sort();
@@ -170,8 +285,15 @@
     const t = (c.resourceTypes || []).slice().sort();
     let x = (c.excludedResourceTypes || []).slice().sort();
     if (!t.length) x = x.filter((v) => v !== "main_frame");
-    if (!p && !t.length && !x.length) return "";
-    return "p=" + p + "|t=" + t.join(",") + "|x=" + x.join(",");
+    const s = (a) => Array.from(new Set(a || [])).sort().join(",");
+    const parts = {
+      p, t: t.join(","), x: x.join(","),
+      i: s(c.initiatorDomains), n: s(c.excludedInitiatorDomains),
+      m: s(c.requestMethods), mx: s(c.excludedRequestMethods),
+      d: s(c.excludedRequestDomains),
+    };
+    if (!p && !t.length && !x.length && !TABLE.extraParts.some((k) => parts[k])) return "";
+    return buildKey(parts);
   }
 
   // The scope a list entry keeps when the rules are merged (update.js
@@ -184,20 +306,18 @@
   //    (the rest stays).
   function scopeForMerge(domain, key, isWhole) {
     if (!key) return null;
-    const parts = {};
-    for (const seg of key.split("|")) {
-      const i = seg.indexOf("=");
-      parts[seg.slice(0, i)] = seg.slice(i + 1);
-    }
+    const parts = parseKey(key);
     let t = parts.t ? parts.t.split(",") : [];
     const nav = t.includes("main_frame");
+    // The optional parts (initiator, method, denyallow) only narrow, so they
+    // are carried through unchanged.
     if (nav && (isNavExempt(domain) || isNavProtected(domain))) {
       t = t.filter((v) => v !== "main_frame");
       if (!t.length || isWhole) return null;
-      return "p=" + (parts.p || "") + "|t=" + t.join(",") + "|x=" + (parts.x || "");
+      return buildKey(Object.assign({}, parts, { t: t.join(",") }));
     }
     if (!isWhole) return key;
-    return nav ? "p=" + (parts.p || "") + "|t=main_frame|x=" : null;
+    return nav ? buildKey(Object.assign({}, parts, { t: "main_frame", x: "" })) : null;
   }
 
   // One `||host^$opts` line -> [domain, key, cancel] or null (not this form / dropped).
@@ -224,5 +344,18 @@
     return popup;
   }
 
-  root.GeneralFilterOptions = { TABLE, NAV_EXEMPT, DOMAIN_RE, convertOptions, keyToCondition, conditionKey, convertLine, isPopupOnly, isNavExempt, isNavProtected, scopeForMerge };
+  // `$all` means every request type, the page itself included. Its key stays
+  // "" (a whole-domain block: the threat tier promotes exactly that key), and
+  // a list parser adds a second entry with DOCUMENT_KEY for the navigation
+  // part. Only for a plain `$all` (with `important`, `match-case` or
+  // `badfilter` at most): with a party, a type or a `domain=` the filter is
+  // converted by convertOptions alone and never blocks a navigation from here.
+  const DOCUMENT_KEY = "p=|t=main_frame|x=";
+  function allAddsDocument(opts) {
+    const parts = String(opts || "").replace(/^\$/, "").split(",").map((p) => p.trim().toLowerCase()).filter(Boolean);
+    if (!parts.some((p) => TABLE.allDocument.includes(p))) return false;
+    return parts.every((p) => TABLE.allDocument.includes(p) || TABLE.ignore.includes(p) || TABLE.cancel.includes(p));
+  }
+
+  root.GeneralFilterOptions = { TABLE, NAV_EXEMPT, DOMAIN_RE, DOCUMENT_KEY, allAddsDocument, cleanHost, buildKey, convertOptions, keyToCondition, conditionKey, convertLine, isPopupOnly, isNavExempt, isNavProtected, scopeForMerge };
 })(typeof self !== "undefined" ? self : globalThis);

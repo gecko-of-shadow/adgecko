@@ -66,6 +66,10 @@
   const listsStatus = el("lists-status");
   const feedStatus = el("feed-status");
   const versionLine = el("version-line");
+  const fixReload = el("fix-reload");
+  const undoFixButton = el("undo-fix");
+  const reloadPage = el("reload-page");
+  const openAllowDomain = el("open-allow-domain");
 
   let activeTab = null;
   let pageChecked = false;
@@ -74,6 +78,10 @@
   let saveError = "";
   let note = "";
   let busy = false; // a button's save / worker round trip is still running
+  // Set only by a click on Allow this site / Block again / Undo fix in this
+  // popup: then the Reload page button shows. Nothing reloads by itself (a
+  // reload can lose what was typed into a form).
+  let offerReload = false;
 
   function packagedVersion() {
     try {
@@ -176,6 +184,18 @@
     return [Object.assign({}, patch, { [KEYS.fix]: value }), []];
   }
 
+  // A Fix that was kept (Yes, or the question timed out): this host's own
+  // entry still has an extra filter switched off. Only the own entry, because
+  // Fix and Undo fix write only that one.
+  function fixedHere(host) {
+    if (!host) return false;
+    const o = all[KEYS.overrides];
+    const entry = o && typeof o === "object" ? o[host] : null;
+    const features = entry && entry.features && typeof entry.features === "object" ? entry.features : null;
+    if (!features) return false;
+    return fixIds().some((id) => features[id] === false);
+  }
+
   function pendingFix(host) {
     if (!host) return null;
     const e = fixMap()[host];
@@ -235,6 +255,8 @@
     // A stream-family host without our scripts (worker's siteInfo): there is
     // nothing to allow or fix, so the popup says what does apply.
     const limited = !!(origin && info && info.host === host && info.limited === true);
+    const pending = pendingFix(host);
+    const fixed = !!origin && on && !allowed && !limited && !pending && fixedHere(host);
     if (brandIcon) {
       // Same trigger as the toolbar icon: the master switch and list blocking.
       const blocking = on && all[KEYS.enabled] !== false;
@@ -248,6 +270,7 @@
     else if (!on) siteStatus.textContent = "Off – turned off in settings";
     else if (limited) siteStatus.textContent = threatHere() ? "Malware blocking only – ad scripts don't run on this site" : "Nothing runs on this site";
     else if (allowed) siteStatus.textContent = "Allowed – not blocking here";
+    else if (fixed) siteStatus.textContent = "Protected – some filters off here (Fix this site)";
     else siteStatus.textContent = "✅ Protected";
 
     allowSite.disabled = !origin || !on || limited;
@@ -259,11 +282,19 @@
     } else {
       pageStatus.textContent = saveError;
     }
+    // Chrome's own "blocked by an extension" page has no address the popup
+    // can read, so the way out (settings > Allow this domain) is offered on
+    // every page without one.
+    if (openAllowDomain) openAllowDomain.hidden = !!origin || !pageChecked;
+    if (reloadPage) reloadPage.hidden = !(offerReload && origin && tabId() !== null);
 
-    const pending = pendingFix(host);
     const canFix = !!origin && on && !allowed && fixIds().length > 0;
-    fixSite.hidden = !!pending;
+    fixSite.hidden = !!pending || fixed;
     fixSite.disabled = !canFix || busy;
+    if (undoFixButton) {
+      undoFixButton.hidden = !fixed;
+      undoFixButton.disabled = busy;
+    }
     fixAsk.hidden = !pending;
     fixNote.textContent = note;
 
@@ -369,6 +400,23 @@
     if (reason && more) more.open = true;
   }
 
+  function tabId() {
+    return activeTab && typeof activeTab.id === "number" ? activeTab.id : null;
+  }
+
+  // Reload only on a click. tabs.reload needs no "tabs" permission.
+  function reloadTab() {
+    const id = tabId();
+    if (id === null) return;
+    try {
+      chrome.tabs.reload(id, {}, () => {
+        void chrome.runtime.lastError;
+      });
+    } catch {
+      // tab gone or API missing
+    }
+  }
+
   async function applyRules() {
     await notifyBackground("applyGeneralState");
   }
@@ -412,7 +460,7 @@
     if (Object.keys(entry).length) o[key] = entry;
     else delete o[key];
     note = "";
-    await save(...fixWrite(fixes, { [KEYS.overrides]: o }));
+    if (await save(...fixWrite(fixes, { [KEYS.overrides]: o }))) offerReload = true;
     await refreshInfo();
     render();
     await applyRules();
@@ -478,6 +526,8 @@
     delete fixes[host];
     const saved = await save(...fixWrite(fixes, { [KEYS.overrides]: o }));
     note = saved && changed ? "Turned back on. If the site still breaks, use Allow this site." : "";
+    // The filters are back on: the page needs another reload to show it.
+    if (saved && changed) offerReload = true;
     await refreshInfo();
     render();
     await applyRules();
@@ -487,6 +537,54 @@
       // fake DOM
     }
   }));
+
+  // "Undo fix": turns back on the extra filters a kept Fix switched off on
+  // this host (its own entry only; an Allow on the entry stays).
+  if (undoFixButton) {
+    undoFixButton.addEventListener("click", guarded(async () => {
+      const host = pageHost();
+      if (!host || !fixedHere(host)) return;
+      const o = overridesCopy();
+      const prev = {};
+      const features = (o[host] && o[host].features) || {};
+      for (const id of FIXABLE) if (features[id] === false) prev[id] = null;
+      undoFix(o, host, prev);
+      note = "";
+      if (await save({ [KEYS.overrides]: o })) offerReload = true;
+      await refreshInfo();
+      render();
+      await applyRules();
+      try {
+        fixSite.focus();
+      } catch {
+        // fake DOM
+      }
+    }));
+  }
+
+  if (fixReload) fixReload.addEventListener("click", reloadTab);
+  if (reloadPage) reloadPage.addEventListener("click", reloadTab);
+
+  // Opens the settings page at the Allow this domain box. tabs.create needs no
+  // "tabs" permission; openOptionsPage is the fallback (no jump to the box).
+  if (openAllowDomain) {
+    const fallback = () => {
+      try {
+        chrome.runtime.openOptionsPage();
+      } catch {
+        // settings page unavailable
+      }
+    };
+    openAllowDomain.addEventListener("click", () => {
+      try {
+        chrome.tabs.create({ url: chrome.runtime.getURL("src/settings.html#allow") }, () => {
+          if (chrome.runtime.lastError) fallback();
+        });
+      } catch {
+        fallback();
+      }
+    });
+  }
 
   if (openSettings) {
     openSettings.addEventListener("click", () => {

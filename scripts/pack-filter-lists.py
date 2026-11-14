@@ -289,29 +289,58 @@ def is_nav_protected(host: str) -> bool:
     return any(under(h, p) for p in PROTECTED_SUFFIX) or any(under(p, h) for p in PROTECTED_SUFFIX + PROTECTED_EXACT)
 
 
+HOST_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$")
+
+
+def clean_host(v: str):
+    """One plain ASCII host (lowercase, no trailing dot) or None. Mirrors cleanHost()."""
+    h = (v or "").strip().lower()
+    if h.endswith("."):
+        h = h[:-1]
+    return h if HOST_RE.fullmatch(h) else None
+
+
+def build_key(parts: dict) -> str:
+    """Parts -> scope key. Mirrors buildKey(): p, t and x always, the extra
+    parts (OPTION_TABLE["extraParts"] order) only when not empty."""
+    key = "p=" + (parts.get("p") or "") + "|t=" + (parts.get("t") or "") + "|x=" + (parts.get("x") or "")
+    for k in OPTION_TABLE["extraParts"]:
+        if parts.get(k):
+            key += "|" + k + "=" + parts[k]
+    return key
+
+
+def parse_key(key: str) -> dict:
+    parts: dict = {}
+    for seg in (key or "").split("|"):
+        k, sep, v = seg.partition("=")
+        if sep:
+            parts[k] = v
+    return parts
+
+
 def scope_for_merge(domain: str, key: str, is_whole: bool):
     """Scope an entry keeps at merge time, or None. Mirrors scopeForMerge().
 
     A whole-domain host keeps only an explicit $document part as a
     main_frame-only scope (party kept): whole-domain rules never match
     opening the page. A navigation-exempt host never keeps main_frame.
+    The optional parts (initiator, method, denyallow) only narrow and are
+    carried through unchanged.
     """
     if not key:
         return None
-    parts = {}
-    for seg in key.split("|"):
-        k, _, v = seg.partition("=")
-        parts[k] = v
+    parts = parse_key(key)
     t = parts.get("t", "").split(",") if parts.get("t") else []
     nav = "main_frame" in t
     if nav and (is_nav_exempt(domain) or is_nav_protected(domain)):
         t = [v for v in t if v != "main_frame"]
         if not t or is_whole:
             return None
-        return "p=" + parts.get("p", "") + "|t=" + ",".join(t) + "|x=" + parts.get("x", "")
+        return build_key({**parts, "t": ",".join(t)})
     if not is_whole:
         return key
-    return "p=" + parts.get("p", "") + "|t=main_frame|x=" if nav else None
+    return build_key({**parts, "t": "main_frame", "x": ""}) if nav else None
 
 
 def convert_options(opts: str):
@@ -324,6 +353,13 @@ def convert_options(opts: str):
         return ("", False)
     types: set[str] = set()
     excluded: set[str] = set()
+    incl: set[str] = set()
+    excl: set[str] = set()
+    methods: set[str] = set()
+    ex_methods: set[str] = set()
+    deny: set[str] = set()
+    had_incl = False
+    had_initiator = False
     party = ""
     narrowed = False
     cancel = False
@@ -345,6 +381,45 @@ def convert_options(opts: str):
                 return None
             party = p
             continue
+        eq = part.find("=")
+        if eq > 0:
+            name = part[:eq]
+            values = part[eq + 1 :].split("|")
+            if name in OPTION_TABLE["initiator"]:
+                # $domain=a.com|~b.a.com: initiator scope. A bad include entry
+                # is skipped (only narrower); a bad exclude entry drops the
+                # filter (skipping it would widen the rule).
+                had_initiator = True
+                for v0 in values:
+                    v = v0.strip()
+                    neg = v.startswith("~")
+                    h = clean_host(v[1:] if neg else v)
+                    if neg:
+                        if not h:
+                            return None
+                        excl.add(h)
+                    else:
+                        had_incl = True
+                        if h:
+                            incl.add(h)
+                continue
+            if name == "method":
+                for v0 in values:
+                    v = v0.strip()
+                    neg = v.startswith("~")
+                    m = v[1:] if neg else v
+                    if m not in OPTION_TABLE["methods"]:
+                        return None
+                    (ex_methods if neg else methods).add(m)
+                continue
+            if name in OPTION_TABLE["denyallow"]:
+                for v0 in values:
+                    h = clean_host(v0)
+                    if not h:
+                        return None  # "~host" or an entity: cannot be exact
+                    deny.add(h)
+                continue
+            return None
         neg = part.startswith("~")
         name = part[1:] if neg else part
         if name in OPTION_TABLE["types"]:
@@ -353,6 +428,12 @@ def convert_options(opts: str):
         return None
     if narrowed and not types:
         return None
+    # Every include entry was skipped: an empty initiator list would widen.
+    if had_incl and not incl:
+        return None
+    # Mixed $method=post|~get has no exact DNR form.
+    if methods and ex_methods:
+        return None
     t = sorted(types)
     x = sorted(excluded)
     if t:
@@ -360,13 +441,37 @@ def convert_options(opts: str):
         if not t:
             return None
         x = []
+    # A $domain= scoped filter never blocks a navigation (a top-level page
+    # load has no meaningful initiator). Mirrors convertOptions().
+    if had_initiator and "main_frame" in t:
+        t = [v for v in t if v != "main_frame"]
+        if not t:
+            return None
     # `$~document` adds nothing: navigations are not blocked by default and
     # key_to_condition excludes main_frame in every excluded-only condition.
     # Mirrors convertOptions().
     x = [v for v in x if v != "main_frame"]
-    if not party and not t and not x:
+    parts = {
+        "p": party, "t": ",".join(t), "x": ",".join(x),
+        "i": ",".join(sorted(incl)), "n": ",".join(sorted(excl)),
+        "m": ",".join(sorted(methods)), "mx": ",".join(sorted(ex_methods)),
+        "d": ",".join(sorted(deny)),
+    }
+    if not party and not t and not x and not any(parts[k] for k in OPTION_TABLE["extraParts"]):
         return ("", cancel)
-    return ("p=" + party + "|t=" + ",".join(t) + "|x=" + ",".join(x), cancel)
+    return (build_key(parts), cancel)
+
+
+# Scope key part -> list-valued DNR condition field. Mirrors keyToCondition().
+KEY_LIST_FIELDS = {
+    "t": "resourceTypes",
+    "x": "excludedResourceTypes",
+    "i": "initiatorDomains",
+    "n": "excludedInitiatorDomains",
+    "m": "requestMethods",
+    "mx": "excludedRequestMethods",
+    "d": "excludedRequestDomains",
+}
 
 
 def key_to_condition(key: str) -> dict:
@@ -386,10 +491,8 @@ def key_to_condition(key: str) -> dict:
             continue
         if k == "p":
             out["domainType"] = v
-        elif k == "t":
-            out["resourceTypes"] = v.split(",")
-        elif k == "x":
-            out["excludedResourceTypes"] = v.split(",")
+        elif k in KEY_LIST_FIELDS:
+            out[KEY_LIST_FIELDS[k]] = v.split(",")
     if "excludedResourceTypes" in out and "resourceTypes" not in out:
         out["excludedResourceTypes"] = sorted(set(out["excludedResourceTypes"]) | {"main_frame"})
     return out
@@ -404,6 +507,24 @@ def convert_line(line: str):
     if res is None:
         return None
     return [m.group(1).lower(), res[0], res[1]]
+
+
+# `$all`: whole-domain block plus a main_frame-only entry. Mirrors
+# DOCUMENT_KEY / allAddsDocument() in src/general/filter-options.js.
+DOCUMENT_KEY = "p=|t=main_frame|x="
+
+
+def all_adds_document(opts: str) -> bool:
+    raw = opts or ""
+    if raw.startswith("$"):
+        raw = raw[1:]
+    parts = [p.strip().lower() for p in raw.split(",") if p.strip()]
+    if not any(p in OPTION_TABLE["allDocument"] for p in parts):
+        return False
+    return all(
+        p in OPTION_TABLE["allDocument"] or p in OPTION_TABLE["ignore"] or p in OPTION_TABLE["cancel"]
+        for p in parts
+    )
 
 
 def keeps_whole_domain(opts: str) -> bool:
@@ -511,12 +632,14 @@ IMPORTANT_RE = re.compile(r"(?:^\$|,)\s*important\s*(?:,|$)", re.IGNORECASE)
 class ListEntries(tuple):
     """(whole, scoped) as extract_entries() returns it, plus the list's
     cross-list data: .cancel ($badfilter idents "domain\nkey"), .allow (hosts of
-    unconditional `@@||host^` exceptions) and .important (whole-domain blocks
-    marked $important, which an exception never lifts)."""
+    unconditional `@@||host^` exceptions), .important (whole-domain blocks
+    marked $important, which an exception never lifts) and .alldoc (hosts
+    whose plain `$all` added a DOCUMENT_KEY entry)."""
 
     cancel: set
     allow: set
     important: set
+    alldoc: set
 
 
 def extract_list(text: str) -> ListEntries:
@@ -534,6 +657,8 @@ def extract_list(text: str) -> ListEntries:
     cancelled: set[str] = set()
     allow: set[str] = set()
     important: set[str] = set()
+    alldoc: set[str] = set()
+    doc_explicit: set[str] = set()
     dropping = False
     for raw in text.splitlines():
         line = raw.strip()
@@ -555,14 +680,23 @@ def extract_list(text: str) -> ListEntries:
             if res is None or not looks_like_domain(domain):
                 continue
             key, cancel = res
+            # A plain `$all` also blocks opening the page. Mirrors parseEntriesFull().
+            doc = bool(m.group(2)) and all_adds_document(m.group(2))
             if cancel:
                 cancelled.add(domain + "\n" + key)
+                if doc:
+                    cancelled.add(domain + "\n" + DOCUMENT_KEY)
             elif key == "":
                 whole.append(domain)
                 if m.group(2) and IMPORTANT_RE.search(m.group(2)):
                     important.add(domain)
+                if doc:
+                    scoped.append([domain, DOCUMENT_KEY])
+                    alldoc.add(domain)
             else:
                 scoped.append([domain, key])
+                if key == DOCUMENT_KEY:
+                    doc_explicit.add(domain)
             continue
         m = HOSTS_RE.match(line)
         if m:
@@ -580,6 +714,9 @@ def extract_list(text: str) -> ListEntries:
     out.cancel = cancelled
     out.allow = allow
     out.important = important
+    # Only hosts whose page entry comes from `$all` alone (an explicit
+    # `$document` for the same host shares the entry and keeps it).
+    out.alldoc = alldoc - doc_explicit
     return out
 
 
@@ -593,20 +730,31 @@ def apply_cross_list(buckets: dict, scoped_buckets: dict, lists: list) -> tuple[
     """Apply every list's $badfilter cancels and unconditional same-host `@@`
     exceptions (extract_list results in `lists`) to all buckets, before
     merge_domains / merge_scoped. Mirrors crossListRules() in update.js.
+    A lifted host also loses the DOCUMENT_KEY entry its plain `$all` added
+    (.alldoc), so the page opens; an explicit `$document` block stays (a
+    host with one in any list keeps its page entry).
     Threat-tier hosts are built elsewhere and are not touched."""
     cancel: set[str] = set()
     allow: set[str] = set()
     important: set[str] = set()
+    alldoc: set[str] = set()
+    doc_explicit: set[str] = set()
     for entry in lists:
         cancel |= getattr(entry, "cancel", set())
         allow |= getattr(entry, "allow", set())
         important |= getattr(entry, "important", set())
+        own = getattr(entry, "alldoc", set())
+        alldoc |= own
+        if isinstance(entry, tuple) and len(entry) > 1:
+            doc_explicit |= {e[0] for e in entry[1] if e[1] == DOCUMENT_KEY and e[0] not in own}
     allow -= important
+    lift_doc = (allow & alldoc) - doc_explicit
     new_buckets = OrderedDict(
         (n, [d for d in ds if d + "\n" not in cancel and d not in allow]) for n, ds in buckets.items()
     )
     new_scoped = OrderedDict(
-        (n, [e for e in es if e[0] + "\n" + e[1] not in cancel]) for n, es in scoped_buckets.items()
+        (n, [e for e in es if e[0] + "\n" + e[1] not in cancel and not (e[1] == DOCUMENT_KEY and e[0] in lift_doc)])
+        for n, es in scoped_buckets.items()
     )
     return new_buckets, new_scoped
 
@@ -707,9 +855,9 @@ def domains_to_dnr_rules(domains: list[str], scoped: list[list[str]] | None = No
         cond.update(extra)
         rules.append({"id": len(rules) + 1, "priority": 1, "action": {"type": "block"}, "condition": cond})
 
+    # No silent cut at MAX_DNR_RULES: main() refuses a pack over the budget
+    # before anything is written, so a lost rule is never hidden.
     for i in range(0, len(domains), DOMAINS_PER_RULE):
-        if len(rules) >= MAX_DNR_RULES:
-            break
         push(domains[i : i + DOMAINS_PER_RULE], {})
     groups: dict[str, list[str]] = {}
     for d, key in scoped or []:
@@ -718,8 +866,6 @@ def domains_to_dnr_rules(domains: list[str], scoped: list[list[str]] | None = No
         extra = key_to_condition(key)
         lst = groups[key]
         for i in range(0, len(lst), DOMAINS_PER_RULE):
-            if len(rules) >= MAX_DNR_RULES:
-                break
             push(lst[i : i + DOMAINS_PER_RULE], extra)
     return rules
 
@@ -767,6 +913,7 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
             "## How we use them",
             "",
             "- Network blocking only in `general-network.json` (domain -> DNR `requestDomains`).",
+            "- Hide rules (`##`) from " + ", ".join(COSMETIC_LISTS) + " in `cosmetic-rules.json` (built by `scripts/pack-cosmetic.mjs`).",
             "- Cosmetic sample (generic `##` only) in `cosmetic-sample.json` for the cosmetic agent - not applied by DNR.",
             "- Twitch / YouTube / Kick (and related player hosts) are stripped from block targets here;",
             "  the DNR agent still must add higher-priority allow rules for those sites.",
@@ -779,6 +926,33 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+# Lists whose `##` hide rules go into the bundled sheet, in the runtime's order
+# (the `cosmetic: true` SOURCES of src/general/update.js; COSMETIC_LISTS in
+# scripts/pack-cosmetic.mjs). test/wave2-lists-cosmetic-pack.test.js checks all three agree.
+COSMETIC_LISTS = ("easylist", "easyprivacy", "adguard_base")
+
+
+def cosmetic_pack_command(packed_at: str) -> list[str]:
+    """The command that rebuilds src/rules/cosmetic-rules.json from the cache."""
+    return [
+        "deno", "run", "--allow-read", "--allow-write",
+        str(ROOT / "scripts" / "pack-cosmetic.mjs"),
+        "--packed-at", packed_at,
+        "--cache", str(CACHE_DIR),
+    ]
+
+
+def run_cosmetic_pack(packed_at: str) -> int:
+    try:
+        res = subprocess.run(cosmetic_pack_command(packed_at), cwd=str(ROOT), check=False)
+    except FileNotFoundError:
+        print("ERROR: deno not found; run scripts/pack-cosmetic.mjs by hand", file=sys.stderr)
+        return 3
+    if res.returncode != 0:
+        print("ERROR: scripts/pack-cosmetic.mjs failed", file=sys.stderr)
+    return res.returncode
 
 
 def main() -> int:
@@ -826,6 +1000,9 @@ def main() -> int:
         for h in SENTINEL_HOSTS
     }
     rules = domains_to_dnr_rules(domains, scoped)
+    if len(rules) > MAX_DNR_RULES:
+        print(f"ERROR: {len(rules)} DNR rules exceed the budget of {MAX_DNR_RULES}; nothing written", file=sys.stderr)
+        return 1
 
     # Block batches only. merge-dnr-rules.py owns general-network.json so the
     # stream allows and the YouTube doubleclick rule are not wiped.
@@ -961,7 +1138,11 @@ def main() -> int:
     if threat.returncode != 0:
         print("ERROR: scripts/build-threat-rules.mjs failed", file=sys.stderr)
         return threat.returncode
-    return 0
+    # Bundled hide sheet (src/rules/cosmetic-rules.json) from the same downloads
+    # (COSMETIC_LISTS), so it never goes stale next to general-network.json and
+    # carries this pack's time. Last, because it refuses (non-zero exit, the old
+    # sheet kept) a list the runtime refresh guard would reject.
+    return run_cosmetic_pack(fetched_at)
 
 
 if __name__ == "__main__":

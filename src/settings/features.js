@@ -9,6 +9,13 @@
 // The old generalEnabled / generalAllowedOrigins keys are migrated once and
 // then kept by the worker as derived mirrors for the DNR and cosmetic code.
 (function (root) {
+  // The manifest can inject this file twice into one frame (cosmetic entry and
+  // flags entry). A second run keeps the first registry. The shape check (not
+  // a plain truthy check) matters: an element with id="GeckoFeatures" is a
+  // named property of window, so a page could otherwise make this run skip.
+  const prev = root.GeckoFeatures;
+  if (prev && typeof prev === "object" && Object.isFrozen(prev) && typeof prev.resolve === "function" &&
+    Array.isArray(prev.FEATURES) && Array.isArray(prev.STREAM_SITES)) return;
   // Hosts with their own handlers (Twitch, YouTube, Kick and their player /
   // media hosts). Ordinary-site scripts (cosmetic hide, page guards) never run
   // here, "Allow this page" never applies here, and the lists never touch the

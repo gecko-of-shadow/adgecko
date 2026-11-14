@@ -236,3 +236,7 @@ details[open] > summary::after {
   #brand-icon[data-glow="on"] { box-shadow: none; }
   :focus-visible { outline: 2px solid Highlight; }
 }
+
+/* "Reload page" inside "Did that fix it?": a gap above Yes / No. */
+#fix-reload { margin-bottom: 8px; }
+#undo-fix { margin-top: 8px; }

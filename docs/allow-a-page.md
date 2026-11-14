@@ -8,9 +8,10 @@ Some websites break or refuse to work when ads are blocked. Try **Fix this site*
 
 1. Open the website that broke and click the gecko icon in the toolbar.
 2. Under **Something broke?** click **Fix this site**. This turns off only the extra filters for this site: hidden ad boxes and the page guards. Ad lists keep blocking.
-3. Reload the page and look. The window asks **Did that fix it?** (for a day it still asks the next time you open it).
+3. Click **Reload page** in the window and look at the page. The window asks **Did that fix it?** (for a day it still asks the next time you open it).
    - **Yes** keeps the fix.
    - **No** turns those filters back on and suggests **Allow this site**.
+4. While a kept fix is in force, the line under the site says **Protected – some filters off here (Fix this site)**, and the window shows **Undo fix** in place of **Fix this site**. Click **Undo fix** to turn those filters back on, then click **Reload page**. The settings page lists the site as **Fixed** with the same **Undo fix** button.
 
 ## Allow a website
 
@@ -18,7 +19,7 @@ Some websites break or refuse to work when ads are blocked. Try **Fix this site*
 2. Click the gecko icon in the toolbar. A small window opens.
 3. Click **Allow this site**.
 4. The button now says **Block again**, and the line under the site says **Allowed – not blocking here**.
-5. Reload the page, so the things that were blocked can load.
+5. Click **Reload page** under the button, so the things that were blocked can load. The window never reloads the page by itself.
 
 When the window opens, the site line may say **Checking this page…** for a moment while it asks the page for its address.
 
@@ -37,16 +38,18 @@ When the window opens, the site line may say **Checking this page…** for a mom
 1. Open the same website.
 2. Click the gecko icon.
 3. Click **Block again**. It goes back to **Allow this site**.
-4. Reload the page.
+4. Click **Reload page**.
+
+The settings page (the gear) lists each allowed site as **Allowed – not blocking here**, with a **Block again** button that does the same.
 
 ## A page Chrome says is blocked
 
-Sometimes Chrome shows its own error page, "This page has been blocked by an extension", instead of the site. That happens when a filter list or the malware list blocks opening that site (mostly ad servers and known bad sites). The popup cannot help here: the blocked page is not a website it can see, and a typed address or bookmark has no "site you came from" to allow.
+Sometimes Chrome shows its own error page, "This page has been blocked by an extension", instead of the site. That happens when a filter list or the malware list blocks opening that site (mostly ad servers and known bad sites). **Allow this site** cannot help here: the blocked page is not a website the popup can see, and a typed address or bookmark has no "site you came from" to allow.
 
 If you trust the site:
 
-1. Click the gecko icon, then the gear (or open the extension's options) to open the settings page.
-2. Under **Allow this domain**, type the site's domain (for example `example.com`, without `https://`) and click **Allow this domain**.
+1. Click the gecko icon, then **Chrome says the page is blocked? Allow its domain**. The settings page opens with the cursor in the **Allow this domain** box. (The gear opens the same settings page.)
+2. Type the site's domain (for example `example.com`), or paste the whole address: the extension keeps only the domain. Click **Allow this domain**.
 3. Go back to the page and reload it.
 
 The domain and all its subdomains are then never blocked, by the filter lists or the malware list. Remove it from the same list to undo. Public suffixes (`co.uk`) and big shared platforms are refused.
