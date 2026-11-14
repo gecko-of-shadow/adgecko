@@ -311,10 +311,12 @@ function installGeneralAdblockUpdate(target) {
   //    path / option exception for its host, a subdomain or a parent of it
   //    (payload.limit).
   //  - #6 `missing`: names of lists with no current parsed copy. Their
-  //    pack-time cross data (filter-options.js PACKED_CROSS) is used instead.
+  //    pack-time cross data (src/rules/packed-cross.json, passed in as
+  //    packedCross by swap(); filter-options.js PACKED_CROSS in tests) is
+  //    used instead.
   // scopeOf(d, k) gives the key an entry keeps (maybe with fewer
   // initiators) or null; keepScoped(d, k) is scopeOf(d, k) !== null.
-  function crossListRules(payloads, missing) {
+  function crossListRules(payloads, missing, packedCross) {
     const FO = filterOptions();
     const docKey = FO ? FO.DOCUMENT_KEY : null;
     const cancel = new Set();
@@ -324,7 +326,8 @@ function installGeneralAdblockUpdate(target) {
     const docExplicit = new Set();
     const limit = new Set();
     const sources = Object.values(payloads || {});
-    const packedLists = (FO && FO.PACKED_CROSS && FO.PACKED_CROSS.lists) || {};
+    const packedSrc = packedCross || (FO && FO.PACKED_CROSS) || null;
+    const packedLists = (packedSrc && packedSrc.lists) || {};
     for (const n of missing || []) {
       if (payloads && payloads[n]) continue;
       if (Object.prototype.hasOwnProperty.call(packedLists, n)) sources.push(packedLists[n]);
@@ -1104,7 +1107,7 @@ function installGeneralAdblockUpdate(target) {
     // Lists without a current parsed copy: their pack-time cross-list data
     // stands in (final review #6).
     const missing = SOURCES.filter((x) => !payloads[x.name]).map((x) => x.name);
-    const cross = crossListRules(payloads, missing);
+    const cross = crossListRules(payloads, missing, bundled.packedCross);
     for (const [n, p] of Object.entries(payloads)) {
       perList[n] = p.domains.filter((d) => cross.keepWhole(d));
       perListScoped[n] = crossScoped(cross, p.scoped);

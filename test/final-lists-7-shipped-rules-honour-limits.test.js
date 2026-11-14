@@ -39,7 +39,8 @@ Deno.test("final-lists-7: no exclusion-only $domain=~ list rule is shipped (#0 a
 
 Deno.test("final-lists-7: no shipped $domain= list rule names a host that a path exception limits (#0 b)", () => {
   const hosts = new Set();
-  for (const part of Object.values(FO.PACKED_CROSS.lists)) for (const h of part.limit || []) hosts.add(h);
+  const packed = JSON.parse(Deno.readTextFileSync(new URL("../src/rules/packed-cross.json", import.meta.url)));
+  for (const part of Object.values(packed.lists)) for (const h of part.limit || []) hosts.add(h);
   assert(hosts.size > 0, "PACKED_CROSS has limit hosts");
   const index = FO.limitIndex(hosts);
   const bad = [];

@@ -630,7 +630,9 @@ function listDeps() {
     loadBundled: async () => {
       const res = await fetch(chrome.runtime.getURL("src/rules/general-network.json"));
       const meta = await fetch(chrome.runtime.getURL("src/rules/dnr-merge-meta.json")).then((r) => r.json()).catch(() => ({}));
-      return { rules: await res.json(), extraIds: meta.extra_tracker_rule_id ? [meta.extra_tracker_rule_id] : [] };
+      // Pack-time $badfilter / @@ data, used for a list with no current copy.
+      const packedCross = await fetch(chrome.runtime.getURL("src/rules/packed-cross.json")).then((r) => r.json()).catch(() => null);
+      return { rules: await res.json(), extraIds: meta.extra_tracker_rule_id ? [meta.extra_tracker_rule_id] : [], packedCross };
     },
     // Baseline for the per-refresh cap on new threat hosts (first refresh only).
     loadPackedThreatRules: async () => (await fetch(chrome.runtime.getURL("src/rules/threat-network.json"))).json(),

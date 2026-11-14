@@ -143,7 +143,7 @@ Deno.test("#6: refresh with AdGuard unreachable does not block totaladblock.com 
 });
 
 Deno.test("#6: the shipped PACKED_CROSS block is well formed and names only known lists", () => {
-  const p = FO.PACKED_CROSS;
+  const p = JSON.parse(Deno.readTextFileSync(new URL("../src/rules/packed-cross.json", import.meta.url)));
   assert(p && p.version === 1 && p.lists && typeof p.lists === "object", JSON.stringify(p).slice(0, 200));
   const names = new Set(U.SOURCES.map((s) => s.name));
   for (const [n, part] of Object.entries(p.lists)) {
@@ -153,4 +153,27 @@ Deno.test("#6: the shipped PACKED_CROSS block is well formed and names only know
       assert(Array.isArray(v) && v.every((x) => typeof x === "string"), n + "." + k);
     }
   }
+});
+
+// The shipped data lives in src/rules/packed-cross.json (ad-network names stay
+// inside src/rules/, release gate). The worker's loadBundled() reads it and
+// swap() passes it to crossListRules as its third argument.
+Deno.test("#6: the shipped packed-cross.json reaches crossListRules as an argument (no PACKED_CROSS global needed)", () => {
+  const FO = globalThis.GeneralFilterOptions;
+  assert(FO.PACKED_CROSS === null, "filter-options.js carries no host data");
+  const packed = JSON.parse(Deno.readTextFileSync(new URL("../src/rules/packed-cross.json", import.meta.url)));
+  const payloads = { easylist: U.parseEntriesFull("||totaladblock.com^\n||keep.example^") };
+  const without = U.crossListRules(payloads, ["adguard_base"]);
+  assert(without.keepWhole("totaladblock.com"), "no packed data passed: kept");
+  const cross = U.crossListRules(payloads, ["adguard_base"], packed);
+  assert(!cross.keepWhole("totaladblock.com"), "AdGuard's packed $badfilter cancels totaladblock.com while AdGuard is missing");
+  assert(cross.keepWhole("keep.example"), "other hosts kept");
+  const present = U.crossListRules({ ...payloads, adguard_base: U.parseEntriesFull("||x.example^") }, [], packed);
+  assert(present.keepWhole("totaladblock.com"), "a present list's own copy wins over the packed data");
+});
+
+Deno.test("#6: the worker's loadBundled fetches src/rules/packed-cross.json", () => {
+  const bg = Deno.readTextFileSync(new URL("../src/general-background.js", import.meta.url));
+  assert(/getURL\("src\/rules\/packed-cross\.json"\)/.test(bg) && /packedCross/.test(bg), "loadBundled reads packed-cross.json");
+  assert(/crossListRules\(payloads, missing, bundled\.packedCross\)/.test(updateSource), "swap passes it on");
 });

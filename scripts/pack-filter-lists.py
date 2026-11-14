@@ -914,7 +914,7 @@ def apply_cross_list(buckets: dict, scoped_buckets: dict, lists: list) -> tuple[
 def packed_cross_data(named) -> dict:
     """Per list (name -> extract_list result), only the cross-list entries
     that removed or narrowed something in the packed lists (final review #6).
-    Written into src/general/filter-options.js (PACKED_CROSS); the runtime
+    Written to src/rules/packed-cross.json; the runtime
     uses a list's part only while that list has no current parsed copy."""
     whole_any: set[str] = set()
     scoped_all: list = []
@@ -968,21 +968,17 @@ def packed_cross_data(named) -> dict:
     return {"version": 1, "lists": out}
 
 
-PACKED_CROSS_START = "/*PACKED-CROSS-START*/"
-PACKED_CROSS_END = "/*PACKED-CROSS-END*/"
+PACKED_CROSS_JSON = OUT_DIR / "packed-cross.json"
 
 
 def write_packed_cross(data: dict) -> bool:
-    """Replace the PACKED-CROSS marker block in src/general/filter-options.js.
-    True when the file changed."""
-    text = FILTER_OPTIONS_JS.read_text(encoding="utf-8")
-    start = text.index(PACKED_CROSS_START) + len(PACKED_CROSS_START)
-    end = text.index(PACKED_CROSS_END)
-    body = json.dumps(data, separators=(",", ":"), ensure_ascii=True, sort_keys=True)
-    new = text[:start] + body + text[end:]
-    if new == text:
+    """Write src/rules/packed-cross.json (the worker loads it with the bundled
+    rules; ad-network names stay inside src/rules/). True when it changed."""
+    body = json.dumps(data, separators=(",", ":"), ensure_ascii=True, sort_keys=True) + "\n"
+    old = PACKED_CROSS_JSON.read_text(encoding="utf-8") if PACKED_CROSS_JSON.exists() else None
+    if old == body:
         return False
-    FILTER_OPTIONS_JS.write_text(new, encoding="utf-8", newline="\n")
+    PACKED_CROSS_JSON.write_text(body, encoding="utf-8", newline="\n")
     return True
 
 
@@ -1240,7 +1236,7 @@ def main() -> int:
     # that list has no parsed copy (final review #6). Only after the budget
     # check, so a refused pack writes nothing.
     if write_packed_cross(packed_cross_data(extracted_by_name)):
-        print(f"wrote PACKED_CROSS in {FILTER_OPTIONS_JS.relative_to(ROOT)}")
+        print(f"wrote {PACKED_CROSS_JSON.relative_to(ROOT)}")
 
     # Block batches only. merge-dnr-rules.py owns general-network.json so the
     # stream allows and the YouTube doubleclick rule are not wiped.
