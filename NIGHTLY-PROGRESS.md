@@ -60,9 +60,5 @@ Fix wave results (each bug has a regression test in test/nightly-*.test.js):
 - #32 fixed: Kick: a post-roll cover that was hidden while it showed no video is now shown again when the ad ends and only the ad controls are removed.
 - #34 fixed: Kick: the banner-collapse path no longer hides a box that holds the video player, and every box it collapses is shown again when its ad frame leaves or the Kick switch goes off.
 
-## Not done yet
-- Full test suite not run after fixes.
-- Repack of filter lists not done (bugs 35-37 need it; 3 tests are ignore:true until then).
-- Wave 2 improvements not started.
-- Version bump, CHANGELOG, release checks not done.
-- Stray empty file C:/Users/Bran/AppData/Local/claude_edit_tmp.py made by a fixer: delete it if you want.
+## Status
+- Superseded: see CHANGELOG.md "## 0.3.5" and TODO.md.
