@@ -1,0 +1,156 @@
+// Final review #6 (0.3.5): crossListRules() read $badfilter / @@ data only
+// from lists with a current parsed copy. When AdGuard Base (which carries
+// `||totaladblock.com^$badfilter` and `$document,badfilter`) failed on the
+// first refresh after the upgrade, the fresh EasyList put totaladblock.com
+// back into the dynamic rules, page block included.
+// Fix: the packer writes each list's effective cross-list data (only the
+// entries that removed or narrowed something) into filter-options.js
+// PACKED_CROSS; swap() passes the names of lists with no current copy to
+// crossListRules(), which uses their packed part in place of the payload.
+import "../src/general/filter-options.js";
+import "../src/threat/psl.js";
+import "../src/general/never-block-captcha.js";
+import updateSource from "../src/general/update.js" with { type: "text" };
+import cosSource from "../src/general/cosmetic-parse.js" with { type: "text" };
+import bundled from "../src/rules/general-network.json" with { type: "json" };
+import mergeMeta from "../src/rules/dnr-merge-meta.json" with { type: "json" };
+import { evaluate } from "./fixtures/dnr-matcher.js";
+
+function assert(c, l) { if (!c) throw new Error(l); }
+const FO = globalThis.GeneralFilterOptions;
+const U = {};
+new Function(`${updateSource}\nreturn installGeneralAdblockUpdate;`)()(U);
+const CP = new Function("self", `${cosSource}\nreturn self.GeneralCosmeticParse;`)({});
+
+async function runPython(code) {
+  const root = new URL("..", import.meta.url);
+  const bins = Deno.build.os === "windows" ? [["py", "-3"], ["python"], ["python3"]] : [["python3"], ["python"]];
+  const tried = [];
+  for (const [bin, ...pre] of bins) {
+    try {
+      const res = await new Deno.Command(bin, { args: [...pre, "-c", code], cwd: root, env: { PYTHONDONTWRITEBYTECODE: "1" } }).output();
+      const err = new TextDecoder().decode(res.stderr);
+      if (res.code === 9009 || /Python was not found|Microsoft Store/.test(err)) { tried.push(bin + ": Store alias"); continue; }
+      if (res.code !== 0) throw new Error(err);
+      return new TextDecoder().decode(res.stdout);
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) { tried.push(bin + ": not found"); continue; }
+      throw e;
+    }
+  }
+  throw new Error("no usable Python 3 (" + tried.join("; ") + ")");
+}
+
+const EASYLIST = "||totaladblock.com^\n||totaladblock.com^$document\n||jwplayer.com^$domain=tennis.com|variety.com\n||ok.example.com^";
+const ADGUARD = "||totaladblock.com^$badfilter\n||totaladblock.com^$document,badfilter\n||jwplayer.com^$domain=tennis.com,badfilter\n||unused.example^$badfilter";
+const DOC = "p=|t=main_frame|x=";
+
+// Run fn with FO.PACKED_CROSS replaced (the packer's block for these lists).
+async function withPacked(data, fn) {
+  const saved = FO.PACKED_CROSS;
+  FO.PACKED_CROSS = data;
+  try {
+    return await fn();
+  } finally {
+    FO.PACKED_CROSS = saved;
+  }
+}
+
+async function packedFor(texts) {
+  const out = await runPython([
+    "import importlib.util, json",
+    "from collections import OrderedDict",
+    "from pathlib import Path",
+    "spec = importlib.util.spec_from_file_location('pfl', Path('scripts/pack-filter-lists.py'))",
+    "mod = importlib.util.module_from_spec(spec)",
+    "spec.loader.exec_module(mod)",
+    `texts = json.loads(${JSON.stringify(JSON.stringify(texts))})`,
+    "named = OrderedDict((n, mod.extract_list(t)) for n, t in texts.items())",
+    "print(json.dumps(mod.packed_cross_data(named)))",
+  ].join("\n"));
+  return JSON.parse(out);
+}
+
+Deno.test("#6: the packer keeps only effective cross-list entries", async () => {
+  const data = await packedFor({ easylist: EASYLIST, adguard_base: ADGUARD });
+  const ag = data.lists.adguard_base;
+  assert(data.version === 1, "version");
+  assert(JSON.stringify(ag.cancel) === JSON.stringify(["jwplayer.com\np=|t=|x=|i=tennis.com", "totaladblock.com\n", "totaladblock.com\n" + DOC]), JSON.stringify(ag));
+  assert(!data.lists.easylist, "easylist has nothing that removes anything: " + JSON.stringify(data.lists.easylist));
+});
+
+Deno.test("#6: a missing list's packed $badfilter still applies; a present list's own copy wins", async () => {
+  const packed = await packedFor({ easylist: EASYLIST, adguard_base: ADGUARD });
+  await withPacked(packed, () => {
+    const payloads = { easylist: U.parseEntriesFull(EASYLIST) };
+    const noPacked = U.crossListRules(payloads);
+    assert(noPacked.keepWhole("totaladblock.com"), "control: without the packed part the host is kept");
+    const cross = U.crossListRules(payloads, ["adguard_base"]);
+    assert(!cross.keepWhole("totaladblock.com") && !cross.keepScoped("totaladblock.com", DOC), "packed badfilter ignored");
+    assert(cross.scopeOf("jwplayer.com", "p=|t=|x=|i=tennis.com,variety.com") === "p=|t=|x=|i=variety.com", "packed per-initiator badfilter ignored");
+    assert(cross.keepWhole("ok.example.com"), "control host");
+    // AdGuard present (its fresh copy dropped the badfilter): packed part unused.
+    const both = U.crossListRules({ easylist: payloads.easylist, adguard_base: U.parseEntriesFull("||x.example^") }, []);
+    assert(both.keepWhole("totaladblock.com"), "packed part used although AdGuard has a current copy");
+  });
+});
+
+Deno.test("#6: refresh with AdGuard unreachable does not block totaladblock.com (swap end to end)", async () => {
+  const packed = await packedFor({ easylist: EASYLIST, adguard_base: ADGUARD });
+  let dynamic = [];
+  const state = {}; const data = {};
+  const big = (p) => Array.from({ length: 30000 }, (_, i) => "||" + p + i + ".example^").join("\n");
+  const bodies = (url) => {
+    const src = U.SOURCES.find((s) => s.url === url || (s.mirrors || []).includes(url));
+    if (!src || src.name === "adguard_base") return null;
+    if (src.name === "easylist") return big("el") + "\n" + EASYLIST;
+    return big(src.name);
+  };
+  const deps = {
+    t: 1e12,
+    now() { return this.t; },
+    getState: async () => JSON.parse(JSON.stringify(state)),
+    setState: async (p) => Object.assign(state, p),
+    fetch: async (url) => {
+      const body = bodies(url);
+      if (body === null) throw new TypeError("Failed to fetch");
+      return { ok: true, status: 200, headers: { get: () => "" }, text: async () => body };
+    },
+    loadBundled: async () => ({ rules: bundled, extraIds: [mergeMeta.extra_tracker_rule_id] }),
+    getDynamicRules: async () => dynamic,
+    updateDynamicRules: async ({ removeRuleIds, addRules }) => {
+      dynamic = dynamic.filter((r) => !removeRuleIds.includes(r.id)).concat(addRules);
+    },
+    setStaticEnabled: async () => {},
+    getListData: async (names) => Object.fromEntries(names.filter((n) => data[n]).map((n) => [n, data[n]])),
+    setListData: async (n, p) => { data[n] = p; },
+    removeListData: async (names) => { for (const n of names) delete data[n]; },
+    enabled: () => true,
+    cosmeticParse: CP,
+    writeCosmetic: async () => {},
+  };
+  const run = () => withPacked(packed, () => U.refresh(deps, { manual: true }));
+  const r = await run();
+  assert(r.ok && r.rules > 0, JSON.stringify(r));
+  assert(state.lastErrors && state.lastErrors.adguard_base, "AdGuard failed: " + JSON.stringify(state.lastErrors));
+  const listRules = dynamic.filter((x) => x.id >= U.LIST_RULE_ID_BASE && x.id < U.KEPT_RULE_ID_BASE);
+  const req = (url, type, initiator) => evaluate(listRules, { url, type, method: "get", initiator }).action;
+  assert(req("https://totaladblock.com/", "main_frame", null) === "none", "page blocked again");
+  assert(req("https://totaladblock.com/a.js", "script", "site.test") === "none", "host blocked again");
+  assert(req("https://cdn.jwplayer.com/x.js", "script", "tennis.com") === "none", "jwplayer on tennis.com");
+  assert(req("https://cdn.jwplayer.com/x.js", "script", "variety.com") === "block", "jwplayer on variety.com kept");
+  assert(req("https://ok.example.com/a.js", "script", "site.test") === "block", "control host");
+});
+
+Deno.test("#6: the shipped PACKED_CROSS block is well formed and names only known lists", () => {
+  const p = FO.PACKED_CROSS;
+  assert(p && p.version === 1 && p.lists && typeof p.lists === "object", JSON.stringify(p).slice(0, 200));
+  const names = new Set(U.SOURCES.map((s) => s.name));
+  for (const [n, part] of Object.entries(p.lists)) {
+    assert(names.has(n), "unknown list " + n);
+    for (const [k, v] of Object.entries(part)) {
+      assert(["cancel", "allow", "limit", "important", "alldoc"].includes(k), n + ": field " + k);
+      assert(Array.isArray(v) && v.every((x) => typeof x === "string"), n + "." + k);
+    }
+  }
+});

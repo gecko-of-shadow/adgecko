@@ -5,3 +5,4 @@ scripts/.dnr-cache/
 scripts/.list-cache/
 __pycache__/
 *.pyc
+.playwright-mcp/

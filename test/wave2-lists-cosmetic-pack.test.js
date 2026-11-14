@@ -1,6 +1,6 @@
 // Wave 2 "lists": AdGuard Base site hide rules are used at runtime (cosmetic:
-// "sites"), the refresh writes the hide list only once all three cosmetic lists
-// are parsed, and the packer rebuilds the bundled sheet
+// "sites"), the refresh writes the hide list once EasyList and EasyPrivacy are
+// parsed (AdGuard's part is optional since final review #2), and the packer rebuilds the bundled sheet
 // (src/rules/cosmetic-rules.json) from EasyList + EasyPrivacy on every list pack.
 import "../src/general/filter-options.js";
 import "../src/general/never-block-captcha.js";
@@ -151,18 +151,25 @@ const bodyFor = (offline) => (url) => {
   return bigList("other" + url.length);
 };
 
-Deno.test("refresh: hide list waits for AdGuard Base, then merges all three lists", async () => {
+// Edited by final review #2 (0.3.5): AdGuard Base ("sites") is an optional
+// hide-rule source, so the first run (AdGuard offline) now writes the
+// EasyList + EasyPrivacy sheet instead of nothing; it used to hold back the
+// whole hide list (an upgraded install kept the 0.3.4 sheet). The second run
+// still merges all three lists; its assertions are unchanged.
+Deno.test("refresh: hide list does not wait for AdGuard Base, then merges all three lists", async () => {
   let offline = ["adguard_base"];
   const d = makeDeps((url) => bodyFor(offline)(url));
   const r1 = await U.refresh(d, { manual: true });
   assert(r1.ok, JSON.stringify(r1));
-  assert(d.cosmetic.length === 0, "no hide list with only two of three cosmetic lists: " + d.cosmetic.length);
+  assert(d.cosmetic.length === 1, "EasyList + EasyPrivacy sheet written without AdGuard: " + d.cosmetic.length);
+  const first = d.cosmetic[0].sites["example.com"] || [];
+  assert(first.includes(".from-easylist") && first.includes(".from-easyprivacy") && !first.includes(".from-adguard"), JSON.stringify(first));
   offline = [];
   d.t += 1;
   const r2 = await U.refresh(d, { manual: true });
   assert(r2.ok, JSON.stringify(r2));
-  assert(d.cosmetic.length === 1, "written once all three are parsed: " + d.cosmetic.length);
-  const out = d.cosmetic[0];
+  assert(d.cosmetic.length === 2, "written again once all three are parsed: " + d.cosmetic.length);
+  const out = d.cosmetic[1];
   const site = out.sites["example.com"] || [];
   for (const s of [".from-easylist", ".from-easyprivacy", ".from-adguard"]) assert(site.includes(s), s + " missing: " + JSON.stringify(site));
   assert(out.generic.includes(".easylist-generic"), "EasyList generic kept: " + JSON.stringify(out.generic));

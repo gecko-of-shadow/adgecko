@@ -26,8 +26,9 @@ function fakePage(host) {
     add(data, type) { if (typeof data === "string") { this.dt.data[String(type).toLowerCase()] = data; return { kind: "string", type }; } return null; }
   }
   class DataTransfer {
-    constructor() { this.data = {}; this._items = new DataTransferItemList(this); }
-    get items() { return this._items; }
+    constructor() { this.data = {}; }
+    // Like Chromium: a new DataTransferItemList object on every read.
+    get items() { return new DataTransferItemList(this); }
     setData(k, v) { this.data[k] = v; }
   }
   class Selection { toString() { return selection; } }

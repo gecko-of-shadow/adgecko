@@ -1,5 +1,5 @@
 {
-  "built_at_utc": "2026-11-14T22:00:38Z",
+  "built_at_utc": "2026-11-14T23:01:40Z",
   "lists_packed_at_utc": "2026-11-14T22:00:32Z",
   "priority": 2000010,
   "resource_types": [
@@ -29,7 +29,7 @@
     "ublock_badware": {
       "sha256_matches_meta": true,
       "whole_domains": 1118,
-      "scoped_entries": 3273,
+      "scoped_entries": 3264,
       "threat_hosts": 3305,
       "popup_only_hosts": 0,
       "added": 3303
@@ -37,7 +37,7 @@
     "dandelion_antimalware": {
       "sha256_matches_meta": true,
       "whole_domains": 11729,
-      "scoped_entries": 12031,
+      "scoped_entries": 12029,
       "threat_hosts": 12028,
       "popup_only_hosts": 0,
       "added": 11993

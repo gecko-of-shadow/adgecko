@@ -2,13 +2,13 @@
 
 ## 0.3.5 (2026-11-14)
 
-A bug hunt found 38 bugs, each proven by a failing test (`test/nightly-*.test.js`). 35 are fixed here; 3 are held back (see "Not in this release"). Also: more blocking, easier recovery from a broken site, lighter page frames, and freshly packed lists.
+A bug hunt found 38 bugs, each proven by a failing test (`test/nightly-*.test.js`), and a final review of this release found 10 more (`test/final-*.test.js`). 45 are fixed here; 3 are held back (see "Not in this release"). Also: more blocking, easier recovery from a broken site, lighter page frames, and freshly packed lists.
 
 ### More blocking
 
-- Filter lists: site-scoped filters (`||host^$domain=site.com`, `$from=`) now block on the listed sites instead of being dropped. `$method`, `$denyallow` and a plain `$all` are converted exactly too. A filter that cannot be expressed exactly is still dropped, and a `$domain=` filter never blocks opening a page.
-- Filter lists: a `$badfilter` in one list (for example AdGuard's fix for totaladblock.com) now cancels the same filter in every other list, and an unconditional exception such as `@@||content.ingbank.pl^` lifts another list's block of that same host. Both work in the packed rules and in list refreshes.
-- Hidden ad boxes: AdGuard Base's site-specific hide rules are now used (its generic ones are not, because its `$generichide` exceptions are not supported). They arrive with the first list refresh, which runs right after install; the bundled sheet stays EasyList + EasyPrivacy to keep the zip small, and is now rebuilt with every list pack (it was a month old). If AdGuard's hide rules ever pass a safety limit, only they are skipped; its network rules still apply.
+- Filter lists: site-scoped filters (`||host^$domain=site.com`, `$from=`) now block on the listed sites instead of being dropped. `$method`, `$denyallow` and a plain `$all` are converted exactly too. A filter that cannot be expressed exactly is still dropped, and a `$domain=` filter never blocks opening a page. To stay safe, a `$domain=` filter is dropped when any list has a path or option exception for its host (for example `@@||adobedtm.com/launch-$script`, which keeps Adobe Launch working on bank and shop sites), and filters that only exclude sites (`$domain=~site.com`) stay dropped, as in 0.3.4.
+- Filter lists: a `$badfilter` in one list (for example AdGuard's fix for totaladblock.com) now cancels the same filter in every other list (a `$badfilter` with `$domain=` removes only those sites), and an unconditional exception such as `@@||content.ingbank.pl^` lifts another list's block of that same host. Both work in the packed rules and in list refreshes, also when the list that carries them fails to download (the packer keeps a small copy of them in `src/general/filter-options.js`).
+- Hidden ad boxes: AdGuard Base's site-specific hide rules are now used (its generic ones are not, because its `$generichide` exceptions are not supported). They arrive with the first list refresh, which runs right after install; the bundled sheet stays EasyList + EasyPrivacy to keep the zip small, and is now rebuilt with every list pack (it was a month old). If AdGuard's hide rules ever pass a safety limit, only they are skipped; its network rules still apply. EasyList and EasyPrivacy hide updates never wait for AdGuard: if filters.adtidy.org cannot be reached, the hide sheet still updates.
 
 ### Easier when a site breaks
 
@@ -16,19 +16,19 @@ A bug hunt found 38 bugs, each proven by a failing test (`test/nightly-*.test.js
 - Popup: a site with a kept Fix now says "Protected – some filters off here (Fix this site)" and offers **Undo fix**. Before, it said "✅ Protected" while the extra filters stayed off.
 - Popup: on a page Chrome shows as blocked, a "Chrome says the page is blocked? Allow its domain" link opens the settings page with the cursor in the **Allow this domain** box.
 - Settings: the per-site list says "Allowed – not blocking here" or "Fixed – hidden ad boxes and page guards off" instead of raw switch names. **Remove** and **Reset** keep keyboard focus.
-- Popup: **Allow this site** and **Fix this site** on a subdomain now change only that subdomain, not its parent domain. An Allow on a parent domain now shows on a subdomain that has its own Fix. A double click on **Fix this site** no longer loses the earlier switch state, and an unanswered Fix is no longer lost when you act on another site.
+- Popup: **Allow this site** and **Fix this site** on a subdomain now change only that subdomain, not its parent domain. An Allow on a parent domain now shows on a subdomain that has its own Fix. A Fix on a parent domain does not turn filters off on a subdomain that has its own site settings (as in 0.3.4), and an unanswered Fix that 0.3.4 saved on a parent domain still asks on the subdomain after the upgrade. A double click on **Fix this site** no longer loses the earlier switch state, and an unanswered Fix is no longer lost when you act on another site.
 - Settings: **Allow this domain** accepts Unicode (IDN) domain names, for ad lists and for the malware list.
 
 ### Page guards
 
-- Clipboard guard: closes four ways a page could still put a command on the clipboard (a custom iterator or an item swap during `clipboard.write`, `clipboardData.items.add` in a copy handler, and 20,000 characters of padding before the command). It now also catches `irm URL | iex` (PowerShell) and `bash -c "$(curl ...)"` (macOS). A right-click no longer lets the page write for 30 seconds; only the browser's own Copy of your selection counts.
+- Clipboard guard: closes four ways a page could still put a command on the clipboard (a custom iterator or an item swap during `clipboard.write`, `clipboardData.items.add` in a copy handler, and 20,000 characters of padding before the command). It now also catches `irm URL | iex` (PowerShell) and `bash -c "$(curl ...)"` (macOS). A right-click no longer lets the page write for 30 seconds; only the browser's own Copy of your selection counts, also when a page starts a copy through a frame or a nested copy event. A command written into drag-and-drop data is now blocked too; ordinary dragged text is not.
 - Popup guard (off by default): a pop-under opened on mousedown or pointerdown, up to 5 s after the click, or behind a stopped click event is now judged by what was clicked. In `about:blank`, `srcdoc` and `blob:` frames, relative addresses resolve against the frame's real address. A site reached with a trailing dot (`news.example.`) counts as the same site.
 
 ### Malware blocking
 
 - Switching **Block known malware hosts** (or the whole extension) off and on no longer drops a refreshed malware set that was already accepted.
 - With the ad lists off, a list refresh still installs freshly downloaded malware rules.
-- The public-suffix subset now has three-label suffixes (`k12.ca.us`, `act.edu.au`), the children of wildcard suffixes and regional Amazon S3 endpoints, so one list line can no longer block all of them as a whole. A malware list can no longer block a parent domain of a captcha host.
+- The public-suffix subset now has three-label suffixes (`k12.ca.us`, `act.edu.au`), the children of wildcard suffixes and regional Amazon S3 endpoints, so one list line can no longer block all of them as a whole; the packer now uses the same suffix rules as the extension. A malware list can no longer block a parent domain of a captcha host.
 - Threat feed: an unchanged feed no longer shows a false replay warning, and the last-check time moves again.
 
 ### List updates
@@ -54,7 +54,7 @@ A bug hunt found 38 bugs, each proven by a failing test (`test/nightly-*.test.js
 
 ### Other
 
-- Filter lists repacked 2026-11-14 22:00 UTC: 195,069 whole-domain and 18,523 site-scoped entries in 2,948 list rules (2,953 rules in `general-network.json`), and 574 URLhaus threat hosts. The bundled hide sheet: 13,635 generic and 7,841 site rules.
+- Filter lists repacked 2026-11-14 22:00 UTC: 195,069 whole-domain and 18,422 site-scoped entries in 2,851 list rules (2,856 rules in `general-network.json`), and 574 URLhaus threat hosts. The bundled hide sheet: 13,635 generic and 7,841 site rules.
 - Release gate: the package size cap is now 8 MB (was 7.5 MB); the site-scoped filters add about 0.4 MB. Checkouts keep LF line endings (`.gitattributes`), so the captcha parity test passes on Windows too.
 
 ### Not in this release (owner decision)

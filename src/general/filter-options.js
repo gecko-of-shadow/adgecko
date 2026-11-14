@@ -211,6 +211,11 @@
     if (narrowed && !types.size) return null;
     // Every include entry was skipped: an empty initiator list would widen.
     if (hadIncl && !incl.size) return null;
+    // Exclusion-only `$domain=~a.com|~b.com`: blocks from every other site,
+    // the widest form. The path / option exceptions that limit such filters
+    // upstream (EasyPrivacy `@@||adobedtm.com/launch-$script`) cannot be
+    // expressed here, so it stays dropped as in 0.3.4 (final review #0).
+    if (hadInitiator && !hadIncl) return null;
     // Mixed $method=post|~get has no exact DNR form.
     if (methods.size && exMethods.size) return null;
     let t = Array.from(types);
@@ -357,5 +362,83 @@
     return parts.every((p) => TABLE.allDocument.includes(p) || TABLE.ignore.includes(p) || TABLE.cancel.includes(p));
   }
 
-  root.GeneralFilterOptions = { TABLE, NAV_EXEMPT, DOMAIN_RE, DOCUMENT_KEY, allAddsDocument, cleanHost, buildKey, convertOptions, keyToCondition, conditionKey, convertLine, isPopupOnly, isNavExempt, isNavProtected, scopeForMerge };
+  // Host of an `@@||host...` exception line (the text after "@@"), or null.
+  // The lists' exceptions are applied in one form only (`@@||host^`, no
+  // path, no options: update.js parseEntriesFull "allow"). Every other
+  // `@@||host` form (a path, a wildcard, any option) has no exact DNR form
+  // here; its host still
+  // limits the $domain= filters of that host (limitsScoped), so such a
+  // filter is never shipped without the exceptions that narrow it upstream
+  // (final review #0: `||adobedtm.com^$third-party,domain=...` vs
+  // `@@||adobedtm.com/launch-$script`). Same regexes in the packer.
+  const EXCEPTION_HOST_RE = /^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])(?=[\^\/$*:?|]|$)/i;
+  function exceptionHost(rest) {
+    const m = EXCEPTION_HOST_RE.exec(String(rest || "").trim());
+    if (!m) return null;
+    return cleanHost(m[1]);
+  }
+
+  // Exception hosts -> the set of hosts a $domain= filter may not name: each
+  // exception host and every parent of it (an exception on b.a.com limits a
+  // filter for a.com; `||a.com/x` also matches b.a.com, so an exception on
+  // a.com limits a filter for b.a.com: limitsScoped checks both directions).
+  function limitIndex(hosts) {
+    const self = new Set();
+    const parents = new Set();
+    for (const h0 of hosts || []) {
+      const h = String(h0);
+      self.add(h);
+      const labels = h.split(".");
+      for (let i = 1; i < labels.length - 1; i++) parents.add(labels.slice(i).join("."));
+    }
+    return { self, parents };
+  }
+
+  // true when scoped entry (domain, key) is a $domain= filter (i= or n=
+  // part) whose host has a path / option exception in `index` (limitIndex):
+  // the exception names the host, a subdomain of it, or a parent of it.
+  function limitsScoped(index, domain, key) {
+    if (!index || !key || !(index.self.size)) return false;
+    const parts = parseKey(key);
+    if (!parts.i && !parts.n) return false;
+    const d = String(domain);
+    if (index.self.has(d) || index.parents.has(d)) return true;
+    const labels = d.split(".");
+    for (let i = 1; i < labels.length - 1; i++) if (index.self.has(labels.slice(i).join("."))) return true;
+    return false;
+  }
+
+  // Per-initiator $badfilter (final review #1). A badfilter key with an i=
+  // part -> [rest, hosts], where rest is the key without its i= part; else
+  // null. A scoped entry of the same domain with the same rest loses those
+  // initiators (removeInitiators), as AdGuard and uBO do.
+  function initiatorSplit(key) {
+    if (!key) return null;
+    const parts = parseKey(key);
+    if (!parts.i) return null;
+    const hosts = parts.i.split(",");
+    delete parts.i;
+    return [buildKey(parts), hosts];
+  }
+
+  // key minus the initiators in `drop` (a Set). The same key when none is
+  // removed; null when none is left (an empty i= list would widen the rule).
+  function removeInitiators(key, drop) {
+    const parts = parseKey(key);
+    if (!parts.i || !drop || !drop.size) return key;
+    const kept = parts.i.split(",").filter((h) => !drop.has(h));
+    if (kept.length === parts.i.split(",").length) return key;
+    if (!kept.length) return null;
+    return buildKey(Object.assign({}, parts, { i: kept.join(",") }));
+  }
+
+  // Pack-time cross-list data per list (final review #6), written by
+  // scripts/pack-filter-lists.py from the packed lists: only the entries
+  // that removed or narrowed something at pack time. The runtime refresh
+  // (update.js crossListRules) applies a list's part only while that list
+  // has no current parsed copy, so a missing list's $badfilter / @@ data is
+  // not lost while the other lists refresh. Do not edit by hand.
+  const PACKED_CROSS = /*PACKED-CROSS-START*/{"lists":{"adguard_base":{"allow":["pgpartner.com"],"cancel":["a2zapk.com\np=thirdParty|t=script,sub_frame,xmlhttprequest|x=","jwplayer.com\np=|t=|x=|i=tennis.com","ojrq.net\np=|t=main_frame|x=","rule34hentai.net\np=firstParty|t=sub_frame|x=","shieldload.neoseeker.com\n","totaladblock.com\n","totaladblock.com\np=|t=main_frame|x="],"limit":["acdn.adnxs.com","ad.mail.ru","ads.google.com","aff.bstatic.com","akamaihd.net","amazonaws.com","amsarkadium-a.akamaihd.net","assets.connatix.com","bidder.criteo.com","cd.connatix.com","cdn.jwplayer.com","cdn.playwire.com","cdn.taboola.com","cdn.vidible.tv","cdn.viously.com","chaturbate.com","cloudfront.net","connatix.com","coubsecureassets-a.akamaihd.net","d13nu0oomnx5ti.cloudfront.net","d1ayxb9ooonjts.cloudfront.net","d2kv6n94eruxg9.cloudfront.net","d3njgrq4uvb497.cloudfront.net","dailymotion.com","dashboard.jwplayer.com","dashboard.tinypass.com","dcbbwymp1bhlf.cloudfront.net","ddzswov1e84sp.cloudfront.net","delivery.vidible.tv","disqus.com","dn0qt3r0xannq.cloudfront.net","dniadops-a.akamaihd.net","embed.sendtonews.com","entitlements.jwplayer.com","europeanclassiccomic.blogspot.com","freeapps4y.blogspot.com","fundingchoicesmessages.google.com","gamezop.com","gapl.hit.gemius.pl","getlec.blogspot.com","google-analytics.com","google.com","googlesyndication.com","h.imedia.cz","hdliveextra-a.akamaihd.net","i.postimg.cc","ib.adnxs.com","imgur.com","mimaletadepeliculas.blogspot.com","mohanlalmovieshub.blogspot.com","myshorturls.blogspot.com","nir-oz.blogspot.com","p.jwpcdn.com","pagead2.googlesyndication.com","paywall-ad-bucket.s3.amazonaws.com","prebid.adnxs.com","prgwonders.blogspot.com","rackcdn.com","rumble.com","s3.amazonaws.com","safeframe.googlesyndication.com","secure.adnxs.com","sendtonews.com","services.brid.tv","sonar.viously.com","sonic-ui.highereducation.com","spolecznosci.net","ssl.p.jwpcdn.com","thechive.files.wordpress.com","tpc.googlesyndication.com","video.onnetwork.tv","widgets.outbrain.com","xda-developers-forum.blogspot.com","youporn.com","youtube.com"]},"easylist":{"limit":["adnxs.com","ads.google.com","ads.taboola.com","amazonaws.com","chaturbate.com","cloudfront.net","connatix.com","disqus.com","google.com","music.youtube.com","pagead2.googlesyndication.com","playwire.com","prebid.adnxs.com","safeframe.googlesyndication.com","succeedscene.com","thegay.com","tpc.googlesyndication.com","tv.youtube.com","twitch.tv","www.youtube.com","youtube.com"]},"easyprivacy":{"allow":["content.ingbank.pl"],"limit":["a.run.app","akamaihd.net","amazonaws.com","bilder-a.akamaihd.net","cdn.shopify.com","cloudfront.net","cohesionapps.com","connatix.com","criteo.com","d2ma0sm7bfpafd.cloudfront.net","d2r1yp2w7bby2u.cloudfront.net","d2wy8f7a9ursnm.cloudfront.net","d347cldnsmtg5x.cloudfront.net","dz9qn8fh4jznm.cloudfront.net","gamezop.com","gemius.pl","google-analytics.com","h.imedia.cz","hit.gemius.pl","imgur.com","odb.outbrain.com","onesignal.com","outbrain.com","parsely.com","shopify.com","static.myfinance.com","taboola.com","tinypass.com","trc.taboola.com","vidible.tv"]}},"version":1}/*PACKED-CROSS-END*/;
+
+  root.GeneralFilterOptions = { TABLE, NAV_EXEMPT, DOMAIN_RE, DOCUMENT_KEY, PACKED_CROSS, EXCEPTION_HOST_RE, allAddsDocument, cleanHost, buildKey, parseKey, convertOptions, keyToCondition, conditionKey, convertLine, isPopupOnly, isNavExempt, isNavProtected, scopeForMerge, exceptionHost, limitIndex, limitsScoped, initiatorSplit, removeInitiators };
 })(typeof self !== "undefined" ? self : globalThis);

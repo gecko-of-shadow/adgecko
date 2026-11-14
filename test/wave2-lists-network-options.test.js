@@ -215,7 +215,9 @@ Deno.test("$all: threat lists still promote the host to the threat tier (key '' 
 Deno.test("packed rules with the new fields round-trip through conditionKey (swap fallback keeps their scope)", () => {
   const { rules } = rulesFor([
     "||a.example.com^$script,third-party,domain=news.test|~sub.news.test,method=get,denyallow=cdn.test",
-    "||b.example.com^$domain=~x.test",
+    // Was `$domain=~x.test`: exclusion-only filters are dropped since final
+    // review #0, so an include + exclude form keeps the n= round trip tested.
+    "||b.example.com^$domain=y.test|~x.y.test",
   ].join("\n"));
   for (const r of rules) {
     const key = FO.conditionKey(r.condition);
@@ -228,7 +230,7 @@ const PARITY_TEXT = [
   "||w.example.com^$script,domain=a.test",
   "||s1.example.com^$script,domain=a.test|b.test",
   "||s2.example.com^$domain=b.test|a.test,script",
-  "||s3.example.com^$image,domain=~c.test",
+  "||s3.example.com^$image,domain=c.test|~d.c.test", // was domain=~c.test (exclusion-only, dropped since final review #0)
   "||s4.example.com^$method=post",
   "||s5.example.com^$xhr,denyallow=cdn.s5.example.com",
   "||s6.example.com^$all",

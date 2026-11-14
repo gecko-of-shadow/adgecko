@@ -107,18 +107,21 @@
     return out;
   }
 
-  // Overrides that apply to a page: its own host and every parent domain,
-  // merged field by field. A switch value comes from the most specific host
-  // that sets it. An Allow (enabled:false) on any of them is in force, because
+  // Overrides that apply to a page: its own host and every parent domain.
+  // Feature switches come from the most specific host that has an entry, as a
+  // whole (0.3.4 semantics: a child entry never inherits a parent's other
+  // switches, so a kept Fix on a parent does not reach into a subdomain that
+  // has its own entry). Only two values reach down from any parent, because
   // the DNR allow rule for a parent (initiatorDomains) covers every subdomain
-  // too. `host` is the entry that controls the Allow when there is one (so
-  // "Block again" edits it), else the most specific entry.
+  // too: an Allow (enabled:false) and network:false. `host` is the entry that
+  // controls the Allow when there is one (so "Block again" edits it), else the
+  // most specific entry.
   function overrideFor(overrides, host) {
     const h = normalizeHost(host);
     const labels = h.split(".");
     let first = null;
     let allowHost = null;
-    const features = {};
+    let networkOff = false;
     // Never a bare top-level label ("com") as a parent, but a single-label
     // host ("localhost", an intranet name) is its own key.
     for (let i = 0; i < Math.max(1, labels.length - 1); i++) {
@@ -127,15 +130,13 @@
       if (!e) continue;
       if (!first) first = key;
       if (e.enabled === false && !allowHost) allowHost = key;
-      if (e.features) {
-        // network:false on a parent also wins: its DNR allow rule covers every
-        // subdomain (legacyMirror), so the feature layer must agree.
-        for (const [id, v] of Object.entries(e.features)) if (!(id in features) || (id === "network" && v === false)) features[id] = v;
-      }
+      if (e.features && e.features.network === false) networkOff = true;
     }
     if (!first) return null;
     const entry = {};
     if (allowHost) entry.enabled = false;
+    const features = Object.assign({}, overrides[first].features);
+    if (networkOff) features.network = false;
     if (Object.keys(features).length) entry.features = features;
     return { host: allowHost || first, entry };
   }

@@ -41,7 +41,7 @@
     { "line": "||doc.example.com^$document", "expect": ["doc.example.com", "p=|t=main_frame|x=", false], "condition": { "resourceTypes": ["main_frame"] } },
     { "line": "||doc2.example.com^$doc", "expect": ["doc2.example.com", "p=|t=main_frame|x=", false] },
     { "line": "||docip.example.com^$doc,ipaddress=192.0.2.1", "expect": null },
-    { "line": "||allex.example.com^$all,domain=~example.org", "expect": ["allex.example.com", "p=|t=|x=|n=example.org", false], "condition": { "excludedInitiatorDomains": ["example.org"] } },
+    { "line": "||allex.example.com^$all,domain=~example.org", "expect": null },
     { "line": "||strict.example.com^$strict3p", "expect": null },
     { "line": "||den.example.com^$denyallow=a.com", "expect": ["den.example.com", "p=|t=|x=|d=a.com", false], "condition": { "excludedRequestDomains": ["a.com"] } },
     { "line": "||meth.example.com^$method=post", "expect": ["meth.example.com", "p=|t=|x=|m=post", false], "condition": { "requestMethods": ["post"] } },
@@ -53,7 +53,9 @@
     { "line": "||bad.example.com^$badfilter", "expect": ["bad.example.com", "", true] },
     { "line": "||badscoped.example.com^$script,badfilter", "expect": ["badscoped.example.com", "p=|t=script|x=", true] },
     { "line": "||ads.example.com^$script,domain=news.test|~sub.news.test", "expect": ["ads.example.com", "p=|t=script|x=|i=news.test|n=sub.news.test", false], "condition": {"resourceTypes": ["script"], "initiatorDomains": ["news.test"], "excludedInitiatorDomains": ["sub.news.test"]} },
-    { "line": "||exonly.example.com^$domain=~b.test|~a.test", "expect": ["exonly.example.com", "p=|t=|x=|n=a.test,b.test", false], "condition": {"excludedInitiatorDomains": ["a.test", "b.test"]} },
+    { "line": "||exonly.example.com^$domain=~b.test|~a.test", "expect": null },
+    { "line": "||adobedtm.com^$third-party,domain=~adobe.com|~costco.com", "expect": null },
+    { "line": "||exonlybf.example.com^$script,domain=~a.test,badfilter", "expect": null },
     { "line": "||entex.example.com^$domain=~google.*", "expect": null },
     { "line": "||entex2.example.com^$domain=news.test|~google.*", "expect": null },
     { "line": "||entin.example.com^$domain=google.*|news.test", "expect": ["entin.example.com", "p=|t=|x=|i=news.test", false] },
@@ -101,5 +103,79 @@
         "scoped": [["all.example.com", "p=|t=main_frame|x="], ["allimp.example.com", "p=|t=main_frame|x="], ["all3p.example.com", "p=thirdParty|t=|x="], ["alldom.example.com", "p=|t=|x=|i=a.test"]]
       }
     }
-  ]
+  ],
+  "cross": [
+    {
+      "_note": "final review #0: adobedtm.com (EasyPrivacy 4160 + 56436), anyclip / viously style path or option exceptions",
+      "lists": {
+        "easylist": "||player.anyclip.com^$script,domain=zerotackle.com|other.test\n||viously.com^$script,domain=clubic.com\n||assets.adobedtm.com^$script,domain=news.test\n||other.example^$script,domain=news.test\n||plain.example^$script,domain=a.test\n||typed.limited.example^$script",
+        "easyprivacy": "||adobedtm.com^$third-party,domain=~adobe.com|~costco.com\n@@||adobedtm.com/launch-$script,xmlhttprequest\n@@||adobedtm.com^*/satelliteLib-$script,domain=ally.com|americanexpress.com\n@@||plain.example^\n@@||typed.limited.example/x.js",
+        "adguard_base": "@@||player.anyclip.com/player.js$domain=zerotackle.com\n@@||sonar.viously.com^$xmlhttprequest,domain=clubic.com"
+      },
+      "expect": {
+        "domains": [],
+        "scoped": [
+          [
+            "other.example",
+            "p=|t=script|x=|i=news.test"
+          ],
+          [
+            "plain.example",
+            "p=|t=script|x=|i=a.test"
+          ],
+          [
+            "typed.limited.example",
+            "p=|t=script|x="
+          ]
+        ]
+      }
+    },
+    {
+      "_note": "final review #1: AdGuard ||jwplayer.com^$domain=tennis.com,badfilter vs EasyList 65954 (shortened)",
+      "lists": {
+        "easylist": "||jwplayer.com^$domain=americansongwriter.com|tennis.com|variety.com\n||y.example^$script,domain=a.test|b.test\n||z.example^$image,domain=a.test|b.test\n||w.example^",
+        "adguard_base": "||jwplayer.com^$domain=tennis.com,badfilter\n||y.example^$script,domain=a.test,badfilter\n||y.example^$script,domain=b.test,badfilter\n||z.example^$script,domain=a.test,badfilter\n||w.example^$domain=a.test,badfilter"
+      },
+      "expect": {
+        "domains": [
+          "w.example"
+        ],
+        "scoped": [
+          [
+            "jwplayer.com",
+            "p=|t=|x=|i=americansongwriter.com,variety.com"
+          ],
+          [
+            "z.example",
+            "p=|t=image|x=|i=a.test,b.test"
+          ]
+        ]
+      }
+    }
+  ],
+  "psl": {
+    "_note": "final review #5: runtime isIcannSuffix (src/threat/psl.js) and the packer's is_public_suffix agree",
+    "hosts": {
+      "k12.ca.us": true,
+      "act.edu.au": true,
+      "nakahara.kawasaki.jp": true,
+      "city.kawasaki.jp": false,
+      "foo.k12.ca.us": false,
+      "school.act.edu.au": false,
+      "co.uk": true,
+      "example.co.uk": false,
+      "foo.ck": true,
+      "www.ck": false,
+      "kawasaki.jp": true
+    },
+    "list": "||k12.ca.us^\n||act.edu.au^\n||nakahara.kawasaki.jp^\n||city.kawasaki.jp^\n||foo.k12.ca.us^\n0.0.0.0 www.ck\nfoo.ck",
+    "expect": {
+      "domains": [
+        "city.kawasaki.jp",
+        "foo.k12.ca.us",
+        "www.ck"
+      ],
+      "scoped": []
+    }
+  }
 }

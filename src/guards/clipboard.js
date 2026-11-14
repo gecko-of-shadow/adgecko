@@ -8,8 +8,8 @@
 // and then tell the visitor to paste it into Run, PowerShell or a terminal.
 // Checked: navigator.clipboard.writeText and .write, document.execCommand
 // ("copy"/"cut"), the browser's own copy/cut of the selection, and
-// DataTransfer.setData / DataTransferItemList.add on a copy/cut event's
-// clipboard data. Text that looks
+// DataTransfer.setData / DataTransferItemList.add (any DataTransfer, see
+// below). Text that looks
 // like a dangerous command is not written unless the visitor copied exactly
 // that text themselves, or the site is on the known-safe list (documentation
 // and code hosts). A small notice says why and how to copy on purpose.
@@ -25,6 +25,31 @@
 // Promise.reject), the selection and form-field getters and the key-event
 // getters. Values are turned into text once; the checked text is the one
 // passed on. Wrappers sit on the prototype that owns each method.
+// Every text write through DataTransfer setData / items.add is checked, on
+// any DataTransfer (copy, cut, drag-and-drop or one the page made): a frame
+// realm's methods called on this realm's clipboardData are then checked by
+// that frame's guard too (final review 9, round 2). Only trusted copy/cut
+// events count as copy events, and each event's clipboardData (and every
+// items list read from it: Chrome returns a new list on each read, so the
+// items getter is wrapped) remembers whether it is the browser's own copy.
+// The browser's own copy (the only one a right-click "menu" gesture can
+// authorise) is a trusted event that this realm's execCommand did not start
+// AND that the browser dispatched with no script on the stack: microtasks run
+// between two listeners only then (HTML "clean up after running script").
+// So a copy event that page script starts, through any realm's execCommand
+// (also a frame the guard has not reached yet), never counts as the menu
+// Copy (final review 8). Checked in Chromium 156: microtasks run between
+// listeners of trusted click/keydown, not of copy events from execCommand in
+// a click handler, a timer, a bound timer or a frame realm; they do run
+// between listeners of the copy event of a keyboard Ctrl+C (Playwright
+// Chromium). UNVERIFIED: the copy event of the context-menu Copy (same
+// browser path). Without queueMicrotask the old "not inside this realm's
+// execCommand" rule is used.
+// execCommand("copy"/"cut") on a document of another window is refused. A
+// right-click gesture ends at the next trusted pointerdown or mousedown.
+// Known limit (UNVERIFIED in Chrome): a same-origin frame the guard has not
+// reached yet has native methods (writeText, setData, execCommand on its own
+// document), so it is not checked at all; that is an injection-timing gap.
 // Known limit (UNVERIFIED in practice): the clipboard.write() check awaits
 // promises, and a page that rewrites Promise internals can still interfere
 // with that one asynchronous path.
@@ -51,6 +76,10 @@ const defineProp = Object.defineProperty;
 const freeze = Object.freeze;
 const symIterator = Symbol.iterator;
 const hasOwn = Object.prototype.hasOwnProperty;
+const WeakMapCtor = WeakMap;
+const wmGet = WeakMap.prototype.get;
+const wmSet = WeakMap.prototype.set;
+const wmHas = WeakMap.prototype.has;
 
 function installClipboardGuard(target) {
   // Commands people are tricked into running (patterns are case-insensitive).
@@ -176,9 +205,20 @@ function installClipboardGuard(target) {
     const now = env.now || (() => apply(dateNow, Date, []));
     const flagOn = env.flagOn || (() => true);
     let lastCopy = null;
-    let copyData = null; // clipboardData of the copy/cut event being dispatched
-    let copyNative = false; // that event is the browser's own copy, not one from execCommand
-    let inExec = false; // inside the wrapped execCommand("copy"/"cut")
+    // clipboardData (and its items list) of every trusted copy/cut event seen
+    // -> true when that event is the browser's own copy, false when it comes
+    // from execCommand. Per object, not one slot: a nested copy event (from
+    // the page's copy handler) must not take the check away from the outer one.
+    const copyMap = new WeakMapCtor();
+    const isObj = (o) => o !== null && (typeof o === "object" || typeof o === "function");
+    const isCopyData = (o) => isObj(o) && apply(wmHas, copyMap, [o]);
+    const copyKind = (o) => apply(wmGet, copyMap, [o]);
+    let inExec = 0; // depth inside the wrapped execCommand("copy"/"cut")
+    // Did the browser dispatch this event with no script on the stack? A
+    // microtask queued by the first copy listener runs before the second one
+    // only then. null without queueMicrotask (old engines, tests): not used.
+    const queueMicro = typeof win.queueMicrotask === "function" ? win.queueMicrotask : null;
+    let gapEvent = null;
 
     // Native getters and methods, captured now (before page scripts).
     const getter = (proto, key) => {
@@ -193,6 +233,8 @@ function installClipboardGuard(target) {
     const nativeGetSelection = typeof win.getSelection === "function" ? win.getSelection : null;
     const nativeSelectionText = protoOf(win.Selection) && typeof win.Selection.prototype.toString === "function" ? win.Selection.prototype.toString : null;
     const nativeActive = getter(protoOf(win.Document), "activeElement");
+    const defaultViewGet = getter(protoOf(win.Document), "defaultView");
+    const itemsGet = getter(protoOf(win.DataTransfer), "items");
     const keyGet = getter(protoOf(win.KeyboardEvent), "key");
     const ctrlGet = getter(protoOf(win.KeyboardEvent), "ctrlKey");
     const metaGet = getter(protoOf(win.KeyboardEvent), "metaKey");
@@ -297,16 +339,50 @@ function installClipboardGuard(target) {
           lastCopy = null;
         }
       }, true);
+      // A right-click authorises only the menu "Copy" that follows it. Choosing
+      // an item in the browser's menu sends no event to the page, so the next
+      // press of a pointer button ends the gesture (never the up events: on
+      // macOS "contextmenu" fires before mouseup).
+      const endMenu = (e) => {
+        try {
+          if (e && e.isTrusted === true && lastCopy && lastCopy.kind === "menu") lastCopy = null;
+        } catch {
+          lastCopy = null;
+        }
+      };
+      listenOn.addEventListener("pointerdown", endMenu, true);
+      listenOn.addEventListener("mousedown", endMenu, true);
       // The browser's own copy/cut of the selection (keyboard, menu, or the
       // copy event an execCommand("copy") fires): if the selection changed to
       // a command the visitor did not select, cancel the copy. Also remember
       // this event's clipboardData so setData is checked on it (and only on it,
       // not on drag-and-drop data).
+      const markCopy = (e) => {
+        try {
+          if (!queueMicro || !e || e.isTrusted !== true) return;
+          gapEvent = null;
+          apply(queueMicro, win, [() => { gapEvent = e; }]);
+        } catch {
+          // no microtask: onCopy treats the event as page-initiated
+        }
+      };
       const onCopy = (e) => {
         try {
-          copyNative = false;
-          copyData = clipboardDataGet ? apply(clipboardDataGet, e, []) : e && e.clipboardData;
-          copyNative = !inExec;
+          // A synthetic event writes nothing to the clipboard: ignore it. In
+          // Chrome isTrusted is an unforgeable own property of each event.
+          if (!e || e.isTrusted !== true) return;
+          const copyNative = inExec === 0 && (!queueMicro || gapEvent === e);
+          gapEvent = null;
+          const data = clipboardDataGet ? apply(clipboardDataGet, e, []) : e.clipboardData;
+          if (isObj(data)) {
+            apply(wmSet, copyMap, [data, copyNative]);
+            try {
+              const items = itemsGet ? apply(itemsGet, data, []) : data.items;
+              if (isObj(items)) apply(wmSet, copyMap, [items, copyNative]);
+            } catch {
+              // no items list
+            }
+          }
           const sel = selectionText();
           const field = fieldSelection();
           if (!allowed(sel, copyNative) || (field && field !== sel && !allowed(field, copyNative))) {
@@ -317,7 +393,11 @@ function installClipboardGuard(target) {
           // fail open
         }
       };
+      // markCopy first, onCopy right after it (same target and phase, added in
+      // this order before any page script).
+      listenOn.addEventListener("copy", markCopy, true);
       listenOn.addEventListener("copy", onCopy, true);
+      listenOn.addEventListener("cut", markCopy, true);
       listenOn.addEventListener("cut", onCopy, true);
     } catch {
       // without gesture tracking every dangerous write outside safe hosts is held
@@ -411,6 +491,18 @@ function installClipboardGuard(target) {
       }
     }
 
+    // Is `d` a document of this window? Compared by window, not by document:
+    // a window can get a new document (initial about:blank, then a same-origin
+    // page) and keep this realm. Any error means "no".
+    function sameWindow(d) {
+      try {
+        if (defaultViewGet) return apply(defaultViewGet, d, []) === win;
+        return d === doc;
+      } catch {
+        return false;
+      }
+    }
+
     const execOwner = doc && ownerOf(doc, "execCommand");
     if (execOwner && typeof execOwner.execCommand === "function") {
       try {
@@ -426,15 +518,20 @@ function installClipboardGuard(target) {
                 const sel = selectionText();
                 const field = fieldSelection();
                 if (!allowed(sel) || (field && field !== sel && !allowed(field))) return false;
+                // A document of another window (a same-origin frame's realm used
+                // on this document, or this realm used on a frame's document):
+                // its copy event would not see this realm's inExec mark and would
+                // count as the browser's own copy. Refused.
+                if (flagOn() && !sameWindow(self)) return false;
               }
             } catch {
               // fail open
             }
-            inExec = true;
+            inExec++;
             try {
               return apply(fn, self, call);
             } finally {
-              inExec = false;
+              inExec--;
             }
           },
         });
@@ -444,23 +541,51 @@ function installClipboardGuard(target) {
       }
     }
 
-    // A page's copy handler can swap the copied text: check setData on the
-    // clipboard data of the copy/cut event being dispatched (not on other
-    // DataTransfer objects such as drag-and-drop data).
+    // Chrome returns a new DataTransferItemList on every read of .items, so
+    // the list a copy handler gets is marked here, with its DataTransfer's kind.
     const DT = win.DataTransfer;
+    const itemsOwner = DT && DT.prototype && ownerOf(DT.prototype, "items");
+    const itemsDesc = itemsOwner && getOwnDesc(itemsOwner, "items");
+    if (itemsDesc && typeof itemsDesc.get === "function" && itemsDesc.configurable) {
+      try {
+        const wrappedItems = new Proxy(itemsDesc.get, {
+          apply(fn, self, args) {
+            const list = apply(fn, self, args);
+            try {
+              if (isCopyData(self) && isObj(list)) apply(wmSet, copyMap, [list, copyKind(self)]);
+            } catch {
+              // unmarked: still checked, as a page-initiated write
+            }
+            return list;
+          },
+        });
+        defineProp(itemsOwner, "items", { get: wrappedItems, set: itemsDesc.set, enumerable: itemsDesc.enumerable, configurable: true });
+      } catch {
+        // stays native
+      }
+    }
+    // Is `o` the clipboardData (or an items list of it) of the browser's own
+    // copy/cut event? Only then can a right-click gesture authorise the write.
+    const nativeCopyData = (o) => isCopyData(o) && copyKind(o) === true;
+
+    // A page's copy handler can swap the copied text. Checked on every
+    // DataTransfer, not only on this realm's copy-event data: a frame realm's
+    // setData called on this realm's clipboardData (or ours on a frame's) is
+    // otherwise not seen by the guard that knows the event (review round 2).
+    // Drag-and-drop data with a command is a ClickFix route as well.
     const dtOwner = DT && DT.prototype && ownerOf(DT.prototype, "setData");
     if (dtOwner && typeof dtOwner.setData === "function") {
       try {
         const wrappedSet = new Proxy(dtOwner.setData, {
           apply(fn, self, args) {
-            if (args.length < 2 || self !== copyData) return apply(fn, self, args);
+            if (args.length < 2) return apply(fn, self, args);
             const call = [];
             for (let i = 0; i < args.length; i++) call[i] = args[i];
             try {
               call[0] = StringFn(args[0]); // once each
               call[1] = StringFn(args[1]);
               const type = lower(call[0]);
-              if ((type === "text/plain" || type === "text" || type === "text/html") && !allowed(call[1], copyNative)) return undefined;
+              if ((type === "text/plain" || type === "text" || type === "text/html") && !allowed(call[1], nativeCopyData(self))) return undefined;
             } catch {
               // fail open
             }
@@ -474,23 +599,21 @@ function installClipboardGuard(target) {
     }
 
     // The same data can be written with clipboardData.items.add(string, type):
-    // check it like setData, on the copy/cut event's item list only.
-    const itemsGet = getter(protoOf(DT), "items");
+    // checked like setData, on every item list. add(File) has one argument.
     const DTIL = win.DataTransferItemList;
-    const addOwner = itemsGet && DTIL && DTIL.prototype && ownerOf(DTIL.prototype, "add");
+    const addOwner = DTIL && DTIL.prototype && ownerOf(DTIL.prototype, "add");
     if (addOwner && typeof addOwner.add === "function") {
       try {
         const wrappedAdd = new Proxy(addOwner.add, {
           apply(fn, self, args) {
-            if (args.length < 2 || !copyData) return apply(fn, self, args);
+            if (args.length < 2) return apply(fn, self, args);
             const call = [];
             for (let i = 0; i < args.length; i++) call[i] = args[i];
             try {
-              if (self !== apply(itemsGet, copyData, [])) return apply(fn, self, args);
               call[0] = StringFn(args[0]); // once each, in the native order
               call[1] = StringFn(args[1]);
               const type = lower(call[1]);
-              if ((type === "text/plain" || type === "text" || type === "text/html") && !allowed(call[0], copyNative)) return null;
+              if ((type === "text/plain" || type === "text" || type === "text/html") && !allowed(call[0], nativeCopyData(self))) return null;
             } catch {
               // fail open
             }

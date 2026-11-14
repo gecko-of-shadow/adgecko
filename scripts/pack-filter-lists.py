@@ -343,6 +343,71 @@ def scope_for_merge(domain: str, key: str, is_whole: bool):
     return build_key({**parts, "t": "main_frame", "x": ""}) if nav else None
 
 
+# `@@||host...` exception -> host (mirrors EXCEPTION_HOST_RE / exceptionHost()).
+EXCEPTION_HOST_RE = re.compile(r"^\|\|([a-z0-9][a-z0-9.-]*[a-z0-9])(?=[\^/$*:?|]|$)", re.IGNORECASE)
+
+
+def exception_host(rest: str):
+    m = EXCEPTION_HOST_RE.match((rest or "").strip())
+    return clean_host(m.group(1)) if m else None
+
+
+def limit_index(hosts) -> tuple[set, set]:
+    """(exception hosts, their parents). Mirrors limitIndex()."""
+    own: set[str] = set()
+    parents: set[str] = set()
+    for h in hosts:
+        own.add(h)
+        labels = h.split(".")
+        for i in range(1, len(labels) - 1):
+            parents.add(".".join(labels[i:]))
+    return own, parents
+
+
+def limit_key(key: str) -> bool:
+    """A $domain= scope (i= or n= part)."""
+    parts = parse_key(key) if key else {}
+    return bool(parts.get("i") or parts.get("n"))
+
+
+def limits_scoped(index, domain: str, key: str) -> bool:
+    """Mirrors limitsScoped(): a $domain= entry whose host, a subdomain or a
+    parent of it has a path / option exception."""
+    own, parents = index
+    if not own or not limit_key(key):
+        return False
+    if domain in own or domain in parents:
+        return True
+    labels = domain.split(".")
+    return any(".".join(labels[i:]) in own for i in range(1, len(labels) - 1))
+
+
+def initiator_split(key: str):
+    """Mirrors initiatorSplit(): (key without i=, [i hosts]) or None."""
+    if not key:
+        return None
+    parts = parse_key(key)
+    if not parts.get("i"):
+        return None
+    hosts = parts["i"].split(",")
+    rest = {k: v for k, v in parts.items() if k != "i"}
+    return build_key(rest), hosts
+
+
+def remove_initiators(key: str, drop: set):
+    """Mirrors removeInitiators(): key minus `drop` initiators; None when none is left."""
+    parts = parse_key(key)
+    if not parts.get("i") or not drop:
+        return key
+    have = parts["i"].split(",")
+    kept = [h for h in have if h not in drop]
+    if len(kept) == len(have):
+        return key
+    if not kept:
+        return None
+    return build_key({**parts, "i": ",".join(kept)})
+
+
 def convert_options(opts: str):
     """Options string -> (key, cancel) or None (drop). Mirrors convertOptions()."""
     raw = (opts or "").strip()
@@ -430,6 +495,11 @@ def convert_options(opts: str):
         return None
     # Every include entry was skipped: an empty initiator list would widen.
     if had_incl and not incl:
+        return None
+    # Exclusion-only $domain=~a.com: the widest form; its upstream path /
+    # option exceptions cannot be expressed, so it stays dropped as in 0.3.4.
+    # Mirrors convertOptions() (final review #0).
+    if had_initiator and not had_incl:
         return None
     # Mixed $method=post|~get has no exact DNR form.
     if methods and ex_methods:
@@ -585,23 +655,41 @@ def load_psl_subset() -> dict:
     start = text.index("/*PSL-SUBSET-START*/") + len("/*PSL-SUBSET-START*/")
     end = text.index("/*PSL-SUBSET-END*/")
     data = json.loads(text[start:end])
-    # ICANN suffixes only, like looksLikeDomain() (isIcannSuffix) at run time.
-    return {"wildcard": set(data["wildcardTlds"]), "suffixes": set(data["suffixes"])}
+    # ICANN suffixes only, like looksLikeDomain() (isIcannSuffix) at run time:
+    # the flat suffixes plus the grouped deeper ones (icannDeep, {parent:
+    # "label label"}, joined as ungroup() in psl.js does), the deeper
+    # wildcard bases and the "!" exceptions (final review #5).
+    suffixes = set(data["suffixes"])
+    for parent, labels in data.get("icannDeep", {}).items():
+        for label in labels.split(" "):
+            if label:
+                suffixes.add(label + "." + parent)
+    return {
+        "wildcard": set(data["wildcardTlds"]),
+        "wildcard_bases": set(data.get("wildcardBases", [])),
+        "exceptions": set(data.get("icannExceptions", [])),
+        "suffixes": suffixes,
+    }
 
 
 PSL = load_psl_subset()
 
 
 def is_public_suffix(host: str) -> bool:
+    """Mirrors isIcannSuffix() in src/threat/psl.js: a listed suffix, else a
+    rule-based one (ruleSuffix: "<x>.<wildcard tld>" or "<x>.<wildcard
+    base>"), never an exception."""
     h = host.lower().rstrip(".")
     if "." not in h:
         return True
     if h in PSL["suffixes"]:
         return True
     labels = h.split(".")
-    if len(labels) != 2:
+    if len(labels) < 2 or h in PSL["exceptions"]:
         return False
-    return labels[1] in PSL["wildcard"]
+    if len(labels) == 2:
+        return labels[1] in PSL["wildcard"]
+    return ".".join(labels[1:]) in PSL["wildcard_bases"]
 
 
 def is_local_address(host: str) -> bool:
@@ -632,12 +720,14 @@ IMPORTANT_RE = re.compile(r"(?:^\$|,)\s*important\s*(?:,|$)", re.IGNORECASE)
 class ListEntries(tuple):
     """(whole, scoped) as extract_entries() returns it, plus the list's
     cross-list data: .cancel ($badfilter idents "domain\nkey"), .allow (hosts of
-    unconditional `@@||host^` exceptions), .important (whole-domain blocks
+    unconditional `@@||host^` exceptions), .limit (hosts of every other
+    `@@||host...` exception: a path or options), .important (whole-domain blocks
     marked $important, which an exception never lifts) and .alldoc (hosts
     whose plain `$all` added a DOCUMENT_KEY entry)."""
 
     cancel: set
     allow: set
+    limit: set
     important: set
     alldoc: set
 
@@ -649,13 +739,16 @@ def extract_list(text: str) -> ListEntries:
     list here and in every other list through apply_cross_list(). Only an
     exception with no options at all (`@@||host^`) is kept, and it lifts only
     the whole-domain block of that same host (apply_cross_list). Every other
-    `@@` line is still ignored. A "! openphish" section is dropped up to the
-    next comment line.
+    `@@||host...` line (a path or options) is not converted, but its host
+    goes into .limit: apply_cross_list drops the $domain= filters of that
+    host, a subdomain or a parent of it. A "! openphish" section is dropped
+    up to the next comment line.
     """
     whole: list[str] = []
     scoped: list[list[str]] = []
     cancelled: set[str] = set()
     allow: set[str] = set()
+    limit: set[str] = set()
     important: set[str] = set()
     alldoc: set[str] = set()
     doc_explicit: set[str] = set()
@@ -670,6 +763,12 @@ def extract_list(text: str) -> ListEntries:
             em = DOMAIN_RE.match(line[2:])
             if em and not em.group(2) and looks_like_domain(em.group(1).lower()):
                 allow.add(em.group(1).lower())
+            else:
+                # A path / option exception: its host limits $domain=
+                # filters across lists (apply_cross_list). Mirrors parseEntriesFull().
+                h = exception_host(line[2:])
+                if h and "." in h:
+                    limit.add(h)
             continue
         if "#$" in line or "##" in line or "#@#" in line:
             continue
@@ -713,6 +812,7 @@ def extract_list(text: str) -> ListEntries:
     out = ListEntries((whole, scoped))
     out.cancel = cancelled
     out.allow = allow
+    out.limit = limit
     out.important = important
     # Only hosts whose page entry comes from `$all` alone (an explicit
     # `$document` for the same host shares the entry and keeps it).
@@ -726,6 +826,64 @@ def extract_entries(text: str) -> tuple[list[str], list[list[str]]]:
     return whole, scoped
 
 
+def collect_cross(lists: list) -> dict:
+    """Union of the cross-list data of `lists` (extract_list results or
+    PACKED_CROSS-style dicts). Mirrors the collection in crossListRules()."""
+    cancel: set[str] = set()
+    allow: set[str] = set()
+    limit: set[str] = set()
+    important: set[str] = set()
+    alldoc: set[str] = set()
+    doc_explicit: set[str] = set()
+    for entry in lists:
+        if isinstance(entry, dict):
+            get = entry.get
+        else:
+            get = (lambda e: lambda k, d: getattr(e, k, d))(entry)
+        cancel |= set(get("cancel", set()))
+        allow |= set(get("allow", set()))
+        limit |= set(get("limit", set()))
+        important |= set(get("important", set()))
+        own = set(get("alldoc", set()))
+        alldoc |= own
+        if isinstance(entry, tuple) and len(entry) > 1:
+            doc_explicit |= {e[0] for e in entry[1] if e[1] == DOCUMENT_KEY and e[0] not in own}
+    allow -= important
+    partial: dict[str, set] = {}
+    for c in cancel:
+        d, _, k = c.partition("\n")
+        split = initiator_split(k)
+        if split is not None:
+            partial.setdefault(d + "\n" + split[0], set()).update(split[1])
+    return {
+        "cancel": cancel,
+        "allow": allow,
+        "lift_doc": (allow & alldoc) - doc_explicit,
+        "partial": partial,
+        "limits": limit_index(limit) if limit else None,
+    }
+
+
+def cross_scope_of(cross: dict, d: str, k: str):
+    """The key a scoped entry keeps after the cross-list step, or None.
+    Mirrors scopeOf() in crossListRules()."""
+    if d + "\n" + k in cross["cancel"]:
+        return None
+    if k == DOCUMENT_KEY and d in cross["lift_doc"]:
+        return None
+    key = k
+    if cross["partial"]:
+        split = initiator_split(k)
+        drop = cross["partial"].get(d + "\n" + split[0]) if split else None
+        if drop:
+            key = remove_initiators(k, drop)
+        if key is None:
+            return None
+    if cross["limits"] is not None and limits_scoped(cross["limits"], d, key):
+        return None
+    return key
+
+
 def apply_cross_list(buckets: dict, scoped_buckets: dict, lists: list) -> tuple[dict, dict]:
     """Apply every list's $badfilter cancels and unconditional same-host `@@`
     exceptions (extract_list results in `lists`) to all buckets, before
@@ -733,30 +891,99 @@ def apply_cross_list(buckets: dict, scoped_buckets: dict, lists: list) -> tuple[
     A lifted host also loses the DOCUMENT_KEY entry its plain `$all` added
     (.alldoc), so the page opens; an explicit `$document` block stays (a
     host with one in any list keeps its page entry).
+    Final review fixes: a $badfilter with $domain= removes only those
+    initiators from the same filter of every list (#1); a $domain= filter
+    whose host (or a subdomain or parent of it) has a path / option
+    exception in any list is dropped (#0).
     Threat-tier hosts are built elsewhere and are not touched."""
-    cancel: set[str] = set()
-    allow: set[str] = set()
-    important: set[str] = set()
-    alldoc: set[str] = set()
-    doc_explicit: set[str] = set()
-    for entry in lists:
-        cancel |= getattr(entry, "cancel", set())
-        allow |= getattr(entry, "allow", set())
-        important |= getattr(entry, "important", set())
-        own = getattr(entry, "alldoc", set())
-        alldoc |= own
-        if isinstance(entry, tuple) and len(entry) > 1:
-            doc_explicit |= {e[0] for e in entry[1] if e[1] == DOCUMENT_KEY and e[0] not in own}
-    allow -= important
-    lift_doc = (allow & alldoc) - doc_explicit
+    cross = collect_cross(lists)
     new_buckets = OrderedDict(
-        (n, [d for d in ds if d + "\n" not in cancel and d not in allow]) for n, ds in buckets.items()
+        (n, [d for d in ds if d + "\n" not in cross["cancel"] and d not in cross["allow"]]) for n, ds in buckets.items()
     )
-    new_scoped = OrderedDict(
-        (n, [e for e in es if e[0] + "\n" + e[1] not in cancel and not (e[1] == DOCUMENT_KEY and e[0] in lift_doc)])
-        for n, es in scoped_buckets.items()
-    )
+    new_scoped = OrderedDict()
+    for n, es in scoped_buckets.items():
+        kept = []
+        for e in es:
+            k = cross_scope_of(cross, e[0], e[1])
+            if k is not None:
+                kept.append(e if k == e[1] else [e[0], k])
+        new_scoped[n] = kept
     return new_buckets, new_scoped
+
+
+def packed_cross_data(named) -> dict:
+    """Per list (name -> extract_list result), only the cross-list entries
+    that removed or narrowed something in the packed lists (final review #6).
+    Written into src/general/filter-options.js (PACKED_CROSS); the runtime
+    uses a list's part only while that list has no current parsed copy."""
+    whole_any: set[str] = set()
+    scoped_all: list = []
+    allow_any: set[str] = set()
+    for entry in named.values():
+        whole_any |= set(entry[0])
+        scoped_all.extend(entry[1])
+        allow_any |= set(getattr(entry, "allow", set()))
+    scoped_ids = {e[0] + "\n" + e[1] for e in scoped_all}
+    rest_ids: dict[str, set] = {}
+    for d, k in scoped_all:
+        split = initiator_split(k)
+        if split:
+            rest_ids.setdefault(d + "\n" + split[0], set()).update(split[1])
+    # Hosts of $domain= entries, and every parent of them.
+    dom_hosts = {d for d, k in scoped_all if limit_key(k)}
+    dom_parents: set[str] = set()
+    for d in dom_hosts:
+        labels = d.split(".")
+        for i in range(1, len(labels) - 1):
+            dom_parents.add(".".join(labels[i:]))
+
+    def limits_any(h: str) -> bool:
+        if h in dom_hosts or h in dom_parents:
+            return True
+        labels = h.split(".")
+        return any(".".join(labels[i:]) in dom_hosts for i in range(1, len(labels) - 1))
+
+    out: dict = {}
+    for name, entry in named.items():
+        part: dict = {}
+        cancel = []
+        for c in sorted(getattr(entry, "cancel", set())):
+            d, _, k = c.partition("\n")
+            split = initiator_split(k)
+            if (k == "" and d in whole_any) or c in scoped_ids or (
+                split and rest_ids.get(d + "\n" + split[0], set()) & set(split[1])
+            ):
+                cancel.append(c)
+        for key, values in (
+            ("cancel", cancel),
+            ("allow", sorted(h for h in getattr(entry, "allow", set()) if h in whole_any)),
+            ("limit", sorted(h for h in getattr(entry, "limit", set()) if limits_any(h))),
+            ("important", sorted(h for h in getattr(entry, "important", set()) if h in allow_any)),
+            ("alldoc", sorted(h for h in getattr(entry, "alldoc", set()) if h in allow_any)),
+        ):
+            if values:
+                part[key] = values
+        if part:
+            out[name] = part
+    return {"version": 1, "lists": out}
+
+
+PACKED_CROSS_START = "/*PACKED-CROSS-START*/"
+PACKED_CROSS_END = "/*PACKED-CROSS-END*/"
+
+
+def write_packed_cross(data: dict) -> bool:
+    """Replace the PACKED-CROSS marker block in src/general/filter-options.js.
+    True when the file changed."""
+    text = FILTER_OPTIONS_JS.read_text(encoding="utf-8")
+    start = text.index(PACKED_CROSS_START) + len(PACKED_CROSS_START)
+    end = text.index(PACKED_CROSS_END)
+    body = json.dumps(data, separators=(",", ":"), ensure_ascii=True, sort_keys=True)
+    new = text[:start] + body + text[end:]
+    if new == text:
+        return False
+    FILTER_OPTIONS_JS.write_text(new, encoding="utf-8", newline="\n")
+    return True
 
 
 def extract_domains(text: str) -> list[str]:
@@ -971,6 +1198,7 @@ def main() -> int:
     scoped_buckets: dict[str, list[list[str]]] = {}
     cosmetic_sample: list[dict] = []
     extracted: list = []
+    extracted_by_name: OrderedDict = OrderedDict()
 
     # Fetch highest-priority first for merge order.
     ordered_names = sorted(
@@ -981,6 +1209,7 @@ def main() -> int:
         digests[name] = digest
         entry = extract_list(text)
         extracted.append(entry)
+        extracted_by_name[name] = entry
         buckets[name], scoped_buckets[name] = entry
         if name in ("easylist", "easyprivacy") and not cosmetic_sample:
             cosmetic_sample = extract_cosmetic_sample(text)
@@ -1007,6 +1236,11 @@ def main() -> int:
     if len(rules) > MAX_DNR_RULES:
         print(f"ERROR: {len(rules)} DNR rules exceed the budget of {MAX_DNR_RULES}; nothing written", file=sys.stderr)
         return 1
+    # Each list's effective cross-list data, for the runtime refresh while
+    # that list has no parsed copy (final review #6). Only after the budget
+    # check, so a refused pack writes nothing.
+    if write_packed_cross(packed_cross_data(extracted_by_name)):
+        print(f"wrote PACKED_CROSS in {FILTER_OPTIONS_JS.relative_to(ROOT)}")
 
     # Block batches only. merge-dnr-rules.py owns general-network.json so the
     # stream allows and the YouTube doubleclick rule are not wiped.

@@ -207,6 +207,7 @@ function installGeneralAdblockUpdate(target) {
     const scoped = [];
     const popup = [];
     const allow = [];
+    const limit = new Set();
     const important = [];
     const allDoc = [];
     const docExplicit = new Set();
@@ -219,6 +220,12 @@ function installGeneralAdblockUpdate(target) {
       if (line.startsWith("@@")) {
         const em = DOMAIN_RE.exec(line.slice(2));
         if (em && !em[2] && looksLikeDomain(em[1].toLowerCase())) allow.push(em[1].toLowerCase());
+        else if (FO && FO.exceptionHost) {
+          // A path / option exception: its host limits $domain= filters
+          // (out.limit, applied across lists in crossListRules).
+          const h = FO.exceptionHost(line.slice(2));
+          if (h && h.includes(".")) limit.add(h);
+        }
         continue;
       }
       if (line.includes("##") || line.includes("#@#") || line.includes("#$")) continue;
@@ -268,6 +275,7 @@ function installGeneralAdblockUpdate(target) {
     if (popup.length) out.popup = popup;
     if (cancelled.size) out.cancel = Array.from(cancelled);
     if (allow.length) out.allow = allow;
+    if (limit.size) out.limit = Array.from(limit).sort();
     if (important.length) out.important = important;
     // Only hosts whose page entry comes from `$all` alone: an explicit
     // `$document` filter for the same host shares that entry and stays.
@@ -282,6 +290,7 @@ function installGeneralAdblockUpdate(target) {
     const out = parseEntriesFull(text);
     delete out.cancel;
     delete out.allow;
+    delete out.limit;
     delete out.important;
     delete out.alldoc;
     return out;
@@ -294,7 +303,18 @@ function installGeneralAdblockUpdate(target) {
   // with such an entry), so the page opens; an explicit `$document` block is
   // not touched (a host with one in any list keeps its page entry). Same
   // rules as apply_cross_list in pack-filter-lists.py.
-  function crossListRules(payloads) {
+  // Final review fixes (0.3.5):
+  //  - #1 a $badfilter with $domain= removes only those initiators from the
+  //    same filter of every list (same domain, same other key parts); the
+  //    entry goes when none is left.
+  //  - #0 a $domain= filter (i= / n= part) is dropped when any list has a
+  //    path / option exception for its host, a subdomain or a parent of it
+  //    (payload.limit).
+  //  - #6 `missing`: names of lists with no current parsed copy. Their
+  //    pack-time cross data (filter-options.js PACKED_CROSS) is used instead.
+  // scopeOf(d, k) gives the key an entry keeps (maybe with fewer
+  // initiators) or null; keepScoped(d, k) is scopeOf(d, k) !== null.
+  function crossListRules(payloads, missing) {
     const FO = filterOptions();
     const docKey = FO ? FO.DOCUMENT_KEY : null;
     const cancel = new Set();
@@ -302,10 +322,18 @@ function installGeneralAdblockUpdate(target) {
     const important = new Set();
     const allDoc = new Set();
     const docExplicit = new Set();
-    for (const p of Object.values(payloads || {})) {
+    const limit = new Set();
+    const sources = Object.values(payloads || {});
+    const packedLists = (FO && FO.PACKED_CROSS && FO.PACKED_CROSS.lists) || {};
+    for (const n of missing || []) {
+      if (payloads && payloads[n]) continue;
+      if (Object.prototype.hasOwnProperty.call(packedLists, n)) sources.push(packedLists[n]);
+    }
+    for (const p of sources) {
       if (!p) continue;
       for (const c of Array.isArray(p.cancel) ? p.cancel : []) cancel.add(String(c));
       for (const a of Array.isArray(p.allow) ? p.allow : []) allow.add(String(a));
+      for (const h of Array.isArray(p.limit) ? p.limit : []) limit.add(String(h));
       for (const i of Array.isArray(p.important) ? p.important : []) important.add(String(i));
       const own = new Set(Array.isArray(p.alldoc) ? p.alldoc.map(String) : []);
       for (const h of own) allDoc.add(h);
@@ -313,10 +341,48 @@ function installGeneralAdblockUpdate(target) {
     }
     for (const i of important) allow.delete(i);
     for (const h of docExplicit) allDoc.delete(h);
+    // "domain\nkey without i=" -> initiators its $badfilter removes.
+    const partial = new Map();
+    if (FO && FO.initiatorSplit) {
+      for (const c of cancel) {
+        const nl = c.indexOf("\n");
+        const split = FO.initiatorSplit(c.slice(nl + 1));
+        if (!split) continue;
+        const id = c.slice(0, nl) + "\n" + split[0];
+        if (!partial.has(id)) partial.set(id, new Set());
+        for (const h of split[1]) partial.get(id).add(h);
+      }
+    }
+    const limits = FO && FO.limitIndex && limit.size ? FO.limitIndex(limit) : null;
+    function scopeOf(d, k) {
+      if (cancel.has(d + "\n" + k)) return null;
+      if (k === docKey && allow.has(d) && allDoc.has(d)) return null;
+      let key = k;
+      if (partial.size) {
+        const split = FO.initiatorSplit(k);
+        const drop = split ? partial.get(d + "\n" + split[0]) : null;
+        if (drop) key = FO.removeInitiators(k, drop);
+        if (key === null) return null;
+      }
+      if (limits && FO.limitsScoped(limits, d, key)) return null;
+      return key;
+    }
     return {
       keepWhole: (d) => !cancel.has(d + "\n") && !allow.has(d),
-      keepScoped: (d, k) => !cancel.has(d + "\n" + k) && !(k === docKey && allow.has(d) && allDoc.has(d)),
+      keepScoped: (d, k) => scopeOf(d, k) !== null,
+      scopeOf,
     };
+  }
+
+  // Scoped entries of one list after the cross-list step (crossListRules):
+  // dropped ones removed, narrowed ones with their new key.
+  function crossScoped(cross, scoped) {
+    const out = [];
+    for (const e of scoped || []) {
+      const k = cross.scopeOf ? cross.scopeOf(e[0], e[1]) : (cross.keepScoped(e[0], e[1]) ? e[1] : null);
+      if (k !== null) out.push(k === e[1] ? e : [e[0], k]);
+    }
+    return out;
   }
 
   // Whole-domain blocks only (scoped filters are not widened into these).
@@ -808,7 +874,7 @@ function installGeneralAdblockUpdate(target) {
           if (total < floor) throw new Error("parsed too few domains (" + total + " < " + floor + ")");
           const payload = { domains: parsed.domains, scoped: parsed.scoped, parser: PARSER_VERSION };
           if (parsed.popup) payload.popup = parsed.popup;
-          for (const k of ["cancel", "allow", "important", "alldoc"]) if (parsed[k]) payload[k] = parsed[k];
+          for (const k of ["cancel", "allow", "limit", "important", "alldoc"]) if (parsed[k]) payload[k] = parsed[k];
           const sitesOnly = src.cosmetic === "sites";
           if (src.cosmetic && CP) payload.cosmetic = CP.parseCosmetic(text, sitesOnly ? { sitesOnly: true } : undefined);
           const hits = protectedHits(parsed);
@@ -866,16 +932,25 @@ function installGeneralAdblockUpdate(target) {
       const usable = SOURCES.filter((x) => lists[x.name]);
       if (!usable.length) throw new Error(Object.values(errors).join("; ") || "no lists");
       await deps.setState({ lists, lastErrors: errors, lastRejected: rejections, lastNotes: mirrorNotes, lastErrorAt: Object.keys(errors).length ? now : 0 });
-      // Write the hide list only when every cosmetic source has a parsed copy:
-      // EasyPrivacy alone would replace the whole EasyList sheet with a couple
-      // of selectors, and the bundled sheet is never restored over a refresh.
+      // Write the hide list only when every required cosmetic source
+      // (cosmetic: true) has a parsed copy: EasyPrivacy alone would replace
+      // the whole EasyList sheet with a couple of selectors, and the bundled
+      // sheet is never restored over a refresh. A `cosmetic: "sites"` source
+      // (AdGuard Base) is optional (final review #2): without a current
+      // parsed copy its part is empty, so an unreachable or rejected AdGuard
+      // never holds back the EasyList / EasyPrivacy sheet.
       const cosmeticSources = SOURCES.filter((x) => x.cosmetic);
-      const cosmeticReady = cosmeticSources.every((x) => lists[x.name] && lists[x.name].cosmetic);
+      const required = (x) => x.cosmetic === true;
+      const hasCosmetic = (x) => !!(lists[x.name] && lists[x.name].cosmetic);
+      const cosmeticReady = cosmeticSources.filter(required).every(hasCosmetic);
       if (cosmeticChanged && cosmeticReady && deps.writeCosmetic) {
         try {
-          const need = cosmeticSources.filter((x) => !fresh[x.name]).map((x) => x.name);
+          const need = cosmeticSources.filter((x) => !fresh[x.name] && hasCosmetic(x)).map((x) => x.name);
           const stored = need.length ? (await deps.getListData(need)) || {} : {};
-          const parts = cosmeticSources.map((x) => (fresh[x.name] || stored[x.name] || {}).cosmetic);
+          const parts = cosmeticSources.map((x) => {
+            const part = hasCosmetic(x) ? (fresh[x.name] || stored[x.name] || {}).cosmetic : null;
+            return part || (required(x) ? null : emptyCosmetic());
+          });
           if (parts.every(Boolean)) await deps.writeCosmetic(CP.mergeCosmetic(parts), { source: "refresh", updatedAt: now });
         } catch {
           // Cosmetic stays on the previous rules (or the bundled sheet).
@@ -1026,12 +1101,14 @@ function installGeneralAdblockUpdate(target) {
     const payloads = await readPayloads(deps, lists, fresh);
     const perList = {};
     const perListScoped = {};
-    const cross = crossListRules(payloads);
+    // Lists without a current parsed copy: their pack-time cross-list data
+    // stands in (final review #6).
+    const missing = SOURCES.filter((x) => !payloads[x.name]).map((x) => x.name);
+    const cross = crossListRules(payloads, missing);
     for (const [n, p] of Object.entries(payloads)) {
       perList[n] = p.domains.filter((d) => cross.keepWhole(d));
-      perListScoped[n] = (p.scoped || []).filter(([d, k]) => cross.keepScoped(d, k));
+      perListScoped[n] = crossScoped(cross, p.scoped);
     }
-    const missing = SOURCES.filter((x) => !perList[x.name]).map((x) => x.name);
     let domains = mergeDomains(perList);
     let scoped = mergeScoped(perListScoped, domains);
     if (missing.length) {
@@ -1043,8 +1120,10 @@ function installGeneralAdblockUpdate(target) {
       domains = domains.slice(0, MAX_LIST_RULES * DOMAINS_PER_RULE);
       const seenScoped = new Set(scoped.map(([d, k]) => d + "\n" + k));
       const whole = new Set(domains);
-      for (const [d, k0] of packedScoped) {
-        if (isNeverBlock(d) || !cross.keepScoped(d, k0)) continue;
+      for (const [d, k1] of packedScoped) {
+        if (isNeverBlock(d)) continue;
+        const k0 = cross.scopeOf(d, k1);
+        if (k0 === null) continue;
         const k = mergedScope(d, k0, whole);
         if (k === null) continue;
         const id = d + "\n" + k;
@@ -1208,7 +1287,7 @@ function installGeneralAdblockUpdate(target) {
 
   Object.assign(target, {
     POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, FETCH_TIMEOUT_MS, MAX_LIST_BYTES, readListText, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
-    RETIRED_LISTS, dropRetiredLists, PARSER_VERSION, parseEntries, parseEntriesFull, crossListRules, mergeScoped, staleParserLists,
+    RETIRED_LISTS, dropRetiredLists, PARSER_VERSION, parseEntries, parseEntriesFull, crossListRules, crossScoped, mergeScoped, staleParserLists,
     THREAT_RULE_ID_BASE, THREAT_RULE_ID_END, DYNAMIC_RULE_LIMIT, isThreatRule, isOurRule, applyThreatRules,
     MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, PROTECTED_HITS_SEED_BY_LIST, PROTECTED_HITS_MARGIN, PROTECTED_HITS_SPIKE, protectedHitsCap, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, checkCosmeticChange, protectedHits, revertLists,
     removeThreatRules, rebuildThreatRules,

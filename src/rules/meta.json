@@ -2,8 +2,8 @@
   "packed_at_utc": "2026-11-14T22:00:32Z",
   "format": "chrome_declarativeNetRequest_rules_array",
   "domains_total": 195069,
-  "scoped_entries_total": 18523,
-  "dnr_rules_total": 2948,
+  "scoped_entries_total": 18422,
+  "dnr_rules_total": 2851,
   "domains_per_rule": 80,
   "max_dnr_rules_budget": 28000,
   "headroom_note": "Reserve remaining static rule quota for stream-site allow rules (DNR agent).",
@@ -38,8 +38,8 @@
       "raw": 44222,
       "kept": 43868,
       "skipped_never": 2,
-      "scoped_raw": 2278,
-      "scoped_kept": 1124
+      "scoped_raw": 2239,
+      "scoped_kept": 1098
     },
     "easyprivacy": {
       "url": "https://easylist.to/easylist/easyprivacy.txt",
@@ -49,8 +49,8 @@
       "raw": 43436,
       "kept": 42707,
       "skipped_never": 7,
-      "scoped_raw": 4012,
-      "scoped_kept": 1595
+      "scoped_raw": 3973,
+      "scoped_kept": 1571
     },
     "hagezi_pro_mini": {
       "url": "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt",
@@ -71,8 +71,8 @@
       "raw": 1118,
       "kept": 862,
       "skipped_never": 0,
-      "scoped_raw": 3273,
-      "scoped_kept": 3257
+      "scoped_raw": 3264,
+      "scoped_kept": 3250
     },
     "dandelion_antimalware": {
       "url": "https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt",
@@ -82,8 +82,8 @@
       "raw": 11729,
       "kept": 11213,
       "skipped_never": 0,
-      "scoped_raw": 12031,
-      "scoped_kept": 11988
+      "scoped_raw": 12028,
+      "scoped_kept": 11986
     },
     "adguard_base": {
       "url": "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt",
@@ -93,8 +93,8 @@
       "raw": 12749,
       "kept": 11703,
       "skipped_never": 3,
-      "scoped_raw": 869,
-      "scoped_kept": 559
+      "scoped_raw": 809,
+      "scoped_kept": 517
     }
   },
   "never_block_suffixes": [
@@ -151,6 +151,6 @@
       ]
     }
   },
-  "general_network_rules_total": 2953,
-  "general_network_merged_at_utc": "2026-11-14T22:02:18Z"
+  "general_network_rules_total": 2856,
+  "general_network_merged_at_utc": "2026-11-14T23:01:40Z"
 }

@@ -140,10 +140,14 @@ Deno.test("clipboard guard blocks a page writing a dangerous command (writeText,
   assert(dt.data["text/plain"] === undefined, "copy handler cannot swap in a command");
   dt.setData("text/plain", "fine");
   assert(dt.data["text/plain"] === "fine", "normal setData works");
-  // Drag-and-drop data is not clipboard data: left alone (follow-up review).
+  // Drag-and-drop (or any other) DataTransfer: a command is checked too since
+  // final review 9 round 2 (a frame realm's setData on the top's clipboardData
+  // is only seen as "some DataTransfer"); ordinary drag text is left alone.
   const drag = new p.window.DataTransfer();
   drag.setData("text/plain", DANGEROUS[1]);
-  assert(drag.data["text/plain"] === DANGEROUS[1], "dragstart data untouched");
+  assert(drag.data["text/plain"] === undefined, "dragstart data with a command is checked");
+  drag.setData("text/plain", "drag me");
+  assert(drag.data["text/plain"] === "drag me", "ordinary dragstart data untouched");
 });
 
 Deno.test("clipboard guard coerces once: a value that changes on each toString cannot pass the check and write something else (M-2)", async () => {

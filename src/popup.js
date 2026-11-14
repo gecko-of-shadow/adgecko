@@ -196,10 +196,27 @@
     return fixIds().some((id) => features[id] === false);
   }
 
+  // The fixMap() key of the unanswered Fix for this page: its own host, or
+  // (a Fix saved by 0.3.4, which wrote the most specific existing entry) the
+  // nearest parent domain that has an override entry when this host has none.
+  // That parent entry is the one whose switches apply here (overrideFor).
+  function fixKey(host, fixes) {
+    if (!host) return "";
+    if (fixes[host]) return host;
+    const o = all[KEYS.overrides];
+    if (!o || typeof o !== "object" || o[host]) return "";
+    const labels = host.split(".");
+    for (let i = 1; i < labels.length - 1; i++) {
+      const key = labels.slice(i).join(".");
+      if (o[key]) return fixes[key] ? key : "";
+    }
+    return "";
+  }
+
   function pendingFix(host) {
-    if (!host) return null;
-    const e = fixMap()[host];
-    return e ? Object.assign({ host }, e) : null;
+    const fixes = fixMap();
+    const key = fixKey(host, fixes);
+    return key ? Object.assign({ host: key }, fixes[key]) : null;
   }
 
   // Puts back exactly the switches one Fix changed (a change made on the
@@ -505,7 +522,7 @@
   fixYes.addEventListener("click", async () => {
     note = "";
     const fixes = fixMap();
-    delete fixes[pageHost()];
+    delete fixes[fixKey(pageHost(), fixes)];
     const saved = await save(...fixWrite(fixes, {}));
     render();
     if (!saved) return;
@@ -519,10 +536,10 @@
   // "No": put back exactly the switches Fix changed (a change made on the
   // settings page in between is kept), then point to Allow this site.
   fixNo.addEventListener("click", guarded(async () => {
-    const host = pageHost();
     const fixes = fixMap();
+    const host = fixKey(pageHost(), fixes);
     const o = overridesCopy();
-    const changed = fixes[host] ? undoFix(o, host, fixes[host].prev) : false;
+    const changed = host ? undoFix(o, host, fixes[host].prev) : false;
     delete fixes[host];
     const saved = await save(...fixWrite(fixes, { [KEYS.overrides]: o }));
     note = saved && changed ? "Turned back on. If the site still breaks, use Allow this site." : "";
