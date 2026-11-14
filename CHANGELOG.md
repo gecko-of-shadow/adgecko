@@ -1,5 +1,78 @@
 # Changelog
 
+## 0.3.5 (2026-11-14)
+
+A bug hunt found 38 bugs, each proven by a failing test (`test/nightly-*.test.js`). 35 are fixed here; 3 are held back (see "Not in this release"). Also: more blocking, easier recovery from a broken site, lighter page frames, and freshly packed lists.
+
+### More blocking
+
+- Filter lists: site-scoped filters (`||host^$domain=site.com`, `$from=`) now block on the listed sites instead of being dropped. `$method`, `$denyallow` and a plain `$all` are converted exactly too. A filter that cannot be expressed exactly is still dropped, and a `$domain=` filter never blocks opening a page.
+- Filter lists: a `$badfilter` in one list (for example AdGuard's fix for totaladblock.com) now cancels the same filter in every other list, and an unconditional exception such as `@@||content.ingbank.pl^` lifts another list's block of that same host. Both work in the packed rules and in list refreshes.
+- Hidden ad boxes: AdGuard Base's site-specific hide rules are now used (its generic ones are not, because its `$generichide` exceptions are not supported). They arrive with the first list refresh, which runs right after install; the bundled sheet stays EasyList + EasyPrivacy to keep the zip small, and is now rebuilt with every list pack (it was a month old). If AdGuard's hide rules ever pass a safety limit, only they are skipped; its network rules still apply.
+
+### Easier when a site breaks
+
+- Popup: a **Reload page** button in "Did that fix it?", and after **Allow this site**, **Block again**, **No** and **Undo fix**. It reloads only when you click it.
+- Popup: a site with a kept Fix now says "Protected – some filters off here (Fix this site)" and offers **Undo fix**. Before, it said "✅ Protected" while the extra filters stayed off.
+- Popup: on a page Chrome shows as blocked, a "Chrome says the page is blocked? Allow its domain" link opens the settings page with the cursor in the **Allow this domain** box.
+- Settings: the per-site list says "Allowed – not blocking here" or "Fixed – hidden ad boxes and page guards off" instead of raw switch names. **Remove** and **Reset** keep keyboard focus.
+- Popup: **Allow this site** and **Fix this site** on a subdomain now change only that subdomain, not its parent domain. An Allow on a parent domain now shows on a subdomain that has its own Fix. A double click on **Fix this site** no longer loses the earlier switch state, and an unanswered Fix is no longer lost when you act on another site.
+- Settings: **Allow this domain** accepts Unicode (IDN) domain names, for ad lists and for the malware list.
+
+### Page guards
+
+- Clipboard guard: closes four ways a page could still put a command on the clipboard (a custom iterator or an item swap during `clipboard.write`, `clipboardData.items.add` in a copy handler, and 20,000 characters of padding before the command). It now also catches `irm URL | iex` (PowerShell) and `bash -c "$(curl ...)"` (macOS). A right-click no longer lets the page write for 30 seconds; only the browser's own Copy of your selection counts.
+- Popup guard (off by default): a pop-under opened on mousedown or pointerdown, up to 5 s after the click, or behind a stopped click event is now judged by what was clicked. In `about:blank`, `srcdoc` and `blob:` frames, relative addresses resolve against the frame's real address. A site reached with a trailing dot (`news.example.`) counts as the same site.
+
+### Malware blocking
+
+- Switching **Block known malware hosts** (or the whole extension) off and on no longer drops a refreshed malware set that was already accepted.
+- With the ad lists off, a list refresh still installs freshly downloaded malware rules.
+- The public-suffix subset now has three-label suffixes (`k12.ca.us`, `act.edu.au`), the children of wildcard suffixes and regional Amazon S3 endpoints, so one list line can no longer block all of them as a whole. A malware list can no longer block a parent domain of a captcha host.
+- Threat feed: an unchanged feed no longer shows a false replay warning, and the last-check time moves again.
+
+### List updates
+
+- A refresh where no list reached its server (offline, captive portal) is now a failure: "Update lists" says so, and the retry comes after 30 minutes instead of 12 hours.
+- A manual **Update lists** click during an automatic refresh now waits for it, then runs its own update.
+- Allowed sites use one allow rule each (not two), and the rule range is capped, so **Block again** keeps working with very many allowed sites.
+
+### YouTube
+
+- Menus, Share, Save and other dialogs open again after the "Experiencing interruptions?" toast has appeared once (they stayed hidden until a reload), and the "Saved" / "Link copied" toasts show again.
+- When one video server fails and another is available, Adgecko no longer reports that all servers failed, which caused a needless reload.
+
+### Hidden ad boxes (rules)
+
+- A `~host` exclusion now stops only that rule on that host; `~host#@#selector` is no longer a global exception; a generic `#@#` exception in one list now cancels the same rule from the other lists; a Unicode host in a rule's domain list no longer drops the whole rule; generic rules that would hide the whole page (`body:has()`, selector lists) are dropped; a late fallback style sheet no longer overwrites newer rules.
+
+### Speed
+
+- Every page frame now reads a hide-rule index record of under 300 bytes instead of about 185 KB (the full key list moved to a worker-only record). Upgrades from 0.3.4 move it on the first start.
+- The worker no longer fetches and parses the 0.8 MB bundled hide sheet on every 3-hour alarm, only on install or a new version.
+- `features.js` keeps its first registry when it is injected twice into one frame.
+
+### Other
+
+- Filter lists repacked 2026-11-14 22:00 UTC: 195,069 whole-domain and 18,523 site-scoped entries in 2,948 list rules (2,953 rules in `general-network.json`), and 574 URLhaus threat hosts. The bundled hide sheet: 13,635 generic and 7,841 site rules.
+- Release gate: the package size cap is now 8 MB (was 7.5 MB); the site-scoped filters add about 0.4 MB. Checkouts keep LF line endings (`.gitattributes`), so the captcha parity test passes on Windows too.
+
+### Not in this release (owner decision)
+
+- Twitch: blocking Twitch's own ad host `ads.twitch.tv` (fix 36). `test/dnr.test.js` keeps every Twitch host off the block rules, and the player could not be tested live. Its tests are kept, ignored, in `test/nightly-manifest-scripts-1-*.test.js`.
+- Kick: two fixes (a post-roll cover that stays hidden, a banner collapse that can hide the player). `src/kick.js` is a frozen playback file in the release gate. The fix is kept in `docs/proposals/kick-0.3.5-fixes.patch`; its tests are kept, ignored.
+
+### Roll back to 0.3.4
+
+1. Download `adgecko-0.3.4.zip` from the existing v0.3.4 release: <https://github.com/gecko-of-shadow/adgecko/releases/download/v0.3.4/adgecko-0.3.4.zip>
+2. Unzip it to a folder. In Windows PowerShell 5.1:
+
+```powershell
+Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\adgecko-0.3.4.zip" -DestinationPath "$env:USERPROFILE\Downloads\adgecko-0.3.4" -Force
+```
+
+3. In Chrome, open `chrome://extensions`, turn on **Developer mode**, **Remove** (or turn off) Adgecko 0.3.5, click **Load unpacked**, and pick the 0.3.4 folder.
+
 ## 0.3.4 (2026-11-11)
 
 Dates in this file are the owner's local date (UTC-6); the dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.

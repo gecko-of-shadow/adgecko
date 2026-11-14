@@ -933,7 +933,7 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
 # scripts/pack-cosmetic.mjs). test/wave2-lists-cosmetic-pack.test.js checks all three agree.
 COSMETIC_LISTS = ("easylist", "easyprivacy", "adguard_base")
 # The subset packed into the shipped sheet (BUNDLED_LISTS in pack-cosmetic.mjs):
-# AdGuard Base's site rules would push the zip over 7.5 MB; the first refresh
+# AdGuard Base's site rules would push the zip over the 8 MB gate cap; the first refresh
 # after install adds them.
 BUNDLED_COSMETIC_LISTS = ("easylist", "easyprivacy")
 

@@ -247,7 +247,9 @@ echo "  package bytes: $SIZE"
 # (~6.7MB, ~0.3MB under this limit). 7MB still catches a runaway list pack.
 # 2026-11-03: the threat ruleset + snapshot (~0.7MB) and src/threat/psl.js
 # (82KB) brought the zip to ~6.96MB; 7.5MB keeps the runaway-pack check.
-if [[ "$SIZE" -gt 7500000 ]]; then fail "package unexpectedly large (>7.5MB)"; else pass "package size sane"; fi
+# 0.3.5: site-scoped $domain= filters (+0.4MB in general-network.json) and the
+# fuller PSL subset (+31KB) bring it to ~7.55MB; 8MB keeps the runaway-pack check.
+if [[ "$SIZE" -gt 8000000 ]]; then fail "package unexpectedly large (>8MB)"; else pass "package size sane"; fi
 
 section "1b. Playback files untouched"
 PLAYBACK_OK=1

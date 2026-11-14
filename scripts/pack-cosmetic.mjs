@@ -23,7 +23,7 @@ export const COSMETIC_LISTS = ["easylist", "easyprivacy", "adguard_base"];
 export const SITES_ONLY_LISTS = ["adguard_base"];
 // The bundled sheet (shipped in the zip) holds only these lists: AdGuard Base's
 // site rules add about 2 MB, which pushes the package over the release gate's
-// 7.5 MB cap. The runtime refresh adds AdGuard's site rules right after install
+// 8 MB cap (about 9.7 MB with them). The runtime refresh adds AdGuard's site rules right after install
 // (runtime.onInstalled), so they arrive within minutes.
 export const BUNDLED_LISTS = ["easylist", "easyprivacy"];
 // Stream sites run their own scripts, and the cosmetic content script never

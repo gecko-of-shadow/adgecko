@@ -258,7 +258,7 @@ Deno.test("refresh: EasyList hide rules over a cosmetic cap still reject the who
 });
 
 // The shipped sheet holds EasyList + EasyPrivacy only (BUNDLED_LISTS): AdGuard
-// Base's site rules would push the zip over the release gate's 7.5 MB cap, and
+// Base's site rules would push the zip over the release gate's 8 MB cap (about 9.7 MB with them), and
 // the first refresh after install adds them at runtime.
 Deno.test("bundled sheet lists agree: pack-cosmetic.mjs BUNDLED_LISTS and the packer", async () => {
   const packSrc = await Deno.readTextFile(new URL("scripts/pack-cosmetic.mjs", ROOT));
