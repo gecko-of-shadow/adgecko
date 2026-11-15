@@ -6,7 +6,7 @@ Where Adgecko stands, and what is next. Last updated 2026-11-14, when 0.3.5 was 
 
 - **Last release:** [v0.3.4](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.4), published 2026-11-12.
 - **Prepared, not pushed:** 0.3.5 on the local branch `nightly/0.3.5` (folder `adgecko-nightly`). See the `## 0.3.5` section of `CHANGELOG.md`: 35 test-proven bug fixes, site-scoped filters, cross-list `$badfilter` / `@@` (AdGuard site hide rules held back: storage quota), popup Reload page / Undo fix, lighter page frames, lists repacked 2026-11-14.
-- **Checks on `nightly/0.3.5` (2026-11-14):** `deno test` 754 passed / 0 failed / 8 ignored (6 are owner-decision or known-issue tests, 2 need tools this machine lacks); `scripts/release-gate.sh` CLEAN on the checkout and with `--zip` (68 files, 7.76 MB); privacy check passed. Not done: a headless Chrome smoke test (installed Chrome refuses `--load-extension`; no Chrome for Testing here) and any live site test.
+- **Checks on `nightly/0.3.5` (2026-11-14):** `deno test` 766 passed / 0 failed / 8 ignored (6 are owner-decision or known-issue tests, 2 need tools this machine lacks); `scripts/release-gate.sh` CLEAN on the checkout and with `--zip` (68 files, 7.82 MB); privacy check passed. Headless Chrome smoke test of the packed zip (CDP `Extensions.loadUnpacked`): it loads, version 0.3.5, the `general`, `threat` and `ubo-youtube` rulesets are on, the first refresh installs 3,062 dynamic rules, the refresh alarm is set, storage about 7.8 MB (filters.adtidy.org answered HTTP 403 to headless Chrome). Not done: any live site test (YouTube, Twitch, Kick, news sites).
 
 ## Next steps
 
