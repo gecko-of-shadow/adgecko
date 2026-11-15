@@ -82,14 +82,13 @@ function installGeneralAdblockUpdate(target) {
     { name: "hagezi_pro_mini", url: "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.mini.txt", minDomains: 10000, mirrors: [] },
     { name: "ublock_badware", url: "https://ublockorigin.github.io/uAssets/filters/badware.txt", minDomains: 500, mirrors: [] },
     { name: "dandelion_antimalware", url: "https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Dandelion%20Sprout%27s%20Anti-Malware%20List.txt", minDomains: 1000, mirrors: [] },
-    // cosmetic: "sites": AdGuard Base (uBO flavour) SITE-SCOPED hide rules and
-    // site #@# exceptions only (parseCosmetic sitesOnly). Its generic "##"
-    // selectors are dropped: the parser has no `$generichide` / `$elemhide`
-    // support, so they would hide things on sites AdGuard exempts.
-    // parseCosmetic also rejects its scriptlet and procedural lines. Hide
-    // rules over a cosmetic cap drop only this list's cosmetic part for that
-    // refresh, never its network rules. Same mode in scripts/pack-cosmetic.mjs.
-    { name: "adguard_base", url: "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt", cosmetic: "sites", minDomains: 1000, mirrors: [] },
+    // AdGuard Base: network rules only (0.3.5). Its site hide rules (a
+    // `cosmetic: "sites"` source, parseCosmetic sitesOnly) needed about 5 MB
+    // of chrome.storage.local (quota 10 MB) and pushed a list refresh over
+    // the quota. They can come back with an IndexedDB store; the refresh code
+    // for `cosmetic: "sites"` sources stays. A payload stored with hide rules
+    // by an earlier build loses them on the next refresh (dropRetiredCosmetic).
+    { name: "adguard_base", url: "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt", minDomains: 1000, mirrors: [] },
   ];
   const LIST_HOSTS = ["pgl.yoyo.org", "malware-filter.gitlab.io", "easylist.to", "ublockorigin.github.io", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz", "raw.githubusercontent.com", "filters.adtidy.org"];
   // Dynamic allow rule so no block rule (ours or a stale one) can stop the
@@ -764,6 +763,43 @@ function installGeneralAdblockUpdate(target) {
     return toRemove;
   }
 
+  // A list that stored hide rules (meta cosmetic: true) but is no longer a
+  // hide-rule source in SOURCES (AdGuard Base, 0.3.5: its site rules took
+  // about 5 MB of the 10 MB storage quota): remove the `cosmetic` field from
+  // its stored payload and meta, keep its network data. `lists` is the
+  // working copy of state.lists (changed in place). Returns the names
+  // changed; the caller rewrites the hide sheet, and writeCosmetic removes
+  // the list's stale cos* keys. Never throws.
+  async function dropRetiredCosmetic(deps, lists) {
+    const names = SOURCES.filter((s) => !s.cosmetic && lists[s.name] && lists[s.name].cosmetic).map((s) => s.name);
+    if (!names.length) return [];
+    const done = [];
+    let got = {};
+    try {
+      got = (await deps.getListData(names)) || {};
+    } catch {
+      return [];
+    }
+    for (const n of names) {
+      try {
+        const p = got[n];
+        if (p && typeof p === "object" && "cosmetic" in p) {
+          const next = Object.assign({}, p);
+          delete next.cosmetic;
+          await deps.setListData(n, next);
+        }
+        const m = Object.assign({}, lists[n], { cosmetic: false });
+        delete m.genericCount;
+        delete m.rejectedGeneric;
+        lists[n] = m;
+        done.push(n);
+      } catch {
+        // Kept as is; tried again on the next refresh.
+      }
+    }
+    return done;
+  }
+
   async function payloadsPresent(deps, names) {
     if (!names.length) return new Set();
     if (deps.listDataPresent) {
@@ -814,13 +850,16 @@ function installGeneralAdblockUpdate(target) {
       await deps.setState({ lastAttemptAt: now });
       const lists = {};
       for (const [k, v] of Object.entries(state.lists || {})) lists[k] = listMeta(v);
+      // Hide data of a list that is no longer a hide-rule source is dropped
+      // before the downloads (also when its server answers 304 or is down),
+      // and the sheet is rewritten without it.
+      let cosmeticChanged = (await dropRetiredCosmetic(deps, lists)).length > 0;
       const present = await payloadsPresent(deps, Object.keys(lists));
       // Missing payloads, and payloads from the old widening parser, are refetched
       // from scratch (no validators) and count as missing until then.
       const stale = staleParserLists({ lists });
       for (const k of Object.keys(lists)) if (!present.has(k) || stale.includes(k)) delete lists[k];
       let changed = !state.dynamicActive || retired.length > 0 || stale.length > 0;
-      let cosmeticChanged = false;
       const errors = {};
       const mirrorNotes = {};
       const CP = deps.cosmeticParse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
@@ -939,7 +978,7 @@ function installGeneralAdblockUpdate(target) {
       // (cosmetic: true) has a parsed copy: EasyPrivacy alone would replace
       // the whole EasyList sheet with a couple of selectors, and the bundled
       // sheet is never restored over a refresh. A `cosmetic: "sites"` source
-      // (AdGuard Base) is optional (final review #2): without a current
+      // (none in 0.3.5; AdGuard Base was one) is optional (final review #2): without a current
       // parsed copy its part is empty, so an unreachable or rejected AdGuard
       // never holds back the EasyList / EasyPrivacy sheet.
       const cosmeticSources = SOURCES.filter((x) => x.cosmetic);
@@ -1290,7 +1329,7 @@ function installGeneralAdblockUpdate(target) {
 
   Object.assign(target, {
     POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, FETCH_TIMEOUT_MS, MAX_LIST_BYTES, readListText, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
-    RETIRED_LISTS, dropRetiredLists, PARSER_VERSION, parseEntries, parseEntriesFull, crossListRules, crossScoped, mergeScoped, staleParserLists,
+    RETIRED_LISTS, dropRetiredLists, dropRetiredCosmetic, PARSER_VERSION, parseEntries, parseEntriesFull, crossListRules, crossScoped, mergeScoped, staleParserLists,
     THREAT_RULE_ID_BASE, THREAT_RULE_ID_END, DYNAMIC_RULE_LIMIT, isThreatRule, isOurRule, applyThreatRules,
     MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, PROTECTED_HITS_SEED_BY_LIST, PROTECTED_HITS_MARGIN, PROTECTED_HITS_SPIKE, protectedHitsCap, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, checkCosmeticChange, protectedHits, revertLists,
     removeThreatRules, rebuildThreatRules,

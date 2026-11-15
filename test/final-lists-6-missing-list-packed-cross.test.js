@@ -3,10 +3,15 @@
 // `||totaladblock.com^$badfilter` and `$document,badfilter`) failed on the
 // first refresh after the upgrade, the fresh EasyList put totaladblock.com
 // back into the dynamic rules, page block included.
-// Fix: the packer writes each list's effective cross-list data (only the
-// entries that removed or narrowed something) into filter-options.js
-// PACKED_CROSS; swap() passes the names of lists with no current copy to
-// crossListRules(), which uses their packed part in place of the payload.
+// Fix: the packer writes each list's cross-list data into
+// src/rules/packed-cross.json; swap() passes the names of lists with no
+// current copy to crossListRules(), which uses their packed part in place of
+// the payload.
+// Edited for 0.3.5: the packer kept only the entries that removed or narrowed
+// something at pack time, so a missing list's $badfilter / @@ / limit data did
+// not cover a filter that another list added after the pack. It now stores
+// each list's FULL cross-list data (cancel, allow, limit, important), and
+// alldoc for the hosts that some list's allow set names.
 import "../src/general/filter-options.js";
 import "../src/threat/psl.js";
 import "../src/general/never-block-captcha.js";
@@ -71,12 +76,45 @@ async function packedFor(texts) {
   return JSON.parse(out);
 }
 
-Deno.test("#6: the packer keeps only effective cross-list entries", async () => {
-  const data = await packedFor({ easylist: EASYLIST, adguard_base: ADGUARD });
+const ADGUARD_MORE = ADGUARD + "\n@@||lift.example^\n@@||limited.example/path$script";
+
+Deno.test("#6: the packer stores each list's full cross-list data", async () => {
+  const data = await packedFor({ easylist: EASYLIST, adguard_base: ADGUARD_MORE });
   const ag = data.lists.adguard_base;
   assert(data.version === 1, "version");
-  assert(JSON.stringify(ag.cancel) === JSON.stringify(["jwplayer.com\np=|t=|x=|i=tennis.com", "totaladblock.com\n", "totaladblock.com\n" + DOC]), JSON.stringify(ag));
-  assert(!data.lists.easylist, "easylist has nothing that removes anything: " + JSON.stringify(data.lists.easylist));
+  // `||unused.example^$badfilter` cancels nothing at pack time: kept anyway.
+  assert(JSON.stringify(ag.cancel) === JSON.stringify(["jwplayer.com\np=|t=|x=|i=tennis.com", "totaladblock.com\n", "totaladblock.com\n" + DOC, "unused.example\n"]), JSON.stringify(ag));
+  assert(JSON.stringify(ag.allow) === '["lift.example"]', "allow kept although no list blocks the host: " + JSON.stringify(ag.allow));
+  assert(JSON.stringify(ag.limit) === '["limited.example"]', "limit kept although no $domain= filter names the host: " + JSON.stringify(ag.limit));
+  assert(!data.lists.easylist, "easylist has no cross-list data: " + JSON.stringify(data.lists.easylist));
+});
+
+// alldoc acts only with an allow entry for the same host, and the full set
+// (about 12,000 malware hosts) put the zip over the 8 MB release-gate cap.
+Deno.test("#6 (0.3.5): the packer keeps alldoc only for hosts some list allows", async () => {
+  const data = await packedFor({
+    easylist: "||lift.example^$all\n||kept-blocked.example^$all",
+    adguard_base: "@@||lift.example^",
+  });
+  const el = data.lists.easylist || {};
+  assert(JSON.stringify(el.alldoc) === '["lift.example"]', "alldoc filtered to allowed hosts: " + JSON.stringify(el));
+  const size = Deno.statSync(new URL("../src/rules/packed-cross.json", import.meta.url)).size;
+  assert(size < 150000, "packed-cross.json is " + size + " bytes");
+});
+
+Deno.test("#6 (0.3.5): a missing list's packed data covers filters other lists add after the pack", async () => {
+  const packed = await packedFor({ easylist: EASYLIST, adguard_base: ADGUARD_MORE });
+  // EasyList after the pack: three new filters that AdGuard's data answers.
+  const later = U.parseEntriesFull(EASYLIST + "\n||unused.example^\n||lift.example^\n||limited.example^$domain=site.test");
+  const control = U.crossListRules({ easylist: later }, []);
+  assert(control.keepWhole("unused.example") && control.keepWhole("lift.example") && control.keepScoped("limited.example", "p=|t=|x=|i=site.test"), "control: kept without AdGuard data");
+  const cross = U.crossListRules({ easylist: later }, ["adguard_base"], packed);
+  assert(!cross.keepWhole("unused.example"), "packed $badfilter cancels a filter added later");
+  assert(!cross.keepWhole("lift.example"), "packed @@||host^ lifts a block added later");
+  assert(!cross.keepScoped("limited.example", "p=|t=|x=|i=site.test"), "packed limit drops a $domain= filter added later");
+  assert(cross.keepWhole("ok.example.com"), "control host");
+  const present = U.crossListRules({ easylist: later, adguard_base: U.parseEntriesFull("||x.example^") }, [], packed);
+  assert(present.keepWhole("unused.example") && present.keepWhole("lift.example"), "a present list's own copy wins");
 });
 
 Deno.test("#6: a missing list's packed $badfilter still applies; a present list's own copy wins", async () => {

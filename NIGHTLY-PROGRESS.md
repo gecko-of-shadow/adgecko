@@ -7,7 +7,7 @@ Fix wave results (each bug has a regression test in test/nightly-*.test.js):
 - #1 fixed: List refresh: a refresh where no list reached its server (offline, captive portal) is now reported as a failure, does not count as a successful run, and is retried after 30 minutes instead of 12 hours.
 - #2 fixed: Malware blocking: with the ad lists switched off, a list refresh now still installs the freshly downloaded malware (threat) rules.
 - #35 fixed: Filter lists: a $badfilter in one list (for example AdGuard's fix for totaladblock.com) now cancels the same filter in every other list, in the packed rules and in list refreshes.
-- #36 fixed: Twitch: Twitch's ad host ads.twitch.tv (edge.ads.twitch.tv) is now blocked by the packed rules, as the Twitch allow rule's carve-out intended.
+- #36 held back (owner decision, see CHANGELOG 0.3.5): Twitch: Twitch's ad host ads.twitch.tv (edge.ads.twitch.tv) is now blocked by the packed rules, as the Twitch allow rule's carve-out intended.
 - #37 fixed: Filter lists: an unconditional list exception such as @@||content.ingbank.pl^ now lifts another list's whole-domain block of that same host.
 
 ## background (review ok: True, repaired: False)
@@ -57,8 +57,8 @@ Fix wave results (each bug has a regression test in test/nightly-*.test.js):
 - #33 fixed: YouTube: the "Saved" and "Link copied" toasts now show after Adgecko hid an "Experiencing interruptions?" toast in the same toast element.
 
 ## kick (review ok: True, repaired: False)
-- #32 fixed: Kick: a post-roll cover that was hidden while it showed no video is now shown again when the ad ends and only the ad controls are removed.
-- #34 fixed: Kick: the banner-collapse path no longer hides a box that holds the video player, and every box it collapses is shown again when its ad frame leaves or the Kick switch goes off.
+- #32 held back (src/kick.js frozen; patch in docs/proposals): Kick: a post-roll cover that was hidden while it showed no video is now shown again when the ad ends and only the ad controls are removed.
+- #34 held back (src/kick.js frozen; patch in docs/proposals): Kick: the banner-collapse path no longer hides a box that holds the video player, and every box it collapses is shown again when its ad frame leaves or the Kick switch goes off.
 
 ## Status
 - Superseded: see CHANGELOG.md "## 0.3.5" and TODO.md.

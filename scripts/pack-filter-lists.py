@@ -912,55 +912,34 @@ def apply_cross_list(buckets: dict, scoped_buckets: dict, lists: list) -> tuple[
 
 
 def packed_cross_data(named) -> dict:
-    """Per list (name -> extract_list result), only the cross-list entries
-    that removed or narrowed something in the packed lists (final review #6).
-    Written to src/rules/packed-cross.json; the runtime
-    uses a list's part only while that list has no current parsed copy."""
-    whole_any: set[str] = set()
-    scoped_all: list = []
-    allow_any: set[str] = set()
+    """Per list (name -> extract_list result), that list's FULL cross-list
+    data: every cancel ($badfilter), allow (unconditional `@@||host^`), limit
+    (path / option exception hosts), important and alldoc entry (final
+    review #6, widened in 0.3.5). Written to src/rules/packed-cross.json; the
+    runtime uses a list's part only while that list has no current parsed
+    copy. Full data, not only the entries that changed something at pack
+    time: a filter that another list adds after the pack must still be
+    cancelled, lifted or limited while the list that carries the exception
+    cannot be downloaded.
+
+    Exception: alldoc is kept only for hosts that some list's allow set names
+    at pack time. An alldoc entry acts only together with an allow entry for
+    the same host (crossListRules: k === docKey && allow.has(d) &&
+    allDoc.has(d)), and the full set (about 12,000 malware hosts) put the
+    package over the 8 MB release-gate cap. A missing list's alldoc could
+    lift a packed page block only, and the packed "general" ruleset stays
+    enabled during a refresh, so that block applies anyway."""
+    allowed: set = set()
     for entry in named.values():
-        whole_any |= set(entry[0])
-        scoped_all.extend(entry[1])
-        allow_any |= set(getattr(entry, "allow", set()))
-    scoped_ids = {e[0] + "\n" + e[1] for e in scoped_all}
-    rest_ids: dict[str, set] = {}
-    for d, k in scoped_all:
-        split = initiator_split(k)
-        if split:
-            rest_ids.setdefault(d + "\n" + split[0], set()).update(split[1])
-    # Hosts of $domain= entries, and every parent of them.
-    dom_hosts = {d for d, k in scoped_all if limit_key(k)}
-    dom_parents: set[str] = set()
-    for d in dom_hosts:
-        labels = d.split(".")
-        for i in range(1, len(labels) - 1):
-            dom_parents.add(".".join(labels[i:]))
-
-    def limits_any(h: str) -> bool:
-        if h in dom_hosts or h in dom_parents:
-            return True
-        labels = h.split(".")
-        return any(".".join(labels[i:]) in dom_hosts for i in range(1, len(labels) - 1))
-
+        allowed |= set(getattr(entry, "allow", set()) or ())
     out: dict = {}
     for name, entry in named.items():
         part: dict = {}
-        cancel = []
-        for c in sorted(getattr(entry, "cancel", set())):
-            d, _, k = c.partition("\n")
-            split = initiator_split(k)
-            if (k == "" and d in whole_any) or c in scoped_ids or (
-                split and rest_ids.get(d + "\n" + split[0], set()) & set(split[1])
-            ):
-                cancel.append(c)
-        for key, values in (
-            ("cancel", cancel),
-            ("allow", sorted(h for h in getattr(entry, "allow", set()) if h in whole_any)),
-            ("limit", sorted(h for h in getattr(entry, "limit", set()) if limits_any(h))),
-            ("important", sorted(h for h in getattr(entry, "important", set()) if h in allow_any)),
-            ("alldoc", sorted(h for h in getattr(entry, "alldoc", set()) if h in allow_any)),
-        ):
+        for key in ("cancel", "allow", "limit", "important", "alldoc"):
+            values = getattr(entry, key, set()) or ()
+            if key == "alldoc":
+                values = [h for h in values if h in allowed]
+            values = sorted(values)
             if values:
                 part[key] = values
         if part:
@@ -1154,10 +1133,10 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
 # Lists whose `##` hide rules go into the bundled sheet, in the runtime's order
 # (the `cosmetic: true` SOURCES of src/general/update.js; COSMETIC_LISTS in
 # scripts/pack-cosmetic.mjs). test/wave2-lists-cosmetic-pack.test.js checks all three agree.
-COSMETIC_LISTS = ("easylist", "easyprivacy", "adguard_base")
-# The subset packed into the shipped sheet (BUNDLED_LISTS in pack-cosmetic.mjs):
-# AdGuard Base's site rules would push the zip over the 8 MB gate cap; the first refresh
-# after install adds them.
+# AdGuard Base is not a hide-rule source in 0.3.5 (its site rules needed about
+# 5 MB of the 10 MB chrome.storage.local quota).
+COSMETIC_LISTS = ("easylist", "easyprivacy")
+# The lists packed into the shipped sheet (BUNDLED_LISTS in pack-cosmetic.mjs).
 BUNDLED_COSMETIC_LISTS = ("easylist", "easyprivacy")
 
 
@@ -1232,7 +1211,7 @@ def main() -> int:
     if len(rules) > MAX_DNR_RULES:
         print(f"ERROR: {len(rules)} DNR rules exceed the budget of {MAX_DNR_RULES}; nothing written", file=sys.stderr)
         return 1
-    # Each list's effective cross-list data, for the runtime refresh while
+    # Each list's full cross-list data, for the runtime refresh while
     # that list has no parsed copy (final review #6). Only after the budget
     # check, so a refused pack writes nothing.
     if write_packed_cross(packed_cross_data(extracted_by_name)):

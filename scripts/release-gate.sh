@@ -249,6 +249,8 @@ echo "  package bytes: $SIZE"
 # (82KB) brought the zip to ~6.96MB; 7.5MB keeps the runaway-pack check.
 # 0.3.5: site-scoped $domain= filters (+0.4MB in general-network.json) and the
 # fuller PSL subset (+31KB) bring it to ~7.55MB; 8MB keeps the runaway-pack check.
+# src/rules/packed-cross.json (~60KB; alldoc kept only for allowed hosts, the full
+# set was 332KB and broke this cap) brings it to ~7.82MB.
 if [[ "$SIZE" -gt 8000000 ]]; then fail "package unexpectedly large (>8MB)"; else pass "package size sane"; fi
 
 section "1b. Playback files untouched"

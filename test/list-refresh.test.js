@@ -69,7 +69,7 @@ Deno.test("first refresh swaps to dynamic rules, writes cosmetics; startup throt
   assert(r.ok && r.rules > 0, JSON.stringify(r));
   assert(d.staticOn === true, "packed floor stays on after swap");
   assert(d.dynamic.length < 30000 && d.dynamic.some((x) => x.id >= U.KEPT_RULE_ID_BASE), "under limit, allows kept");
-  assert(d.cosmetic.length === 1 && d.cosmetic[0].sites["example.com"].length === 3, "cosmetic from easylist+easyprivacy+adguard_base");
+  assert(d.cosmetic.length === 1 && d.cosmetic[0].sites["example.com"].length === 2, "cosmetic from easylist+easyprivacy (AdGuard Base: network rules only)");
   d.t += 60 * 60 * 1000;
   assert((await U.refresh(d, {})).reason === "throttled", "startup throttled");
   const n = d.calls.length;
@@ -122,7 +122,7 @@ Deno.test("EasyList failing on the first refresh leaves the hide list alone unti
   assert(d.cosmetic.length === 0, "no partial hide list written: " + JSON.stringify(d.cosmetic.map((c) => c.general?.length)));
   easylistDown = false;
   await U.refresh(d, { manual: true });
-  assert(d.cosmetic.length === 1 && d.cosmetic[0].sites["example.com"].length === 3, "written once all three cosmetic lists parsed");
+  assert(d.cosmetic.length === 1 && d.cosmetic[0].sites["example.com"].length === 2, "written once both cosmetic lists parsed (AdGuard Base: network rules only)");
 });
 
 Deno.test("one list failing keeps the others and records a readable reason", async () => {

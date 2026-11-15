@@ -5,6 +5,10 @@
 // Fix (update.js refresh): only `cosmetic: true` sources (EasyList,
 // EasyPrivacy) are required; a "sites" source without a current parsed copy
 // adds an empty part, and its stored part is used when it has one.
+// Edited for 0.3.5 (storage budget): AdGuard Base is no longer a hide-rule
+// source at all (network rules only). Hide data that an earlier build stored
+// in its payload is removed on the next refresh, also when filters.adtidy.org
+// answers 304 or is unreachable, and the sheet is rewritten without it.
 import "../src/general/filter-options.js";
 import "../src/general/never-block-captcha.js";
 import source from "../src/general/update.js" with { type: "text" };
@@ -78,7 +82,7 @@ Deno.test("#2: upgrade from 0.3.4 with filters.adtidy.org unreachable still writ
   assert(d.cosmetic[0].meta && d.cosmetic[0].meta.source === "refresh", "refresh sheet");
 });
 
-Deno.test("#2: a later AdGuard failure keeps its stored part in the sheet", async () => {
+Deno.test("#2 (0.3.5): a later AdGuard failure adds no AdGuard part to the sheet", async () => {
   let offline = [];
   const d = makeDeps((url) => bodyFor(offline)(url));
   assert((await U.refresh(d, { manual: true })).ok, "first run");
@@ -88,8 +92,52 @@ Deno.test("#2: a later AdGuard failure keeps its stored part in the sheet", asyn
   assert((await U.refresh(d, { manual: true })).ok, "second run");
   assert(d.cosmetic.length === 2, "second sheet: " + d.cosmetic.length);
   const site = d.cosmetic[1].d.sites["example.com"] || [];
-  for (const s of [".from-easylist", ".from-easyprivacy", ".from-adguard"]) assert(site.includes(s), s + " missing: " + JSON.stringify(site));
+  assert(site.includes(".from-easylist") && site.includes(".from-easyprivacy"), JSON.stringify(site));
+  assert(!site.includes(".from-adguard"), "no AdGuard part: " + JSON.stringify(site));
 });
+
+// An install that stored AdGuard hide rules (an earlier 0.3.5 nightly build).
+function seededWithAdguardHide(bodies) {
+  const lists = {};
+  const d = makeDeps(bodies, { lists, dynamicActive: true });
+  for (const s of U.SOURCES) {
+    lists[s.name] = { url: s.url, etag: '"' + s.name + '"', fetchedAt: 1e12, expiresMs: 4 * 86400000, count: 30000, parser: U.PARSER_VERSION, cosmetic: !!s.cosmetic || s.name === "adguard_base", protectedHits: 0 };
+    const p = { domains: [s.name + "-kept.example"], scoped: [], parser: U.PARSER_VERSION };
+    if (s.cosmetic) p.cosmetic = CP.parseCosmetic("example.com##.from-" + s.name);
+    d.data[s.name] = p;
+  }
+  lists.adguard_base.genericCount = 0;
+  d.data.adguard_base.cosmetic = CP.parseCosmetic("example.com##.from-adguard", { sitesOnly: true });
+  return d;
+}
+
+for (const [label, answer] of [["304", "304"], ["unreachable", "offline"]]) {
+  Deno.test("0.3.5: stored AdGuard hide data is removed on the next refresh (lists " + label + ")", async () => {
+    const d = seededWithAdguardHide(() => null);
+    d.fetch = async () => {
+      if (answer === "offline") throw new TypeError("Failed to fetch");
+      return { ok: false, status: 304, headers: { get: () => "" }, text: async () => "" };
+    };
+    d.t = 1e12 + 1000;
+    const r = await U.refresh(d, { manual: true });
+    if (answer === "304") assert(r.ok, JSON.stringify(r));
+    const ag = d.data.adguard_base;
+    assert(ag && !("cosmetic" in ag), "AdGuard payload has no hide data: " + Object.keys(ag || {}));
+    assert(ag.domains.includes("adguard_base-kept.example"), "AdGuard network data kept");
+    const meta = d.state.lists.adguard_base;
+    assert(meta && meta.cosmetic === false && !("genericCount" in meta), JSON.stringify(meta));
+    assert(d.cosmetic.length === 1, "sheet rewritten without AdGuard: " + d.cosmetic.length);
+    const site = d.cosmetic[0].d.sites["example.com"] || [];
+    assert(site.includes(".from-easylist") && site.includes(".from-easyprivacy") && !site.includes(".from-adguard"), JSON.stringify(site));
+    // EasyList / EasyPrivacy payloads keep their hide data.
+    assert(d.data.easylist.cosmetic && d.data.easyprivacy.cosmetic, "EasyList / EasyPrivacy hide data kept");
+    // A second refresh has nothing left to strip.
+    const n = d.cosmetic.length;
+    d.t += 1;
+    await U.refresh(d, { manual: true });
+    if (answer === "304") assert(d.cosmetic.length === n, "no further sheet rewrite: " + d.cosmetic.length);
+  });
+}
 
 Deno.test("#2: EasyList is still required (no sheet from EasyPrivacy alone)", async () => {
   const d = makeDeps(bodyFor(["easylist"]));

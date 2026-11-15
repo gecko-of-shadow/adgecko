@@ -1,7 +1,11 @@
-// Wave 2 "lists": AdGuard Base site hide rules are used at runtime (cosmetic:
-// "sites"), the refresh writes the hide list once EasyList and EasyPrivacy are
-// parsed (AdGuard's part is optional since final review #2), and the packer rebuilds the bundled sheet
+// Wave 2 "lists": the refresh writes the hide list once EasyList and
+// EasyPrivacy are parsed, and the packer rebuilds the bundled sheet
 // (src/rules/cosmetic-rules.json) from EasyList + EasyPrivacy on every list pack.
+// Edited for 0.3.5 (storage budget): AdGuard Base is no longer a hide-rule
+// source (its site rules needed about 5 MB of the 10 MB storage quota); it
+// gives network rules only. The `cosmetic: "sites"` code path (parseCosmetic
+// sitesOnly) stays for a later IndexedDB store; its tests below switch the
+// flag on for AdGuard Base for the duration of the test.
 import "../src/general/filter-options.js";
 import "../src/general/never-block-captcha.js";
 import source from "../src/general/update.js" with { type: "text" };
@@ -14,7 +18,7 @@ const U = {};
 new Function(`${source}\nreturn installGeneralAdblockUpdate;`)()(U);
 const CP = new Function("self", `${cosSource}\nreturn self.GeneralCosmeticParse;`)({});
 const ROOT = new URL("..", import.meta.url);
-const EXPECTED = ["easylist", "easyprivacy", "adguard_base"];
+const EXPECTED = ["easylist", "easyprivacy"];
 
 async function runPython(code) {
   const bins = Deno.build.os === "windows" ? [["py", "-3"], ["python"], ["python3"]] : [["python3"], ["python"]];
@@ -34,7 +38,7 @@ async function runPython(code) {
   throw new Error("no usable Python 3 (" + tried.join("; ") + ")");
 }
 
-Deno.test("the three cosmetic lists agree: update.js SOURCES, pack-cosmetic.mjs and the packer", async () => {
+Deno.test("the cosmetic lists agree: update.js SOURCES, pack-cosmetic.mjs and the packer", async () => {
   const runtime = U.SOURCES.filter((s) => s.cosmetic).map((s) => s.name);
   assert(JSON.stringify(runtime) === JSON.stringify(EXPECTED), "runtime " + JSON.stringify(runtime));
   // Read as text: importing pack-cosmetic.mjs would run it.
@@ -44,7 +48,8 @@ Deno.test("the three cosmetic lists agree: update.js SOURCES, pack-cosmetic.mjs 
   // Same sites-only lists on both sides.
   const runtimeSites = U.SOURCES.filter((s) => s.cosmetic === "sites").map((s) => s.name);
   const ms = /export const SITES_ONLY_LISTS = (\[[^\]]*\]);/.exec(packSrc);
-  assert(JSON.stringify(runtimeSites) === '["adguard_base"]', "runtime sites-only " + JSON.stringify(runtimeSites));
+  assert(JSON.stringify(runtimeSites) === "[]", "runtime sites-only " + JSON.stringify(runtimeSites));
+  assert(!U.SOURCES.find((s) => s.name === "adguard_base").cosmetic, "AdGuard Base: network rules only");
   assert(ms && JSON.stringify(JSON.parse(ms[1])) === JSON.stringify(runtimeSites), "pack-cosmetic sites-only " + (ms && ms[1]));
   // EasyList / EasyPrivacy keep the full parse (generic rules too).
   for (const n of ["easylist", "easyprivacy"]) assert(U.SOURCES.find((s) => s.name === n).cosmetic === true, n);
@@ -151,12 +156,40 @@ const bodyFor = (offline) => (url) => {
   return bigList("other" + url.length);
 };
 
-// Edited by final review #2 (0.3.5): AdGuard Base ("sites") is an optional
-// hide-rule source, so the first run (AdGuard offline) now writes the
-// EasyList + EasyPrivacy sheet instead of nothing; it used to hold back the
-// whole hide list (an upgraded install kept the 0.3.4 sheet). The second run
-// still merges all three lists; its assertions are unchanged.
-Deno.test("refresh: hide list does not wait for AdGuard Base, then merges all three lists", async () => {
+// A dormant `cosmetic: "sites"` source: AdGuard Base with its 0.3.5-rc flag
+// back on, for the duration of one test (SOURCES is the module's own array).
+async function withSitesSource(fn) {
+  const ag = U.SOURCES.find((x) => x.name === "adguard_base");
+  const saved = ag.cosmetic;
+  ag.cosmetic = "sites";
+  try {
+    await fn();
+  } finally {
+    if (saved === undefined) delete ag.cosmetic; else ag.cosmetic = saved;
+  }
+}
+
+// 0.3.5: AdGuard Base gives network rules only; the hide list is EasyList +
+// EasyPrivacy, and the AdGuard payload carries no hide rules.
+Deno.test("refresh: AdGuard Base adds network rules only, hide list from EasyList + EasyPrivacy", async () => {
+  const d = makeDeps(bodyFor([]));
+  const r = await U.refresh(d, { manual: true });
+  assert(r.ok, JSON.stringify(r));
+  assert(d.cosmetic.length === 1, "hide list written: " + d.cosmetic.length);
+  const site = d.cosmetic[0].sites["example.com"] || [];
+  assert(site.includes(".from-easylist") && site.includes(".from-easyprivacy") && !site.includes(".from-adguard"), JSON.stringify(site));
+  assert(!d.cosmetic[0].generic.includes(".adguard-generic"), "no AdGuard generic");
+  const ag = d.data.adguard_base;
+  assert(ag && ag.parser === U.PARSER_VERSION && ag.domains.includes("ag0.example"), "AdGuard network rules stored");
+  assert(!("cosmetic" in ag), "AdGuard payload carries no hide rules: " + Object.keys(ag));
+  const st = await d.getState();
+  assert(st.lists.adguard_base && st.lists.adguard_base.cosmetic === false && !("genericCount" in st.lists.adguard_base), JSON.stringify(st.lists.adguard_base));
+});
+
+// Kept for the dormant `cosmetic: "sites"` path (edited by final review #2:
+// the sites source is optional, so the first run writes the EasyList +
+// EasyPrivacy sheet without it).
+Deno.test("refresh (dormant sites source): hide list does not wait for it, then merges all three lists", () => withSitesSource(async () => {
   let offline = ["adguard_base"];
   const d = makeDeps((url) => bodyFor(offline)(url));
   const r1 = await U.refresh(d, { manual: true });
@@ -175,8 +208,8 @@ Deno.test("refresh: hide list does not wait for AdGuard Base, then merges all th
   assert(out.generic.includes(".easylist-generic"), "EasyList generic kept: " + JSON.stringify(out.generic));
   assert(!out.generic.includes(".adguard-generic"), "AdGuard generic dropped: " + JSON.stringify(out.generic));
   assert(!JSON.stringify(out).includes("+js"), "scriptlet rejected");
-  assert(d.data.adguard_base && d.data.adguard_base.parser === U.PARSER_VERSION && d.data.adguard_base.cosmetic, "AdGuard payload carries its hide rules");
-});
+  assert(d.data.adguard_base && d.data.adguard_base.parser === U.PARSER_VERSION && d.data.adguard_base.cosmetic, "sites payload carries its hide rules");
+}));
 
 // pack-cosmetic.mjs, run for real on three tiny lists in a temp folder. The
 // test process has no write permission: Python makes the folder and files and
@@ -200,7 +233,7 @@ async function packIn(lists, extraArgs) {
   return JSON.parse(out);
 }
 
-Deno.test("refresh: AdGuard hide rules over a cosmetic cap drop only its hide rules, never its network rules", async () => {
+Deno.test("refresh (dormant sites source): hide rules over a cosmetic cap drop only its hide rules, never its network rules", () => withSitesSource(async () => {
   const roots = [];
   for (let i = 0; i <= U.MAX_PAGE_ROOT_SITE_RULES; i++) roots.push("site" + i + ".test##html");
   const saved = BODIES.adguard_base;
@@ -225,9 +258,9 @@ Deno.test("refresh: AdGuard hide rules over a cosmetic cap drop only its hide ru
   } finally {
     BODIES.adguard_base = saved;
   }
-});
+}));
 
-Deno.test("refresh: an old AdGuard genericCount baseline never drops its site hide rules", async () => {
+Deno.test("refresh (dormant sites source): an old genericCount baseline never drops its site hide rules", () => withSitesSource(async () => {
   const d = makeDeps(bodyFor([]));
   assert((await U.refresh(d, { manual: true })).ok, "first refresh");
   const st = await d.getState();
@@ -246,7 +279,7 @@ Deno.test("refresh: an old AdGuard genericCount baseline never drops its site hi
   } finally {
     BODIES.adguard_base = BODIES.adguard_base.replace("\nexample.com##.from-adguard-2", "");
   }
-});
+}));
 
 Deno.test("refresh: EasyList hide rules over a cosmetic cap still reject the whole list (unchanged)", async () => {
   const roots = [];
@@ -264,9 +297,7 @@ Deno.test("refresh: EasyList hide rules over a cosmetic cap still reject the who
   }
 });
 
-// The shipped sheet holds EasyList + EasyPrivacy only (BUNDLED_LISTS): AdGuard
-// Base's site rules would push the zip over the release gate's 8 MB cap (about 9.7 MB with them), and
-// the first refresh after install adds them at runtime.
+// The shipped sheet holds EasyList + EasyPrivacy only (BUNDLED_LISTS).
 Deno.test("bundled sheet lists agree: pack-cosmetic.mjs BUNDLED_LISTS and the packer", async () => {
   const packSrc = await Deno.readTextFile(new URL("scripts/pack-cosmetic.mjs", ROOT));
   const m = /export const BUNDLED_LISTS = (\[[^\]]*\]);/.exec(packSrc);

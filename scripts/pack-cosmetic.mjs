@@ -17,14 +17,12 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const COSMETIC_LISTS = ["easylist", "easyprivacy", "adguard_base"];
-// Generic "##" selectors dropped (parseCosmetic sitesOnly): AdGuard's
-// `$generichide` / `$elemhide` exceptions are not supported.
-export const SITES_ONLY_LISTS = ["adguard_base"];
-// The bundled sheet (shipped in the zip) holds only these lists: AdGuard Base's
-// site rules add about 2 MB, which pushes the package over the release gate's
-// 8 MB cap (about 9.7 MB with them). The runtime refresh adds AdGuard's site rules right after install
-// (runtime.onInstalled), so they arrive within minutes.
+export const COSMETIC_LISTS = ["easylist", "easyprivacy"];
+// Lists that give only site hide rules (parseCosmetic sitesOnly). None in
+// 0.3.5: AdGuard Base's site rules (about 5 MB in chrome.storage.local) are
+// not used until they can move to an IndexedDB store.
+export const SITES_ONLY_LISTS = [];
+// The bundled sheet (shipped in the zip) holds these lists.
 export const BUNDLED_LISTS = ["easylist", "easyprivacy"];
 // Stream sites run their own scripts, and the cosmetic content script never
 // loads there (manifest exclude_matches): keep their hide rules out of the bundle.
