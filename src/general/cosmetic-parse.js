@@ -174,6 +174,18 @@
     return /^\s*(?:\*|html|body|:root)\s*$/i.test(String(sel || ""));
   }
 
+  // "~a.com" also excludes every subdomain of a.com. Two generic rules with
+  // the same selector both leave a host alone only when an exclusion of each
+  // covers it: keep every host of either set that the other set covers.
+  function intersectCoverage(prev, next) {
+    const covers = (set, h) => [...set].some((p) => h === p || h.endsWith("." + p));
+    const nextSet = new Set(next);
+    const out = new Set();
+    for (const h of nextSet) if (covers(prev, h)) out.add(h);
+    for (const h of prev) if (covers(nextSet, h)) out.add(h);
+    return out;
+  }
+
   // Unicode (IDN) host -> punycode, as location.hostname reports it. A
   // trailing ".*" (any-TLD form) is kept apart from the conversion.
   function toAsciiHost(host) {
@@ -289,7 +301,7 @@
       if (!included.length) {
         const prev = genericExcl.get(sel);
         if (!exclude.length || prev === null) genericExcl.set(sel, null);
-        else genericExcl.set(sel, prev ? new Set(exclude.filter((h) => prev.has(h))) : new Set(exclude));
+        else genericExcl.set(sel, prev ? intersectCoverage(prev, exclude) : new Set(exclude));
       } else if (exclude.length) {
         for (const h of exclude) siteExcl.push([h, sel]);
       } else {

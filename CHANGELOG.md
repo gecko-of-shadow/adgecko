@@ -45,7 +45,7 @@ A bug hunt found 38 bugs, each proven by a failing test (`test/nightly-*.test.js
 
 ### Hidden ad boxes (rules)
 
-- A `~host` exclusion now stops only that rule on that host; `~host#@#selector` is no longer a global exception; a generic `#@#` exception in one list now cancels the same rule from the other lists; a Unicode host in a rule's domain list no longer drops the whole rule; generic rules that would hide the whole page (`body:has()`, selector lists) are dropped; a late fallback style sheet no longer overwrites newer rules.
+- A `~host` exclusion now stops only that rule on that host; `~host#@#selector` is no longer a global exception; a generic `#@#` exception in one list now cancels the same rule from the other lists; a Unicode host in a rule's domain list no longer drops the whole rule; generic rules that would hide the whole page (`body:has()`, selector lists) are dropped; a late fallback style sheet no longer overwrites newer rules. Two generic hide rules for the same selector, one excluding a site (`~example.com`) and one a subdomain of it (`~shop.example.com`), now both leave that subdomain alone (found in the PR #12 review).
 
 ### Speed
 
