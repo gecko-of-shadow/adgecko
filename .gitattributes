@@ -1,0 +1,7 @@
+# Keep LF everywhere. Generated files (src/general/never-block-captcha.js)
+# are compared byte for byte with what the packer writes, so a CRLF
+# checkout on Windows made the parity test fail.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.zip binary

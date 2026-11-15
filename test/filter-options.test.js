@@ -131,7 +131,9 @@ Deno.test("regression: known widened domains are no longer whole-domain blocks i
   for (const r of generalRules) {
     if (r.action.type !== "block" || r.priority !== 1) continue;
     const c = r.condition;
-    if (c.resourceTypes || c.excludedResourceTypes || c.domainType || c.initiatorDomains) continue;
+    // Any narrowing field makes the rule scoped (filter-options.js table version 2
+    // adds excluded initiators, methods and denyallow hosts).
+    if (c.resourceTypes || c.excludedResourceTypes || c.domainType || c.initiatorDomains || c.excludedInitiatorDomains || c.requestMethods || c.excludedRequestMethods || c.excludedRequestDomains) continue;
     for (const d of c.requestDomains || []) wholeBlocked.add(d);
   }
   assert(wholeBlocked.size > 1000, "sanity: packed whole-domain blocks present");

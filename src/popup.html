@@ -28,16 +28,20 @@
       <button id="fix-site" type="button" class="primary">Fix this site</button>
       <div id="fix-ask" role="group" aria-labelledby="fix-question" hidden>
         <p id="fix-question" class="question">Did that fix it? Reload the page and look.</p>
+        <button id="fix-reload" type="button" class="secondary">Reload page</button>
         <div class="pair">
           <button id="fix-yes" type="button" class="primary">Yes</button>
           <button id="fix-no" type="button" class="secondary">No</button>
         </div>
       </div>
+      <button id="undo-fix" type="button" class="secondary" hidden>Undo fix</button>
       <p id="fix-note" class="note" aria-live="polite"></p>
     </section>
 
     <button id="allow-site" type="button" class="primary big" aria-pressed="false">Allow this site</button>
+    <button id="reload-page" type="button" class="link" hidden>Reload page</button>
     <p id="page-status" class="note" aria-live="polite"></p>
+    <button id="open-allow-domain" type="button" class="link" hidden>Chrome says the page is blocked? Allow its domain</button>
 
     <details id="more">
       <summary>Show more</summary>

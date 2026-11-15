@@ -116,7 +116,7 @@ IPv4 addresses too (security review L-3), at refresh time and in the packer;
 private suffixes and shared-platform parents (`github.io`, dynamic-DNS
 parents) stay up to the lists there. That tier is priority 1 and blocks
 opening a page (main_frame) only for an explicit `$doc` / `$document` list
-entry, also when another list blocks the same host as a whole domain (fixed
+entry or a plain `$all` entry (0.3.5), also when another list blocks the same host as a whole domain (fixed
 2026-11-03: the merge used to drop such entries, so about 500 EasyList ad
 servers opened when visited directly). A filter with only negated types
 (`$~script`, `$~stylesheet,third-party`) never blocks opening its host

@@ -9,6 +9,7 @@
 //   - equal to or under a SUFFIX entry (the entry and all its subdomains), or
 //   - equal to or an ANCESTOR of any entry (e.g. "google.com" would match
 //     www.google.com; "googleapis.com" would match youtubei.googleapis.com).
+// Captcha entries (CAPTCHA) get the same two checks.
 // EXACT entries (bare googleapis.com, gstatic.com, storage.googleapis.com)
 // protect only themselves and their ancestors: deeper hosts such as
 // "<bucket>.storage.googleapis.com" may be threat-blocked unless they fall
@@ -83,6 +84,7 @@
     for (const p of SUFFIX) if (under(h, p)) return "protected: " + p;
     for (const p of CAPTCHA) if (under(h, p)) return "protected: " + p;
     for (const p of ALL) if (under(p, h)) return "ancestor of protected " + p;
+    for (const p of CAPTCHA) if (under(p, h)) return "ancestor of protected " + p;
     const local = localAddressReason(h);
     if (local) return local;
     const ps = root.GeckoPublicSuffix;

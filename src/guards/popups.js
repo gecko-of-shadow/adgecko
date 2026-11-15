@@ -66,6 +66,8 @@ function installPopupGuard(target) {
   const lower = (s) => apply(sLower, s, []);
   const endsWithDot = (h, d) => h.length > d.length && apply(sSlice, h, [h.length - d.length - 1]) === "." + d;
   const under = (h, d) => h === d || endsWithDot(h, d);
+  // "news.example." (fully qualified form) is the same host as "news.example".
+  const noDot = (h) => (h.length > 1 && h[h.length - 1] === "." ? apply(sSlice, h, [0, -1]) : h);
   // The last `n` labels of a host name.
   function lastLabels(h, n) {
     let i = h.length;
@@ -78,7 +80,7 @@ function installPopupGuard(target) {
 
   // Registrable domain ("site") of a host under this small subset.
   function siteOf(host) {
-    const h = lower(StringFn(host || ""));
+    const h = noDot(lower(StringFn(host || "")));
     if (!h) return "";
     for (let i = 0; i < platforms.length; i++) if (endsWithDot(h, platforms[i])) return lastLabels(h, labelCount(platforms[i]) + 1);
     const two = lastLabels(h, 2);
@@ -89,17 +91,44 @@ function installPopupGuard(target) {
     return two;
   }
 
-  function sameSiteOrAllowed(url, pageLocation) {
+  const hostOfUrl = (s) => {
+    try {
+      const u = new URLCtor(StringFn(s));
+      return urlHostname ? apply(urlHostname, u, []) : u.hostname;
+    } catch {
+      return "";
+    }
+  };
+
+  // `base` is the document base URL: window.open resolves against it, and in
+  // about:blank / srcdoc / blob: frames it is the creator page, while
+  // location.href is opaque (nightly 0.3.5).
+  // `origin` is the frame's own origin (window.origin, read at install): an
+  // about:blank / srcdoc frame inherits its creator's origin there, while its
+  // location.origin is the opaque "null".
+  function sameSiteOrAllowed(url, pageLocation, base, origin) {
+    const s = StringFn(url == null ? "" : url);
     let u;
     try {
-      u = new URLCtor(StringFn(url == null ? "" : url), pageLocation.href);
+      u = new URLCtor(s, base || pageLocation.href);
     } catch {
-      return true; // unparsable: let the browser decide (fail open)
+      try {
+        u = new URLCtor(s, pageLocation.href);
+      } catch {
+        // Unparsable against every base: only an empty URL (about:blank) is
+        // harmless. Anything else goes on to the gesture checks.
+        return s === "";
+      }
     }
     const protocol = urlProtocol ? apply(urlProtocol, u, []) : u.protocol;
     if (protocol !== "http:" && protocol !== "https:") return (urlHref ? apply(urlHref, u, []) : u.href) === "about:blank";
-    const host = lower(urlHostname ? apply(urlHostname, u, []) : u.hostname);
-    const pageHost = lower(StringFn(pageLocation.hostname || ""));
+    const host = noDot(lower(urlHostname ? apply(urlHostname, u, []) : u.hostname));
+    // An opaque-URL frame has no hostname: use its inherited origin, then the
+    // origin of its URL (real for blob:), then its base URL (sandboxed frames,
+    // where both origins are opaque).
+    const pageHost = noDot(lower(StringFn(
+      pageLocation.hostname || hostOfUrl(origin || "") || hostOfUrl(pageLocation.origin || "") || hostOfUrl(base || "") || "",
+    )));
     if (host === pageHost || siteOf(host) === siteOf(pageHost)) return true;
     for (let i = 0; i < ALLOWED_DESTINATIONS.length; i++) if (under(host, ALLOWED_DESTINATIONS[i])) return true;
     return false;
@@ -107,7 +136,7 @@ function installPopupGuard(target) {
 
   // -> null (allow) or the reason it is blocked.
   function judge(url, ctx) {
-    if (sameSiteOrAllowed(url, ctx.location)) return null;
+    if (sameSiteOrAllowed(url, ctx.location, ctx.base, ctx.origin)) return null;
     if (!ctx.activation) return "no user gesture";
     if (ctx.opensThisGesture > 0) return "second window in one click";
     if (ctx.lastClickTarget && !ctx.lastClickInteractive) return "popunder (click on page content)";
@@ -141,6 +170,23 @@ function installPopupGuard(target) {
     const targetGet = getter(protoOf(win.Event), "target");
     const parentElementGet = getter(protoOf(win.Node), "parentElement");
     const isActiveGet = getter(protoOf(win.UserActivation), "isActive");
+    const baseURIGet = getter(protoOf(win.Node), "baseURI");
+    const baseOf = () => {
+      try {
+        const b = baseURIGet ? apply(baseURIGet, env.document, []) : env.document.baseURI;
+        return typeof b === "string" ? b : "";
+      } catch {
+        return "";
+      }
+    };
+    // Read now, before page scripts run: window.origin is replaceable.
+    let ownOrigin = "";
+    try {
+      const o = win.origin;
+      ownOrigin = typeof o === "string" ? o : "";
+    } catch {
+      // stays ""
+    }
     const ua = env.navigator && env.navigator.userActivation;
     // The real clicked node: the first entry of composedPath() (inside open or
     // closed shadow roots), else event.target.
@@ -174,19 +220,32 @@ function installPopupGuard(target) {
       }
       return true;
     };
-    try {
-      env.document.addEventListener("click", (e) => {
-        try {
-          if (!e || e.isTrusted !== true) return;
-          const t = clickedNode(e);
-          lastClick = { at: now(), target: t, interactive: interactive(t) };
-          opens = 0;
-        } catch {
-          // fail open
-        }
-      }, true);
-    } catch {
-      // no click tracking: only the gesture check applies
+    // A gesture is recorded from its first event: pointerdown and mousedown
+    // start user activation before the click exists, and a popunder can open
+    // right there (nightly 0.3.5). The click of the same gesture only updates
+    // the target; it does not reset the window count of that gesture.
+    const track = (type) => (e) => {
+      try {
+        if (!e || e.isTrusted !== true) return;
+        const t = clickedNode(e);
+        const at = now();
+        const sameGesture = lastClick && lastClick.down && type !== "pointerdown" && at - lastClick.at < 1000;
+        lastClick = { at: sameGesture ? lastClick.at : at, target: t, interactive: interactive(t), down: type !== "click" };
+        if (!sameGesture) opens = 0;
+      } catch {
+        // fail open
+      }
+    };
+    // On window in capture phase, registered at document_start: it runs before
+    // any page listener, so a page window-capture listener that stops
+    // propagation cannot hide the gesture (as the clipboard guard does).
+    const listenOn = typeof win.addEventListener === "function" ? win : env.document;
+    for (const type of ["pointerdown", "mousedown", "click"]) {
+      try {
+        listenOn.addEventListener(type, track(type), true);
+      } catch {
+        // no tracking for this event: only the other checks apply
+      }
     }
     if (typeof win.open !== "function") return;
     const nativeOpen = win.open;
@@ -196,9 +255,11 @@ function installPopupGuard(target) {
           try {
             if (flagOn()) {
               const activation = ua ? (isActiveGet ? apply(isActiveGet, ua, []) : ua.isActive) === true : true;
-              const fresh = lastClick && now() - lastClick.at < 1000 ? lastClick : null;
+              // Transient user activation lasts about 5 s in Chrome: a gesture
+              // stays the judged one for that long (a delayed popunder).
+              const fresh = lastClick && now() - lastClick.at < 5000 ? lastClick : null;
               const reason = judge(args[0], {
-                location: env.location, activation, opensThisGesture: fresh ? opens : 0,
+                location: env.location, base: baseOf(), origin: ownOrigin, activation, opensThisGesture: fresh ? opens : 0,
                 lastClickTarget: fresh ? fresh.target : null, lastClickInteractive: fresh ? fresh.interactive : true,
               });
               if (reason) {

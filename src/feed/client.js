@@ -230,6 +230,22 @@
       await setState(deps, { lastError: "fetch: " + String(e && e.message || e), lastCheckAt: now });
       return { ok: false, ran: true, reason: String(e && e.message || e) };
     }
+    // The publisher re-serves the same file between updates (the normal case).
+    // Same bytes and signature as the saved, still-valid, applied file: record
+    // a successful check. A same serial with other bytes still goes to
+    // verifyFeed and is rejected there.
+    try {
+      const cur = ((await deps.getCache()) || {}).current;
+      if (cur && cur.sig === sigText && cur.bytes === C().bytesToBase64(bytes) && st.source === "feed") {
+        const same = await verifyCached(deps, cur);
+        if (same && same.serial === st.serial && same.serial === st.appliedSerial) {
+          await setState(deps, { lastError: "", lastCheckAt: now, fetchedAt: now });
+          return { ok: true, ran: true, mode: "unchanged" };
+        }
+      }
+    } catch {
+      // fall through to the full check
+    }
     const storedNotAfter = st.notAfter ? Date.parse(st.notAfter) : 0;
     const r = await V().verifyFeed(bytes, sigText, verifyOpts(deps, { storedSerial: st.serial || 0, storedKillSerial: st.killSerial || 0, storedNotAfter: Number.isFinite(storedNotAfter) ? storedNotAfter : 0 }));
     if (!r.ok) {

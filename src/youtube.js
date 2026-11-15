@@ -100,10 +100,6 @@ function installYoutubeAdblock(target) {
     "tp-yt-paper-toast#toast:has(a[href*=\"ad_block\"])",
     "tp-yt-paper-toast#toast:has(a[href*=\"blocker\"])",
     "tp-yt-paper-toast#toast:has(a[href*=\"check_ad_blockers\"])",
-    "ytd-popup-container:has(yt-formatted-string[split-lines*=\"Experiencing interruptions\"])",
-    "ytd-popup-container:has(a[href*=\"3037019\"])",
-    "ytd-popup-container:has(a[href*=\"ad_block\"])",
-    "ytd-popup-container:has(a[href*=\"check_ad_blockers\"])",
   ].join(",");
 
   function kindFor(url) {
@@ -920,6 +916,9 @@ function installYoutubeAdblock(target) {
     return !!(node.closest && node.closest("yt-notification-action-renderer, tp-yt-paper-toast"));
   }
 
+  // Toast nodes this script hid, so a reused toast can be shown again.
+  const hiddenToasts = new WeakSet();
+
   function removeInterruptionsToast(root) {
     const scope = root || (typeof document !== "undefined" ? document : null);
     if (!scope || typeof scope.querySelectorAll !== "function") return;
@@ -932,11 +931,25 @@ function installYoutubeAdblock(target) {
       return;
     }
     for (const node of candidates) {
-      if (!isInterruptionsToast(node)) continue;
       const outer = (node.closest && node.closest("yt-notification-action-renderer")) || node;
-      // Keep the node. Removing it makes the popup open again on the next frame.
-      outer.hidden = true;
       const style = outer.style;
+      if (!isInterruptionsToast(node)) {
+        // YouTube reuses the same toast element for later messages ("Saved",
+        // "Link copied"). Undo our own hiding once it no longer holds the
+        // interruptions toast.
+        if (hiddenToasts.has(outer) && !isInterruptionsToast(outer)) {
+          hiddenToasts.delete(outer);
+          outer.hidden = false;
+          if (style && typeof style.removeProperty === "function") {
+            style.removeProperty("display");
+            style.removeProperty("pointer-events");
+          }
+        }
+        continue;
+      }
+      // Keep the node. Removing it makes the popup open again on the next frame.
+      hiddenToasts.add(outer);
+      outer.hidden = true;
       if (style && typeof style.setProperty === "function") {
         style.setProperty("display", "none", "important");
         style.setProperty("pointer-events", "none", "important");
@@ -1970,8 +1983,9 @@ function startYoutubeAdblock() {
         const next = api.googlevideoFallbacks(url)[0];
         api.rememberBadHost(url, next || "");
         logFallback({ failures: [{ url, reason: status ? "http " + status : "network" }], exhausted: !next });
-        if (next && OPTS.diag) console.log("adgecko: next media requests use " + new URL(next).hostname);
-        else onMediaExhausted();
+        if (next) {
+          if (OPTS.diag) console.log("adgecko: next media requests use " + new URL(next).hostname);
+        } else onMediaExhausted();
       } catch {
         // Never break the player's own error handling.
       }

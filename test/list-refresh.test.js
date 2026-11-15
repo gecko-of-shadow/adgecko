@@ -17,7 +17,8 @@ Deno.test("parser keeps domain rules and skips exceptions, cosmetics, scoped and
   const d = U.parseList(text);
   // H-2: "$third-party" is kept as a third-party-only rule, not a whole-domain block.
   assert(JSON.stringify(d) === JSON.stringify(["ads.example.com", "hosts.example.io", "bare.example.co"]), JSON.stringify(d));
-  assert(JSON.stringify(U.parseEntries(text).scoped) === JSON.stringify([["track.example.net", "p=thirdParty|t=|x="]]), "third-party scope kept");
+  // Wave 2: "$domain=foo.com" is an initiator-scoped rule now (never a whole-domain block).
+  assert(JSON.stringify(U.parseEntries(text).scoped) === JSON.stringify([["track.example.net", "p=thirdParty|t=|x="], ["scoped.example.org", "p=|t=|x=|i=foo.com"]]), "third-party and initiator scopes kept");
   assert(U.parseExpires(text) === 4 * 86400000, "4 days");
   assert(U.parseExpires("! Expires: 1 hours") === U.MIN_INTERVAL_MS, "floored to 12h");
   assert(U.parseExpires("no header") === 86400000, "default 1 day");
@@ -68,7 +69,7 @@ Deno.test("first refresh swaps to dynamic rules, writes cosmetics; startup throt
   assert(r.ok && r.rules > 0, JSON.stringify(r));
   assert(d.staticOn === true, "packed floor stays on after swap");
   assert(d.dynamic.length < 30000 && d.dynamic.some((x) => x.id >= U.KEPT_RULE_ID_BASE), "under limit, allows kept");
-  assert(d.cosmetic.length === 1 && d.cosmetic[0].sites["example.com"].length === 2, "cosmetic from easylist+easyprivacy");
+  assert(d.cosmetic.length === 1 && d.cosmetic[0].sites["example.com"].length === 2, "cosmetic from easylist+easyprivacy (AdGuard Base: network rules only)");
   d.t += 60 * 60 * 1000;
   assert((await U.refresh(d, {})).reason === "throttled", "startup throttled");
   const n = d.calls.length;
@@ -121,7 +122,7 @@ Deno.test("EasyList failing on the first refresh leaves the hide list alone unti
   assert(d.cosmetic.length === 0, "no partial hide list written: " + JSON.stringify(d.cosmetic.map((c) => c.general?.length)));
   easylistDown = false;
   await U.refresh(d, { manual: true });
-  assert(d.cosmetic.length === 1 && d.cosmetic[0].sites["example.com"].length === 2, "written once both lists parsed");
+  assert(d.cosmetic.length === 1 && d.cosmetic[0].sites["example.com"].length === 2, "written once both cosmetic lists parsed (AdGuard Base: network rules only)");
 });
 
 Deno.test("one list failing keeps the others and records a readable reason", async () => {
@@ -182,7 +183,8 @@ Deno.test("parser skips non-blocking options; merge drops live-video.net", () =>
   const parsed = U.parseList(text);
   // H-2: "$script,popup" stays a script-only rule instead of a whole-domain block.
   assert(JSON.stringify(parsed) === JSON.stringify(["stats.live-video.net", "ok.example.com"]), JSON.stringify(parsed));
-  assert(JSON.stringify(U.parseEntries(text).scoped) === JSON.stringify([["both.example.com", "p=|t=script|x="]]), "script scope kept");
+  // Wave 2: $domain= / $from= filters are initiator-scoped rules, not dropped.
+  assert(JSON.stringify(U.parseEntries(text).scoped) === JSON.stringify([["both.example.com", "p=|t=script|x="], ["lim.example.com", "p=|t=|x=|i=news.com"], ["from.example.com", "p=|t=|x=|i=news.com"]]), "script and initiator scopes kept");
   const merged = U.mergeDomains({ peter_lowe: parsed });
   assert(JSON.stringify(merged) === JSON.stringify(["ok.example.com"]), JSON.stringify(merged));
   assert(U.isNeverBlock("stats.live-video.net") && U.isNeverBlock("edge.live-video.net"), "live-video family");

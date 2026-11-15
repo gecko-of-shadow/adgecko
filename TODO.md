@@ -1,23 +1,22 @@
 # To do
 
-Where Adgecko stands, and what is next. Last updated 2026-11-11, when 0.3.4 was prepared.
+Where Adgecko stands, and what is next. Last updated 2026-11-14, when 0.3.5 was prepared.
 
 ## Where it was left off
 
-- **Last release:** [v0.3.4](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.4), published 2026-11-12 (before it: v0.3.3, 2026-11-09).
-- **Last work merged:** PR #8 (2026-11-10), six fixes made *after* the v0.3.3 zip was published:
-  - Settings: **Allow this site** / **Fix this site** now work on one-label hosts (`localhost`, intranet names).
-  - Clipboard guard: your own cut, Ctrl+Insert and non-Latin Ctrl+C count as copying it yourself.
-  - Threat lists: refreshed malware rules come back after the background worker restarts.
-  - Lists: the status line keeps an error or "Reverted" message until a refresh really runs.
-  - Packer: runs the rule merger after writing `meta.json`.
-  - Popup: YouTube Music, Studio, TV, Kids and youtube-nocookie pages show the site and "Malware blocking only".
-- **Open issues / pull requests:** none.
-- **Tests on `main`:** 570 passed, 0 failed, 2 skipped (the skips need a packing tool or a private word list that this machine does not have).
-
-**In short:** the code on `main` was ahead of the published v0.3.3 zip but still called itself 0.3.3. Release 0.3.4 is now prepared to ship those fixes.
+- **Last release:** [v0.3.4](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.4), published 2026-11-12.
+- **Prepared, not pushed:** 0.3.5 on the local branch `nightly/0.3.5` (folder `adgecko-nightly`). See the `## 0.3.5` section of `CHANGELOG.md`: 35 test-proven bug fixes, site-scoped filters, cross-list `$badfilter` / `@@` (AdGuard site hide rules held back: storage quota), popup Reload page / Undo fix, lighter page frames, lists repacked 2026-11-14.
+- **Checks on `nightly/0.3.5` (2026-11-14):** `deno test` 766 passed / 0 failed / 8 ignored (6 are owner-decision or known-issue tests, 2 need tools this machine lacks); `scripts/release-gate.sh` CLEAN on the checkout and with `--zip` (68 files, 7.82 MB); privacy check passed. Headless Chrome smoke test of the packed zip (CDP `Extensions.loadUnpacked`): it loads, version 0.3.5, the `general`, `threat` and `ubo-youtube` rulesets are on, the first refresh installs 3,062 dynamic rules, the refresh alarm is set, storage about 7.8 MB (filters.adtidy.org answered HTTP 403 to headless Chrome). Not done: any live site test (YouTube, Twitch, Kick, news sites).
 
 ## Next steps
+
+### 0. Ship 0.3.5
+
+- [ ] Review the branch, push it, open a PR and merge it.
+- [ ] Try it by hand in your own Chrome: YouTube (menus, Share, Save open after an "Experiencing interruptions?" toast), Twitch, Kick, and one news site. None of these could be tested live.
+- [ ] **Actions** -> **release** -> **Run workflow**. The README zip link for 0.3.5 works only after this.
+- [ ] Owner decisions (held out of 0.3.5): block Twitch's own ad host `ads.twitch.tv`? Apply the Kick fixes in `docs/proposals/kick-0.3.5-fixes.patch` (`src/kick.js` is frozen by the release gate)?
+- [ ] Owner decisions (ideas not built): let **Allow this site** also allow third-party frames on that page (payment, video, login frames); a default allow list for checkout and login helpers (DataDome, ThreatMetrix, Sift, Quantcast consent) - fewer broken sites, but these are trackers; path filters (`||host/ads/`) and generic URL filters for more blocking.
 
 ### 1. Ship the post-release fixes as 0.3.4
 

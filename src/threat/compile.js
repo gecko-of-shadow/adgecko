@@ -95,6 +95,18 @@
     let s = String(input == null ? "" : input).trim().toLowerCase();
     s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//, "").replace(/[/?#].*$/, "").replace(/:\d+$/, "");
     if (s.startsWith("*.")) s = s.slice(2);
+    // Unicode (IDN) names: convert to punycode (xn--), the form URL.hostname
+    // and DNR requestDomains use. The URL parser does the IDNA mapping.
+    if (/[^\x00-\x7f]/.test(s)) {
+      // Userinfo, a backslash, "%", ":" or a space would make the URL parser
+      // pick a different host than the one typed ("bücher@evil.example").
+      if (/[@\\%:\s]/.test(s)) return { domain: null, reason: "not a domain name" };
+      try {
+        s = new URL("http://" + s).hostname;
+      } catch {
+        return { domain: null, reason: "not a domain name" };
+      }
+    }
     if (s.endsWith(".")) s = s.slice(0, -1);
     if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(s)) return { domain: null, reason: "not a domain name" };
     const ps = root.GeckoPublicSuffix;

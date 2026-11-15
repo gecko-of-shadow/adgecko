@@ -141,7 +141,7 @@ REQUIRED=(
 # Shippable paths. Cosmetic hide, popup worker, list rules, and stream exclusion module.
 # Must cover every path scripts/lib/package_files.py derives (test/packaging.test.js
 # checks that); settings page, guards, threat tier and signed-feed client added 2026-11-02.
-ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/popup\.css|src/settings\.html|src/settings\.js|src/settings/(features|flags)\.js|src/guards/(clipboard|popups)\.js|src/threat/(psl|protected-hosts|compile)\.js|src/feed/(config|keys|canonical|schema|verify|compile|client)\.js|src/rules/threat-(network|snapshot|meta)\.json|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|cosmetic-parse|exclusions|filter-options|never-block-captcha|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/vendor/ubo-youtube(-isolated)?\.js|src/vendor/ubo-youtube\.css|src/vendor/ubo-youtube-meta\.json|src/vendor/LICENSE-uBlock\.md|src/vendor/LICENSE-uBlock-GPLv3\.txt|src/rules/ubo-youtube-network\.json|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/cosmetic-sample\.json|src/rules/cosmetic-rules\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/youtube-ads\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
+ALLOWED_RE='^(manifest\.json|src/popup\.html|src/popup\.js|src/popup\.css|src/settings\.html|src/settings\.js|src/settings/(features|flags)\.js|src/guards/(clipboard|popups)\.js|src/threat/(psl|protected-hosts|compile)\.js|src/feed/(config|keys|canonical|schema|verify|compile|client)\.js|src/rules/threat-(network|snapshot|meta)\.json|src/general-exclude-hosts\.js|src/general-settings\.js|src/general-background\.js|src/general/(cosmetic|cosmetic-parse|exclusions|filter-options|never-block-captcha|toggles|update)\.js|src/vendor/video-swap-new\.user\.js|src/vendor/LICENSE-TwitchAdSolutions|src/vendor/README\.md|src/vendor/ubo-youtube(-isolated)?\.js|src/vendor/ubo-youtube\.css|src/vendor/ubo-youtube-meta\.json|src/vendor/LICENSE-uBlock\.md|src/vendor/LICENSE-uBlock-GPLv3\.txt|src/rules/ubo-youtube-network\.json|src/youtube\.js|src/kick\.js|src/rules/general-network\.json|src/rules/CREDIT-EasyList\.txt|src/rules/LICENSES\.md|src/rules/README\.md|src/rules/meta\.json|src/rules/dnr-merge-meta\.json|src/rules/packed-cross\.json|src/rules/cosmetic-sample\.json|src/rules/cosmetic-rules\.json|src/cosmetic\.js|src/cosmetic\.css|src/cosmetic-hide\.css|src/youtube-ads\.css|src/twitch-directory-ads\.js|src/LICENSE-EasyList\.txt|icons/icon(16|48|128)(-working|-off)?\.png)$'
 
 # YouTube is the beta script (spinner + search cards). The Twitch vendor stays at main.
 PLAYBACK_FILES=(
@@ -247,7 +247,11 @@ echo "  package bytes: $SIZE"
 # (~6.7MB, ~0.3MB under this limit). 7MB still catches a runaway list pack.
 # 2026-11-03: the threat ruleset + snapshot (~0.7MB) and src/threat/psl.js
 # (82KB) brought the zip to ~6.96MB; 7.5MB keeps the runaway-pack check.
-if [[ "$SIZE" -gt 7500000 ]]; then fail "package unexpectedly large (>7.5MB)"; else pass "package size sane"; fi
+# 0.3.5: site-scoped $domain= filters (+0.4MB in general-network.json) and the
+# fuller PSL subset (+31KB) bring it to ~7.55MB; 8MB keeps the runaway-pack check.
+# src/rules/packed-cross.json (~60KB; alldoc kept only for allowed hosts, the full
+# set was 332KB and broke this cap) brings it to ~7.82MB.
+if [[ "$SIZE" -gt 8000000 ]]; then fail "package unexpectedly large (>8MB)"; else pass "package size sane"; fi
 
 section "1b. Playback files untouched"
 PLAYBACK_OK=1

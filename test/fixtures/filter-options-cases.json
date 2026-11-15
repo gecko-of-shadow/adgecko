@@ -32,8 +32,8 @@
     { "line": "||impscript.example.com^$important,script", "expect": ["impscript.example.com", "p=|t=script|x=", false] },
     { "line": "||all.example.com^$all", "expect": ["all.example.com", "", false] },
     { "line": "||mc.example.com^$match-case", "expect": ["mc.example.com", "", false] },
-    { "line": "||lim.example.com^$domain=news.com", "expect": null },
-    { "line": "||from.example.com^$from=news.com", "expect": null },
+    { "line": "||lim.example.com^$domain=news.com", "expect": ["lim.example.com", "p=|t=|x=|i=news.com", false], "condition": { "initiatorDomains": ["news.com"] } },
+    { "line": "||from.example.com^$from=news.com", "expect": ["from.example.com", "p=|t=|x=|i=news.com", false] },
     { "line": "||to.example.com^$to=news.com", "expect": null },
     { "line": "||redir.example.com^$redirect=noopjs", "expect": null },
     { "line": "||rp.example.com^$removeparam", "expect": null },
@@ -43,8 +43,8 @@
     { "line": "||docip.example.com^$doc,ipaddress=192.0.2.1", "expect": null },
     { "line": "||allex.example.com^$all,domain=~example.org", "expect": null },
     { "line": "||strict.example.com^$strict3p", "expect": null },
-    { "line": "||den.example.com^$denyallow=a.com", "expect": null },
-    { "line": "||meth.example.com^$method=post", "expect": null },
+    { "line": "||den.example.com^$denyallow=a.com", "expect": ["den.example.com", "p=|t=|x=|d=a.com", false], "condition": { "excludedRequestDomains": ["a.com"] } },
+    { "line": "||meth.example.com^$method=post", "expect": ["meth.example.com", "p=|t=|x=|m=post", false], "condition": { "requestMethods": ["post"] } },
     { "line": "||inline.example.com^$inline-script", "expect": null },
     { "line": "||self-cancel.example.com^$script,~script", "expect": null },
     { "line": "||mixed.example.com^$image,~script", "expect": ["mixed.example.com", "p=|t=image|x=", false] },
@@ -52,6 +52,32 @@
     { "line": "||UPPER.Example.COM^$SCRIPT,Third-Party", "expect": ["upper.example.com", "p=thirdParty|t=script|x=", false] },
     { "line": "||bad.example.com^$badfilter", "expect": ["bad.example.com", "", true] },
     { "line": "||badscoped.example.com^$script,badfilter", "expect": ["badscoped.example.com", "p=|t=script|x=", true] },
+    { "line": "||ads.example.com^$script,domain=news.test|~sub.news.test", "expect": ["ads.example.com", "p=|t=script|x=|i=news.test|n=sub.news.test", false], "condition": {"resourceTypes": ["script"], "initiatorDomains": ["news.test"], "excludedInitiatorDomains": ["sub.news.test"]} },
+    { "line": "||exonly.example.com^$domain=~b.test|~a.test", "expect": null },
+    { "line": "||adobedtm.com^$third-party,domain=~adobe.com|~costco.com", "expect": null },
+    { "line": "||exonlybf.example.com^$script,domain=~a.test,badfilter", "expect": null },
+    { "line": "||entex.example.com^$domain=~google.*", "expect": null },
+    { "line": "||entex2.example.com^$domain=news.test|~google.*", "expect": null },
+    { "line": "||entin.example.com^$domain=google.*|news.test", "expect": ["entin.example.com", "p=|t=|x=|i=news.test", false] },
+    { "line": "||entonly.example.com^$domain=google.*", "expect": null },
+    { "line": "||regexdom.example.com^$domain=/^news\\.test$/", "expect": null },
+    { "line": "||emptydom.example.com^$domain=", "expect": null },
+    { "line": "||idndom.example.com^$domain=néws.test", "expect": null },
+    { "line": "||sorted.example.com^$domain=B.test.|a.test|b.test", "expect": ["sorted.example.com", "p=|t=|x=|i=a.test,b.test", false] },
+    { "line": "||docdom.example.com^$document,domain=a.test", "expect": null },
+    { "line": "||docscriptdom.example.com^$doc,script,domain=a.test", "expect": ["docscriptdom.example.com", "p=|t=script|x=|i=a.test", false], "condition": {"resourceTypes": ["script"], "initiatorDomains": ["a.test"]} },
+    { "line": "||exdom.example.com^$~script,domain=a.test", "expect": ["exdom.example.com", "p=|t=|x=script|i=a.test", false], "condition": {"excludedResourceTypes": ["main_frame", "script"], "initiatorDomains": ["a.test"]} },
+    { "line": "||partydom.example.com^$third-party,domain=a.test", "expect": ["partydom.example.com", "p=thirdParty|t=|x=|i=a.test", false], "condition": {"domainType": "thirdParty", "initiatorDomains": ["a.test"]} },
+    { "line": "||popdom.example.com^$popup,domain=a.test", "expect": null },
+    { "line": "||bfdom.example.com^$script,domain=a.test,badfilter", "expect": ["bfdom.example.com", "p=|t=script|x=|i=a.test", true] },
+    { "line": "||methx.example.com^$method=~get", "expect": ["methx.example.com", "p=|t=|x=|mx=get", false], "condition": {"excludedRequestMethods": ["get"]} },
+    { "line": "||methmulti.example.com^$script,method=PUT|post", "expect": ["methmulti.example.com", "p=|t=script|x=|m=post,put", false], "condition": {"resourceTypes": ["script"], "requestMethods": ["post", "put"]} },
+    { "line": "||methbogus.example.com^$method=bogus", "expect": null },
+    { "line": "||methmixed.example.com^$method=post|~get", "expect": null },
+    { "line": "||denymulti.example.com^$script,denyallow=x.test|cdn.test", "expect": ["denymulti.example.com", "p=|t=script|x=|d=cdn.test,x.test", false], "condition": {"resourceTypes": ["script"], "excludedRequestDomains": ["cdn.test", "x.test"]} },
+    { "line": "||denyneg.example.com^$denyallow=~a.com", "expect": null },
+    { "line": "||denyent.example.com^$denyallow=foo.*", "expect": null },
+    { "line": "||combo.example.com^$script,third-party,domain=a.test|~b.a.test,method=get,denyallow=cdn.test", "expect": ["combo.example.com", "p=thirdParty|t=script|x=|i=a.test|n=b.a.test|m=get|d=cdn.test", false], "condition": {"domainType": "thirdParty", "resourceTypes": ["script"], "initiatorDomains": ["a.test"], "excludedInitiatorDomains": ["b.a.test"], "requestMethods": ["get"], "excludedRequestDomains": ["cdn.test"]} },
     { "line": "||path.example.com/ads^", "expect": null },
     { "line": "example.com##.ad", "expect": null }
   ],
@@ -62,6 +88,94 @@
         "domains": ["keep.example.com", "hosts.example.com", "bare.example.com"],
         "scoped": [["scoped2.example.com", "p=|t=image|x="]]
       }
+    },
+    {
+      "text": "||s.example.com^$script,domain=a.test\n||s.example.com^$script,domain=a.test,badfilter\n||s.example.com^$script,domain=b.test\n||k.example.com^$image,domain=b.test|~c.b.test\n||k.example.com^$method=post\n||k.example.com^$domain=~google.*\n||w.example.com^$domain=google.*",
+      "expect": {
+        "domains": [],
+        "scoped": [["s.example.com", "p=|t=script|x=|i=b.test"], ["k.example.com", "p=|t=image|x=|i=b.test|n=c.b.test"], ["k.example.com", "p=|t=|x=|m=post"]]
+      }
+    },
+    {
+      "text": "||all.example.com^$all\n||allimp.example.com^$all,important\n||allbf.example.com^$all\n||allbf.example.com^$all,badfilter\n||all3p.example.com^$all,3p\n||alldom.example.com^$all,domain=a.test",
+      "expect": {
+        "domains": ["all.example.com", "allimp.example.com"],
+        "scoped": [["all.example.com", "p=|t=main_frame|x="], ["allimp.example.com", "p=|t=main_frame|x="], ["all3p.example.com", "p=thirdParty|t=|x="], ["alldom.example.com", "p=|t=|x=|i=a.test"]]
+      }
     }
-  ]
+  ],
+  "cross": [
+    {
+      "_note": "final review #0: adobedtm.com (EasyPrivacy 4160 + 56436), anyclip / viously style path or option exceptions",
+      "lists": {
+        "easylist": "||player.anyclip.com^$script,domain=zerotackle.com|other.test\n||viously.com^$script,domain=clubic.com\n||assets.adobedtm.com^$script,domain=news.test\n||other.example^$script,domain=news.test\n||plain.example^$script,domain=a.test\n||typed.limited.example^$script",
+        "easyprivacy": "||adobedtm.com^$third-party,domain=~adobe.com|~costco.com\n@@||adobedtm.com/launch-$script,xmlhttprequest\n@@||adobedtm.com^*/satelliteLib-$script,domain=ally.com|americanexpress.com\n@@||plain.example^\n@@||typed.limited.example/x.js",
+        "adguard_base": "@@||player.anyclip.com/player.js$domain=zerotackle.com\n@@||sonar.viously.com^$xmlhttprequest,domain=clubic.com"
+      },
+      "expect": {
+        "domains": [],
+        "scoped": [
+          [
+            "other.example",
+            "p=|t=script|x=|i=news.test"
+          ],
+          [
+            "plain.example",
+            "p=|t=script|x=|i=a.test"
+          ],
+          [
+            "typed.limited.example",
+            "p=|t=script|x="
+          ]
+        ]
+      }
+    },
+    {
+      "_note": "final review #1: AdGuard ||jwplayer.com^$domain=tennis.com,badfilter vs EasyList 65954 (shortened)",
+      "lists": {
+        "easylist": "||jwplayer.com^$domain=americansongwriter.com|tennis.com|variety.com\n||y.example^$script,domain=a.test|b.test\n||z.example^$image,domain=a.test|b.test\n||w.example^",
+        "adguard_base": "||jwplayer.com^$domain=tennis.com,badfilter\n||y.example^$script,domain=a.test,badfilter\n||y.example^$script,domain=b.test,badfilter\n||z.example^$script,domain=a.test,badfilter\n||w.example^$domain=a.test,badfilter"
+      },
+      "expect": {
+        "domains": [
+          "w.example"
+        ],
+        "scoped": [
+          [
+            "jwplayer.com",
+            "p=|t=|x=|i=americansongwriter.com,variety.com"
+          ],
+          [
+            "z.example",
+            "p=|t=image|x=|i=a.test,b.test"
+          ]
+        ]
+      }
+    }
+  ],
+  "psl": {
+    "_note": "final review #5: runtime isIcannSuffix (src/threat/psl.js) and the packer's is_public_suffix agree",
+    "hosts": {
+      "k12.ca.us": true,
+      "act.edu.au": true,
+      "nakahara.kawasaki.jp": true,
+      "city.kawasaki.jp": false,
+      "foo.k12.ca.us": false,
+      "school.act.edu.au": false,
+      "co.uk": true,
+      "example.co.uk": false,
+      "foo.ck": true,
+      "www.ck": false,
+      "kawasaki.jp": true
+    },
+    "list": "||k12.ca.us^\n||act.edu.au^\n||nakahara.kawasaki.jp^\n||city.kawasaki.jp^\n||foo.k12.ca.us^\n0.0.0.0 www.ck\nfoo.ck",
+    "expect": {
+      "domains": [
+        "city.kawasaki.jp",
+        "foo.k12.ca.us",
+        "www.ck"
+      ],
+      "scoped": []
+    }
+  }
 }

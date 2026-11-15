@@ -4,7 +4,7 @@
 
 <img src="icons/icon128-working.png" width="128" height="128" alt="Adgecko icon: a neon purple gecko head on a dark rounded square, its tongue snapping a cluster of pixel squares (an ad)">
 
-**A Chrome extension (Manifest V3, version 0.3.4) that blocks ads on Twitch, YouTube, Kick, and other websites.**<br>
+**A Chrome extension (Manifest V3, version 0.3.5) that blocks ads on Twitch, YouTube, Kick, and other websites.**<br>
 It works inside Chrome: no separate program, no account.
 
 <img src="icons/icon48-working.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is on: purple gecko, the pixel ad at its tongue lit up bright"> &nbsp; <img src="icons/icon48-off.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is off: the same gecko in grey, pixel ad not lit">
@@ -31,7 +31,7 @@ It works inside Chrome: no separate program, no account.
 ## Install
 
 1. Get the files and unzip them. Pick one:
-   - **Release zip:** [adgecko-0.3.4.zip](https://github.com/gecko-of-shadow/adgecko/releases/download/v0.3.4/adgecko-0.3.4.zip) ([release v0.3.4](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.4), [all releases](https://github.com/gecko-of-shadow/adgecko/releases)).
+   - **Release zip:** [adgecko-0.3.5.zip](https://github.com/gecko-of-shadow/adgecko/releases/download/v0.3.5/adgecko-0.3.5.zip) ([release v0.3.5](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.5), [all releases](https://github.com/gecko-of-shadow/adgecko/releases)).
    - **Newest code:** click the green **Code** button on this page, then **Download ZIP**. That copy is the newest code in this repository. It may be newer than the last numbered release; Chrome shows the version from `manifest.json`.
 2. In Chrome, type `chrome://extensions` in the address bar and press Enter. If you had an older copy loaded, remove it first.
 3. Turn on **Developer mode** (top right). This switch lets Chrome add an extension from a folder on your computer.
@@ -43,9 +43,10 @@ It works inside Chrome: no separate program, no account.
 Nothing to set up: it works as soon as it is installed.
 
 1. Click the gecko in the toolbar. A small window shows the site and one line: **✅ Protected**, or **Allowed – not blocking here**.
-2. **Something broke?** Click **Fix this site**. It turns off the extra filters for this site only (hidden boxes and the page guards). Reload the page and look, then answer **Did that fix it?** **Yes** keeps it. **No** turns them back on and suggests the next step.
-3. Still broken? Click **Allow this site**: the ad lists stop blocking what this site itself loads, ad boxes are no longer hidden, and the pop-up guard stops working on this site. The clipboard guard stays on. Known malware sites stay blocked, and on Twitch and YouTube the built-in ad blocking keeps running. Details: [docs/allow-a-page.md](docs/allow-a-page.md). The button turns into **Block again** to undo it.
-4. **Show more** has the list status and the version. The gear opens the settings page with every switch, the per-site list, the list update button and the popup look (Automatic, Purple or High contrast).
+2. **Something broke?** Click **Fix this site**. It turns off the extra filters for this site only (hidden boxes and the page guards). Click **Reload page** and look, then answer **Did that fix it?** **Yes** keeps it. **No** turns them back on and suggests the next step. A kept fix shows as **Protected – some filters off here (Fix this site)**, with an **Undo fix** button.
+3. Still broken? Click **Allow this site**: the ad lists stop blocking what this site itself loads, ad boxes are no longer hidden, and the pop-up guard stops working on this site. The clipboard guard stays on. Known malware sites stay blocked, and on Twitch and YouTube the built-in ad blocking keeps running. Details: [docs/allow-a-page.md](docs/allow-a-page.md). The button turns into **Block again** to undo it. After either button, **Reload page** reloads the tab (it never reloads by itself).
+4. Chrome shows "blocked by an extension" for a site you trust? Click the gecko, then **Chrome says the page is blocked? Allow its domain**. It opens the **Allow this domain** box on the settings page.
+5. **Show more** has the list status and the version. The gear opens the settings page with every switch, the per-site list, the list update button and the popup look (Automatic, Purple or High contrast).
 
 A small magenta dot on the gecko means a page guard just blocked something on that tab (for example a page trying to put a command into your clipboard). Open the window to see what; the dot then goes away (it also goes away when the tab opens another page). There are no pop-ups or counters.
 

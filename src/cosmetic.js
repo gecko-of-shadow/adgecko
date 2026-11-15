@@ -116,7 +116,12 @@ function installCosmeticHide(api) {
     });
   }
 
+  // Each applyState call bumps this. A slow fallback-sheet load injects only
+  // if no newer call ran meanwhile (master off, allowed site, per-host CSS).
+  let applyGen = 0;
+
   function applyState(state, fetcher) {
+    const gen = ++applyGen;
     const hostname = api.hostname != null
       ? api.hostname
       : (typeof location !== "undefined" ? location.hostname : "");
@@ -159,11 +164,12 @@ function installCosmeticHide(api) {
       }
     }
     return loadCss(fetcher).then((text) => {
+      if (gen !== applyGen) return false;
       injectStyle(text);
       return true;
     }).catch(() => {
       // Fail open for playback safety: do not throw into the page.
-      removeStyle();
+      if (gen === applyGen) removeStyle();
       return false;
     });
   }

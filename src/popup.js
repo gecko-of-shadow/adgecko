@@ -14,7 +14,10 @@
     listStatus: "generalListStatus",
     settings: "settings",
     overrides: "siteOverrides",
-    fix: "popupFix", // { host, at, prev: { <feature id>: true | false | null } }
+    // { host, at, prev: { <feature id>: true | false | null }, others?: { <host>: { at, prev } } }
+    // The newest unanswered Fix at the top level; earlier ones (other sites)
+    // under `others`, so a Fix on a second site does not drop the first question.
+    fix: "popupFix",
     welcomed: "popupWelcomed",
     theme: "uiTheme", // "auto" | "purple" | "contrast" (settings page)
   };
@@ -63,6 +66,10 @@
   const listsStatus = el("lists-status");
   const feedStatus = el("feed-status");
   const versionLine = el("version-line");
+  const fixReload = el("fix-reload");
+  const undoFixButton = el("undo-fix");
+  const reloadPage = el("reload-page");
+  const openAllowDomain = el("open-allow-domain");
 
   let activeTab = null;
   let pageChecked = false;
@@ -70,6 +77,11 @@
   let info = null; // worker's siteInfo answer for this page
   let saveError = "";
   let note = "";
+  let busy = false; // a button's save / worker round trip is still running
+  // Set only by a click on Allow this site / Block again / Undo fix in this
+  // popup: then the Reload page button shows. Nothing reloads by itself (a
+  // reload can lose what was typed into a form).
+  let offerReload = false;
 
   function packagedVersion() {
     try {
@@ -143,12 +155,88 @@
     return info && info.host === host && info.overrideHost ? info.overrideHost : host;
   }
 
-  function pendingFix(host) {
+  // Every unanswered Fix still inside its TTL, by host.
+  function fixMap() {
     const f = all[KEYS.fix];
-    if (!f || typeof f !== "object" || !host) return null;
-    if (f.host !== overrideKey(host)) return null;
-    if (typeof f.at !== "number" || Date.now() - f.at > FIX_TTL_MS) return null;
-    return f;
+    const out = {};
+    if (!f || typeof f !== "object") return out;
+    const add = (host, e) => {
+      if (typeof host !== "string" || !host || !e || typeof e !== "object") return;
+      if (typeof e.at !== "number" || Date.now() - e.at > FIX_TTL_MS) return;
+      if (!out[host] || out[host].at < e.at) out[host] = { at: e.at, prev: e.prev && typeof e.prev === "object" ? e.prev : {} };
+    };
+    if (f.others && typeof f.others === "object") for (const [h, e] of Object.entries(f.others)) add(h, e);
+    add(f.host, f);
+    return out;
+  }
+
+  // fixMap() -> [patch, removeKeys] for save(): the newest entry at the top
+  // level, the rest under `others`; no entries -> the key is removed.
+  function fixWrite(map, patch) {
+    const hosts = Object.keys(map).sort((a, b) => map[b].at - map[a].at);
+    if (!hosts.length) return [patch, [KEYS.fix]];
+    const [top, ...rest] = hosts;
+    const value = { host: top, at: map[top].at, prev: map[top].prev };
+    if (rest.length) {
+      value.others = {};
+      for (const h of rest) value.others[h] = map[h];
+    }
+    return [Object.assign({}, patch, { [KEYS.fix]: value }), []];
+  }
+
+  // A Fix that was kept (Yes, or the question timed out): this host's own
+  // entry still has an extra filter switched off. Only the own entry, because
+  // Fix and Undo fix write only that one.
+  function fixedHere(host) {
+    if (!host) return false;
+    const o = all[KEYS.overrides];
+    const entry = o && typeof o === "object" ? o[host] : null;
+    const features = entry && entry.features && typeof entry.features === "object" ? entry.features : null;
+    if (!features) return false;
+    return fixIds().some((id) => features[id] === false);
+  }
+
+  // The fixMap() key of the unanswered Fix for this page: its own host, or
+  // (a Fix saved by 0.3.4, which wrote the most specific existing entry) the
+  // nearest parent domain that has an override entry when this host has none.
+  // That parent entry is the one whose switches apply here (overrideFor).
+  function fixKey(host, fixes) {
+    if (!host) return "";
+    if (fixes[host]) return host;
+    const o = all[KEYS.overrides];
+    if (!o || typeof o !== "object" || o[host]) return "";
+    const labels = host.split(".");
+    for (let i = 1; i < labels.length - 1; i++) {
+      const key = labels.slice(i).join(".");
+      if (o[key]) return fixes[key] ? key : "";
+    }
+    return "";
+  }
+
+  function pendingFix(host) {
+    const fixes = fixMap();
+    const key = fixKey(host, fixes);
+    return key ? Object.assign({ host: key }, fixes[key]) : null;
+  }
+
+  // Puts back exactly the switches one Fix changed (a change made on the
+  // settings page in between is kept). Returns true when a switch changed.
+  function undoFix(o, host, prev) {
+    if (!prev || !o[host]) return false;
+    let changed = false;
+    const entry = Object.assign({}, o[host]);
+    const features = Object.assign({}, entry.features);
+    for (const id of Object.keys(prev)) {
+      const before = features[id];
+      if (prev[id] === null) delete features[id];
+      else features[id] = prev[id];
+      if (features[id] !== before) changed = true;
+    }
+    if (Object.keys(features).length) entry.features = features;
+    else delete entry.features;
+    if (Object.keys(entry).length) o[host] = entry;
+    else delete o[host];
+    return changed;
   }
 
   function feedText() {
@@ -184,6 +272,8 @@
     // A stream-family host without our scripts (worker's siteInfo): there is
     // nothing to allow or fix, so the popup says what does apply.
     const limited = !!(origin && info && info.host === host && info.limited === true);
+    const pending = pendingFix(host);
+    const fixed = !!origin && on && !allowed && !limited && !pending && fixedHere(host);
     if (brandIcon) {
       // Same trigger as the toolbar icon: the master switch and list blocking.
       const blocking = on && all[KEYS.enabled] !== false;
@@ -197,6 +287,7 @@
     else if (!on) siteStatus.textContent = "Off – turned off in settings";
     else if (limited) siteStatus.textContent = threatHere() ? "Malware blocking only – ad scripts don't run on this site" : "Nothing runs on this site";
     else if (allowed) siteStatus.textContent = "Allowed – not blocking here";
+    else if (fixed) siteStatus.textContent = "Protected – some filters off here (Fix this site)";
     else siteStatus.textContent = "✅ Protected";
 
     allowSite.disabled = !origin || !on || limited;
@@ -208,11 +299,19 @@
     } else {
       pageStatus.textContent = saveError;
     }
+    // Chrome's own "blocked by an extension" page has no address the popup
+    // can read, so the way out (settings > Allow this domain) is offered on
+    // every page without one.
+    if (openAllowDomain) openAllowDomain.hidden = !!origin || !pageChecked;
+    if (reloadPage) reloadPage.hidden = !(offerReload && origin && tabId() !== null);
 
-    const pending = pendingFix(host);
     const canFix = !!origin && on && !allowed && fixIds().length > 0;
-    fixSite.hidden = !!pending;
-    fixSite.disabled = !canFix;
+    fixSite.hidden = !!pending || fixed;
+    fixSite.disabled = !canFix || busy;
+    if (undoFixButton) {
+      undoFixButton.hidden = !fixed;
+      undoFixButton.disabled = busy;
+    }
     fixAsk.hidden = !pending;
     fixNote.textContent = note;
 
@@ -318,46 +417,93 @@
     if (reason && more) more.open = true;
   }
 
+  function tabId() {
+    return activeTab && typeof activeTab.id === "number" ? activeTab.id : null;
+  }
+
+  // Reload only on a click. tabs.reload needs no "tabs" permission.
+  function reloadTab() {
+    const id = tabId();
+    if (id === null) return;
+    try {
+      chrome.tabs.reload(id, {}, () => {
+        void chrome.runtime.lastError;
+      });
+    } catch {
+      // tab gone or API missing
+    }
+  }
+
   async function applyRules() {
     await notifyBackground("applyGeneralState");
   }
 
-  allowSite.addEventListener("click", async () => {
+  // A double click must not run a handler twice on stale state: the second
+  // click would read what the first one just wrote.
+  function guarded(fn) {
+    return async () => {
+      if (busy) return;
+      busy = true;
+      fixSite.disabled = true;
+      try {
+        await fn();
+      } finally {
+        busy = false;
+        render();
+      }
+    };
+  }
+
+  // Allow writes this page's own host (other addresses of the same site count
+  // separately). Block again edits the entry that holds the Allow, which can
+  // be a parent domain. An unanswered Fix on this host is undone first: Allow
+  // keeps the clipboard guard on, and Block again must not bring back a Fix
+  // the visitor never confirmed.
+  allowSite.addEventListener("click", guarded(async () => {
     const origin = currentOrigin();
     const host = origin ? hostOfOrigin(origin) : "";
     if (!host) return;
     const o = overridesCopy();
-    const key = overrideKey(host);
+    const off = siteOff(origin);
+    const key = off ? overrideKey(host) : host;
+    const fixes = fixMap();
+    if (!off && fixes[host]) {
+      undoFix(o, host, fixes[host].prev);
+      delete fixes[host];
+    }
     const entry = Object.assign({}, o[key]);
-    if (siteOff(origin)) delete entry.enabled;
+    if (off) delete entry.enabled;
     else entry.enabled = false;
     if (Object.keys(entry).length) o[key] = entry;
     else delete o[key];
     note = "";
-    await save({ [KEYS.overrides]: o }, [KEYS.fix]);
+    if (await save(...fixWrite(fixes, { [KEYS.overrides]: o }))) offerReload = true;
     await refreshInfo();
     render();
     await applyRules();
-  });
+  }));
 
-  fixSite.addEventListener("click", async () => {
+  // Fix writes this page's own host only, never a parent domain's entry.
+  fixSite.addEventListener("click", guarded(async () => {
     const origin = currentOrigin();
     const host = origin ? hostOfOrigin(origin) : "";
     const ids = fixIds();
     if (!host || !ids.length) return;
     const o = overridesCopy();
-    const key = overrideKey(host);
-    const entry = Object.assign({}, o[key]);
+    const entry = Object.assign({}, o[host]);
     const features = Object.assign({}, entry.features);
-    const prev = {};
+    const fixes = fixMap();
+    // An unanswered Fix on this host keeps what was there before it.
+    const prev = Object.assign({}, fixes[host] && fixes[host].prev);
     for (const id of ids) {
-      prev[id] = typeof features[id] === "boolean" ? features[id] : null;
+      if (!(id in prev)) prev[id] = typeof features[id] === "boolean" ? features[id] : null;
       features[id] = false;
     }
     entry.features = features;
-    o[key] = entry;
+    o[host] = entry;
+    fixes[host] = { at: Date.now(), prev };
     note = "";
-    await save({ [KEYS.overrides]: o, [KEYS.fix]: { host: key, at: Date.now(), prev } });
+    await save(...fixWrite(fixes, { [KEYS.overrides]: o }));
     await refreshInfo();
     render();
     await applyRules();
@@ -366,11 +512,18 @@
     } catch {
       // fake DOM
     }
-  });
+  }));
+
+  function pageHost() {
+    const origin = currentOrigin();
+    return origin ? hostOfOrigin(origin) : "";
+  }
 
   fixYes.addEventListener("click", async () => {
     note = "";
-    const saved = await save({}, [KEYS.fix]);
+    const fixes = fixMap();
+    delete fixes[fixKey(pageHost(), fixes)];
+    const saved = await save(...fixWrite(fixes, {}));
     render();
     if (!saved) return;
     try {
@@ -382,26 +535,16 @@
 
   // "No": put back exactly the switches Fix changed (a change made on the
   // settings page in between is kept), then point to Allow this site.
-  fixNo.addEventListener("click", async () => {
-    const f = all[KEYS.fix];
+  fixNo.addEventListener("click", guarded(async () => {
+    const fixes = fixMap();
+    const host = fixKey(pageHost(), fixes);
     const o = overridesCopy();
-    let changed = false;
-    if (f && typeof f === "object" && f.prev && o[f.host]) {
-      const entry = Object.assign({}, o[f.host]);
-      const features = Object.assign({}, entry.features);
-      for (const id of Object.keys(f.prev)) {
-        const before = features[id];
-        if (f.prev[id] === null) delete features[id];
-        else features[id] = f.prev[id];
-        if (features[id] !== before) changed = true;
-      }
-      if (Object.keys(features).length) entry.features = features;
-      else delete entry.features;
-      if (Object.keys(entry).length) o[f.host] = entry;
-      else delete o[f.host];
-    }
-    const saved = await save({ [KEYS.overrides]: o }, [KEYS.fix]);
+    const changed = host ? undoFix(o, host, fixes[host].prev) : false;
+    delete fixes[host];
+    const saved = await save(...fixWrite(fixes, { [KEYS.overrides]: o }));
     note = saved && changed ? "Turned back on. If the site still breaks, use Allow this site." : "";
+    // The filters are back on: the page needs another reload to show it.
+    if (saved && changed) offerReload = true;
     await refreshInfo();
     render();
     await applyRules();
@@ -410,7 +553,55 @@
     } catch {
       // fake DOM
     }
-  });
+  }));
+
+  // "Undo fix": turns back on the extra filters a kept Fix switched off on
+  // this host (its own entry only; an Allow on the entry stays).
+  if (undoFixButton) {
+    undoFixButton.addEventListener("click", guarded(async () => {
+      const host = pageHost();
+      if (!host || !fixedHere(host)) return;
+      const o = overridesCopy();
+      const prev = {};
+      const features = (o[host] && o[host].features) || {};
+      for (const id of FIXABLE) if (features[id] === false) prev[id] = null;
+      undoFix(o, host, prev);
+      note = "";
+      if (await save({ [KEYS.overrides]: o })) offerReload = true;
+      await refreshInfo();
+      render();
+      await applyRules();
+      try {
+        fixSite.focus();
+      } catch {
+        // fake DOM
+      }
+    }));
+  }
+
+  if (fixReload) fixReload.addEventListener("click", reloadTab);
+  if (reloadPage) reloadPage.addEventListener("click", reloadTab);
+
+  // Opens the settings page at the Allow this domain box. tabs.create needs no
+  // "tabs" permission; openOptionsPage is the fallback (no jump to the box).
+  if (openAllowDomain) {
+    const fallback = () => {
+      try {
+        chrome.runtime.openOptionsPage();
+      } catch {
+        // settings page unavailable
+      }
+    };
+    openAllowDomain.addEventListener("click", () => {
+      try {
+        chrome.tabs.create({ url: chrome.runtime.getURL("src/settings.html#allow") }, () => {
+          if (chrome.runtime.lastError) fallback();
+        });
+      } catch {
+        fallback();
+      }
+    });
+  }
 
   if (openSettings) {
     openSettings.addEventListener("click", () => {

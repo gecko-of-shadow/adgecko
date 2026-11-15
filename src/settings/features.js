@@ -9,6 +9,13 @@
 // The old generalEnabled / generalAllowedOrigins keys are migrated once and
 // then kept by the worker as derived mirrors for the DNR and cosmetic code.
 (function (root) {
+  // The manifest can inject this file twice into one frame (cosmetic entry and
+  // flags entry). A second run keeps the first registry. The shape check (not
+  // a plain truthy check) matters: an element with id="GeckoFeatures" is a
+  // named property of window, so a page could otherwise make this run skip.
+  const prev = root.GeckoFeatures;
+  if (prev && typeof prev === "object" && Object.isFrozen(prev) && typeof prev.resolve === "function" &&
+    Array.isArray(prev.FEATURES) && Array.isArray(prev.STREAM_SITES)) return;
   // Hosts with their own handlers (Twitch, YouTube, Kick and their player /
   // media hosts). Ordinary-site scripts (cosmetic hide, page guards) never run
   // here, "Allow this page" never applies here, and the lists never touch the
@@ -100,18 +107,38 @@
     return out;
   }
 
-  // Overrides that apply to a page: its own host and every parent domain;
-  // the most specific host wins.
+  // Overrides that apply to a page: its own host and every parent domain.
+  // Feature switches come from the most specific host that has an entry, as a
+  // whole (0.3.4 semantics: a child entry never inherits a parent's other
+  // switches, so a kept Fix on a parent does not reach into a subdomain that
+  // has its own entry). Only two values reach down from any parent, because
+  // the DNR allow rule for a parent (initiatorDomains) covers every subdomain
+  // too: an Allow (enabled:false) and network:false. `host` is the entry that
+  // controls the Allow when there is one (so "Block again" edits it), else the
+  // most specific entry.
   function overrideFor(overrides, host) {
     const h = normalizeHost(host);
     const labels = h.split(".");
+    let first = null;
+    let allowHost = null;
+    let networkOff = false;
     // Never a bare top-level label ("com") as a parent, but a single-label
     // host ("localhost", an intranet name) is its own key.
     for (let i = 0; i < Math.max(1, labels.length - 1); i++) {
       const key = labels.slice(i).join(".");
-      if (overrides[key]) return { host: key, entry: overrides[key] };
+      const e = overrides[key];
+      if (!e) continue;
+      if (!first) first = key;
+      if (e.enabled === false && !allowHost) allowHost = key;
+      if (e.features && e.features.network === false) networkOff = true;
     }
-    return null;
+    if (!first) return null;
+    const entry = {};
+    if (allowHost) entry.enabled = false;
+    const features = Object.assign({}, overrides[first].features);
+    if (networkOff) features.network = false;
+    if (Object.keys(features).length) entry.features = features;
+    return { host: allowHost || first, entry };
   }
 
   // Effective on/off for every feature on one page (host may be "").

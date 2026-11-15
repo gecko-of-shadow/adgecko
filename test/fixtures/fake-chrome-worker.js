@@ -118,6 +118,7 @@ export function loadWorker(opts = {}) {
     "src/rules/dnr-merge-meta.json": () => Deno.readTextFileSync(new URL("rules/dnr-merge-meta.json", SRC)),
     "src/rules/cosmetic-rules.json": () => Deno.readTextFileSync(new URL("rules/cosmetic-rules.json", SRC)),
     "src/rules/threat-snapshot.json": () => Deno.readTextFileSync(new URL("rules/threat-snapshot.json", SRC)),
+    "src/rules/packed-cross.json": () => Deno.readTextFileSync(new URL("rules/packed-cross.json", SRC)),
   };
   const fakeFetch = async (url, init) => {
     await tick(opts.fetchDelay || 2);
