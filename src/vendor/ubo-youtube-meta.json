@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-11-15T19:22:30Z",
-  "uassets_commit": "c7e01d34f95bfcbda34127a1bbc63ca6980217aa",
+  "generated_at_utc": "2026-11-15T20:06:05Z",
+  "uassets_commit": "e140ffc75aee8c1af136f579126389d6defae5ed",
   "local_additions": [
     "! from: ||youtube.com/youtubei/v1/get_watch?$xhr,1p,replace=/\"adPlacements\"/\"no_ads\"/ (filters.txt, Firefox-only)",
     "www.youtube.com##+js(trusted-rpfr, '\"adPlacements\"', '\"no_ads\"', /get_watch?)"

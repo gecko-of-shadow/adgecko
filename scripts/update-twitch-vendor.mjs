@@ -17,7 +17,7 @@
 // The downloaded file is untrusted data. This script reads it as text. It
 // never imports, evals or runs it. It does not edit scripts/release-gate.sh,
 // TODO.md or CHANGELOG.md.
-// Exit codes: 0 done / up to date, 1 --check found a difference, 2 error (nothing written),
+// Exit codes: 0 done / up to date, 1 --check found a difference, 2 error (the message says if files were written),
 // 3 written, but manual work is listed.
 import {
   applyRules, DEFAULT_PATH, DEFAULT_REPO, GATE_NOTES, inspectUserscript, lineDelta, makePin, MAX_BYTES,
@@ -33,6 +33,7 @@ for (let i = 0; i < args.length; i++) {
 }
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
 const CHECK = args.includes("--check");
+const written = []; // files written so far, for the error report
 
 const readText = async (rel) => { try { return await Deno.readTextFile(ROOT + rel); } catch { return null; } };
 const readBytes = async (rel) => { try { return await Deno.readFile(ROOT + rel); } catch { return null; } };
@@ -152,8 +153,8 @@ async function main() {
     return sameFile && writes.length === 0 ? 0 : 1;
   }
 
-  if (!sameFile) await Deno.writeFile(ROOT + VENDOR_FILE, bytes);
-  for (const w of writes) await Deno.writeTextFile(ROOT + w.file, w.text);
+  if (!sameFile) { await Deno.writeFile(ROOT + VENDOR_FILE, bytes); written.push(VENDOR_FILE); }
+  for (const w of writes) { await Deno.writeTextFile(ROOT + w.file, w.text); written.push(w.file); }
   say();
   if (sameFile && writes.length === 0) { say("Up to date. Nothing was written."); return 0; }
   say("Written:");
@@ -179,6 +180,12 @@ async function main() {
 try {
   Deno.exit(await main());
 } catch (e) {
-  console.error("ERROR (nothing was written): " + printable(e?.message ?? e, 300));
+  if (written.length === 0) {
+    console.error("ERROR (nothing was written): " + printable(e?.message ?? e, 300));
+  } else {
+    console.error("ERROR (INCOMPLETE UPDATE): " + printable(e?.message ?? e, 300));
+    console.error("These files were already written: " + written.join(", "));
+    console.error("The checkout is in a mixed state. Correct the cause and run the script again, or restore the files with git.");
+  }
   Deno.exit(2);
 }

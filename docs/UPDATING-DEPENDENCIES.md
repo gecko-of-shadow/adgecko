@@ -61,7 +61,7 @@ Options:
 - `--repo <owner/name>`: use a different upstream repository, for example a maintained fork. The script then prints a warning. Review the code and the licence before a release.
 - `--path <path>`: the path of the userscript in that repository.
 
-Exit codes: 0 = done or current. 1 = `--check` found a difference. 2 = error, nothing written. 3 = written, but the script listed manual work.
+Exit codes: 0 = done or current. 1 = `--check` found a difference. 2 = error. The message tells you if some files were already written. 3 = written, but the script listed manual work.
 
 ### Text that the script updates
 

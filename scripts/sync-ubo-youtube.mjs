@@ -178,6 +178,14 @@ const ARG_PATCHES = [
     "e(),new MutationObserver((()=>{e()})).observe(document,",
     "e();let q=0;new MutationObserver((()=>{q||(q=setTimeout((()=>{q=0,e()}),250))})).observe(document,",
   ],
+  // uAssets c7e01d3 dropped the optional chaining on the #masthead read. The
+  // payload runs at the top of a YouTube inline script; without #masthead (or
+  // its logo-type attribute) it throws there, before the embed-URL test and
+  // before the playback recovery is installed. Keep the earlier guarded form.
+  [
+    "document.getElementById(\"masthead\").attributes[\"logo-type\"].value",
+    "document.getElementById(\"masthead\")?.attributes?.[\"logo-type\"]?.value",
+  ],
 ];
 const patchHits = new Set();
 const argPatchHits = new Set();
