@@ -84,7 +84,7 @@ The script stops before it writes anything when one of these texts is not found.
 The gate freezes the Twitch file. After an update, expect these results:
 
 - **Section 1b fails** until the new file is on `origin/main`. The gate compares the file with `origin/main`. This is by design: a change to a playback file needs the owner's approval. The script prints this as `OWNER DECISION`.
-- **Section 6 fails** if upstream changed `ourTwitchAdSolutionsVersion`. Line 774 of the gate holds the number. The owner must change that line by hand.
+- **Section 6 fails** if upstream changed `ourTwitchAdSolutionsVersion`. Line 774 of the gate holds the number. The owner must change that line by hand. `test/vendor-pin.test.js` also fails until that line agrees with the new number.
 - **Section 3 fails** if upstream added an `eval` call or an `innerHTML` write. Do not widen the gate's allow-list without a code review of the new lines.
 
 Some tests read the code inside the vendored file (`test/page.test.js`, `swap`, `bug`, `memory`, `reload`, `fixtures`, `playlist`). They can fail on a real upstream change. Read each failure. Do not edit the vendored file to make a test pass.
