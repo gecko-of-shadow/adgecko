@@ -50,7 +50,7 @@ const req = (ua) => ({
 const out = {};
 out.edits = {
   channel: s(req("; channel")),
-  lactmilli: s(req("; lactmilli")),
+  oaeb: s(req("; oaeb")),
   plainUa: s(req("")),
   noAttestation: s({ context: { client: { clientName: "WEB", userAgent: "x; channel" } } }),
   arrayRoot: s([req("; channel"), { other: 1 }]),

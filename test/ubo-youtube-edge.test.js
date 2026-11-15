@@ -25,9 +25,10 @@ Deno.test("inboundEdit: attestation requests get uBO's markers; the caller's obj
   const ch = JSON.parse(shipped.edits.channel);
   assert(ch.context.client.clientScreen === "CHANNEL", "clientScreen " + shipped.edits.channel);
   assert(ch.playbackContext.contentPlaybackContext.referer.endsWith("v=x#reloadxhr"), "referer marker");
-  assert(ch.playbackContext.contentPlaybackContext.lactMilliseconds === "1700000000000", "lactMilliseconds = now");
-  const lm = JSON.parse(shipped.edits.lactmilli);
-  assert(lm.params === "8AUB" && lm.context.client.clientScreen === undefined, "lactmilli params only " + shipped.edits.lactmilli);
+  // uAssets c7e01d3 dropped the lactMilliseconds edit and replaced the "lactmilli" marker with "oaeb".
+  assert(ch.playbackContext.contentPlaybackContext.lactMilliseconds === "-1", "lactMilliseconds is left alone");
+  const oa = JSON.parse(shipped.edits.oaeb);
+  assert(oa.params === "oAEBogYBLg" && oa.context.client.clientScreen === undefined, "oaeb params only " + shipped.edits.oaeb);
   assert(shipped.originalUntouched, "edit works on a clone");
   const twice = JSON.parse(shipped.edits.twice).playbackContext.contentPlaybackContext.referer;
   assert(twice.split("#reloadxhr").length === 2, "referer marker added once on re-stringify: " + twice);

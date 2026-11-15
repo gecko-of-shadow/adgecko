@@ -39,7 +39,8 @@ function run(payload, href, state = {}) {
     Promise: { prototype: { then: Promise.prototype.then } },
   };
   const doc = {
-    getElementById: (id) => (id === "movie_player" ? player : null),
+    // uAssets c7e01d3 reads #masthead's logo-type without optional chaining.
+    getElementById: (id) => (id === "movie_player" ? player : id === "masthead" ? { attributes: { "logo-type": { value: "" } } } : null),
     addEventListener: (type, fn) => { if (type === "DOMContentLoaded") ready = fn; },
     querySelector: () => null,
   };
