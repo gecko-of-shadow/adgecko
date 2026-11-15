@@ -1,0 +1,14 @@
+{
+  "_comment": "Written by scripts/update-twitch-vendor.mjs. Do not edit by hand. Checked by test/vendor-pin.test.js.",
+  "twitch": {
+    "file": "src/vendor/video-swap-new.user.js",
+    "repo": "pixeltris/TwitchAdSolutions",
+    "path": "video-swap-new/video-swap-new.user.js",
+    "commit": "cebf3d73f0743f99708812dfeb946be701f1a97f",
+    "commit_date": "2026-02-26T14:22:30Z",
+    "userscript_version": "1.55",
+    "conflict_version": 23,
+    "sha256": "ef804d16e4d7623554aec59b1608097b5059ac7a337ee4e22120efb955c3b6f4",
+    "bytes": 51556
+  }
+}
