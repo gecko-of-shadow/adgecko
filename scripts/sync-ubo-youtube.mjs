@@ -167,12 +167,24 @@ const PATCHES = [[
 // first keeps it from reading .length on DOM prototypes ("Illegal invocation").
 const ARG_PATCHES = [
   [
-    "const e=()=>{let e,s,{player:i,",
-    "const e=()=>{if(!window.location.href.includes(\"/watch?\")&&!window.location.href.includes(\"/embed/\"))return void(o=t);let e,s,{player:i,",
+    // `r` is the payload's working marker list and `t` its full list (the
+    // payload's own last branch is "else r=t"). uAssets c7e01d3 renamed these
+    // minified variables (before: list `o`, locals `e,s`); re-check the names
+    // whenever this patch stops matching.
+    "const e=()=>{let e,l,{player:i,",
+    "const e=()=>{if(!window.location.href.includes(\"/watch?\")&&!window.location.href.includes(\"/embed/\"))return void(r=t);let e,l,{player:i,",
   ],
   [
     "e(),new MutationObserver((()=>{e()})).observe(document,",
     "e();let q=0;new MutationObserver((()=>{q||(q=setTimeout((()=>{q=0,e()}),250))})).observe(document,",
+  ],
+  // uAssets c7e01d3 dropped the optional chaining on the #masthead read. The
+  // payload runs at the top of a YouTube inline script; without #masthead (or
+  // its logo-type attribute) it throws there, before the embed-URL test and
+  // before the playback recovery is installed. Keep the earlier guarded form.
+  [
+    "document.getElementById(\"masthead\").attributes[\"logo-type\"].value",
+    "document.getElementById(\"masthead\")?.attributes?.[\"logo-type\"]?.value",
   ],
 ];
 const patchHits = new Set();

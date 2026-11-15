@@ -39,7 +39,9 @@ function run(payload, href, state = {}) {
     Promise: { prototype: { then: Promise.prototype.then } },
   };
   const doc = {
-    getElementById: (id) => (id === "movie_player" ? player : null),
+    // uAssets c7e01d3 reads #masthead's logo-type without optional chaining.
+    // state.masthead: undefined = a normal header, null = no header, or a stand-in element.
+    getElementById: (id) => (id === "movie_player" ? player : id === "masthead" ? (state.masthead === undefined ? { attributes: { "logo-type": { value: "" } } } : state.masthead) : null),
     addEventListener: (type, fn) => { if (type === "DOMContentLoaded") ready = fn; },
     querySelector: () => null,
   };
@@ -51,8 +53,10 @@ function run(payload, href, state = {}) {
   const consoleFake = { log: () => { calls.logs++; } };
   new Function("window", "document", "location", "MutationObserver", "setTimeout", "console", "URLSearchParams",
     payload.replace(/\$1$/, ""))(win, doc, location, MO, setTimeoutFake, consoleFake, URLSearchParams);
-  ready();
+  // On an /embed/ URL the payload returns before it registers anything.
+  if (ready) ready();
   return {
+    installed: !!ready,
     calls,
     win,
     mutate(n) { for (let i = 0; i < n; i++) observerCb([]); },
@@ -118,4 +122,25 @@ Deno.test("rpnt payload: 105-byte wait reply reloads the same way", () => {
     assert(r.calls.loadVideoById === 1, "one reload: " + r.calls.loadVideoById);
     assert(r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent.includes("; channel"), "UA hint");
   }
+});
+
+Deno.test("rpnt payload: no #masthead, or no logo-type attribute, does not throw (upstream does)", () => {
+  const threw = (fn) => { try { fn(); return ""; } catch (e) { return String(e && e.message); } };
+  for (const masthead of [null, { attributes: {} }]) {
+    for (const href of ["https://www.youtube.com/watch?v=abc", "https://www.youtube.com/", "https://www.youtube.com/embed/abc"]) {
+      const label = (masthead ? "no logo-type" : "no #masthead") + " on " + href;
+      // Upstream reads the header first, so it throws even on the embed URL it would skip.
+      assert(/Cannot read properties of (null|undefined)/.test(threw(() => run(upstream, href, { masthead }))), "upstream throws: " + label);
+      let r;
+      assert(threw(() => { r = run(shipped, href, { masthead }); }) === "", "shipped does not throw: " + label);
+      assert(r.installed === !href.includes("/embed/"), "recovery installed except on embed: " + label);
+    }
+  }
+  const stuck = { masthead: null, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
+  const r = run(shipped, "https://www.youtube.com/watch?v=abc", stuck);
+  r.push(new Uint8Array(105));
+  r.mutate(5); r.flush();
+  assert(r.calls.loadVideoById === 1, "recovery still reloads without a header: " + r.calls.loadVideoById);
+  const premium = run(shipped, "https://www.youtube.com/watch?v=abc", { masthead: { attributes: { "logo-type": { value: "YOUTUBE_PREMIUM_LOGO" } } } });
+  assert(premium.installed === false, "Premium header: the payload still steps aside");
 });

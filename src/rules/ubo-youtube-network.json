@@ -56,12 +56,12 @@
    "initiatorDomains": [
     "youtube.com"
    ],
-   "excludedRequestDomains": [
-    "hcaptcha.com"
-   ],
    "domainType": "thirdParty",
    "resourceTypes": [
     "media"
+   ],
+   "excludedRequestDomains": [
+    "hcaptcha.com"
    ]
   },
   "action": {
