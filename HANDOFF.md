@@ -11,7 +11,7 @@ Last updated: 2026-11-16.
 - The correction plan is in `docs/review-2026-11-16/PLAN.md` (25 work packages, WP-01 to WP-25).
 - All finding data is in `docs/review-2026-11-16/findings.json`.
 - Reproduction scripts from the review are in `docs/review-2026-11-16/repros/`.
-- The 0.3.6 session does the plan now. This file shows the status of each WP.
+- The 0.3.6 session did all 25 WPs and the release steps. The branch holds version 0.3.6. It is pushed. It is not merged, not tagged, and the release workflow did not run.
 
 ## Baseline (0.3.5)
 
@@ -123,15 +123,77 @@ Status values: done, changed, discarded, owner decision, open. All behavior is U
 | WP-24 | done (items 1-2 Option B) | see `git log --grep WP-24` | A trusted keydown starts a new gesture. Anchor, form and child-frame coverage documented as out of scope; Option A is owner decision 10. UNVERIFIED. |
 | WP-25 | done | see `git log --grep WP-25` | `--parallel` in checks.yml only; the gate stays serial (owner decision 11). New `test/twitch-playlist.test.js` runs the vendor playlist code. New upstream gap: vendor 1.55 stripAdSegments tracking-URL rewrite has no effect (writes a local variable). Not run in CI. |
 
-## Facts
+## Release checks for 0.3.6 (this container, 2026-11-16)
 
-- Checked in the review session: `deno test` on 0.3.5 gave 776 passed, 0 failed, 9 ignored (Deno 2.9.6, Linux container). The privacy check passed on the review files.
-- Not checked: no finding was tested on the owner's PC or on live sites. All findings are UNVERIFIED until a run on the owner's PC proves them.
+| Check | Result |
+|---|---|
+| `deno test --no-lock --allow-read --allow-run --allow-env test/` | 921 passed, 0 failed, 9 ignored (5 min 28 s). Baseline 0.3.5: 776, 0, 9. |
+| `bash scripts/release-gate.sh` | CLEAN (package bytes 7,607,291) |
+| `bash scripts/pack-zip.sh` | `adgecko-0.3.6.zip`, 68 files, 2,513,124 bytes compressed, 7,876,252 bytes unpacked (the gate cap is 8,000,000 unpacked) |
+| SHA-256 of the zip | `10b2178c31a6b60f7b4c6ad551c4dd97a483a1a728b148e3464536962c8bd69a` (a second pack gave the same hash) |
+| `bash scripts/release-gate.sh --zip adgecko-0.3.6.zip` | CLEAN |
+| `python3 -I scripts/privacy-check.py` (BASE = merge-base with `origin/main`, HEAD) | FAILED on 2 commit messages: ae6f02d line 17 and 0308df8 line 7 (test IP addresses with no allow marker). All file content passes. A range that starts after 0308df8 passes. PRIVACY_PATTERNS was not set here, so the personal-string rows were not checked. |
+
+The zip is not committed (`*.zip` is in `.gitignore`).
+
+### Privacy check: open item
+
+- The two commit messages name test addresses (the CGNAT test and the `192.168.` boundary test). The checker honors the allow marker per line, and these lines have none.
+- The fix is a reword of the two messages and a force push of this branch. The session's permission check denied the history rewrite. The owner must choose:
+  1. Approve a history rewrite of `claude/festive-dirac-a043po` (reword ae6f02d and 0308df8, then `git push --force-with-lease`), or
+  2. Use a squash merge for PR 14, so that the messages do not reach `main`, or
+  3. Accept the failed check on the PR.
 
 ## Owner decisions open
 
-- See section 3 of `docs/review-2026-11-16/PLAN.md`.
+From PLAN section 3, with the results of this session:
+
+1. Kick fixes (`docs/proposals/kick-0.3.5-fixes.patch`). Not applied. `src/kick.js` is not changed.
+2. Frozen-file content pins (WP-22 item 1). Done in a new file `scripts/frozen-pins.json`. Confirm. After a Twitch vendor update, update this file by hand (`docs/UPDATING-DEPENDENCIES.md`).
+3. Master switch and the ubo-youtube ruleset. Option B (docs) done. Option A open.
+4. Embedded YouTube players. Documented only.
+5. EasyList licence option (finding 50). Not changed. Recommendation: GPL-3.0-or-later.
+6. Peter Lowe list terms. Open since 0.3.4.
+7. Project LICENSE in the zip (finding 51). Not changed. Recommendation: yes.
+8. Cross-list `@@` exceptions (finding 6). Not changed. Recommendation: keep the same-host rule, add a doc note.
+9. Cosmetic storage layout (WP-17 item 2). Not changed.
+10. Pop-up guard coverage of links, forms and child frames (WP-24 Option A). Not changed.
+11. Release-gate tests in parallel. The gate stays serial; CI uses `--parallel`.
+12. Reproducible zip with Windows `tar.exe`. The Info-ZIP path is reproducible; the `tar.exe` path is not.
+
+New in this session:
+
+13. WP-02: copies on ordinary sites are plain text only (no text/html); a page-started cut does not remove the text; copying a selected image copies nothing.
+14. WP-04: timing limit 500 ms (plan: 50 ms) for 100 KB pattern inputs. The old patterns already took 65-95 ms.
+15. WP-05: limits that stay: a page click handler within 500 ms; visible but disguised text.
+16. WP-09 item 4: `ubo-youtube-network.json` rule 1 blocks `ads.youtube.com`, which `isStreamHost` lists. That ruleset is not in the new oracle test. Add a named exception, or change the registry.
+17. WP-10: under uBO, a toast with the interruptions text only in plain textContent is not hidden (the CSS matches only the split-lines attribute and the help links).
+18. WP-11: no serial reset on kill release. With two pinned keys, removing the key that signed the stored serial lets valid files from the other key apply one more time.
+19. WP-14: repack `cosmetic-rules.json` from a list cache and run `test/final-storage-budget.test.js` with the cache (not measured here). PARSER_VERSION 5 makes every list download once after the update.
+20. WP-16: a second (one-shot) alarm `gecko-refresh-retry`. The 2026-11-02 decision named one alarm.
+21. WP-18: the order of document_start scripts was measured only in headless Chromium.
+22. WP-19: Option A (CSS rules for the DOM selectors that the CSS does not cover).
+23. WP-21: check the `REGIONAL_WILDCARD_BASES` list (12 entries) in `scripts/build-psl-subset.mjs`; the non-AWS URL forms are not checked live.
+24. WP-25: upstream gap in TwitchAdSolutions 1.55: the ad tracking-URL rewrite in `stripAdSegments` writes a local variable and has no effect.
+25. `src/vendor/LICENSE-uBlock.md` still shows `deno run -A` for the sync. It ships in the zip, so it was not changed.
+26. Privacy check on two commit messages (see above).
 
 ## Deletion candidates (the owner must approve; nothing was deleted)
 
-- See section 3 of `docs/review-2026-11-16/PLAN.md`.
+- `src/general/toggles.js`, `src/general/exclusions.js`, `src/general/cosmetic.js` and `src/general-exclude-hosts.js` (dead modules, "NEEDS OWNER").
+- Their tests: `test/toggles.test.js`, `test/exclusions.test.js` and `test/general-cosmetic-contract.test.js` (rename them instead, if the modules stay).
+- The string-presence Twitch tests that the SHA pin covers. `test/twitch-playlist.test.js` now exists, so they can be merged.
+- `docs/cards2/` and `docs/cards-main/` (the same as `docs/cards/`; TODO.md:41).
+- Local only, not in git: the 9 agent worktrees under `.claude/worktrees/` (excluded in `.git/info/exclude`) and their branches `worktree-agent-*`.
+
+## Facts
+
+Checked in this session (Linux container, Deno 2.9.6):
+- The baseline and final test counts, the two gate runs, the zip size, the zip SHA-256 and its reproducibility, and the privacy check results above.
+- Each regression test failed on the old code (or on a temporary mutant for test-only items) and passes now. The commit messages record each proof.
+- Headless Chromium checks (scratch only): clipboard repros t2, t3, t4, t7 and t8; the flags port; the pop-up guard Enter case; the hide sheet after a full page re-render.
+
+Not checked:
+- No run on the owner's PC, in a real (headed) Chrome, or on live sites (YouTube, Twitch, Kick, Gmail, GitHub, React 18 sites). All behavior is UNVERIFIED until a run on the owner's PC proves it.
+- No GitHub Actions run (parallel tests, the release job with the `.sha256` asset, the uBO drift job grants).
+- The storage budget with the real lists (no list cache), a React 18 hydration check, a real uBO sync, Windows and Git Bash runs of the new tests and of `pack-zip.sh`.
