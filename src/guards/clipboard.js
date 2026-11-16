@@ -54,7 +54,9 @@
 // promises, and a page that rewrites Promise internals can still interfere
 // with that one asynchronous path.
 // Fail-open: an error in the guard lets the original call through, but an
-// error while judging "did the visitor copy it" counts as "no".
+// error while judging "did the visitor copy it" counts as "no". An error from
+// the page's own value (its toString throws) is not a guard error: it goes
+// back to the page, and the native method is not called.
 // Switch: flag "guardClipboard" from src/settings/flags.js, read at use time,
 // on until a flag says otherwise.
 // Wrapped in one function so the page sees no globals from this file (L-18).
@@ -511,8 +513,11 @@ function installClipboardGuard(target) {
             if (args.length === 0) return apply(fn, self, args); // native error
             const call = [];
             for (let i = 0; i < args.length; i++) call[i] = args[i];
+            // Once, outside the fail-open block: when the page's own value
+            // throws, the error goes back to the page and the native method
+            // never converts that value a second time (review 2026-11-16).
+            call[0] = StringFn(args[0]);
             try {
-              call[0] = StringFn(args[0]); // once
               const cmd = lower(call[0]);
               if (cmd === "copy" || cmd === "cut") {
                 const sel = selectionText();
@@ -581,9 +586,11 @@ function installClipboardGuard(target) {
             if (args.length < 2) return apply(fn, self, args);
             const call = [];
             for (let i = 0; i < args.length; i++) call[i] = args[i];
+            // Once each, in the native order, outside the fail-open block (a
+            // throwing value is never passed on to be converted again).
+            call[0] = StringFn(args[0]);
+            call[1] = StringFn(args[1]);
             try {
-              call[0] = StringFn(args[0]); // once each
-              call[1] = StringFn(args[1]);
               const type = lower(call[0]);
               if ((type === "text/plain" || type === "text" || type === "text/html") && !allowed(call[1], nativeCopyData(self))) return undefined;
             } catch {
@@ -609,9 +616,10 @@ function installClipboardGuard(target) {
             if (args.length < 2) return apply(fn, self, args);
             const call = [];
             for (let i = 0; i < args.length; i++) call[i] = args[i];
+            // Once each, in the native order, outside the fail-open block.
+            call[0] = StringFn(args[0]);
+            call[1] = StringFn(args[1]);
             try {
-              call[0] = StringFn(args[0]); // once each, in the native order
-              call[1] = StringFn(args[1]);
               const type = lower(call[1]);
               if ((type === "text/plain" || type === "text" || type === "text/html") && !allowed(call[0], nativeCopyData(self))) return null;
             } catch {
