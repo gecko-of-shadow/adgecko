@@ -94,6 +94,28 @@ Deno.test("release gate: --zip mode asks for the byte check when it derives the 
   assert(/--check-zip "\$ZIP" "\$\{CHECK_BYTES\[@\]\}"/.test(gate) && /CHECK_BYTES=\(--check-bytes\)/.test(gate), "gate passes --check-bytes when DERIVE_ROOT is ROOT");
 });
 
+// Two packs of the same tree, 3 s apart, must give the same bytes (Info-ZIP
+// path; the Windows tar.exe fallback is not reproducible, an owner decision).
+const hasZip = await (async () => {
+  try { return (await new Deno.Command("bash", { args: ["-c", "command -v zip"], stdout: "null", stderr: "null" }).output()).code === 0; } catch { return false; }
+})();
+Deno.test({
+  name: "pack-zip.sh: two packs of the same checkout give the same SHA-256",
+  ignore: !hasZip,
+  fn: async () => {
+    const r = await bash(`d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
+bash scripts/pack-zip.sh "$d/a.zip" >/dev/null || exit 3
+sleep 3
+bash scripts/pack-zip.sh "$d/b.zip" >/dev/null || exit 4
+sha256sum "$d/a.zip" "$d/b.zip" | awk '{print $1}'
+python3 -B -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); print('sorted=' + str(n == sorted(n)))" "$d/a.zip"`);
+    assert(r.code === 0, "pack failed:\n" + r.text);
+    const [a, b] = r.text.trim().split("\n");
+    assert(/^[0-9a-f]{64}$/.test(a) && a === b, "two packs differ: " + a + " " + b);
+    assert(/sorted=True/.test(r.text), "entries in sorted order");
+  },
+});
+
 // The list packer with a stub download (no network). ROOT, OUT_DIR, CACHE_DIR
 // and packed-cross.json point into a temp dir that holds a copy of the
 // committed meta.json; subprocess is a stub, so nothing runs and nothing in
