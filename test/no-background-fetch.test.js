@@ -82,7 +82,12 @@ Deno.test("only the background worker fetches lists, and only list hosts", () =>
   // Owner decision 2026-11-02: one alarm drives refreshes (was: no alarms at all).
   const creates = backgroundSource.match(/chrome\.alarms\.create\(/g) || [];
   assert(creates.length >= 1 && /chrome\.alarms\.create\(REFRESH_ALARM,/.test(backgroundSource), "only the refresh alarm is created");
-  assert(!/chrome\.alarms\.create\((?!REFRESH_ALARM,)/.test(backgroundSource), "no other alarm");
+  // Review 2026-11-16 WP-16: plus one one-shot retry alarm after a failed run
+  // (no periodInMinutes, so it never polls).
+  assertEquals(api.RETRY_ALARM, "gecko-refresh-retry");
+  assert(api.RETRY_DELAY_MINUTES > 30, "the retry passes the 30-min throttle");
+  assert(/chrome\.alarms\.create\(GU\.RETRY_ALARM, \{ delayInMinutes: GU\.RETRY_DELAY_MINUTES \}/.test(backgroundSource), "retry alarm is one-shot");
+  assert(!/chrome\.alarms\.create\((?!REFRESH_ALARM,|GU\.RETRY_ALARM, \{ delayInMinutes: GU\.RETRY_DELAY_MINUTES \})/.test(backgroundSource), "no other alarm");
 });
 
 Deno.test("manifest: alarms is the only background-scheduling permission", () => {

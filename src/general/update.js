@@ -1,7 +1,8 @@
 // Filter-list refresh engine.
 // Policy "alarm-and-manual": the worker's "gecko-refresh" alarm (every 3 h) asks
 // for a refresh; it runs at most once per 12 h after a successful run (and at
-// most every 30 min after a failed attempt), each list is only re-downloaded
+// most every 30 min after a failed attempt: a failed run asks the worker for
+// one "gecko-refresh-retry" alarm 31 min later), each list is only re-downloaded
 // after its own "! Expires:" window, plus the popup's Update button.
 // Conditional requests (ETag / If-Modified-Since). Lists are parsed to
 // domain block rules and swapped into dynamic DNR rules; the bundled static
@@ -19,6 +20,14 @@ function installGeneralAdblockUpdate(target) {
   const ALARM_PERIOD_MINUTES = 180;
   const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000;
   const RETRY_MIN_MS = 30 * 60 * 1000;
+  // One-shot alarm the worker creates after a failed run (ran:true, ok:false).
+  // The first 3 h alarm comes 5 to 30 min after it is created, so after a
+  // failed install-time run it was always throttled (review 2026-11-16 WP-16).
+  const RETRY_ALARM = "gecko-refresh-retry";
+  const RETRY_DELAY_MINUTES = 31;
+  // A stored time later than now + this is from a clock that was set ahead:
+  // it is ignored, else automatic refreshes stop until the clock reaches it.
+  const CLOCK_SKEW_MS = 5 * 60 * 1000;
   const DEFAULT_EXPIRES_MS = 24 * 60 * 60 * 1000;
   const DOMAINS_PER_RULE = 80;
   const MAX_LIST_RULES = 25000; // dynamic limit is 30000; leave room for allows
@@ -623,12 +632,18 @@ function installGeneralAdblockUpdate(target) {
   // Throttle: automatic runs at most once per 12h after a successful run, and
   // at most every 30 min after a failed attempt; manual clicks always run.
   // lastRunAt is written only after a successful run (M-2), lastAttemptAt at
-  // the start of every run.
+  // the start of every run. A time later than now + CLOCK_SKEW_MS counts as
+  // not set.
+  function pastTime(t, now) {
+    const v = Number(t) || 0;
+    return v > now + CLOCK_SKEW_MS ? 0 : v;
+  }
+
   function shouldRun(state, now, manual) {
     if (manual) return true;
-    const last = state && state.lastRunAt || 0;
+    const last = pastTime(state && state.lastRunAt, now);
     if (now - last < MIN_INTERVAL_MS) return false;
-    const attempt = state && state.lastAttemptAt || 0;
+    const attempt = pastTime(state && state.lastAttemptAt, now);
     return !(now - attempt < RETRY_MIN_MS);
   }
 
@@ -637,6 +652,7 @@ function installGeneralAdblockUpdate(target) {
   function listDue(meta, now, manual, present) {
     if (!meta || !meta.fetchedAt || !present) return true;
     if (manual) return true; // still conditional; a 304 costs nothing
+    if (meta.fetchedAt > now + CLOCK_SKEW_MS) return true; // clock was set ahead
     return now - meta.fetchedAt >= (meta.expiresMs || DEFAULT_EXPIRES_MS);
   }
 
@@ -844,7 +860,8 @@ function installGeneralAdblockUpdate(target) {
     }
     // M-2: a run where no due list reached its server (offline, captive
     // portal, every host down) is not a successful run: lastRunAt stays, so
-    // the 30-min retry applies. Rejected lists did reach their server.
+    // the 30-min retry applies (the worker's one-shot RETRY_ALARM, then the
+    // 3 h alarm). Rejected lists did reach their server.
     let attempted = 0;
     let reached = 0;
     let allFailed = false;
@@ -1337,7 +1354,7 @@ function installGeneralAdblockUpdate(target) {
   }
 
   Object.assign(target, {
-    POLICY, REFRESH_ALARM, ALARM_PERIOD_MINUTES, FETCH_TIMEOUT_MS, MAX_LIST_BYTES, readListText, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
+    POLICY, REFRESH_ALARM, RETRY_ALARM, RETRY_DELAY_MINUTES, CLOCK_SKEW_MS, ALARM_PERIOD_MINUTES, FETCH_TIMEOUT_MS, MAX_LIST_BYTES, readListText, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
     RETIRED_LISTS, dropRetiredLists, dropRetiredCosmetic, PARSER_VERSION, parseEntries, parseEntriesFull, crossListRules, crossScoped, mergeScoped, staleParserLists,
     THREAT_RULE_ID_BASE, THREAT_RULE_ID_END, DYNAMIC_RULE_LIMIT, isThreatRule, isOurRule, applyThreatRules,
     MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, PROTECTED_HITS_SEED_BY_LIST, PROTECTED_HITS_MARGIN, PROTECTED_HITS_SPIKE, protectedHitsCap, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, checkCosmeticChange, protectedHits, revertLists,
