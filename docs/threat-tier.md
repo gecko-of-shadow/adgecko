@@ -2,163 +2,77 @@
 
 [← Back to the README](../README.md)
 
-The threat tier blocks hosts that public malware lists name as known-bad, on
-every page, including Twitch, YouTube and Kick pages, while the sites' own
-servers and player hosts can never be blocked.
+The threat tier blocks hosts that public malware lists name as known-bad. It blocks them on every page, also on Twitch, YouTube and Kick pages. The servers and player hosts of those sites can never be blocked.
+
+UNVERIFIED: the behaviour in Chrome. The tests use a model of the documented rule precedence, not Chrome's code.
 
 ## Where the hosts come from
 
-- **Packed:** static ruleset `threat` (`src/rules/threat-network.json`,
-  enabled by default), built by `scripts/build-threat-rules.mjs` from the
-  threat lists that `scripts/pack-filter-lists.py` downloads. The packer runs
-  the builder at the end of every run.
-- **Refreshed:** the 3-hourly list refresh rebuilds the same set as dynamic
-  rules (ids 600000-609999) from the refreshed lists.
-- **Signed feed:** see [feed-setup.md](feed-setup.md) (dormant until a key and
-  a feed host are configured).
+- **Packed:** the static ruleset `threat` (`src/rules/threat-network.json`, enabled by default). `scripts/build-threat-rules.mjs` builds it from the threat lists that `scripts/pack-filter-lists.py` downloads. The packer runs the builder at the end of each run.
+- **Refreshed:** the list refresh builds the same set again as dynamic rules (ids 600000 to 609999) from the refreshed lists.
+- **Signed feed:** see [feed-setup.md](feed-setup.md). It is dormant until a key and a feed host are configured.
 
-Lists used (role `malware_threat`): URLhaus (curbengh's urlhaus-filter), uBlock
-Origin badware, Dandelion Sprout's Anti-Malware List. From each list only
-whole-domain filters and `$doc` (navigation) filters count as "this host is
-bad"; party- or type-limited filters stay in the ordinary list tier with their
-own scope.
+The current pack (`src/rules/threat-meta.json`, lists of 2026-11-14 22:00 UTC) has 15,865 hosts in 199 rules.
 
-**The one Curben list we use: URLhaus data, no OpenPhish (owner decision
-#18b, 2026-11-02).** `urlhaus_hosts` is curbengh's urlhaus-filter: abuse.ch
-URLhaus malware hosts (data CC0 1.0; the urlhaus-filter repository is CC0 1.0
-and MIT). It is the only list from Curben's malware-filter project in this
-extension, fetched only from
-`https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt`.
-It is kept because it adds about 546 malware hosts that the other lists do not
-have (about 2 of 548 overlap with uBO badware / Dandelion, checked
-2026-11-02), and direct abuse.ch exports now need an Auth-Key, so there is no
-keyless replacement. `scripts/lib/curben_check.py` enforces the exception: the
-release gate and `test/no-openphish.test.js` fail on any other Curben list or
-mirror, Curben's phishing list, or any OpenPhish source.
+Lists used (role `malware_threat`): URLhaus (curbengh's urlhaus-filter), uBlock Origin badware, and Dandelion Sprout's Anti-Malware List. From each list, only whole-domain filters and `$doc` (navigation) filters count as "this host is bad". Filters with a party or type limit stay in the ordinary list tier with their own scope.
 
-**uBO badware's OpenPhish section is dropped too (owner decision, 2026-11-04).**
-uBO's `badware.txt` has a section headed `! openphish` (16 filters when checked).
-The packer and the list refresh skip that section, from its header to the next
-comment line, so it is neither packed nor brought back by a refresh. A host stays
-blocked only if another list has it on its own (one did: `vzla-qr.com`, from
-HaGeZi, in the general rules, not in the threat tier).
+Owner decisions about the sources:
 
-**Smaller phishing coverage (owner decision #13, 2026-11-02):** Curben's
-phishing-filter is not used anywhere, because it is curated from OpenPhish. That
-list was about 30,000 of the roughly 45,000 packed malware/phishing domains.
-There is no phishing list of its own any more: phishing pages are blocked only
-when uBO badware, Dandelion Sprout's Anti-Malware List or the EasyList-family
-lists name them. Chrome Safe Browsing remains the backstop for phishing pages. The repo ships
-HaGeZi **Pro mini** (an ads/trackers list), not HaGeZi's threat-intelligence
-list, so HaGeZi does not feed this tier.
+- **One Curben list, URLhaus data, no OpenPhish (#18b, 2026-11-02).** `urlhaus_hosts` is curbengh's urlhaus-filter: abuse.ch URLhaus malware hosts (data CC0 1.0; the repository is CC0 1.0 and MIT). It is the only list from Curben's malware-filter project, and it comes only from `https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts-online.txt`. It adds malware hosts that the other lists do not have (546 of 548 on 2026-11-02), and direct abuse.ch exports need an Auth-Key. `scripts/lib/curben_check.py` enforces the rule: the release gate and `test/no-openphish.test.js` fail on any other Curben list or mirror, Curben's phishing list, or any OpenPhish source.
+- **The OpenPhish section of uBO badware is dropped (2026-11-04).** The packer and the list refresh skip the section of `badware.txt` that has the heading `! openphish`.
+- **Smaller phishing coverage (#13, 2026-11-02).** Curben's phishing-filter is not used, because it comes from OpenPhish. Phishing pages are blocked only when uBO badware, the Dandelion Sprout list or the EasyList-family lists name them. Chrome Safe Browsing stays the main protection against phishing pages. The repository ships HaGeZi **Pro mini** (an ads and trackers list), not the HaGeZi threat list.
 
 ## Rule shape and priority
 
 | Rule | Priority | Notes |
 | --- | --- | --- |
-| Public list blocks | 1 | ordinary ads/trackers tier |
-| "Allow this page" | 10,000 | does **not** let threat hosts through |
-| YouTube/Kick frame `allowAllRequests`, Twitch and player-CDN allows | 2,000,000 | stream pages keep playing |
+| Public list blocks | 1 | The ordinary ads and trackers tier |
+| **Allow this site** | 10,000 | Does **not** let threat hosts through |
+| YouTube and Kick frame `allowAllRequests`, Twitch and player-CDN allows | 2,000,000 | Stream pages keep playing |
 | YouTube doubleclick block | 2,000,001 | |
-| **Threat blocks** | **2,000,010** | `main_frame, sub_frame, script, xmlhttprequest, ping, media, websocket, other`; 80 hosts per rule; no initiator condition |
-| **User "Allow this domain"** | **2,000,020** | every resource type incl. `main_frame`; storage key `threatAllowDomains` |
-| List-download allow | 3,000,000 | the extension's own downloads |
+| **Threat blocks** | **2,000,010** | `main_frame, sub_frame, script, xmlhttprequest, ping, media, websocket, other`; 80 hosts for each rule; no initiator condition |
+| **Allow this domain** | **2,000,020** | Every resource type, also `main_frame`; storage key `threatAllowDomains` |
+| List-download allow | 3,000,000 | The extension's own downloads |
 
-Because 2,000,010 is above the 2,000,000 stream-site allows, a threat host is
-blocked inside YouTube and Kick frames (and embeds) too. Stylesheets, fonts and
-images from a threat host are left to the ordinary lists.
-
-The override uses `requestDomains`, which also matches subdomains: allowing
-`example.test` also allows `www.example.test`. It only ever allows more.
+- 2,000,010 is above the stream-site allows. Thus a threat host is also blocked inside YouTube and Kick frames and embeds.
+- Stylesheets, fonts and images from a threat host are left to the ordinary lists.
+- **Allow this domain** uses `requestDomains`, which also matches subdomains: `example.test` also allows `www.example.test`. It can only allow more.
 
 ## Protected hosts
 
-`src/threat/protected-hosts.js` is the one list (also used by the feed
-validator and the tests). A threat host is rejected when it is equal to or
-under a protected host, or an ancestor of one (`google.com` would match
-`www.google.com`). `googleapis.com`, `gstatic.com` and
-`storage.googleapis.com` are protected only as themselves (and their
-ancestors), so a bucket host such as `<bucket>.storage.googleapis.com` can be
-blocked, but `fonts.googleapis.com` and `youtubei.googleapis.com` cannot.
-Single-label hosts and two-label hosts that look like a public suffix
-(`co.uk`) are rejected too.
+`src/threat/protected-hosts.js` is the one list. The feed validator and the tests use it too. A threat host is rejected when:
 
-**Public suffixes and shared platforms (security review M-3).**
-`src/threat/psl.js` holds the Public Suffix List's explicit names (every
-two-label ICANN rule, every PRIVATE rule up to three labels and the bases of
-wildcard rules, with Unicode (IDN) rules stored as punycode since 0.3.6; about 8,700 names, 117 KB, loaded only by the service worker
-and the settings page, never by web pages; generated by
-`scripts/build-psl-subset.mjs` from a PSL copy you download yourself,
-MPL-2.0) plus a hand-kept list of shared-hosting, cloud, CDN and big-platform
-parents (`github.io`, `pages.dev`, `amazonaws.com`,
-`blogspot.com`, `cloudfront.net`, `docs.google.com`, ...). A threat host is
-rejected when it is one of those names or a parent of one, so one bad list
-line cannot black out a whole country domain or platform; a customer's own
-host (`evil.github.io`, `d123.cloudfront.net`) can still be blocked.
-Since 0.3.6 (UNVERIFIED in Chrome):
-- For a single-service platform (`facebook.com`, `live.com`, `jsdelivr.net`
-  and 30 more, the generator's `SERVICE_PLATFORMS`), every host under the name
-  is also refused (`www.facebook.com`, `login.live.com`, `cdn.jsdelivr.net`).
-  On these sites the subdomains are the service itself, not a customer's site.
-- A short exact list of shared service hosts (`SERVICE_HOSTS`, for example
-  `raw.githubusercontent.com`, `js.stripe.com`, `www.recaptcha.net`) and their
-  parents are refused. Hosts under them can still be blocked.
-- Cloud region names under a private wildcard rule
-  (`us-west-1.compute.amazonaws.com`, the generator's
-  `REGIONAL_WILDCARD_BASES`) are refused. One machine name under a region
-  (`ec2-54-177-49-112.us-west-1.compute.amazonaws.com`) can still be blocked. IPv4
-literals in private, loopback, link-local, shared (CGNAT) and multicast ranges
-are rejected too. The same check guards the signed feed and the "Allow this
-domain" box (which therefore refuses `github.io` but accepts `me.github.io`).
-Without the data file loaded, nothing is accepted. Rules with four or more
-labels are left out (UNVERIFIED blast radius, small). The packed threat
-ruleset was rebuilt with this check: 15,920 hosts (`pisz.pl`, `ru.com`,
-`webhop.me`, `3utilities.com`, `cprapid.com` and `fastvps-server.com` are
-public suffixes and are no longer blocked as a whole). After the list repack
-of 2026-11-09 03:01 UTC it holds 15,827 hosts in 198 rules.
+- It is equal to or below a protected host, or a parent of one (`google.com` would match `www.google.com`).
+- It has one label, or it has two labels and looks like a public suffix (`co.uk`).
+- It is an IPv4 address in a private, loopback, link-local, shared (CGNAT) or multicast range.
+- The public-suffix data refuses it (see below).
 
-**Per-refresh cap.** One list refresh may add at most 2,500 new threat hosts
-and at most 20% of the previous set (the last refreshed set, or the packed
-`threat` ruleset on the first refresh). A bigger jump keeps the previous rules
-and shows the reason; the same jump (within 10%) on the next refresh is
-accepted as real.
+`googleapis.com` and `storage.googleapis.com` are protected only as themselves and their parents. Thus a bucket host such as `<bucket>.storage.googleapis.com` can be blocked, but `fonts.googleapis.com` and `youtubei.googleapis.com` cannot. `gstatic.com` is also a single-service platform (see below), thus each host below it is protected.
 
-The ordinary list tier skips ICANN public suffixes (`co.uk`) and non-public
-IPv4 addresses too (security review L-3), at refresh time and in the packer;
-private suffixes and shared-platform parents (`github.io`, dynamic-DNS
-parents) stay up to the lists there. That tier is priority 1 and blocks
-opening a page (main_frame) only for an explicit `$doc` / `$document` list
-entry or a plain `$all` entry (0.3.5), also when another list blocks the same host as a whole domain (fixed
-2026-11-03: the merge used to drop such entries, so about 500 EasyList ad
-servers opened when visited directly). A filter with only negated types
-(`$~script`, `$~stylesheet,third-party`) never blocks opening its host
-(fixed 2026-11-03: Chrome matches a rule with only `excludedResourceTypes`
-for page loads too, so `main_frame` is now always in that list). Stream and
-player hosts (`protected-hosts.js`) and a small list of affiliate
-redirectors people click on purpose (`NAV_EXEMPT` in
-`src/general/filter-options.js`) never get a navigation block from this
-tier. "Allow this site" in the popup lifts it for links followed from that
-site; Settings -> "Allow this domain" lifts it everywhere, also for a typed
-address. The packed `general-network.json` was repacked on 2026-11-03
-(20:37Z) with both fixes; it no longer holds `pisz.pl` or `0.0.0.1`.
-The current pack is 2026-11-09 03:01 UTC (`src/rules/meta.json`).
+**Public suffixes and shared platforms (security review M-3).** `src/threat/psl.js` is generated by `scripts/build-psl-subset.mjs` from a copy of the Public Suffix List that you download (MPL-2.0; now the list of 2026-11-15). Only the service worker and the settings page load it (about 8,700 names, 117 KB). A threat host is rejected when it is:
 
-`youtubekids.com` and `kickusercontent.com` were added to the build prompt's
-list (fail-open): they are in the manifest's stream-site exclusions.
+- A public suffix or a parent of one. Unicode (IDN) suffixes are stored as punycode.
+- A shared-hosting, cloud, CDN or big-platform parent from the hand-kept list (`github.io`, `pages.dev`, `amazonaws.com`, `blogspot.com`, `cloudfront.net`, `docs.google.com` and more), or a parent of one. A customer's own host (`evil.github.io`, `d123.cloudfront.net`) can still be blocked.
+- A host below a single-service platform (`SERVICE_PLATFORMS`, 33 names: `facebook.com`, `live.com`, `jsdelivr.net` and more). There, the subdomains are the service itself (`www.facebook.com`, `login.live.com`, `cdn.jsdelivr.net`).
+- An exact shared service host (`SERVICE_HOSTS`, 12 names: for example `raw.githubusercontent.com`, `js.stripe.com`, `www.recaptcha.net`) or a parent of one. Hosts below them can still be blocked.
+- A cloud region name below a private wildcard rule (`REGIONAL_WILDCARD_BASES`: for example `us-west-1.compute.amazonaws.com`). One machine name below a region can still be blocked.
+
+The same check guards the signed feed and the **Allow this domain** box (it refuses `github.io` but accepts `me.github.io`). Without the data file, nothing is accepted. The pack of 2026-11-14 rejected five hosts as public suffixes (`3utilities.com`, `ru.com`, `fastvps-server.com`, `webhop.me`, `cprapid.com`).
+
+**Limit for each refresh.** One list refresh can add 2,500 new threat hosts maximum, and 20 % of the previous set maximum. A larger change keeps the previous rules and shows the reason. The same change (within 10 %) on the next refresh is accepted.
+
+**The ordinary list tier** (priority 1) has related rules:
+
+- It skips ICANN public suffixes (`co.uk`) and non-public IPv4 addresses (security review L-3), at refresh time and in the packer. Private suffixes and shared-platform parents stay up to the lists there.
+- It blocks the opening of a page (`main_frame`) only for an explicit `$doc` / `$document` list entry or a plain `$all` entry. A filter with only negated types (`$~script`) never blocks the opening of its host.
+- Stream and player hosts, and a small list of affiliate redirectors that people click on purpose (`NAV_EXEMPT` in `src/general/filter-options.js`), never get a navigation block from this tier.
+- **Allow this site** in the popup lifts a navigation block for links from that site. **Allow this domain** on the settings page lifts it everywhere, also for a typed address.
 
 ## Switches
 
-The lists switch, "Allow this page" and a failed list refresh do not remove
-threat rules. Per-feature switches come with the settings page.
+- The switch is **Block known malware hosts** on the settings page (feature `threatTier`). The master switch also turns the tier off. It is not a per-site switch.
+- The lists switch, **Allow this site** and a failed list refresh do not remove threat rules.
 
 ## Tests
 
-`test/threat-tier.test.js` runs a small DNR matcher (`test/fixtures/dnr-matcher.js`)
-over the shipped rule files plus the dynamic rules the worker creates. It
-checks blocking on ordinary pages, YouTube and Kick frames, embeds, "allowed"
-pages and navigations; the override; that protected hosts and the stream hosts
-in `test/fixtures/stream-hosts.txt` are never blocked; a fuzz of protected
-subdomains; and the rule limits.
-
-Not verified in a browser: the matcher models the documented precedence, not
-Chrome's code.
+`test/threat-tier.test.js` runs a small DNR matcher (`test/fixtures/dnr-matcher.js`) over the shipped rule files and the dynamic rules that the worker creates. It checks blocking on ordinary pages, in YouTube and Kick frames, in embeds, on allowed pages and for navigations; the override; that protected hosts and the stream hosts in `test/fixtures/stream-hosts.txt` are never blocked; and the rule limits. `test/psl.test.js` and the two `test/nightly-threat-4-*` and `nightly-threat-5-*` files check the public-suffix and platform rules.
