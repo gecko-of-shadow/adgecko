@@ -168,12 +168,28 @@
   function isUnscopedBranch(m) {
     const memo = new Map();
     // Subject = last compound of the branch.
-    const compounds = splitTop(reduceSelector(m, true, memo), (c) => /[\s>+~]/.test(c)).filter(Boolean);
+    // A namespace prefix ("*|html", "svg|body") does not change the element,
+    // and "&" at the top level is :root. Both are normalized first.
+    const compounds = splitTop(reduceSelector(m, true, memo), (c) => /[\s>+~]/.test(c)).filter(Boolean)
+      .map((c) => c.replace(/^[^|:.#[]*\|/, "").replace(/&/g, ":root"));
     const subject = compounds[compounds.length - 1] || "";
+    const ownScope = (c) => /[.#[]/.test(c) || CUSTOM_ELEMENT_RE.test(c);
+    const isPageRoot = (c) => {
+      const type = c.replace(/:[a-z-]+/gi, "").toLowerCase();
+      return type === "html" || type === "body" || /:root\b/i.test(c);
+    };
     if (!/[.#[]/.test(subject)) {
       const type = subject.replace(/:[a-z-]+/gi, "").toLowerCase();
-      if (type === "html" || type === "body" || /:root\b/i.test(subject)) return true;
+      if (isPageRoot(subject)) return true;
       if ((type === "" || type === "*") && compounds.length === 1) return true;
+    }
+    // "html:has(.x) > *", ":root:has(.x) *": a branch that starts at the page
+    // root needs a later part that is scoped itself (its own class, id or
+    // attribute, also inside its own :has()/:is()). (".ad *" and
+    // "div:has(.x) > *" stay: they start below the page root.)
+    if (compounds.length > 1 && isPageRoot(compounds[0]) && !ownScope(compounds[0])) {
+      const full = splitTop(reduceSelector(m, false, memo), (c) => /[\s>+~]/.test(c)).filter(Boolean);
+      if (!full.slice(1).some(isScopedText)) return true;
     }
     return !isScopedText(reduceSelector(m, false, memo));
   }

@@ -57,6 +57,10 @@ function installCosmeticHide(api) {
   let sheet = null;
   let sheetOn = false; // our sheet should be adopted now
   let sheetFailed = false;
+  // The CSS text now in our sheet or <style> node (null = none). An equal
+  // text is not written again: a write re-parses the whole sheet (about
+  // 500 KB) and restyles the page, in every frame of every tab.
+  let sheetText = null;
   let watchers = false;
   let styleObserver = null;
 
@@ -91,6 +95,7 @@ function installCosmeticHide(api) {
 
   function removeStyle() {
     sheetOn = false;
+    sheetText = null;
     if (sheet) {
       try {
         if (adoptedHas(sheet)) document.adoptedStyleSheets = Array.from(document.adoptedStyleSheets).filter((s) => s !== sheet);
@@ -126,7 +131,8 @@ function installCosmeticHide(api) {
     if (sheetFailed || typeof CSSStyleSheet === "undefined" || !document.adoptedStyleSheets) return false;
     try {
       if (!sheet) sheet = new CSSStyleSheet();
-      sheet.replaceSync(text);
+      if (sheetText !== text || !sheetOn) sheet.replaceSync(text);
+      sheetText = text;
       sheetOn = true;
       adoptSheet();
       watchAdopted();
@@ -134,6 +140,7 @@ function installCosmeticHide(api) {
     } catch {
       sheetFailed = true;
       sheetOn = false;
+      sheetText = null;
       sheet = null;
       return false;
     }
@@ -167,7 +174,7 @@ function installCosmeticHide(api) {
       styleEl.id = STYLE_ID;
       appendStyleEl();
     }
-    styleEl.textContent = text;
+    if (styleEl.textContent !== text) styleEl.textContent = text;
     watchStyleEl();
   }
 
@@ -317,8 +324,35 @@ function installCosmeticHide(api) {
       return;
     }
 
+    // The settings and site switches this frame last read. A change to them
+    // re-reads storage only when it changes this frame's cosmetic result
+    // (an Allow on another site does not).
+    let seen = null;
     const sync = () => {
-      readStorage(opts.getLocal).then((state) => applyState(state, opts.fetch));
+      readStorage(opts.getLocal).then((state) => {
+        const st = (state && state.stored) || {};
+        seen = { settings: st[SETTINGS_KEY], overrides: st[OVERRIDES_KEY] };
+        return applyState(state, opts.fetch);
+      });
+    };
+    const frameHost = () => (opts.hostname != null ? opts.hostname : (api.hostname != null ? api.hostname : (typeof location !== "undefined" ? location.hostname : "")));
+    const resultUnchanged = (changes) => {
+      const F = features();
+      if (!F || !seen || changes.cosMeta) return false;
+      const valid = (x) => !!x && typeof x === "object";
+      if (!valid(seen.settings)) return false;
+      const next = {
+        settings: changes[SETTINGS_KEY] ? changes[SETTINGS_KEY].newValue : seen.settings,
+        overrides: changes[OVERRIDES_KEY] ? changes[OVERRIDES_KEY].newValue : seen.overrides,
+      };
+      if (!valid(next.settings)) return false;
+      const host = frameHost();
+      const before = F.resolve(seen.settings, seen.overrides, host).cosmetic;
+      const after = F.resolve(next.settings, next.overrides, host).cosmetic;
+      seen = next;
+      // With settings, generalEnabled / generalAllowedOrigins do not decide
+      // (applyState), so a change to them alone changes nothing here.
+      return before === after;
     };
 
     sync();
@@ -344,6 +378,7 @@ function installCosmeticHide(api) {
         onChanged.addListener((changes, area) => {
           if (area && area !== "local") return;
           if (!changes || (!changes[STORAGE_KEY] && !changes[ALLOWED_ORIGINS_KEY] && !changes.cosMeta && !changes[SETTINGS_KEY] && !changes[OVERRIDES_KEY])) return;
+          if (resultUnchanged(changes)) return;
           sync();
         });
       }
