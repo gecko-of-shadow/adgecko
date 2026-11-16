@@ -30,6 +30,13 @@ Where Adgecko stands, and what is next. Last updated 2026-11-14, when 0.3.5 was 
 - [ ] Try YouTube by hand in your own Chrome: YouTube refused the build machine (HTTP 429, a bot check), so it was not tested live.
 - [x] Release published 2026-11-12 by the new release workflow (`.github/workflows/release.yml`, #10): [v0.3.4](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.4) with `adgecko-0.3.4.zip` (67 files). Next release: bump the version and add its changelog section, then **Actions** -> **release** -> **Run workflow**.
 
+### 1b. Codebase map (added 2026-11-16)
+
+- [x] A codebase map is in [.planning/codebase/](.planning/codebase/README.md): seven documents, each compared with the source at commit `b01e6a5`. `CLAUDE.md` tells coding agents to read it.
+- [ ] Read [CONCERNS.md](.planning/codebase/CONCERNS.md) and decide what to do with each item. It has 5 high, 13 medium and 6 low items. The high items: storage quota headroom (H1), package size near the gate cap (H2), the archived Twitch upstream and its `eval` (H3), YouTube patches that depend on upstream shapes (H4), no live site test for 0.3.5 (H5).
+- [ ] Correct the stale documents that the map found (M1, M2, L5): the rule counts and date in `docs/how-it-works.md`, the "Where it was left off" section of this file, and `src/rules/README.md`.
+- [ ] Keep the map correct: when a change makes a statement in the map wrong, correct the map in the same pull request.
+
 ### 2. Keep an eye on
 
 - [ ] The weekly uBO YouTube drift check (`.github/workflows/ubo-youtube-drift.yml`, Mondays 06:00 UTC). A red run means YouTube's upstream filters changed and `scripts/sync-ubo-youtube.mjs` needs a re-run.

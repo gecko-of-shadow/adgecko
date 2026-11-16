@@ -112,4 +112,4 @@ bash scripts/pack-zip.sh
 ## Links
 
 - **Docs:** [How it works](docs/how-it-works.md) · [Allow a site](docs/allow-a-page.md) · [Permissions and privacy](docs/permissions-and-privacy.md) · [Threat tier](docs/threat-tier.md) · [Signed threat feed setup](docs/feed-setup.md) · [Updating dependencies](docs/UPDATING-DEPENDENCIES.md)
-- **Project:** [Changelog](CHANGELOG.md) · [To do](TODO.md) · [Releases](https://github.com/gecko-of-shadow/adgecko/releases)
+- **Project:** [Changelog](CHANGELOG.md) · [To do](TODO.md) · [Codebase map](.planning/codebase/README.md) · [Releases](https://github.com/gecko-of-shadow/adgecko/releases)
