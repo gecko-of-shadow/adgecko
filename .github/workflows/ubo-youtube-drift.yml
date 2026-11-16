@@ -31,8 +31,14 @@ jobs:
         with:
           deno-version: v2.9.8
 
+      # The sync imports and runs uBO code from a clone. It stops when the
+      # clone is not the commit pinned in src/vendor/ubo-youtube-meta.json,
+      # and it gets only these grants (no -A): read, write to the synced
+      # folders and the temp dir, the uAssets host, and git.
       - name: Run the uBO YouTube sync (upstream fetch, local-patch layer)
-        run: deno run -A scripts/sync-ubo-youtube.mjs
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: deno run --allow-read --allow-write=src/vendor,src/rules,"$TMPDIR" --allow-net=raw.githubusercontent.com --allow-run=git scripts/sync-ubo-youtube.mjs
 
       # ubo-youtube-meta.json records the run time and the uAssets commit, so
       # it changes on every sync; it is shown for the log but not judged. The

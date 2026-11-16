@@ -116,6 +116,52 @@ python3 -B -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist();
   },
 });
 
+// uBO sync commit pin (no real sync, no network): a stub "git" on PATH makes
+// a fake clone whose parser module prints a marker when it is imported.
+const uboMeta = JSON.parse(await Deno.readTextFile(new URL("src/vendor/ubo-youtube-meta.json", ROOT)));
+const UBO_SYNC = (head, extra = "") => `d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
+mkdir -p "$d/bin" "$d/tmp"
+cat > "$d/bin/git" <<'SH'
+#!/usr/bin/env bash
+case "$1" in
+  clone) dest="\${@: -1}"; mkdir -p "$dest/src/js/resources"; echo 'console.log("UPSTREAM CODE RAN"); export class AstFilterParser {}' > "$dest/src/js/static-filtering-parser.js" ;;
+  rev-parse) echo "$FAKE_HEAD" ;;
+  *) echo "stub git: $*" >&2; exit 1 ;;
+esac
+SH
+chmod +x "$d/bin/git"
+PATH="$d/bin:$PATH" TMPDIR="$d/tmp" FAKE_HEAD="${head}" deno run --no-lock --allow-read --allow-write="$d/tmp" --allow-run=git scripts/sync-ubo-youtube.mjs --uassets ${"0".repeat(40)} ${extra}; echo "rc=$?"`;
+
+Deno.test("uBO sync: the meta commit is the pinned commit; a moved tag stops the sync before upstream code runs", async () => {
+  const { expectedUboCommit, verifyUboClone } = await import("../scripts/lib/ubo-commit-pin.mjs");
+  assert(/^[0-9a-f]{40}$/.test(uboMeta.ublock_commit), "meta records a commit");
+  assert(expectedUboCommit({ tag: uboMeta.ublock_tag, meta: uboMeta }) === uboMeta.ublock_commit, "meta commit is the pin");
+  let err = "";
+  try { expectedUboCommit({ tag: "9.9.9", meta: uboMeta }); } catch (e) { err = e.message; }
+  assert(/--ubo-commit/.test(err), "another tag needs --ubo-commit: " + err);
+  assert(expectedUboCommit({ tag: "9.9.9", commitArg: "a".repeat(40), meta: uboMeta }) === "a".repeat(40), "explicit commit");
+  err = "";
+  try { await verifyUboClone({ tag: "1.75.0", expected: uboMeta.ublock_commit, revParse: async () => "b".repeat(40) + "\n" }); } catch (e) { err = e.message; }
+  assert(/not the pinned commit/.test(err), "stub HEAD differs: " + err);
+
+  const moved = await bash(UBO_SYNC("b".repeat(40)));
+  assert(/rc=[1-9]/.test(moved.text) && /not the pinned commit/.test(moved.text), "moved tag:\n" + moved.text);
+  assert(!/UPSTREAM CODE RAN/.test(moved.text), "upstream code ran:\n" + moved.text);
+  const other = await bash(UBO_SYNC("b".repeat(40), "--ubo 9.9.9"));
+  assert(/rc=[1-9]/.test(other.text) && /--ubo-commit/.test(other.text) && !/UPSTREAM CODE RAN/.test(other.text), "other tag:\n" + other.text);
+  // The pinned HEAD passes the check; the run then stops at the first
+  // download, because this test grants no network.
+  const pinned = await bash(UBO_SYNC(uboMeta.ublock_commit));
+  assert(!/not the pinned commit/.test(pinned.text) && /net access|NotCapable|PermissionDenied/i.test(pinned.text), "pinned HEAD:\n" + pinned.text);
+});
+
+Deno.test("uBO sync workflow: explicit Deno grants, no -A", async () => {
+  const wf = await Deno.readTextFile(new URL(".github/workflows/ubo-youtube-drift.yml", ROOT));
+  const run = wf.split("\n").find((l) => /deno run .*scripts\/sync-ubo-youtube\.mjs/.test(l)) || "";
+  assert(run && !/\s-A\b|--allow-all/.test(run), "workflow still grants everything: " + run);
+  assert(/--allow-net=raw\.githubusercontent\.com\b/.test(run) && /--allow-run=git\b/.test(run) && /--allow-write=src\/vendor,src\/rules,/.test(run), "grants: " + run);
+});
+
 // The list packer with a stub download (no network). ROOT, OUT_DIR, CACHE_DIR
 // and packed-cross.json point into a temp dir that holds a copy of the
 // committed meta.json; subprocess is a stub, so nothing runs and nothing in
