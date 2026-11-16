@@ -331,6 +331,9 @@ function syncFromSettings() {
         if (!nextThreat) await GU.removeThreatRules(listDeps()).catch(() => {});
         else if (!firstSync || await threatRulesMissing()) await GU.rebuildThreatRules(listDeps()).catch(() => {});
       });
+      // The feed's snapshot fallback follows the threat tier (review
+      // 2026-11-16 WP-20). Not awaited: the feed queues its own DNR write.
+      applyCachedFeed();
     }
   });
   settingsQueue = run.catch(() => {});
@@ -377,6 +380,12 @@ function feedDeps() {
     getCache: async () => (await getKey(FC.CACHE_KEY)) || {},
     setCache: (cache) => localSet({ [FC.CACHE_KEY]: cache }),
     getPaused: async () => (await getKey(FC.PAUSE_KEY)) === true,
+    // The packed snapshot is the packed threat set: not used with the threat
+    // tier off (review 2026-11-16 WP-20).
+    snapshotAllowed: async () => {
+      const s = FEAT.normalizeSettings(await getKey("settings"));
+      return s.enabled && s.features.threatTier;
+    },
     getSessionRules: () => new Promise((resolve) => dnr.getSessionRules((r) => {
       void chrome.runtime.lastError;
       resolve(r || []);

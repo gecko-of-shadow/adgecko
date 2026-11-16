@@ -23,6 +23,9 @@ signs, by hand or automatically (D-7). The scripts below work for either.
   keeps the last two verified files for rollback.
 - On browser start and after an update it re-applies the saved file (if not
   expired), otherwise the packed snapshot `src/rules/threat-snapshot.json`.
+  The snapshot is the packed threat list, so it is not used when the user
+  switched off "Block known malware hosts" (then no feed rules until a valid
+  file arrives). A worker wake with the right rules in place changes nothing.
 - The popup shows serial, rule count, time of the last check, the last
   problem, and paused/killed.
 
