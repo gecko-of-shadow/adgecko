@@ -5,7 +5,7 @@
 <img src="icons/icon128-working.png" width="128" height="128" alt="Adgecko icon: a neon purple gecko head on a dark rounded square, its tongue snapping a cluster of pixel squares (an ad)">
 
 **A Chrome extension (Manifest V3) that blocks ads on Twitch, YouTube, Kick and other websites, blocks known malware sites, and stops pages from copying shell commands into your clipboard.**<br>
-Current version: 0.3.5. It runs inside Chrome (version 137 or newer): no separate program, no account.
+Current version: 0.3.6. It runs inside Chrome (version 137 or newer): no separate program, no account.
 
 [Features](#features) · [Install](#install) · [How to use](#how-to-use) · [Privacy and permissions](#privacy-and-permissions) · [Troubleshooting](#troubleshooting) · [Development](#development) · [License](#license-and-brand)
 
@@ -34,7 +34,7 @@ Current version: 0.3.5. It runs inside Chrome (version 137 or newer): no separat
 Adgecko is not on the Chrome Web Store. You load it into Chrome yourself:
 
 1. Get the files and unzip them. Pick one:
-   - **Release zip:** [adgecko-0.3.5.zip](https://github.com/gecko-of-shadow/adgecko/releases/download/v0.3.5/adgecko-0.3.5.zip) ([release v0.3.5](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.5), [all releases](https://github.com/gecko-of-shadow/adgecko/releases)).
+   - **Release zip:** [adgecko-0.3.6.zip](https://github.com/gecko-of-shadow/adgecko/releases/download/v0.3.6/adgecko-0.3.6.zip) ([release v0.3.6](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.6), [all releases](https://github.com/gecko-of-shadow/adgecko/releases)).
    - **Newest code:** click the green **Code** button on this page, then **Download ZIP**. This may be newer than the last numbered release; Chrome shows the version from `manifest.json`.
 2. In Chrome, type `chrome://extensions` in the address bar and press Enter. If you had an older copy loaded, remove it first.
 3. Turn on **Developer mode** (top right). This switch lets Chrome add an extension from a folder on your computer.

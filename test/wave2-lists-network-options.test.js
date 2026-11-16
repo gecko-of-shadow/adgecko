@@ -54,9 +54,10 @@ function rulesFor(text) {
 const req = (rules, url, type, initiator, method) =>
   evaluate(rules, { url, type, method: method || "get", initiator: initiator === undefined ? null : initiator }).action;
 
-Deno.test("table version 2 and parser version 4 (stored copies parsed by the old table are refetched)", () => {
+// Parser version 5 since 0.3.6 (WP-14: $generichide / $elemhide page exceptions).
+Deno.test("table version 2 and parser version 5 (stored copies parsed by the old table are refetched)", () => {
   assert(FO.TABLE.version === 2, "table version " + FO.TABLE.version);
-  assert(U.PARSER_VERSION === 4, "parser version " + U.PARSER_VERSION);
+  assert(U.PARSER_VERSION === 5, "parser version " + U.PARSER_VERSION);
 });
 
 Deno.test("$domain=: blocks only from the listed sites, never from excluded subsites, never a navigation", () => {
