@@ -132,23 +132,31 @@ function installCosmeticHide(api) {
       removeStyle();
       return Promise.resolve(false);
     }
-    const enabled = state && typeof state === "object" ? state.enabled : state;
-    const allowed = state && typeof state === "object" ? state.allowedOrigins : undefined;
-    if (!isEnabled(enabled)) {
-      removeStyle();
-      return Promise.resolve(false);
-    }
-    if (originAllowed(pageOrigin(hostname, href), allowed)) {
-      removeStyle();
-      return Promise.resolve(false);
-    }
     const stored = state && typeof state === "object" ? state.stored : null;
     // Feature switches (src/settings/features.js): the "cosmetic" feature, the
     // extension master and this site's override. Live: storage.onChanged re-runs.
+    // When settings exist, they alone decide. generalEnabled and
+    // generalAllowedOrigins mirror the "network" feature (legacyMirror), so
+    // they must not switch off "Hide leftover ad boxes". They decide only
+    // before the migration, when no settings key exists yet.
     const F = features();
-    if (F && stored && stored[SETTINGS_KEY] && !F.resolve(stored[SETTINGS_KEY], stored[OVERRIDES_KEY], hostname).cosmetic) {
-      removeStyle();
-      return Promise.resolve(false);
+    const settings = stored && stored[SETTINGS_KEY];
+    if (F && settings && typeof settings === "object") {
+      if (!F.resolve(settings, stored[OVERRIDES_KEY], hostname).cosmetic) {
+        removeStyle();
+        return Promise.resolve(false);
+      }
+    } else {
+      const enabled = state && typeof state === "object" ? state.enabled : state;
+      const allowed = state && typeof state === "object" ? state.allowedOrigins : undefined;
+      if (!isEnabled(enabled)) {
+        removeStyle();
+        return Promise.resolve(false);
+      }
+      if (originAllowed(pageOrigin(hostname, href), allowed)) {
+        removeStyle();
+        return Promise.resolve(false);
+      }
     }
     // Refreshed / installed rules in storage: generic sheet (top frame only)
     // plus this host's site rules, minus its #@# exceptions. One <style>.
