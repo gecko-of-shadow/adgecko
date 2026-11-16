@@ -48,8 +48,64 @@ function installCosmeticHide(api) {
 
   let cssText = null;
   let styleEl = null;
+  // The hide CSS lives in a constructed sheet in document.adoptedStyleSheets.
+  // A <style> node under <html> (added at document_start, before <head>
+  // exists) breaks React 18 whole-document hydration (hydrateRoot(document)):
+  // React re-renders the whole document and the node is lost. An adopted
+  // sheet is not a DOM node. It has no id, so the page sees no product name.
+  // The <style> node stays as the fallback when the sheet API fails.
+  let sheet = null;
+  let sheetOn = false; // our sheet should be adopted now
+  let sheetFailed = false;
+  let watchers = false;
+  let styleObserver = null;
+
+  function adoptedHas(s) {
+    return Array.prototype.includes.call(document.adoptedStyleSheets || [], s);
+  }
+
+  function adoptSheet() {
+    if (!sheet || !sheetOn || adoptedHas(sheet)) return;
+    document.adoptedStyleSheets = Array.from(document.adoptedStyleSheets || []).concat(sheet);
+  }
+
+  // A page script may replace document.adoptedStyleSheets. Check again when
+  // the document is parsed and when the page has loaded.
+  function watchAdopted() {
+    if (watchers) return;
+    watchers = true;
+    const again = () => {
+      try {
+        adoptSheet();
+      } catch {
+        // The page made the list read-only: nothing more to do.
+      }
+    };
+    try {
+      document.addEventListener("DOMContentLoaded", again, { once: true });
+      if (typeof window !== "undefined" && window && window.addEventListener) window.addEventListener("load", again, { once: true });
+    } catch {
+      // No events in unit tests without a DOM.
+    }
+  }
 
   function removeStyle() {
+    sheetOn = false;
+    if (sheet) {
+      try {
+        if (adoptedHas(sheet)) document.adoptedStyleSheets = Array.from(document.adoptedStyleSheets).filter((s) => s !== sheet);
+      } catch {
+        // document may be unavailable in unit tests.
+      }
+    }
+    if (styleObserver) {
+      try {
+        styleObserver.disconnect();
+      } catch {
+        // ignore
+      }
+      styleObserver = null;
+    }
     if (styleEl) {
       try {
         styleEl.remove();
@@ -66,15 +122,53 @@ function installCosmeticHide(api) {
     }
   }
 
+  function injectSheet(text) {
+    if (sheetFailed || typeof CSSStyleSheet === "undefined" || !document.adoptedStyleSheets) return false;
+    try {
+      if (!sheet) sheet = new CSSStyleSheet();
+      sheet.replaceSync(text);
+      sheetOn = true;
+      adoptSheet();
+      watchAdopted();
+      return true;
+    } catch {
+      sheetFailed = true;
+      sheetOn = false;
+      sheet = null;
+      return false;
+    }
+  }
+
+  function appendStyleEl() {
+    const root = document.documentElement || document.head || document;
+    root.appendChild(styleEl);
+  }
+
+  // Fallback only: put the <style> node back when the page (or a hydration
+  // re-render) removes it.
+  function watchStyleEl() {
+    if (styleObserver || typeof MutationObserver === "undefined") return;
+    try {
+      styleObserver = new MutationObserver(() => {
+        if (styleEl && !styleEl.isConnected) appendStyleEl();
+      });
+      styleObserver.observe(document, { childList: true });
+      if (document.documentElement) styleObserver.observe(document.documentElement, { childList: true });
+    } catch {
+      styleObserver = null;
+    }
+  }
+
   function injectStyle(text) {
     if (typeof document === "undefined") return;
+    if (injectSheet(text)) return;
     if (!styleEl || !styleEl.isConnected) {
       styleEl = document.createElement("style");
       styleEl.id = STYLE_ID;
-      const root = document.documentElement || document.head || document;
-      root.appendChild(styleEl);
+      appendStyleEl();
     }
     styleEl.textContent = text;
+    watchStyleEl();
   }
 
   // The bundled fallback sheet comes from the service worker by message: it is
