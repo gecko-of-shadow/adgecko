@@ -25,13 +25,41 @@ install(api);
 
 // update.js names forbidden list hosts on purpose (deny list). Do not scan it
 // for those substrings — scan the code that must never phone them.
-const packagedJs = [
+// Review 2026-11-16 WP-09 item 5: the scanned files come from the manifest
+// content scripts, the script tags of the extension pages and the worker
+// importScripts list, so a new live script is scanned too. Only update.js and
+// general-background.js (the worker, which fetches the lists) are left out.
+// The dead modules (exclusions.js, toggles.js, general/cosmetic.js) are still
+// packed, so they stay in the scan.
+const ROOT = new URL("../", import.meta.url);
+const LIST_FETCHERS = new Set(["src/general/update.js", "src/general-background.js"]);
+function liveScriptPaths() {
+  const files = new Set();
+  for (const cs of manifest.content_scripts || []) for (const js of cs.js || []) files.add(js);
+  for (const page of ["src/popup.html", "src/settings.html"]) {
+    const html = Deno.readTextFileSync(new URL(page, ROOT));
+    for (const m of html.matchAll(/<script[^>]*\ssrc="([^"]+)"/g)) files.add("src/" + m[1]);
+  }
+  const imports = /importScripts\(([^)]*)\)/.exec(backgroundSource);
+  for (const m of (imports ? imports[1] : "").matchAll(/"([^"]+)"/g)) files.add("src/" + m[1]);
+  return [...files].filter((f) => !LIST_FETCHERS.has(f));
+}
+const livePaths = liveScriptPaths();
+const packagedJs = livePaths.map((f) => Deno.readTextFileSync(new URL(f, ROOT))).concat([
   popupSource,
   youtubeSource,
   exclusionsSource,
   togglesSource,
   cosmeticSource,
-];
+]);
+
+Deno.test("the fetch scan covers the live scripts (manifest, pages, worker imports)", () => {
+  for (const f of ["src/cosmetic.js", "src/settings/flags.js", "src/guards/clipboard.js", "src/guards/popups.js", "src/twitch-directory-ads.js", "src/settings.js", "src/popup.js", "src/feed/client.js", "src/threat/compile.js"]) {
+    assert(livePaths.includes(f), "not scanned: " + f + " in " + JSON.stringify(livePaths));
+  }
+  assert(!livePaths.some((f) => LIST_FETCHERS.has(f)), "list fetchers are left out");
+  assert(packagedJs.length === livePaths.length + 5 && packagedJs.every((t) => typeof t === "string" && t.length > 0), "each scanned file has text");
+});
 
 Deno.test("update policy is alarm refresh + manual, list hosts only", () => {
   assertEquals(api.POLICY, "alarm-and-manual");
