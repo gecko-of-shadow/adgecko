@@ -9,6 +9,9 @@
 // parse is dropped alone and never disables the others.
 (function (root) {
   const MAX_SELECTOR_LEN = 600;
+  // Parenthesis nesting limit. EasyList and EasyPrivacy use depth 2 at most
+  // (2026-11). Deeper nesting has no use and only costs parse time.
+  const MAX_SELECTOR_DEPTH = 8;
   const PROCEDURAL_RE = /:(?:-abp-[a-z-]+|has-text|xpath|upward|remove|remove-attr|remove-class|style|matches-css(?:-before|-after)?|matches-attr|matches-path|matches-media|matches-prop|min-text-length|watch-attr|others|if|if-not|contains|nth-ancestor|properties|shadow)\(/i;
   // Stream sites keep their own handlers; never store rules for them. The one
   // list is src/settings/features.js (loaded first wherever this file runs).
@@ -41,8 +44,10 @@
         continue;
       }
       if (ch === '"' || ch === "'") quote = ch;
-      else if (ch === "(") paren += 1;
-      else if (ch === ")") paren -= 1;
+      else if (ch === "(") {
+        paren += 1;
+        if (paren > MAX_SELECTOR_DEPTH) return "";
+      } else if (ch === ")") paren -= 1;
       else if (ch === "[") bracket += 1;
       else if (ch === "]") bracket -= 1;
       if (paren < 0 || bracket < 0) return "";
@@ -126,7 +131,12 @@
   // every argument branch is scoped. Other arguments (:has(), procedural
   // filters) are kept, except with forSubject, where they say nothing about
   // the subject element itself.
-  function reduceSelector(m, forSubject) {
+  // The memo (one per checked branch) keeps the cost linear in the nesting
+  // depth: each :is-like level reduces its arguments for the scope check and
+  // again for the output, which without the memo is 2^depth calls.
+  function reduceSelector(m, forSubject, memo) {
+    const key = (forSubject ? "1" : "0") + m;
+    if (memo && memo.has(key)) return memo.get(key);
     let out = "";
     for (let i = 0; i < m.length; i++) {
       const ch = m[i];
@@ -145,25 +155,27 @@
       const name = (/:[a-z-]+$/i.exec(out) || [""])[0];
       if (NON_SCOPING_PSEUDO_RE.test(name)) continue;
       if (LIST_PSEUDO_RE.test(name)) {
-        const ok = splitTop(args, (c) => c === ",").every((b) => isScopedText(reduceSelector(b, false)));
-        if (ok) out += "(" + reduceSelector(args, forSubject) + ")";
+        const ok = splitTop(args, (c) => c === ",").every((b) => isScopedText(reduceSelector(b, false, memo)));
+        if (ok) out += "(" + reduceSelector(args, forSubject, memo) + ")";
         continue;
       }
-      if (!forSubject) out += "(" + reduceSelector(args, false) + ")";
+      if (!forSubject) out += "(" + reduceSelector(args, false, memo) + ")";
     }
+    if (memo) memo.set(key, out);
     return out;
   }
 
   function isUnscopedBranch(m) {
+    const memo = new Map();
     // Subject = last compound of the branch.
-    const compounds = splitTop(reduceSelector(m, true), (c) => /[\s>+~]/.test(c)).filter(Boolean);
+    const compounds = splitTop(reduceSelector(m, true, memo), (c) => /[\s>+~]/.test(c)).filter(Boolean);
     const subject = compounds[compounds.length - 1] || "";
     if (!/[.#[]/.test(subject)) {
       const type = subject.replace(/:[a-z-]+/gi, "").toLowerCase();
       if (type === "html" || type === "body" || /:root\b/i.test(subject)) return true;
       if ((type === "" || type === "*") && compounds.length === 1) return true;
     }
-    return !isScopedText(reduceSelector(m, false));
+    return !isScopedText(reduceSelector(m, false, memo));
   }
 
   function isUnscopedSelector(sel) {
@@ -465,7 +477,7 @@
   }
 
   root.GeneralCosmeticParse = {
-    MAX_SELECTOR_LEN, KEY_GENERIC, KEY_META, KEY_INDEX, PREFIX_SITE, PREFIX_EXC, HIDE,
+    MAX_SELECTOR_LEN, MAX_SELECTOR_DEPTH, KEY_GENERIC, KEY_META, KEY_INDEX, PREFIX_SITE, PREFIX_EXC, HIDE,
     sanitizeSelector, normalizeHost, isUnscopedSelector, isPageRootSelector, parseCosmetic, mergeCosmetic, candidateHosts,
     cssForSelectors, toStorage, keysForHost, buildPageCss,
   };
