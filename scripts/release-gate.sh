@@ -769,13 +769,14 @@ for rel, ok_ns in allowed.items():
     for match in re.finditer(r"\b(chrome|browser)\.([A-Za-z0-9_]+)", text):
         if match.group(1) != "chrome" or match.group(2) not in ok_ns:
             bad.append(f"{rel}: {match.group(0)}")
-# No interval timers in the UI worker; exactly one alarm (gecko-refresh, the
-# 3 h list/feed check), created only through REFRESH_ALARM.
+# No interval timers in the UI worker; one periodic alarm (gecko-refresh, the
+# 3 h list/feed check), created only through REFRESH_ALARM, plus the one-shot
+# gecko-refresh-retry alarm after a failed list run (no period; WP-16).
 bg = (root / "src/general-background.js").read_text(errors="replace")
 if re.search(r"\bsetInterval\b", bg):
     bad.append("src/general-background.js must not use setInterval")
-if re.search(r"chrome\.alarms\.create\((?!REFRESH_ALARM,)", bg):
-    bad.append("src/general-background.js may only create the gecko-refresh alarm")
+if re.search(r"chrome\.alarms\.create\((?!REFRESH_ALARM,|GU\.RETRY_ALARM, \{ delayInMinutes: GU\.RETRY_DELAY_MINUTES \})", bg):
+    bad.append("src/general-background.js may only create the gecko-refresh alarm and the one-shot retry alarm")
 if not re.search(r'REFRESH_ALARM\s*=\s*"gecko-refresh"', (root / "src/general/update.js").read_text(errors="replace")):
     bad.append("src/general/update.js must name the one alarm gecko-refresh")
 if bad:

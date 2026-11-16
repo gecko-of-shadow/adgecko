@@ -25,7 +25,9 @@ Deno.test("general popup defaults on and never auto-fetches lists", () => {
   assert(popupSource.includes("generalEnabled: true") || popupSource.includes("generalEnabled: true,"), "storage default ON");
   assert(!popupSource.includes("chrome.alarms"), "no alarms in popup");
   // The worker's single 3 h "gecko-refresh" alarm is allowed (owner decision 2026-11-02).
-  assert(!/chrome\.alarms\.create\((?!REFRESH_ALARM,)/.test(backgroundSource), "only the refresh alarm in background");
+  // Plus the one-shot "gecko-refresh-retry" alarm after a failed run (review
+  // 2026-11-16 WP-16; no periodInMinutes, so it never polls).
+  assert(!/chrome\.alarms\.create\((?!REFRESH_ALARM,|GU\.RETRY_ALARM, \{ delayInMinutes: GU\.RETRY_DELAY_MINUTES \})/.test(backgroundSource), "only the refresh alarm and the one-shot retry in background");
   assert(!backgroundSource.includes("setInterval"), "no interval polling for lists");
   assert(backgroundSource.includes("manual"), "update path is manual");
 });
