@@ -365,10 +365,10 @@ Manual procedure after a change (from `docs/UPDATING-DEPENDENCIES.md:12-28`):
 
 ## 14. How to add a test for a new bug
 
-Use the `nightly-*` pattern: one new file for one bug.
+Use the method of the `nightly-*` files: one new file for one bug. Do not use the `nightly-` prefix for a new file.
 
-1. Find the area: `cosmetic`, `feed`, `guards`, `manifest-scripts`, `site-scripts`, `threat`, `ui` or `worker-refresh`.
-2. Name the file `test/nightly-<area>-<next number>-<short bug title>.test.js`. Use lower-case words with hyphens.
+1. The prefixes `nightly-`, `final-`, `wave2-` and `pr12-` are records of past reviews. The newest test (`test/ubo-rpnt-payload.test.js`, 2026-11-15) has a subject name.
+2. Name the file `test/<subject>-<short bug title>.test.js`, unless the owner gives a prefix. Use lower-case words with hyphens. This agrees with `STRUCTURE.md`, "A new test".
 3. Write a comment at the top. Tell what was wrong, the correct behaviour and the fix.
 4. Import the source file as text. Use `unwrapMain()` for `src/youtube.js`, `src/kick.js` and `src/guards/*.js`.
 5. Get the function with `new Function`. Give fake globals as parameters.
