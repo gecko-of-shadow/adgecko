@@ -136,6 +136,12 @@ Status values: done, changed, discarded, owner decision, open. All behavior is U
 
 The zip is not committed (`*.zip` is in `.gitignore`).
 
+### Ignored tests
+
+- Here: 9 ignored, the same as the 0.3.5 baseline. They are 1 storage-budget test (no list cache), 3 owner-decision Twitch and list tests, 3 known-issue Kick tests (`src/kick.js` is frozen), and 2 privacy tests that need the `PRIVACY_PATTERNS` secret.
+- CI on 0308df8 showed 11 ignored. The 2 extra are the two release-gate tests in `test/release-tooling.test.js` (WP-22). They skip when `rg` is missing, and the CI tests job did not install ripgrep. Commit "CI: install ripgrep in the tests job" adds the same step that the gate job has. UNVERIFIED in CI until the next run.
+- CI on 0308df8 also had 1 failed test (the parser-version pin). Commit ef90dda fixed it before this note.
+
 ### Privacy check: open item
 
 - The two commit messages name test addresses (the CGNAT test and the `192.168.` boundary test). The checker honors the allow marker per line, and these lines have none.
