@@ -25,6 +25,8 @@ const SCRATCH = 'd="$(mktemp -d)"; trap \'rm -rf "$d"\' EXIT; ' +
   'python3 -B scripts/lib/package_files.py --root . | tr -d "\\r" | while IFS= read -r f; do mkdir -p "$d/pkg/$(dirname "$f")"; cp "$f" "$d/pkg/$f"; done; ';
 const gateOn = (mutate) => bash(SCRATCH + mutate + '\nbash scripts/release-gate.sh --dir "$d/pkg"');
 const line = (text, re) => text.split("\n").find((l) => re.test(l)) || "";
+// The gate needs deno, python3 and rg (scripts/release-gate.sh checks them).
+const canGate = (await bash("command -v rg && command -v python3")).code === 0;
 
 Deno.test("frozen pins: each frozen file in the checkout matches its pin; the Twitch pin agrees with vendor-pins.json", async () => {
   const files = Object.keys(frozen.frozen).sort();
@@ -38,15 +40,15 @@ Deno.test("frozen pins: each frozen file in the checkout matches its pin; the Tw
   assert(tw && tw.sha256 === vendorPins.twitch.sha256 && tw.bytes === vendorPins.twitch.bytes, "Twitch frozen pin != scripts/vendor-pins.json");
 });
 
-Deno.test("release gate on a clean package copy: frozen pins, manifest keys and secret scan pass; a password= in src/rules/*.json is not a finding", async () => {
+Deno.test({ name: "release gate on a clean package copy: frozen pins, manifest keys and secret scan pass; a password= in src/rules/*.json is not a finding", ignore: !canGate, fn: async () => {
   const r = await gateOn('printf \'{"x":"password=1"}\\n\' > "$d/pkg/src/rules/x.json"');
   assert(/PASS\s+frozen playback files match scripts\/frozen-pins\.json/.test(r.text), "frozen PASS line:\n" + r.text);
   assert(/PASS\s+permissions are storage/.test(r.text), "section 2 PASS:\n" + line(r.text, /privileged/));
   assert(/PASS\s+no obvious identity\/secret strings/.test(r.text), "rules JSON must be excluded from the secret scan:\n" + line(r.text, /identity\/secret/));
   assert(r.code === 0 && /VERDICT: CLEAN/.test(r.text), "gate verdict:\n" + r.text.slice(-3000));
-});
+} });
 
-Deno.test("release gate on a changed package copy: a changed kick.js, a new manifest key and a password= in src/*.js each FAIL", async () => {
+Deno.test({ name: "release gate on a changed package copy: a changed kick.js, a new manifest key and a password= in src/*.js each FAIL", ignore: !canGate, fn: async () => {
   const r = await gateOn([
     'echo "// changed" >> "$d/pkg/src/kick.js"',
     'python3 -c "import json,sys; p=sys.argv[1]; m=json.load(open(p)); m[\'update_url\']=\'https://updates.example/x.xml\'; m[\'content_security_policy\']={\'sandbox\':\'sandbox allow-scripts; script-src \\\'unsafe-eval\\\'\'}; json.dump(m, open(p, \'w\'), indent=2)" "$d/pkg/manifest.json"',
@@ -57,7 +59,7 @@ Deno.test("release gate on a changed package copy: a changed kick.js, a new mani
   const sec2 = line(r.text, /privileged \/ permission fields/);
   assert(/FAIL/.test(sec2) && /update_url/.test(sec2) && /content_security_policy/.test(sec2), "manifest key allow-list:\n" + sec2);
   assert(/FAIL\s+possible identity\/secret strings/.test(r.text) && /src\/x\.js/.test(r.text), "password= in src/x.js");
-});
+} });
 
 Deno.test("release gate: the manifest key allow-list is exactly the keys of the current manifest.json", async () => {
   const gate = await Deno.readTextFile(new URL("scripts/release-gate.sh", ROOT));
@@ -132,7 +134,7 @@ SH
 chmod +x "$d/bin/git"
 PATH="$d/bin:$PATH" TMPDIR="$d/tmp" FAKE_HEAD="${head}" deno run --no-lock --allow-read --allow-write="$d/tmp" --allow-run=git scripts/sync-ubo-youtube.mjs --uassets ${"0".repeat(40)} ${extra}; echo "rc=$?"`;
 
-Deno.test("uBO sync: the meta commit is the pinned commit; a moved tag stops the sync before upstream code runs", async () => {
+Deno.test("uBO sync: the meta commit is the pinned commit; another tag needs --ubo-commit; a stub HEAD that differs is refused", async () => {
   const { expectedUboCommit, verifyUboClone } = await import("../scripts/lib/ubo-commit-pin.mjs");
   assert(/^[0-9a-f]{40}$/.test(uboMeta.ublock_commit), "meta records a commit");
   assert(expectedUboCommit({ tag: uboMeta.ublock_tag, meta: uboMeta }) === uboMeta.ublock_commit, "meta commit is the pin");
@@ -143,7 +145,10 @@ Deno.test("uBO sync: the meta commit is the pinned commit; a moved tag stops the
   err = "";
   try { await verifyUboClone({ tag: "1.75.0", expected: uboMeta.ublock_commit, revParse: async () => "b".repeat(40) + "\n" }); } catch (e) { err = e.message; }
   assert(/not the pinned commit/.test(err), "stub HEAD differs: " + err);
+});
 
+// A bash script named "git" on PATH is not found by Deno on Windows.
+Deno.test({ name: "uBO sync with a stub git: a moved tag or another tag stops the sync before upstream code runs", ignore: Deno.build.os === "windows", fn: async () => {
   const moved = await bash(UBO_SYNC("b".repeat(40)));
   assert(/rc=[1-9]/.test(moved.text) && /not the pinned commit/.test(moved.text), "moved tag:\n" + moved.text);
   assert(!/UPSTREAM CODE RAN/.test(moved.text), "upstream code ran:\n" + moved.text);
@@ -153,7 +158,7 @@ Deno.test("uBO sync: the meta commit is the pinned commit; a moved tag stops the
   // download, because this test grants no network.
   const pinned = await bash(UBO_SYNC(uboMeta.ublock_commit));
   assert(!/not the pinned commit/.test(pinned.text) && /net access|NotCapable|PermissionDenied/i.test(pinned.text), "pinned HEAD:\n" + pinned.text);
-});
+} });
 
 Deno.test("uBO sync workflow: explicit Deno grants, no -A", async () => {
   const wf = await Deno.readTextFile(new URL(".github/workflows/ubo-youtube-drift.yml", ROOT));
