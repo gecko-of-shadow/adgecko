@@ -116,10 +116,6 @@ Do not read the large JSON files in full. `general-network.json` has 5,168,730 b
 | `design/` | `DESIGN-RULES.md`, `README.md`, images, `rejected/`, `screenshots/`. Tests refer to it. |
 | `review-2026-11-16/` | Record of the 0.3.6 code review: `PLAN.md`, `RESULTS.md`, `findings.json`, `repros/`. |
 | `proposals/` | `kick-0.3.5-fixes.patch`: Kick corrections that are not applied, because `src/kick.js` is frozen. |
-| Old one-off files | `beta-0.2.5-release.md` to `beta-0.2.12-release.md`, `release-notes/`, `agent-notes/`, `README-backup-2026-10-24.md`, `chat-2026-10-11.md`, `efficiency-check-2026-10-11.md` |
-| Old image folders | `cards/`, `cards-beta/`, `cards-release/`, five `cards-beta-0.2.x/` folders, `install/`, `safe/`, `icon-preview/`, four loose images |
-
-The old files are candidates for removal. The owner must approve each deletion (`TODO.md`).
 
 ## 5. What goes into the release zip
 

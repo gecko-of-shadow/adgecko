@@ -1,27 +1,26 @@
 # To do
 
-Last update: 2026-11-16, after version 0.3.6 was merged into `main`.
+Last update: 2026-11-16, after the release of version 0.3.6.
 
 ## Where it stands
 
-- **Last release:** [v0.3.5](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.5), published 2026-11-15.
-- **On `main`, not released:** version 0.3.6 (pull request 14, commit `5cd4ab6`, merged 2026-11-16). It has the corrections of the 2026-11-16 code review. See `CHANGELOG.md`, section 0.3.6.
-- **Checks on 0.3.6:** 884 tests passed, 0 failed, 9 ignored, and the release gate was CLEAN on the checkout (Linux container, Deno 2.9.8). The package has 64 files and 7,862,441 bytes; the cap is 8,000,000.
-- **UNVERIFIED:** all behaviour of 0.3.6 in Chrome. No run on the owner's PC or on live sites was done.
+- **Last release:** [v0.3.6](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.6), published 2026-11-16 by the release workflow from commit `5cd4ab6`. Assets: `adgecko-0.3.6.zip` (2,508,034 bytes) and `adgecko-0.3.6.zip.sha256`.
+- **Checks on 0.3.6:** the release workflow passed the release gate on the checkout and on the zip. CI on `main` was green (tests with `--parallel`, privacy, release gate). The package has 64 files and 7,862,441 bytes; the cap is 8,000,000.
+- **UNVERIFIED:** all behaviour of 0.3.6 in Chrome. The release was published before a manual test, at the owner's request. No run on the owner's PC or on live sites was done.
 
 ## Next steps
 
-### 1. Release 0.3.6
+### 1. Test 0.3.6 by hand
 
-- [ ] Look at the CI result on `main`. The 0.3.6 workflow changes (tests with `--parallel`, the `.sha256` release file, the uBlock Origin sync permissions) did not run on GitHub before the merge.
-- [ ] Test by hand in your own Chrome, with the unpacked 0.3.6:
+- [ ] Test in your own Chrome, with `adgecko-0.3.6.zip` or the unpacked `main`:
   - YouTube: a video starts; menus, Share and Save open after an "Experiencing interruptions?" toast; a premiere page is not reloaded.
   - Twitch (live stream) and Kick.
   - One news site, Gmail, GitHub and one React site: the page is complete and ad boxes are hidden.
   - Clipboard guard: a copy on an ordinary site gives plain text; Ctrl+C on your own selection works.
   - Popup: **Fix this site**, **Allow this site**, **Block again**, **Undo fix**.
-- [ ] **Actions** -> **release** -> **Run workflow**. The README links to the latest release page, which shows v0.3.5 until this step is done.
-- [ ] After the release, update this file and remove the UNVERIFIED marks that the tests proved.
+- [ ] If a test fails: roll back to v0.3.5 (`CHANGELOG.md`, section 0.3.5, "Roll back") and record the failure here.
+- [ ] After the tests, remove the UNVERIFIED marks that the tests proved.
+- [ ] The weekly uBlock Origin drift job runs for the first time with explicit permissions on Monday. Look at its result.
 
 ### 2. Owner decisions
 
@@ -36,7 +35,7 @@ The numbers are the numbers in `docs/review-2026-11-16/RESULTS.md`, section "Own
 | 5, 7 | EasyList licence option (CC BY-SA 3.0 or GPL-3.0-or-later). The project `LICENSE` in the zip. | Not changed. Recommendation: GPL-3.0-or-later, and add the `LICENSE`. |
 | 6 | Peter Lowe list terms ("non-commercial"). | Open since 0.3.4. |
 | 8 | Cross-list `@@` exceptions. | Recommendation: keep the same-host rule and add a note to the docs. |
-| 9, 19 | Cosmetic storage layout. Repack `cosmetic-rules.json` and measure the storage budget. | Not done. No list cache was available. See item 3 below. |
+| 9, 19 | Cosmetic storage layout. Repack `cosmetic-rules.json` and measure the storage budget. | The budget was measured: see item 3 below. The repack is not committed. |
 | 10 | Pop-up guard for links, forms and child frames. | Not changed. Documented as out of scope. |
 | 11, 12 | Release gate tests in parallel. A reproducible zip with Windows `tar.exe`. | The gate stays serial. Only the Info-ZIP path is reproducible. |
 | 13, 14, 15 | Clipboard guard: plain-text copies on ordinary sites, the 500 ms timing limit, the two limits that stay. | In 0.3.6. Accept or change. |
@@ -59,9 +58,10 @@ Older decisions that are open:
 
 ### 3. Before the next list repack
 
-- [ ] Run `python3 scripts/pack-filter-lists.py`, then run `test/final-storage-budget.test.js` with the full list cache. Record the peak here. The quota is 10,485,760 bytes and the test limit is 9,000,000 bytes.
+- [x] Storage budget measured on 2026-11-16 (lists downloaded at 20:28 UTC, scratch repack, not committed): peak 8,155,204 bytes. The test limit is 9,000,000 bytes (headroom 844,796) and the quota is 10,485,760 bytes (headroom 2,330,556). The test passed.
+- [ ] Before each later repack: run `python3 scripts/pack-filter-lists.py`, then run `test/final-storage-budget.test.js` with the full list cache, and record the peak here.
 - [ ] Refresh the public-suffix data with `scripts/build-psl-subset.mjs` (now: Public Suffix List of 2026-11-15).
-- [ ] Look at the package size after the repack. The headroom to the gate cap is 137,559 bytes.
+- [ ] Look at the package size after each repack. Now: 7,862,441 bytes (headroom 137,559). The scratch repack of 2026-11-16 gave 7,859,984 bytes (headroom 140,016).
 
 ### 4. Keep an eye on
 
@@ -71,6 +71,5 @@ Older decisions that are open:
 ### 5. Later
 
 - [ ] **Chrome Web Store:** nothing was submitted. Read [docs/STORE-REVIEW-NOTES.md](docs/STORE-REVIEW-NOTES.md) first.
-- [ ] Delete the old one-off documents and image folders in `docs/` (approximately 30 MB). The list is in `CONCERNS.md`, L2. The owner must approve each deletion.
 - [ ] Not covered today: YouTube Music, YouTube Kids, YouTube players in other websites, and ads that are part of the video.
 - [ ] Work through `.planning/codebase/CONCERNS.md`. It is sorted by impact.

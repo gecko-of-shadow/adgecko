@@ -11,7 +11,7 @@ UNVERIFIED: all behaviour in Chrome. No statement here was proven on the owner's
 
 | ID | Concern | Impact |
 |---|---|---|
-| H1 | Storage quota headroom is small and was not measured for 0.3.6 | High |
+| H1 | Storage quota headroom is small, and CI does not measure it | High |
 | H2 | Package size is 1.7 % below the release gate cap | High |
 | H3 | The vendored Twitch script has an archived upstream and an `eval` call | High |
 | H4 | YouTube response patching depends on upstream shapes | High |
@@ -26,7 +26,7 @@ UNVERIFIED: all behaviour in Chrome. No statement here was proven on the owner's
 | M8 | The signed feed is dormant, but its code and data ship | Medium |
 | M9 | Public-suffix data and hand-kept platform lists have no refresh schedule | Medium |
 | L1 | A retired workflow stays in the repository | Low |
-| L2 | Old documents and image folders use approximately 30 MB | Low |
+| L2 | Old documents and image folders (done: deleted) | Low |
 | L3 | References to a file that is not in the repository | Low |
 | L4 | Generated `src/rules/README.md` and `meta.json` hints are old | Low |
 | L5 | Small duplicates and one wrong workflow comment | Low |
@@ -35,16 +35,16 @@ Section 5 lists items that were checked and are not a concern now.
 
 ## 2. High impact
 
-### H1. Storage quota headroom is small and was not measured for 0.3.6
+### H1. Storage quota headroom is small, and CI does not measure it
 
 - **What.** The extension stores parsed lists in `chrome.storage.local`. The quota is 10,485,760 bytes. The manifest does not request `unlimitedStorage`, and the gate forbids it.
-- **Evidence.** `CHANGELOG.md` (0.3.5) gives a fresh-install peak of approximately 8.1 MB. `test/final-storage-budget.test.js` permits a peak of 9,000,000 bytes, but it is ignored without a full list cache, thus CI never runs it. 0.3.6 added the `cosNoG:<host>` keys and changed `PARSER_VERSION` to 5, and `HANDOFF.md` records that the budget was not measured after that.
+- **Evidence.** `CHANGELOG.md` (0.3.5) gives a fresh-install peak of approximately 8.1 MB. `test/final-storage-budget.test.js` permits a peak of 9,000,000 bytes, but it is ignored without a full list cache, thus CI never runs it. Measured on 2026-11-16 for 0.3.6, with the lists downloaded at 2026-11-16 20:28 UTC (scratch repack, not committed): peak 8,155,204 bytes. That is 844,796 bytes below the test limit and 2,330,556 bytes below the quota.
 - **Impact.** The upstream lists grow. If the peak goes above the quota, each refresh fails with a quota error and the lists become old. No automatic check finds the problem before a release.
 - **Action.** Run `scripts/pack-filter-lists.py`, then run the budget test with the full cache before each release, and record the peak in `TODO.md`. Do not add new stored list data before a decision about an IndexedDB store.
 
 ### H2. Package size is 1.7 % below the release gate cap
 
-- **What.** The gate fails when the package is larger than 8,000,000 bytes. The package has 64 files and 7,862,441 bytes. The headroom is 137,559 bytes.
+- **What.** The gate fails when the package is larger than 8,000,000 bytes. The package has 64 files and 7,862,441 bytes. The headroom is 137,559 bytes. A scratch repack on 2026-11-16 gave 7,859,984 bytes (headroom 140,016).
 - **Evidence.** `src/rules/general-network.json` is 5,168,730 bytes. `src/rules/cosmetic-sample.json` (172,666 bytes) has no reader. `src/rules/threat-snapshot.json` (333,354 bytes) is used only when the feed is configured (M8). The gate comments record that the cap was increased two times.
 - **Impact.** The next list repack can make the gate fail. A cap that moves with each release does not catch a runaway pack.
 - **Action.** Remove `cosmetic-sample.json` from `EXTRA_OPTIONAL` in `scripts/lib/package_files.py` (owner decision). Make a decision about the snapshot. Then set the cap from the measured size plus a fixed margin.
@@ -165,18 +165,9 @@ Five manifest entries run in the MAIN world. The page can see and change the sam
 
 `.github/workflows/refresh-release-notes.yml` only prints one line. Its comment names v0.2.13 as "the only current release". `test/privacy-generic.test.js` reads this file, thus a deletion needs a test change and the owner's approval.
 
-### L2. Old documents and image folders use approximately 30 MB
+### L2. Old documents and image folders (done)
 
-| Item | Size | References found |
-|---|---|---|
-| Eight `docs/cards*` folders | 26,520 KB | `docs/cards-release/`: `docs/release-notes/v0.2.3.md`. `docs/cards-beta-0.2.x/`: the old `docs/beta-0.2.x-release.md` pages. The others: none. |
-| `docs/install/`, `docs/safe/`, `docs/icon-preview/` | 2,792 KB | None |
-| Four loose images in `docs/` | 1,244 KB | `what-it-is.png`: `docs/release-notes/v0.2.3.md`. `gecko-avatar.jpg`: `docs/README-backup-2026-10-24.md`. |
-| Old notes: eight `docs/beta-0.2.*-release.md`, `docs/release-notes/`, `docs/agent-notes/`, three dated files | approximately 100 KB | Only each other and the codebase map |
-
-- `docs/design/` and `docs/review-2026-11-16/` are in use.
-- `scripts/pack-zip.sh` does not pack `docs/`. Thus the package size does not change.
-- **Action.** Ask the owner for approval with this list, then delete. The git history keeps the size until a history rewrite. Do not rewrite history without approval.
+The owner approved the deletion on 2026-11-16. 95 old files (approximately 30 MB) were deleted from `docs/`: the old release pages and notes, `agent-notes/`, the `cards*` folders, `install/`, `safe/`, `icon-preview/` and four loose images. The git history keeps them. Do not rewrite history without the owner's approval.
 
 ### L3. References to a file that is not in the repository
 
