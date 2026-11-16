@@ -213,3 +213,82 @@ Deno.test("WP-02: a password field never has its value written by the guard", ()
   p.browserCopy("copy");
   assert(p.clipboard.text !== "secretpw1", "password written");
 });
+
+// ---- WP-03: clipboard.write() fails closed ----
+
+// navigator.clipboard.write with fake ClipboardItem / Blob. getType returns a
+// real (Deno/V8) promise, so `await` reads promise.constructor as in Chrome.
+function writePage(host = "verify-human.example", flag = true) {
+  const written = [];
+  class Blob { constructor(parts) { this.parts = parts; } text() { return Promise.resolve(this.parts.join("")); } }
+  class ClipboardItem {
+    constructor(map, opts = {}) { this.map = map; this.throwOnGetType = !!opts.throwOnGetType; }
+    get types() { return Object.keys(this.map); }
+    getType(type) { if (this.throwOnGetType) throw new Error("getType failed"); return Promise.resolve(this.map[type]); }
+  }
+  class Clipboard { write(items) { for (const it of items) written.push(it.types.join(",") + ":" + (it.map["text/plain"] ? it.map["text/plain"].parts.join("") : "")); return Promise.resolve(); } }
+  const clipboard = new Clipboard();
+  class Document {}
+  const document = new Document();
+  document.addEventListener = () => {};
+  const window = { Blob, ClipboardItem, Document };
+  loadClip().install({ window, document, navigator: { clipboard }, location: { hostname: host }, now: () => clock, notify: () => {}, flagOn: () => { if (flag === "throw") throw new Error("x"); return flag; } });
+  return { clipboard, written, Blob, ClipboardItem };
+}
+const outcome = (pr) => pr.then(() => "resolved", (e) => (e && e.name) || "rejected");
+
+Deno.test("WP-03: a throw while the guard reads a text item (getType) rejects the write; the native write never runs", async () => {
+  const p = writePage();
+  const r = await outcome(p.clipboard.write([new p.ClipboardItem({ "text/plain": new p.Blob([CMD]) }, { throwOnGetType: true })]));
+  assert(r === "NotAllowedError" && p.written.length === 0, "fail open: " + JSON.stringify({ r, w: p.written }));
+});
+
+Deno.test("WP-03: a throwing Promise.prototype.constructor getter around write() does not let the command through", async () => {
+  const p = writePage();
+  const desc = Object.getOwnPropertyDescriptor(Promise.prototype, "constructor");
+  let pr;
+  try {
+    Object.defineProperty(Promise.prototype, "constructor", { get() { throw new Error("x"); }, configurable: true });
+    pr = p.clipboard.write([new p.ClipboardItem({ "text/plain": new p.Blob([CMD]) })]);
+  } finally {
+    Object.defineProperty(Promise.prototype, "constructor", desc);
+  }
+  const r = await outcome(pr);
+  assert(!p.written.some((w) => hasCmd(w)), "command written: " + JSON.stringify({ r, w: p.written }));
+});
+
+Deno.test("WP-03: a Promise.prototype.constructor getter plus a page `then` cannot feed the check a harmless Blob (t2 case A2)", async () => {
+  const p = writePage();
+  const desc = Object.getOwnPropertyDescriptor(Promise.prototype, "constructor");
+  const realThen = Promise.prototype.then;
+  const clean = new p.Blob(["hello"]);
+  let pr;
+  try {
+    Object.defineProperty(Promise.prototype, "constructor", { get() { return Object; }, configurable: true });
+    Promise.prototype.then = function (ok, bad) {
+      return realThen.call(this, (v) => (ok ? ok((v instanceof p.Blob && v.parts.join("").length > 20) ? clean : (typeof v === "string" && v.includes("powershell") ? "hello" : v)) : v), bad);
+    };
+    pr = p.clipboard.write([new p.ClipboardItem({ "text/plain": new p.Blob([CMD]) })]);
+    realThen.call(pr, null, () => {}); // handled now; the outcome is read below
+    await new Promise((r) => setTimeout(r, 20));
+  } finally {
+    Promise.prototype.then = realThen;
+    Object.defineProperty(Promise.prototype, "constructor", desc);
+  }
+  const r = await outcome(pr);
+  assert(!p.written.some((w) => hasCmd(w)), "command written: " + JSON.stringify({ r, w: p.written }));
+});
+
+Deno.test("WP-03 controls: image-only and ordinary text writes pass; the switch off, a docs host and a throwing switch still write", async () => {
+  const p = writePage();
+  assert(await outcome(p.clipboard.write([new p.ClipboardItem({ "image/png": new p.Blob(["png"]) })])) === "resolved", "image-only write");
+  assert(await outcome(p.clipboard.write([new p.ClipboardItem({ "text/plain": new p.Blob(["hello"]) })])) === "resolved", "text write");
+  assert(p.written.length === 2, "writes: " + JSON.stringify(p.written));
+  // An image-only item is never read, so a throwing getType does not matter.
+  assert(await outcome(p.clipboard.write([new p.ClipboardItem({ "image/png": new p.Blob(["png"]) }, { throwOnGetType: true })])) === "resolved", "image-only write with a throwing getType");
+  for (const [host, flag] of [["verify-human.example", false], ["docs.github.com", true], ["verify-human.example", "throw"]]) {
+    const q = writePage(host, flag);
+    const r = await outcome(q.clipboard.write([new q.ClipboardItem({ "text/plain": new q.Blob([CMD]) }, { throwOnGetType: true })]));
+    assert(r === "resolved" && q.written.length === 1, `guard not active (${host}, ${flag}): ` + r);
+  }
+});

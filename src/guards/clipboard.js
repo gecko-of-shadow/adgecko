@@ -50,9 +50,11 @@
 // Known limit (UNVERIFIED in Chrome): a same-origin frame the guard has not
 // reached yet has native methods (writeText, setData, execCommand on its own
 // document), so it is not checked at all; that is an injection-timing gap.
-// Known limit (UNVERIFIED in practice): the clipboard.write() check awaits
-// promises, and a page that rewrites Promise internals can still interfere
-// with that one asynchronous path.
+// The clipboard.write() check does not use `await`: it chains with the native
+// Promise.prototype.then captured at load, and while the guard is on any
+// error on that path blocks the write (fail closed, review 2026-11-16). A
+// page getter on Promise.prototype.constructor made the old `await` path
+// fail open (proven in Chrome).
 // Fail-open: an error in the guard lets the original call through, but an
 // error while judging "did the visitor copy it" counts as "no". An error from
 // the page's own value (its toString throws) is not a guard error: it goes
@@ -72,6 +74,7 @@ const StringFn = String;
 const dateNow = Date.now;
 const PromiseCtor = Promise;
 const promiseReject = Promise.reject;
+const promiseThen = Promise.prototype.then;
 const getOwnDesc = Object.getOwnPropertyDescriptor;
 const getProto = Object.getPrototypeOf;
 const defineProp = Object.defineProperty;
@@ -596,29 +599,76 @@ function installClipboardGuard(target) {
             }
             const call = [list];
             for (let i = 1; i < args.length; i++) call[i] = args[i];
-            const run = async () => {
-              let verdict = true;
+            // No `await` (review 2026-11-16): `await` reads promise.constructor,
+            // and a page getter there could throw or hand the check a harmless
+            // Blob through its own `then`. The parts are chained with the
+            // native then (captured at load). Any error while the guard is on
+            // blocks the write (fail closed); with the switch off, on a safe
+            // host, or when the switch itself throws, the native call decides.
+            return new PromiseCtor((resolve, reject) => {
+              const finish = (ok) => {
+                if (!ok) {
+                  reject(blocked());
+                  return;
+                }
+                try {
+                  resolve(apply(fn, self, call));
+                } catch (error) {
+                  reject(error);
+                }
+              };
+              let active = false;
               try {
-                if (flagOn() && !onSafeHost(hostOf(env.location))) {
-                  const n = list.length;
-                  for (let i = 0; i < n && verdict; i++) {
-                    const item = list[i];
-                    const types = apply(typesGet, item, []);
-                    for (let j = 0; j < types.length && verdict; j++) {
-                      const type = lower(StringFn(types[j]));
-                      if (type !== "text/plain" && type !== "text/html") continue;
-                      const blob = await apply(getTypeFn, item, [types[j]]);
-                      verdict = allowed(await apply(blobTextFn, blob, []));
-                    }
+                active = flagOn() && !onSafeHost(hostOf(env.location));
+              } catch {
+                active = false;
+              }
+              const failed = () => finish(!active);
+              if (!active) {
+                finish(true);
+                return;
+              }
+              // The text parts to check, as [item, type] pairs (index access
+              // only: no page-replaceable Array iterator).
+              const parts = [];
+              try {
+                const n = list.length;
+                for (let i = 0; i < n; i++) {
+                  const item = list[i];
+                  const types = apply(typesGet, item, []);
+                  for (let j = 0; j < types.length; j++) {
+                    const type = lower(StringFn(types[j]));
+                    if (type === "text/plain" || type === "text/html") parts[parts.length] = [item, types[j]];
                   }
                 }
               } catch {
-                verdict = true; // not readable by us: the native call decides
+                failed();
+                return;
               }
-              if (!verdict) throw blocked();
-              return apply(fn, self, call);
-            };
-            return run();
+              let k = 0;
+              const next = () => {
+                if (k >= parts.length) {
+                  finish(true);
+                  return;
+                }
+                const part = parts[k++];
+                try {
+                  apply(promiseThen, apply(getTypeFn, part[0], [part[1]]), [(blob) => {
+                    try {
+                      apply(promiseThen, apply(blobTextFn, blob, []), [(text) => {
+                        if (allowed(text)) next();
+                        else finish(false);
+                      }, failed]);
+                    } catch {
+                      failed();
+                    }
+                  }, failed]);
+                } catch {
+                  failed();
+                }
+              };
+              next();
+            });
           },
         });
         defineProp(writeOwner, "write", { value: wrappedWrite, configurable: true, writable: true });
