@@ -55,7 +55,7 @@ Deno.test("generichide: the domain= form, localhost and private IP forms", () =>
   for (const h of ["howtogeek.com", "www.screenrant.com", "localhost", "192.168.1.1", "192.168.0.254", "127.0.0.1"]) {
     assert(pageCss(st, h) === "", h + " must get no generic rules");
   }
-  for (const h of ["example.com", "192.169.1.1", "10.0.0.1", "127.0.0.2"]) {
+  for (const h of ["example.com", "192.169.1.1", "10.0.0.1", "127.0.0.2"]) { // privacy-check: allow (boundary next to the 192.168. prefix)
     assert(pageCss(st, h).includes(".ad-banner"), h + " keeps the generic sheet");
   }
 });
