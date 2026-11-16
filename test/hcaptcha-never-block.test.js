@@ -8,6 +8,7 @@ import generalRules from "../src/rules/general-network.json" with { type: "json"
 import threatRules from "../src/rules/threat-network.json" with { type: "json" };
 import threatSnapshot from "../src/rules/threat-snapshot.json" with { type: "json" };
 import youtubeRules from "../src/rules/ubo-youtube-network.json" with { type: "json" };
+import { urlFilterToRegExp } from "./fixtures/dnr-matcher.js";
 
 const U = {};
 new Function(`${updateSource}\nreturn installGeneralAdblockUpdate;`)()(U);
@@ -229,18 +230,76 @@ function isHcaptchaHost(host) {
   return h === "hcaptcha.com" || h.endsWith(".hcaptcha.com");
 }
 
+// Review 2026-11-16 WP-09 item 1: the old regexFilter check removed each
+// backslash and then needed one, so it could not fail. This check compiles
+// each regexFilter and urlFilter and runs it on hCaptcha probe URLs, with the
+// requestDomains and excludedRequestDomains of the same rule. Initiator, type
+// and method conditions are ignored on purpose (a rule that blocks hCaptcha
+// only on some pages still blocks it).
+const HCAPTCHA_PROBES = [
+  "https://hcaptcha.com/1/api.js",
+  "https://js.hcaptcha.com/1/api.js",
+  "https://api.hcaptcha.com/checksiteconfig",
+  "https://sentry.hcaptcha.com/x",
+  "https://imgs.hcaptcha.com/captcha",
+  "https://newassets.hcaptcha.com/c",
+];
+const hostUnder = (h, list) => (list || []).some((d) => h === d || h.endsWith("." + d));
+
+// Returns a reason text when the block rule can hit an hCaptcha host, else "".
+function hcaptchaBlockReason(rule) {
+  if (!rule.action || rule.action.type !== "block") return "";
+  const c = rule.condition || {};
+  for (const host of c.requestDomains || []) {
+    if (isHcaptchaHost(host)) return "requestDomains " + host;
+  }
+  const rf = typeof c.regexFilter === "string" ? new RegExp(c.regexFilter, "i") : null;
+  const uf = typeof c.urlFilter === "string" ? urlFilterToRegExp(c.urlFilter) : null;
+  for (const url of HCAPTCHA_PROBES) {
+    const host = new URL(url).hostname;
+    if (c.requestDomains && !hostUnder(host, c.requestDomains)) continue;
+    if (hostUnder(host, c.excludedRequestDomains)) continue;
+    if (!rf && !uf && !c.requestDomains) continue; // no URL condition: not a host rule
+    if (rf && !rf.test(url)) continue;
+    if (uf && !uf.test(url)) continue;
+    return (rf ? "regexFilter " + c.regexFilter : "urlFilter " + c.urlFilter) + " hits " + url;
+  }
+  // A filter text that names the host, also when no probe path matches.
+  const text = (c.urlFilter || "") + " " + (c.regexFilter || "");
+  if (/(?<![a-z0-9-])hcaptcha(?:\\?\.|\[\.\])com(?![a-z0-9-])/i.test(text) && !hostUnder("hcaptcha.com", c.excludedRequestDomains)) return "filter text " + text.trim();
+  return "";
+}
+
+Deno.test("hCaptcha shipped-rule check catches each rule form (self-test)", () => {
+  const block = (condition) => ({ id: 1, priority: 1, action: { type: "block" }, condition });
+  for (const cond of [
+    { regexFilter: "^https?://([a-z]+\\.)?hcaptcha\\.com/" },
+    { regexFilter: "hcaptcha\\.com" },
+    { urlFilter: "||sentry.hcaptcha.com^" },
+    { urlFilter: "||sentry.hcaptcha.com/1/api.js" },
+    { urlFilter: "|https://hcaptcha.com/" },
+    { urlFilter: "||hcaptcha.com^" },
+    { urlFilter: "/captcha", requestDomains: ["imgs.hcaptcha.com"] },
+  ]) {
+    assert(hcaptchaBlockReason(block(cond)) !== "", "not caught: " + JSON.stringify(cond));
+  }
+  for (const cond of [
+    { urlFilter: "||nothcaptcha.com^" },
+    { regexFilter: "^https?://nothcaptcha\\.com/" },
+    { requestDomains: ["hcaptcha.com.evil.example"] },
+    { urlFilter: "_ad_", excludedRequestDomains: ["hcaptcha.com"] },
+  ]) {
+    assert(hcaptchaBlockReason(block(cond)) === "", "false hit: " + JSON.stringify(cond));
+  }
+  assert(hcaptchaBlockReason({ id: 1, action: { type: "allow" }, condition: { urlFilter: "||hcaptcha.com^" } }) === "", "allow rules are not checked");
+});
+
 Deno.test("shipped block rules name no hCaptcha host", () => {
   const sets = [["general", generalRules], ["threat", threatRules], ["youtube", youtubeRules]];
   for (const [name, rules] of sets) {
     for (const rule of rules) {
-      if (!rule.action || rule.action.type !== "block") continue;
-      for (const host of (rule.condition && rule.condition.requestDomains) || []) {
-        assert(!isHcaptchaHost(host), name + " blocks " + host);
-      }
-      const uf = rule.condition && rule.condition.urlFilter;
-      if (typeof uf === "string") assert(!/(^|\|\|)(\*\.)?hcaptcha\.com([\/^:*?]|$)/i.test(uf), name + " urlFilter " + uf);
-      const rf = rule.condition && rule.condition.regexFilter;
-      if (typeof rf === "string") assert(!/(?<![a-z0-9])hcaptcha\\.com(?![a-z0-9.-])/i.test(rf.replace(/\\\./g, ".")), name + " regexFilter");
+      const why = hcaptchaBlockReason(rule);
+      assert(why === "", name + " rule " + rule.id + ": " + why);
     }
   }
   const snap = JSON.stringify(threatSnapshot);
