@@ -35,5 +35,10 @@ if (record.kind === "kill") {
   if (doc && typeof doc === "object" && "kill" in doc) throw new Error("a kill document must be signed with the kill key");
   S.validateFeed(doc, { storedSerial: 0, now: Date.parse(doc.notBefore) });
 }
+// Review 2026-11-16 WP-11: a serial at the cap (2^31-1) blocks every later
+// file signed with the same key. Warn well before it (10,000,000 below).
+if (Number.isSafeInteger(doc.serial) && doc.serial > S.MAX_SERIAL - 10000000) {
+  console.error("Warning: serial " + doc.serial + " is near the cap " + S.MAX_SERIAL + ". After the cap, browsers accept a higher serial only from a new pinned key.");
+}
 await Deno.writeTextFile(outPath, await signBytes(bytes, record));
 console.log("Signed " + feedPath + " (serial " + doc.serial + ") with key id " + record.keyId + "; wrote " + outPath);

@@ -219,10 +219,15 @@ Deno.test("window and serial bounds: future createdAt, notBefore before createdA
   assert((await check(feed({ serial: 2026110201 }), { storedSerial: 0 })).ok, "date-like serial on a fresh install");
   assert((await check(feed({ serial: 1000005 }), { storedSerial: 5 })).ok, "a step of exactly 1,000,000");
   // Once the stored document has expired, a larger step is allowed (no permanent lock-out).
-  assert((await check(feed({ serial: 2026111001 }), { storedSerial: 1, storedNotAfter: NOW - DAY })).ok, "big step after the stored file expired");
+  // (Review 2026-11-16 WP-11: only when the stored file lived at least 24 h.)
+  assert((await check(feed({ serial: 2026111001 }), { storedSerial: 1, storedNotBefore: NOW - 3 * DAY, storedNotAfter: NOW - DAY })).ok, "big step after the stored file expired");
+  assert(!(await check(feed({ serial: 2026111001 }), { storedSerial: 1, storedNotBefore: NOW - DAY - 60000, storedNotAfter: NOW - DAY })).ok, "big step after a 60 s file expired");
   assert(!(await check(feed({ serial: 2026111001 }), { storedSerial: 1, storedNotAfter: NOW + DAY })).ok, "big step while the stored file is valid");
-  // Kill documents: same serial bounds.
+  // Kill documents: the cap, but no step limit (review 2026-11-16 WP-11).
   const killBytes = enc({ format: 1, kill: true, serial: 2000001, createdAt: iso(NOW) });
   const kr = await V.verifyFeed(killBytes, await sign(killBytes, killKey.kp, "kill-test"), OPTS({ storedKillSerial: 1 }));
-  assert(!kr.ok && /kill serial jumps/.test(kr.error), JSON.stringify(kr));
+  assert(kr.ok && kr.kind === "kill", JSON.stringify(kr));
+  const capBytes = enc({ format: 1, kill: true, serial: 2147483648, createdAt: iso(NOW) });
+  const kc = await V.verifyFeed(capBytes, await sign(capBytes, killKey.kp, "kill-test"), OPTS({ storedKillSerial: 1 }));
+  assert(!kc.ok && /above 2147483647/.test(kc.error), JSON.stringify(kc));
 });

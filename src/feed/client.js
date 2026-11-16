@@ -151,6 +151,38 @@
   }
   const RELEASED = { killLatch: false, killed: false, killedVersion: "", lastError: "kill switch released by an extension update" };
 
+  // Key rotation (review 2026-11-16 WP-11). The stored serial (and kill
+  // serial) is bound to the key that signed it (serialKeyId, killSerialKeyId).
+  // When an extension update removes that key from the pinned list, the
+  // serial starts again at 0 and the saved files are dropped: else a serial at
+  // the cap (2^31-1: a stolen key or a typo) refuses every file from the new
+  // key for ever. A removed key cannot sign any more, so the reset gives it
+  // nothing. While the key is still pinned, nothing is reset (also not when a
+  // kill latch is released), so files signed before a kill stay refused.
+  // State without a key id (older state) is not reset either.
+  const hasKey = (keys, id) => !!id && Object.prototype.hasOwnProperty.call(keys || {}, id);
+  async function forgetRemovedKeys(deps, st) {
+    const patch = {};
+    let note = "";
+    if (st.serialKeyId && !hasKey(deps.keys.feedKeys, st.serialKeyId)) {
+      Object.assign(patch, { serial: 0, appliedSerial: 0, notBefore: "", notAfter: "", serialKeyId: "" });
+      note = "feed key " + st.serialKeyId + " is no longer pinned; serial reset";
+      try {
+        await deps.setCache({ current: null, previous: null });
+      } catch {
+        // the old files no longer verify anyway (unknown key id)
+      }
+    }
+    if (st.killSerialKeyId && !hasKey(deps.keys.killKeys, st.killSerialKeyId)) {
+      Object.assign(patch, { killSerial: 0, killSerialKeyId: "" });
+      note = (note ? note + "; " : "") + "kill key " + st.killSerialKeyId + " is no longer pinned; kill serial reset";
+    }
+    if (!note) return st;
+    patch.lastError = note;
+    await setState(deps, patch);
+    return Object.assign({}, st, patch);
+  }
+
   // The packaged snapshot (src/rules/threat-snapshot.json) as rules.
   async function snapshotRules(deps) {
     const snap = await deps.loadSnapshot();
@@ -176,6 +208,7 @@
       await setState(deps, RELEASED);
       st = Object.assign({}, st, RELEASED);
     }
+    if (!latched(st, deps)) st = await forgetRemovedKeys(deps, st);
     if (st.killed) {
       await removeFeedRules(deps);
       await setState(deps, { status: "killed", ruleCount: 0 });
@@ -220,6 +253,7 @@
       await setState(deps, RELEASED);
       st = Object.assign({}, st, RELEASED);
     }
+    st = await forgetRemovedKeys(deps, st);
     let bytes;
     let sigText;
     try {
@@ -246,8 +280,11 @@
     } catch {
       // fall through to the full check
     }
-    const storedNotAfter = st.notAfter ? Date.parse(st.notAfter) : 0;
-    const r = await V().verifyFeed(bytes, sigText, verifyOpts(deps, { storedSerial: st.serial || 0, storedKillSerial: st.killSerial || 0, storedNotAfter: Number.isFinite(storedNotAfter) ? storedNotAfter : 0 }));
+    const msOf = (v) => {
+      const t = v ? Date.parse(v) : 0;
+      return Number.isFinite(t) ? t : 0;
+    };
+    const r = await V().verifyFeed(bytes, sigText, verifyOpts(deps, { storedSerial: st.serial || 0, storedKillSerial: st.killSerial || 0, storedNotBefore: msOf(st.notBefore), storedNotAfter: msOf(st.notAfter) }));
     if (!r.ok) {
       await setState(deps, { lastError: "rejected: " + r.error, lastCheckAt: now });
       return { ok: false, ran: true, reason: r.error };
@@ -258,7 +295,7 @@
         // Forget the killed feed's saved files (follow-up review): after an
         // update releases the latch, nothing signed before the kill comes back.
         await deps.setCache({ current: null, previous: null });
-        await setState(deps, { status: "killed", killed: true, killLatch: true, killedVersion: deps.extensionVersion || "", killSerial: r.doc.serial, ruleCount: 0, lastError: "", lastCheckAt: now, fetchedAt: now });
+        await setState(deps, { status: "killed", killed: true, killLatch: true, killedVersion: deps.extensionVersion || "", killSerial: r.doc.serial, killSerialKeyId: r.keyId, ruleCount: 0, lastError: "", lastCheckAt: now, fetchedAt: now });
         return { ok: true, ran: true, mode: "killed" };
       }
       const doc = r.doc;
@@ -271,7 +308,7 @@
         }
         const picked = K().resolveRollback(doc, docs);
         if (!picked) {
-          await setState(deps, { serial: doc.serial, lastError: "rollback to " + doc.rollbackTo + " ignored: not stored", lastCheckAt: now, fetchedAt: now });
+          await setState(deps, { serial: doc.serial, serialKeyId: r.keyId, lastError: "rollback to " + doc.rollbackTo + " ignored: not stored", lastCheckAt: now, fetchedAt: now });
           return { ok: false, ran: true, reason: "rollback target not stored" };
         }
         const { rules, killed } = K().compileFeed(picked.doc);
@@ -280,7 +317,7 @@
         const other = pickedSlot === "current" ? cache.previous : cache.current;
         await deps.setCache({ current: cache[pickedSlot], previous: other || null });
         // A rolled-back document with killFeed reports "killed", not "active" (I-6).
-        await setState(deps, { status: killed ? "killed" : "active", source: "feed", killed, serial: doc.serial, appliedSerial: picked.serial, ruleCount: rules.length, notAfter: picked.doc.notAfter, appliedAt: now, lastError: "", lastCheckAt: now, fetchedAt: now });
+        await setState(deps, { status: killed ? "killed" : "active", source: "feed", killed, serial: doc.serial, serialKeyId: r.keyId, appliedSerial: picked.serial, ruleCount: rules.length, notBefore: picked.doc.notBefore, notAfter: picked.doc.notAfter, appliedAt: now, lastError: "", lastCheckAt: now, fetchedAt: now });
         return { ok: true, ran: true, mode: "rollback", serial: picked.serial };
       }
       const { rules, killed } = K().compileFeed(doc);
@@ -288,7 +325,7 @@
       // stored serial does not advance and the old rules stay active.
       await replaceRules(deps, rules);
       await deps.setCache({ current: entryOf(bytes, sigText, doc), previous: cache.current || null });
-      await setState(deps, { status: killed ? "killed" : "active", source: "feed", killed, serial: doc.serial, appliedSerial: doc.serial, ruleCount: rules.length, notAfter: doc.notAfter, appliedAt: now, lastError: "", lastCheckAt: now, fetchedAt: now });
+      await setState(deps, { status: killed ? "killed" : "active", source: "feed", killed, serial: doc.serial, serialKeyId: r.keyId, appliedSerial: doc.serial, ruleCount: rules.length, notBefore: doc.notBefore, notAfter: doc.notAfter, appliedAt: now, lastError: "", lastCheckAt: now, fetchedAt: now });
       return { ok: true, ran: true, mode: killed ? "killed" : "applied", rules: rules.length };
     } catch (e) {
       await setState(deps, { lastError: "apply: " + String(e && e.message || e), lastCheckAt: now });

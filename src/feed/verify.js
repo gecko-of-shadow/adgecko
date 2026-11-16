@@ -35,7 +35,7 @@
 
   // feedBytes: Uint8Array of feed.json; sigText: contents of feed.json.sig.
   // opts: { feedKeys, killKeys, now, storedSerial, storedKillSerial,
-  //         extensionVersion, protectedReason }
+  //         storedNotBefore, storedNotAfter, extensionVersion, protectedReason }
   // -> { ok: true, kind: "feed" | "kill", keyId, doc } or { ok: false, error }
   async function verifyFeed(feedBytes, sigText, opts) {
     const o = opts || {};
@@ -52,7 +52,7 @@
       }
       if (doc && typeof doc === "object" && "kill" in doc) throw new Error("a kill document must be signed by a kill key");
       const valid = S().validateFeed(doc, {
-        now: o.now, storedSerial: o.storedSerial, storedNotAfter: o.storedNotAfter, extensionVersion: o.extensionVersion, protectedReason: o.protectedReason,
+        now: o.now, storedSerial: o.storedSerial, storedNotBefore: o.storedNotBefore, storedNotAfter: o.storedNotAfter, extensionVersion: o.extensionVersion, protectedReason: o.protectedReason,
       });
       return { ok: true, kind: "feed", keyId, doc: valid };
     } catch (e) {
