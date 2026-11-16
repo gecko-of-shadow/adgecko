@@ -4,6 +4,10 @@
 // Blocks window.open() calls that come without a user gesture, a second
 // window opened in the same gesture, and "popunders": a click on plain page
 // content (not a link, button or form control) that opens another site.
+// Scope (review 2026-11-16, documented in docs/how-it-works.md): only
+// window.open is checked. <a target=_blank> (also a.click()) and forms with
+// target=_blank are not; each frame judges only its own gestures. Wider
+// coverage is an owner decision (false positives).
 // Logins and share dialogs on the allowed list always open. Per-site override
 // through the popup's feature list. Fail-open on any internal error.
 // "Same site" (security review L-17) compares registrable domains: a.co.uk and
@@ -246,6 +250,33 @@ function installPopupGuard(target) {
       } catch {
         // no tracking for this event: only the other checks apply
       }
+    }
+    // A trusted key press starts a gesture of its own (review 2026-11-16).
+    // Before, a click into a search box and Enter within 5 s (the site opens
+    // results from its keydown handler) was judged by the old click on the
+    // text field, a "popunder". The focused element is the target: a control
+    // counts as interactive; the page body or root (nothing focused) counts as
+    // page content, like a click on plain text.
+    const localNameGet = getter(protoOf(win.Element), "localName");
+    try {
+      listenOn.addEventListener("keydown", (e) => {
+        try {
+          if (!e || e.isTrusted !== true) return;
+          const t = clickedNode(e);
+          let name = "";
+          try {
+            name = StringFn((localNameGet ? apply(localNameGet, t, []) : t && t.localName) || "");
+          } catch {
+            name = "";
+          }
+          lastClick = { at: now(), target: t, interactive: name !== "" && name !== "body" && name !== "html", down: false };
+          opens = 0;
+        } catch {
+          // fail open
+        }
+      }, true);
+    } catch {
+      // key presses keep the last click's verdict
     }
     if (typeof win.open !== "function") return;
     const nativeOpen = win.open;
