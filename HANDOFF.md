@@ -123,16 +123,16 @@ Status values: done, changed, discarded, owner decision, open. All behavior is U
 | WP-24 | done (items 1-2 Option B) | see `git log --grep WP-24` | A trusted keydown starts a new gesture. Anchor, form and child-frame coverage documented as out of scope; Option A is owner decision 10. UNVERIFIED. |
 | WP-25 | done | see `git log --grep WP-25` | `--parallel` in checks.yml only; the gate stays serial (owner decision 11). New `test/twitch-playlist.test.js` runs the vendor playlist code. New upstream gap: vendor 1.55 stripAdSegments tracking-URL rewrite has no effect (writes a local variable). Not run in CI. |
 
-## Release checks for 0.3.6 (this container, 2026-11-16)
+## Release checks for 0.3.6 (this container, 2026-11-16, after the approved deletions)
 
 | Check | Result |
 |---|---|
-| `deno test --no-lock --allow-read --allow-run --allow-env test/` | 921 passed, 0 failed, 9 ignored (5 min 28 s). Baseline 0.3.5: 776, 0, 9. |
-| `bash scripts/release-gate.sh` | CLEAN (package bytes 7,607,291) |
-| `bash scripts/pack-zip.sh` | `adgecko-0.3.6.zip`, 68 files, 2,513,124 bytes compressed, 7,876,252 bytes unpacked (the gate cap is 8,000,000 unpacked) |
-| SHA-256 of the zip | `10b2178c31a6b60f7b4c6ad551c4dd97a483a1a728b148e3464536962c8bd69a` (a second pack gave the same hash) |
+| `deno test --no-lock --allow-read --allow-run --allow-env test/` | 884 passed, 0 failed, 9 ignored (4 min 28 s). Before the deletions: 921, 0, 9. Baseline 0.3.5: 776, 0, 9. |
+| `bash scripts/release-gate.sh` | CLEAN (package bytes 7,603,348) |
+| `bash scripts/pack-zip.sh` | `adgecko-0.3.6.zip`, 64 files, 2,508,034 bytes compressed, 7,862,441 bytes unpacked (the gate cap is 8,000,000 unpacked) |
+| SHA-256 of the zip | `1521dca69206728c4cdebc9236276b540584619f393d3493ab2f6fa4067a0bac` |
 | `bash scripts/release-gate.sh --zip adgecko-0.3.6.zip` | CLEAN |
-| `python3 -I scripts/privacy-check.py` (BASE = merge-base with `origin/main`, HEAD) | FAILED on 2 commit messages: ae6f02d line 17 and 0308df8 line 7 (test IP addresses with no allow marker). All file content passes. A range that starts after 0308df8 passes. PRIVACY_PATTERNS was not set here, so the personal-string rows were not checked. |
+| `python3 -I scripts/privacy-check.py` with BASE c2347c4 | Passed (PRIVACY_PATTERNS not set here). The full branch range still fails on 2 older commit messages (ae6f02d, 0308df8); the owner approved a squash merge for that. |
 
 The zip is not committed (`*.zip` is in `.gitignore`).
 
