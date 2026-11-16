@@ -193,7 +193,7 @@ The owner approved all four items. The approval came through the parent session 
 - Deleted: the Twitch string-presence tests `test/page.test.js`, `test/swap.test.js`, `test/reload.test.js`, `test/bug.test.js`, `test/memory.test.js` (21 tests). `test/fixtures.test.js` and `test/playlist.test.js` stay, because they check fixtures, `youtube.js`, the manifest and the licence.
 - Deleted: `docs/cards2/`, `docs/cards-main/`.
 - References removed or updated: release gate (REQUIRED list and ALLOWED_RE), `scripts/lib/package_files.py`, `scripts/lib/twitch-vendor.mjs` pin sites, `scripts/update-twitch-vendor.mjs`, `test/vendor-pin.test.js`, `test/no-background-fetch.test.js`, `docs/UPDATING-DEPENDENCIES.md`, comments in `scripts/merge-dnr-rules.py`, `scripts/pack-filter-lists.py` and `test/fixtures/stream-hosts.txt`.
-- Not deleted: the local agent worktrees under `.claude/worktrees/` (container only, not in git).
+- Removed on the owner's request: the 9 local agent worktrees under `.claude/worktrees/` and their `worktree-agent-*` branches (container only, never pushed). Before the removal, a check showed that all their work is on this branch.
 
 ## Owner answers (2026-11-16)
 
