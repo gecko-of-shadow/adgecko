@@ -45,6 +45,7 @@ Target: Adgecko 0.3.6, ready to push.
 10. Write commit messages and notes in ASD-STE100. End each commit message with the attribution lines that the session gives.
 11. Keep HANDOFF.md up to date after each WP. Mark each item as one of: done, changed, discarded or owner decision. Mark it UNVERIFIED until a run on Bran's PC proves it.
 12. Do not write a token or a password in output.
+13. **Coverage check first.** `findings.json` is the source of truth. This plan was written from it without reading the code. Before WP-01, make sure that each confirmed finding (64) is in a WP. Put each missing finding in a WP, or record it as DISCARD with a reason. Write the map in HANDOFF.md.
 
 ## 2. Work packages
 
@@ -775,7 +776,7 @@ Do these steps after all the WPs are done, changed or discarded.
 10. Do not commit the zip unless the repository already tracks release zips. Check with `git ls-files '*.zip'`.
 11. Update HANDOFF.md. Give the status of each WP, the open owner decisions, the deletion candidates and the UNVERIFIED items for a run on Bran's PC.
 12. Commit on the branch `claude/festive-dirac-a043po`. Use ASD-STE100 messages with the attribution lines.
-13. Do not push to `main`, and do not tag or publish a release. The work is complete when the branch is ready to push and all the checks above pass.
+13. Push the branch `claude/festive-dirac-a043po` after each finished WP and at the end (the container is temporary; unpushed commits are lost). Update the draft pull request. Do not push to `main`, do not tag, and do not run the release workflow. The work is complete when the branch holds version 0.3.6 and all the checks above pass.
 14. Give the final report. Include:
     - the test counts
     - the gate results (checkout and zip)
