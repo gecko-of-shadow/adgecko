@@ -1,62 +1,65 @@
 # Changelog
 
+All notable changes to Adgecko, newest first. Each released version matches a GitHub release tagged `v<version>` (v0.3.0 and later); the release workflow copies a version's section into its release notes.
+
+Dates in this file are the owner's local date (UTC-6). The dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.
+
+## Unreleased
+
+Merged after 0.3.5 (PR #13, 2026-11-15); not in a release yet.
+
+### Added
+
+- Vendored Twitch script: `scripts/update-twitch-vendor.mjs` updates `src/vendor/video-swap-new.user.js` in one command. It downloads the file at a fixed upstream commit, checks it as text (it is never run), writes it byte for byte, records commit, version and SHA-256 in `scripts/vendor-pins.json`, and updates the version text in the tests and docs. It does not edit `scripts/release-gate.sh`. When an update stops part way, the error names the files already written. `test/vendor-pin.test.js` fails when the file and the pin do not agree.
+- Docs: `docs/UPDATING-DEPENDENCIES.md` gives the PowerShell 5.1 commands for both vendored dependencies (the Twitch script and the uBlock Origin YouTube filters), and what to expect from the release gate after an update (for example, `test/vendor-pin.test.js` fails until line 774 of `scripts/release-gate.sh` agrees with a new upstream `ourTwitchAdSolutionsVersion`).
+
+### Changed
+
+- YouTube: the uBlock Origin YouTube filters are synced to uAssets `c7e01d3`. Upstream replaced the `lactmilli` marker with `oaeb`, removed the `lactMilliseconds` edit and one snackbar hide, and renamed the minified variables of the `rpnt` payload; the sync's first local patch (`ARG_PATCHES[0]`, which no longer matched) has its anchor and reset variable updated. The synced files now carry uAssets `e140ffc` (banner line only, no filter change). uBlock Origin scriptlet code stays at tag 1.75.0. Not tested in Chrome.
+
+### Fixed
+
+- YouTube: a third local patch in `scripts/sync-ubo-youtube.mjs` restores the optional chaining on the `#masthead` logo-type read that uAssets `c7e01d3` dropped. Tests cover a missing header and a missing attribute on watch, home and embed URLs.
+
 ## 0.3.5 (2026-11-14)
 
 A bug hunt found 38 bugs, each proven by a failing test (`test/nightly-*.test.js`), and a final review of this release found 10 more (`test/final-*.test.js`). 45 are fixed here; 3 are held back (see "Not in this release"). Also: more blocking, easier recovery from a broken site, lighter page frames, and freshly packed lists.
 
-### More blocking
+### Added
 
 - Filter lists: site-scoped filters (`||host^$domain=site.com`, `$from=`) now block on the listed sites instead of being dropped. `$method`, `$denyallow` and a plain `$all` are converted exactly too. A filter that cannot be expressed exactly is still dropped, and a `$domain=` filter never blocks opening a page. To stay safe, a `$domain=` filter is dropped when any list has a path or option exception for its host (for example `@@||adobedtm.com/launch-$script`, which keeps Adobe Launch working on bank and shop sites), and filters that only exclude sites (`$domain=~site.com`) stay dropped, as in 0.3.4.
 - Filter lists: a `$badfilter` in one list (for example AdGuard's fix for totaladblock.com) now cancels the same filter in every other list (a `$badfilter` with `$domain=` removes only those sites), and an unconditional exception such as `@@||content.ingbank.pl^` lifts another list's block of that same host. Both work in the packed rules and in list refreshes, also when the list that carries them fails to download (the packer stores each list's full `$badfilter`, `@@` and path-exception data in `src/rules/packed-cross.json`, so it also covers filters that other lists add after the pack).
+- Popup: a **Reload page** button in "Did that fix it?", and after **Allow this site**, **Block again**, **No** and **Undo fix**. It reloads only when you click it.
+- Popup: on a page Chrome shows as blocked, a "Chrome says the page is blocked? Allow its domain" link opens the settings page with the cursor in the **Allow this domain** box.
+
+### Changed
+
 - Hidden ad boxes: the bundled hide sheet (EasyList + EasyPrivacy) is now rebuilt with every list pack (it was a month old). Hide rules still come only from EasyList and EasyPrivacy: AdGuard Base's site hide rules were tried on this branch but held back, because a list refresh with them needed 12.9 MB of the 10 MB `chrome.storage.local` quota. AdGuard Base's network rules still apply. A refresh on an install that stored AdGuard hide data drops it from the saved AdGuard copy, and the old hide keys are cleaned up when EasyList next parses.
 - Storage: a fresh-install refresh of the real lists now peaks at about 8.1 MB of the 10 MB quota (`test/final-storage-budget.test.js` checks it stays under 9 MB when the list cache is present).
-
-### Easier when a site breaks
-
-- Popup: a **Reload page** button in "Did that fix it?", and after **Allow this site**, **Block again**, **No** and **Undo fix**. It reloads only when you click it.
-- Popup: a site with a kept Fix now says "Protected – some filters off here (Fix this site)" and offers **Undo fix**. Before, it said "✅ Protected" while the extra filters stayed off.
-- Popup: on a page Chrome shows as blocked, a "Chrome says the page is blocked? Allow its domain" link opens the settings page with the cursor in the **Allow this domain** box.
 - Settings: the per-site list says "Allowed – not blocking here" or "Fixed – hidden ad boxes and page guards off" instead of raw switch names. **Remove** and **Reset** keep keyboard focus.
-- Popup: **Allow this site** and **Fix this site** on a subdomain now change only that subdomain, not its parent domain. An Allow on a parent domain now shows on a subdomain that has its own Fix. A Fix on a parent domain does not turn filters off on a subdomain that has its own site settings (as in 0.3.4), and an unanswered Fix that 0.3.4 saved on a parent domain still asks on the subdomain after the upgrade. A double click on **Fix this site** no longer loses the earlier switch state, and an unanswered Fix is no longer lost when you act on another site.
-- Settings: **Allow this domain** accepts Unicode (IDN) domain names, for ad lists and for the malware list.
-
-### Page guards
-
-- Clipboard guard: closes four ways a page could still put a command on the clipboard (a custom iterator or an item swap during `clipboard.write`, `clipboardData.items.add` in a copy handler, and 20,000 characters of padding before the command). It now also catches `irm URL | iex` (PowerShell) and `bash -c "$(curl ...)"` (macOS). A right-click no longer lets the page write for 30 seconds; only the browser's own Copy of your selection counts, also when a page starts a copy through a frame or a nested copy event. A command written into drag-and-drop data is now blocked too; ordinary dragged text is not.
-- Popup guard (off by default): a pop-under opened on mousedown or pointerdown, up to 5 s after the click, or behind a stopped click event is now judged by what was clicked. In `about:blank`, `srcdoc` and `blob:` frames, relative addresses resolve against the frame's real address. A site reached with a trailing dot (`news.example.`) counts as the same site.
-
-### Malware blocking
-
-- Switching **Block known malware hosts** (or the whole extension) off and on no longer drops a refreshed malware set that was already accepted.
-- With the ad lists off, a list refresh still installs freshly downloaded malware rules.
-- The public-suffix subset now has three-label suffixes (`k12.ca.us`, `act.edu.au`), the children of wildcard suffixes and regional Amazon S3 endpoints, so one list line can no longer block all of them as a whole; the packer now uses the same suffix rules as the extension. A malware list can no longer block a parent domain of a captcha host.
-- Threat feed: an unchanged feed no longer shows a false replay warning, and the last-check time moves again.
-
-### List updates
-
-- A refresh where no list reached its server (offline, captive portal) is now a failure: "Update lists" says so, and the retry comes after 30 minutes instead of 12 hours.
-- A manual **Update lists** click during an automatic refresh now waits for it, then runs its own update.
-- Allowed sites use one allow rule each (not two), and the rule range is capped, so **Block again** keeps working with very many allowed sites.
-
-### YouTube
-
-- Menus, Share, Save and other dialogs open again after the "Experiencing interruptions?" toast has appeared once (they stayed hidden until a reload), and the "Saved" / "Link copied" toasts show again.
-- When one video server fails and another is available, Adgecko no longer reports that all servers failed, which caused a needless reload.
-
-### Hidden ad boxes (rules)
-
-- A `~host` exclusion now stops only that rule on that host; `~host#@#selector` is no longer a global exception; a generic `#@#` exception in one list now cancels the same rule from the other lists; a Unicode host in a rule's domain list no longer drops the whole rule; generic rules that would hide the whole page (`body:has()`, selector lists) are dropped; a late fallback style sheet no longer overwrites newer rules. Two generic hide rules for the same selector, one excluding a site (`~example.com`) and one a subdomain of it (`~shop.example.com`), now both leave that subdomain alone (found in the PR #12 review).
-
-### Speed
-
-- Every page frame now reads a hide-rule index record of under 300 bytes instead of about 185 KB (the full key list moved to a worker-only record). Upgrades from 0.3.4 move it on the first start.
-- The worker no longer fetches and parses the 0.8 MB bundled hide sheet on every 3-hour alarm, only on install or a new version.
-- `features.js` keeps its first registry when it is injected twice into one frame.
-
-### Other
-
+- Speed: every page frame now reads a hide-rule index record of under 300 bytes instead of about 185 KB (the full key list moved to a worker-only record). Upgrades from 0.3.4 move it on the first start.
+- Speed: the worker no longer fetches and parses the 0.8 MB bundled hide sheet on every 3-hour alarm, only on install or a new version.
+- Speed: `features.js` keeps its first registry when it is injected twice into one frame.
 - Filter lists repacked 2026-11-14 22:00 UTC: 195,069 whole-domain and 18,422 site-scoped entries in 2,851 list rules (2,856 rules in `general-network.json`), and 574 URLhaus threat hosts. The bundled hide sheet: 13,635 generic and 7,841 site rules.
 - Release gate: the package size cap is now 8 MB (was 7.5 MB); the site-scoped filters add about 0.4 MB and the zip is about 7.82 MB. `src/rules/packed-cross.json` (about 60 KB) keeps `$all` page-block hosts only when some list has an `@@` exception for them, which keeps the zip under the cap. Checkouts keep LF line endings (`.gitattributes`), so the captcha parity test passes on Windows too.
+
+### Fixed
+
+- Popup: a site with a kept Fix now says "Protected – some filters off here (Fix this site)" and offers **Undo fix**. Before, it said "✅ Protected" while the extra filters stayed off.
+- Popup: **Allow this site** and **Fix this site** on a subdomain now change only that subdomain, not its parent domain. An Allow on a parent domain now shows on a subdomain that has its own Fix. A Fix on a parent domain does not turn filters off on a subdomain that has its own site settings (as in 0.3.4), and an unanswered Fix that 0.3.4 saved on a parent domain still asks on the subdomain after the upgrade. A double click on **Fix this site** no longer loses the earlier switch state, and an unanswered Fix is no longer lost when you act on another site.
+- Settings: **Allow this domain** accepts Unicode (IDN) domain names, for ad lists and for the malware list.
+- Clipboard guard: closes four ways a page could still put a command on the clipboard (a custom iterator or an item swap during `clipboard.write`, `clipboardData.items.add` in a copy handler, and 20,000 characters of padding before the command). It now also catches `irm URL | iex` (PowerShell) and `bash -c "$(curl ...)"` (macOS). A right-click no longer lets the page write for 30 seconds; only the browser's own Copy of your selection counts, also when a page starts a copy through a frame or a nested copy event. A command written into drag-and-drop data is now blocked too; ordinary dragged text is not.
+- Popup guard (off by default): a pop-under opened on mousedown or pointerdown, up to 5 s after the click, or behind a stopped click event is now judged by what was clicked. In `about:blank`, `srcdoc` and `blob:` frames, relative addresses resolve against the frame's real address. A site reached with a trailing dot (`news.example.`) counts as the same site.
+- Malware blocking: switching **Block known malware hosts** (or the whole extension) off and on no longer drops a refreshed malware set that was already accepted.
+- Malware blocking: with the ad lists off, a list refresh still installs freshly downloaded malware rules.
+- Malware blocking: the public-suffix subset now has three-label suffixes (`k12.ca.us`, `act.edu.au`), the children of wildcard suffixes and regional Amazon S3 endpoints, so one list line can no longer block all of them as a whole; the packer now uses the same suffix rules as the extension. A malware list can no longer block a parent domain of a captcha host.
+- Threat feed: an unchanged feed no longer shows a false replay warning, and the last-check time moves again.
+- List updates: a refresh where no list reached its server (offline, captive portal) is now a failure: "Update lists" says so, and the retry comes after 30 minutes instead of 12 hours.
+- List updates: a manual **Update lists** click during an automatic refresh now waits for it, then runs its own update.
+- List updates: allowed sites use one allow rule each (not two), and the rule range is capped, so **Block again** keeps working with very many allowed sites.
+- YouTube: menus, Share, Save and other dialogs open again after the "Experiencing interruptions?" toast has appeared once (they stayed hidden until a reload), and the "Saved" / "Link copied" toasts show again.
+- YouTube: when one video server fails and another is available, Adgecko no longer reports that all servers failed, which caused a needless reload.
+- Hidden ad boxes (rules): a `~host` exclusion now stops only that rule on that host; `~host#@#selector` is no longer a global exception; a generic `#@#` exception in one list now cancels the same rule from the other lists; a Unicode host in a rule's domain list no longer drops the whole rule; generic rules that would hide the whole page (`body:has()`, selector lists) are dropped; a late fallback style sheet no longer overwrites newer rules. Two generic hide rules for the same selector, one excluding a site (`~example.com`) and one a subdomain of it (`~shop.example.com`), now both leave that subdomain alone (found in the PR #12 review).
 
 ### Not in this release (owner decision)
 
@@ -76,9 +79,13 @@ Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\adgecko-0.3.4.zip" -Dest
 
 ## 0.3.4 (2026-11-11)
 
-Dates in this file are the owner's local date (UTC-6); the dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.
-
 Fixes made after the 0.3.3 zip was published (merged in PR #8), and freshly packed filter lists.
+
+### Changed
+
+- Filter lists repacked 2026-11-11 22:41 UTC: 193,100 whole-domain and 5,329 scoped entries in 2,513 list rules (2,518 rules in `general-network.json`), and 15,844 threat hosts in 199 rules. YouTube keeps 4 rules.
+
+### Fixed
 
 - Settings: **Allow this site** and **Fix this site** now take effect on a host with one label (`localhost`, an intranet name). The override was saved and shown, but the hide rules and the page guards never looked it up there.
 - Clipboard guard: your own cut (Ctrl/Cmd+X, Shift+Delete), Ctrl+Insert, and Ctrl+C on a keyboard layout where that key is not "c" (Russian, Greek and others) count as copying it yourself. They were cancelled with the "this page tried to put a command into your clipboard" notice. Only text that was selected when the key went down is let through, as before.
@@ -86,7 +93,6 @@ Fixes made after the 0.3.3 zip was published (merged in PR #8), and freshly pack
 - Lists: the status line keeps a storage error, and the "Reverted to the packed lists" message, until a refresh really runs. A background check that had nothing to do used to wipe the error and, after a revert, show the discarded lists' "Last update" time again.
 - Packer: `scripts/pack-filter-lists.py` runs the rule merger after it writes `src/rules/meta.json`, so a repack keeps `general_network_rules_total` instead of needing a second merger run by hand.
 - Popup: on YouTube Music, YouTube Studio, YouTube TV, YouTube Kids and youtube-nocookie pages the popup now shows the site and says "Malware blocking only – ad scripts don't run on this site", with **Allow this site** and **Fix this site** greyed out, instead of "No web page" and a hint to reload. The YouTube ad scripts still run on `www`, `m` and the bare domain only; those other hosts get just the small script that tells the popup which page it is on. The popup lists a switch only where its script is really injected. `manifest.json` adds those hosts (`*.youtube.com`, `youtubekids.com`, `youtube-nocookie.com` and their subdomains) to the matches of that one small script; `permissions` and `host_permissions` are unchanged.
-- Filter lists repacked 2026-11-11 22:41 UTC: 193,100 whole-domain and 5,329 scoped entries in 2,513 list rules (2,518 rules in `general-network.json`), and 15,844 threat hosts in 199 rules. YouTube keeps 4 rules.
 
 ### Roll back to 0.3.3
 
@@ -101,14 +107,22 @@ Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\adgecko-0.3.3.zip" -Dest
 
 ## 0.3.3 (2026-11-09)
 
-- Lists: the captcha never-block hosts have one source, `src/rules/never-block-captcha.json`. The packer, the rule merger and the YouTube sync read it, and the packer writes `src/general/never-block-captcha.js` from it for the service worker (list refresh and threat tier), so a new captcha vendor is one edit plus `python3 scripts/pack-filter-lists.py --never-block-captcha-js`. The parity test checks every layer, the generated file and the packed `_ad_` media rule's exclusion in `src/rules/ubo-youtube-network.json` against that JSON. Packed rules are unchanged; lookalike hosts are still blocked.
-- Lists: a fresh install fetches the lists right away from `runtime.onInstalled`, the same refresh as the settings page's "Update lists", instead of running on the packed lists until the first alarm 5 to 30 minutes later. Updates and reloads keep their saved lists and wait for the alarm as before.
-- Lists: `imasdk.googleapis.com` (the IMA ad SDK) stays blocked by the refreshed rules as well as by the packed ruleset. The packer and the list refresh share one exception list under the broad `googleapis.com` never-block suffix; the player API hosts (`youtubei`, `play`, `fonts`) stay never-blocked, and the threat tier is unchanged. A test keeps the packer, the refresh, the merger and the packed file in agreement.
-- Lists: the HaGeZi Pro mini protected-host cap adapts instead of being fixed at 64. A refresh is accepted when it names at most `last accepted count + 10` protected hosts, and never more than `2 x last accepted count` (when that count is at least 1), so a poisoned copy is still caught even inside the margin. The count of the last accepted copy is stored with that list's refresh state (`protectedHits`, written only when a refresh is accepted; a rejected refresh leaves it unchanged). With no stored count yet (a first load, or an install upgraded from 0.3.2) the cap is the seed 64, the old fixed value. Every other list keeps its fixed cap of 25. The packer applies no cap; it only skips never-block hosts.
+### Added
+
 - Lists: `src/rules/meta.json` now records the rule count of the shipped `general-network.json` after the merge (`general_network_rules_total`, written by `scripts/merge-dnr-rules.py`) next to the packer's list-rule count, and a test checks every packed total (list rules, whole-domain and scoped entries, threat rules and hosts) against the files. 0.3.2 had meta 2,536 list rules next to 2,541 rules in the file with nothing tying the two together.
 - CI: a weekly workflow (`.github/workflows/ubo-youtube-drift.yml`, Mondays 06:00 UTC and on demand) runs `scripts/sync-ubo-youtube.mjs` against current uAssets with the local-patch layer and fails when the sync errors, a local patch no longer finds its upstream shape, or the shipped `src/vendor/ubo-youtube.js`, `ubo-youtube-isolated.js`, `ubo-youtube.css` or `src/rules/ubo-youtube-network.json` would change (the generated files' one banner line naming the uAssets commit is ignored, so a new upstream commit with unchanged YouTube filters passes). It commits nothing, opens nothing, and uses no secret (read-only token).
+
+### Changed
+
+- Lists: the captcha never-block hosts have one source, `src/rules/never-block-captcha.json`. The packer, the rule merger and the YouTube sync read it, and the packer writes `src/general/never-block-captcha.js` from it for the service worker (list refresh and threat tier), so a new captcha vendor is one edit plus `python3 scripts/pack-filter-lists.py --never-block-captcha-js`. The parity test checks every layer, the generated file and the packed `_ad_` media rule's exclusion in `src/rules/ubo-youtube-network.json` against that JSON. Packed rules are unchanged; lookalike hosts are still blocked.
+- Lists: a fresh install fetches the lists right away from `runtime.onInstalled`, the same refresh as the settings page's "Update lists", instead of running on the packed lists until the first alarm 5 to 30 minutes later. Updates and reloads keep their saved lists and wait for the alarm as before.
+- Lists: the HaGeZi Pro mini protected-host cap adapts instead of being fixed at 64. A refresh is accepted when it names at most `last accepted count + 10` protected hosts, and never more than `2 x last accepted count` (when that count is at least 1), so a poisoned copy is still caught even inside the margin. The count of the last accepted copy is stored with that list's refresh state (`protectedHits`, written only when a refresh is accepted; a rejected refresh leaves it unchanged). With no stored count yet (a first load, or an install upgraded from 0.3.2) the cap is the seed 64, the old fixed value. Every other list keeps its fixed cap of 25. The packer applies no cap; it only skips never-block hosts.
 - Tests: the two storage tests that provoke a `QUOTA_BYTES` write failure on purpose now capture and assert the worker's warning instead of printing it, so the run shows no quota noise; the production warning is unchanged.
 - Filter lists repacked 2026-11-09 09:18 UTC: 192,715 whole-domain and 5,345 scoped entries in 2,508 list rules (2,513 rules in `general-network.json`), and 15,827 threat hosts in 198 rules. YouTube keeps 4 rules.
+
+### Fixed
+
+- Lists: `imasdk.googleapis.com` (the IMA ad SDK) stays blocked by the refreshed rules as well as by the packed ruleset. The packer and the list refresh share one exception list under the broad `googleapis.com` never-block suffix; the player API hosts (`youtubei`, `play`, `fonts`) stay never-blocked, and the threat tier is unchanged. A test keeps the packer, the refresh, the merger and the packed file in agreement.
 
 ### Roll back to 0.3.2
 
@@ -123,12 +137,17 @@ Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\adgecko-0.3.2.zip" -Dest
 
 ## 0.3.2 (2026-11-09)
 
-- Lists: a HaGeZi Pro mini refresh is accepted when it names the protected hosts that list really carries (about 30, mostly under googleapis.com). The same check stays at 25 hosts for every other list, and a larger HaGeZi jump is still rejected.
-- Lists: hcaptcha.com is in the packed never-block list, matching the packer and the list updater. The threat tier refuses those same captcha hosts. Lookalike names are still blocked.
-- YouTube: the `_ad_` media rule no longer matches an hCaptcha address. Player responses also drop `playerAds`, which had left one placement in the player after the other ad fields were removed.
+### Changed
+
 - Docs: the 0.3.1 repack date below is the UTC date stored on the packed files.
 - Release gate: `scripts/pack-zip.sh` and `scripts/release-gate.sh` were run against this release, on the checkout and with `--zip` on the packed `adgecko-0.3.2.zip`; every check passed, and the zip holds exactly the 66 files `scripts/lib/package_files.py` derives from `manifest.json`, the worker's `importScripts(...)` and the page script tags. The gate in `--zip` mode now also checks that exact list (the allow-list alone accepts the optional files whether or not the checkout has them), prints the deno summary without colour codes, and no longer mistakes "0 failed (3m)" for a failure. A new `release-gate` job in `.github/workflows/checks.yml` packs the zip and runs the gate in both modes on every push to main and every pull request.
 - Filter lists repacked 2026-11-09 03:01 UTC: 194,896 whole-domain and 5,350 scoped entries in 2,536 list rules (2,541 rules in `general-network.json`), and 15,827 threat hosts in 198 rules. YouTube keeps 4 rules.
+
+### Fixed
+
+- Lists: a HaGeZi Pro mini refresh is accepted when it names the protected hosts that list really carries (about 30, mostly under googleapis.com). The same check stays at 25 hosts for every other list, and a larger HaGeZi jump is still rejected.
+- Lists: hcaptcha.com is in the packed never-block list, matching the packer and the list updater. The threat tier refuses those same captcha hosts. Lookalike names are still blocked.
+- YouTube: the `_ad_` media rule no longer matches an hCaptcha address. Player responses also drop `playerAds`, which had left one placement in the player after the other ad fields were removed.
 
 ### Roll back to 0.3.1
 
@@ -143,9 +162,17 @@ Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\adgecko-0.3.1.zip" -Dest
 
 ## 0.3.1 (2026-11-07)
 
-- Filter lists: hCaptcha checkboxes show again. hcaptcha.com and its subdomains are never blocked, in the packed lists and in list updates; lookalike hosts are still blocked.
-- Filter lists repacked 2026-11-08 02:42 UTC (the time in `src/rules/meta.json`; the earlier note said 2026-11-07): 2,534 rules in general-network.json and 200 threat rules.
+### Added
+
 - Tests: a regression test for the hCaptcha hosts, and the OpenPhish guard records which approved list supplied each sentinel host in the general rules; threat files stay strict.
+
+### Changed
+
+- Filter lists repacked 2026-11-08 02:42 UTC (the time in `src/rules/meta.json`; the earlier note said 2026-11-07): 2,534 rules in general-network.json and 200 threat rules.
+
+### Fixed
+
+- Filter lists: hCaptcha checkboxes show again. hcaptcha.com and its subdomains are never blocked, in the packed lists and in list updates; lookalike hosts are still blocked.
 
 ## 0.3.0 (2026-11-06)
 
@@ -162,7 +189,6 @@ Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\adgecko-0.3.1.zip" -Dest
 - Filter lists repacked again on 2026-11-03 (20:37Z) with these fixes: 187,014 whole-domain + 5,480 scoped entries in 2,439 list rules (2,444 rules in `general-network.json`).
 - Allow this site no longer turns off the clipboard guard (ClickFix), owner decision: the guard stays on on an allowed ordinary site. The pop-up guard still goes off there. Fix this site and the settings switches can still turn the clipboard guard off. Allow on Twitch, YouTube and Kick is unchanged.
 - Filter lists: the `! openphish` section of uBO badware is gone, owner decision: 12 hosts out of the threat rules, 11 out of the general rules (the twelfth, `vzla-qr.com`, is also in HaGeZi and stays there). The packer and the list refresh skip that section, and the refresh parser version moved to 3 so saved lists are rebuilt. Now 187,003 whole-domain + 5,480 scoped entries in 2,439 list rules, and 15,901 threat hosts in 199 rules. Curben's urlhaus-filter stays.
-
 - Rules: every writer of blocking rules (list refresh, the lists switch and Allow this site, Revert lists, the malware-tier switch, Allow this domain, the threat feed) now takes turns in one queue, so two of them can no longer write the same rule ids at once; that used to make Chrome reject the second write and drop refreshed lists back to the packed ones. List downloads do not hold the queue, so a click never waits for the network.
 - Filter lists repacked on 2026-11-03: the packed general ruleset no longer holds the public suffix `pisz.pl` or the address `0.0.0.1`. Now 186,987 whole-domain + 4,035 scoped entries in 2,421 list rules; the packed threat ruleset holds 15,913 hosts in 199 rules.
 - Kick: the post-roll ad cover is hidden and its clip paused only when nothing in it could be the live player (a stream source, an endless length, or a video whose source or length is not known yet keeps it visible); the decision is made again when a video's source or length changes, a hide is undone if the live player turns up, and turning Kick help off shows the covers again. The stylesheet no longer hides post-roll covers.
@@ -258,7 +284,7 @@ Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\adgecko-0.3.1.zip" -Dest
 
 ## 0.2.13
 
-This is the only current build. Twitch, YouTube, Kick, and ordinary-site blocking are in this zip. There is no separate beta download.
+At release this was the only current build: Twitch, YouTube, Kick and ordinary-site blocking were in one zip, with no separate beta download.
 
 - Includes the 0.2.12 work: packed EasyList, EasyPrivacy, Peter Lowe, and urlhaus lists, leftover-box hiding, IMDb sponsored billboards, Twitch directory ads, and Kick in-player skip.
 - YouTube's server start switch stays on. Turning it off left the black spinner up. Server ABR stays on, so a video that only has a SABR address still has a stream.
@@ -266,43 +292,43 @@ This is the only current build. Twitch, YouTube, Kick, and ordinary-site blockin
 - A paused start that already has picture data is still asked to play once. Nothing seeks or pauses.
 - Update lists still only remembers the ask. It does not download a new list. Nothing fetches on its own.
 
-## 0.2.12 — beta
+## 0.2.12 (beta)
 
 - EasyList, EasyPrivacy, Peter Lowe, and the urlhaus malware list were packed again. The full uBO stack was not added.
 - Stream allows are unchanged: YouTube and Kick stay allow-all frames, Twitch stays a plain allow, video CDNs stay allowed.
 - The Update lists button still only remembers the ask. It does not download a new list.
 - Stable Latest stays v0.2.3. This beta replaces the 0.2.11 try.
 
-## 0.2.11 — beta
+## 0.2.11 (beta)
 
 - IMDb sponsored banners, including the large name-page billboard, are hidden. The slot is on IMDb itself. Amazon’s ad host was already blocked. Posters stay.
 - This hide runs with the ordinary-site sheet. Twitch, YouTube, and Kick playback are unchanged.
 - Stable Latest stays v0.2.3. This beta replaces the 0.2.10 try.
 
-## 0.2.10 — beta
+## 0.2.10 (beta)
 
 - Twitch Browse directory ads (the top banner slot and in-grid Ad cards) are hidden. The player, usher, and gql are not rewritten.
 - Amazon’s ad host is no longer let through on Twitch pages. gql.twitch.tv and the video CDNs, including usher on ttvnw.net, stay allowed.
 - Stable Latest stays v0.2.3. This beta replaces the 0.2.9 try.
 
-## 0.2.9 — beta
+## 0.2.9 (beta)
 
 - Some other videos still sat on a black loading screen after 0.2.8, with the length already known and the player already trying to play. One well-known video was often ready in a couple of seconds on 0.2.8. This beta also clears the video start-buffer target in the playback response, and turns off the server start-buffer switch, including when that switch’s policies arrive as a list. When that switch is present, the player is told not to wait on the server’s bandwidth pick. The video address stays. Nothing seeks or pauses.
 - Stable Latest stays v0.2.3. This beta replaces the 0.2.8 try.
 
-## 0.2.8 — beta
+## 0.2.8 (beta)
 
 - YouTube’s “Experiencing interruptions?” toast is removed when it appears, including when YouTube puts it back. Other toasts stay. This does not start the picture by itself.
 - Some starts still sat on a black loading screen for about 11 seconds after the backoff clear, with the length already known and the player already trying to play. The start-buffer wait in that playback response, and the same wait in the player response, is cleared. A newer playback part no longer hides a later backoff. A paused start that already has picture data is asked to play once. Nothing seeks or pauses.
 - Stable Latest stays v0.2.3. This beta replaces the 0.2.7 try.
 
-## 0.2.7 — beta
+## 0.2.7 (beta)
 
 - Copy debug prints the loaded extension version. It no longer always says 0.2.3.
 - A later YouTube playback policy, and a backoff that arrives before the rest of that part, is still cleared. Picture bytes stay the same length.
 - Stable Latest stays v0.2.3. This beta replaces the 0.2.6 try.
 
-## 0.2.6 — beta
+## 0.2.6 (beta)
 
 - YouTube search results drop sponsored cards (`searchPyvRenderer`) the same way Home does. The video results stay.
 - Leftover ad boxes on ordinary sites can load their hide stylesheet. The file is listed as a web-accessible resource so Chrome can fetch it.
@@ -310,7 +336,7 @@ This is the only current build. Twitch, YouTube, Kick, and ordinary-site blockin
 - Three more tracker hosts are blocked on ordinary sites: facebook.net, imasdk.googleapis.com, and fundingchoicesmessages.google.com. Twitch, YouTube, and Kick frames are still allowed through.
 - Kick’s own player try is still included. The general list still skips Twitch, YouTube, and Kick. Update lists still only remembers the ask. This does not block every ad. Stable Latest stays v0.2.3.
 
-## 0.2.5 — beta
+## 0.2.5 (beta)
 
 - On ordinary websites, many ad servers are blocked and leftover ad boxes are hidden. This does not block every ad.
 - Twitch and YouTube playback scripts match stable and were not edited for general blocking. Kick in-player ad skip from v0.2.4 is included; the general list still skips Kick.
@@ -341,7 +367,7 @@ This is the only current build. Twitch, YouTube, Kick, and ordinary-site blockin
 - YouTube player/home ad stripping and the temporary debug popup are unchanged.
 - MIT license for the vendored script is included in the zip.
 
-## 0.1.22 — beta
+## 0.1.22 (beta)
 
 - Live client-side ad cues (a `twitch-maf-ad` marker on a playlist whose segments stay live) now hide that ad player and resume the live video. The player is not reloaded for this, and it does not start a backup swap. If hiding the ad would take the only picture, the ad plays.
 - VODs and clips are unchanged.
@@ -349,7 +375,7 @@ This is the only current build. Twitch, YouTube, Kick, and ordinary-site blockin
 - The reload ceiling (2 player reloads in any 60 seconds) and the false-alarm hold are unchanged.
 - Debug stays on by default (temporary).
 
-## 0.1.21 — beta
+## 0.1.21 (beta)
 
 - Fixes a reload loop on high-resolution (1440p60 source) channels where the player kept going black every few seconds during a midroll. After a swap, the new master was checked on the first rung only. That rung could look clean while the rung the player was on still had the ad, so the swap was undone and redone over and over. The check now follows the rung the ad was seen on.
 - A swap that is undone within 15 seconds is treated as a false alarm. The ad then plays on main for 60 seconds, doubling on repeats up to 240 seconds, instead of swapping again. This applies to both ways of leaving the backup.
@@ -357,7 +383,7 @@ This is the only current build. Twitch, YouTube, Kick, and ordinary-site blockin
 - Debug log shows why an ad was detected (`ad-seen`), when the hold applies (`hold`) and when the ceiling blocks a swap (`reload-ceiling`).
 - Debug stays on by default (temporary).
 
-## 0.1.20 — beta
+## 0.1.20 (beta)
 
 - Midrolls that start after a normal page load are swapped to the backup stream. A clean probe no longer drops the channel session, and a master response that already serves the main stream no longer arms the moving-off guard.
 - Backup first: when the adopted backup's playlist is dirty or missing, the next clean backup type is tried before real ads pass through.
