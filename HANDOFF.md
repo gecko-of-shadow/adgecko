@@ -15,7 +15,8 @@ Last updated: 2026-11-16.
 
 ## Baseline (0.3.5)
 
-- `deno test --no-lock --allow-read --allow-run --allow-env test/`: see the WP status table (the baseline line is added when the run ends).
+- Checked in this session: `deno test --no-lock --allow-read --allow-run --allow-env test/` gave 776 passed, 0 failed, 9 ignored (4 min 44 s, Deno 2.9.6).
+- `main` got two docs commits after the review (README restructure, CHANGELOG in Added/Changed/Fixed form, b01e6a5). This branch merged `main` (16d9d60).
 
 ## Coverage map: confirmed findings to work packages
 
@@ -96,7 +97,31 @@ Status values: done, changed, discarded, owner decision, open. All behavior is U
 
 | WP | Status | Commit | Notes |
 |---|---|---|---|
-| WP-01 to WP-25 | open | | Work started 2026-11-16. |
+| WP-01 | open | | |
+| WP-02 | open | | |
+| WP-03 | open | | |
+| WP-04 | open | | |
+| WP-05 | open | | |
+| WP-06 | open | | |
+| WP-07 | open | | |
+| WP-08 | open | | |
+| WP-09 | open | | |
+| WP-10 | done | see `git log --grep WP-10` | Under uBO the toast sweep only restores. The CSS hides the interruptions toast. Gap: a toast with the text only in plain textContent is not hidden under uBO (owner decision). UNVERIFIED. |
+| WP-11 | open | | |
+| WP-12 | open | | |
+| WP-13 | open | | |
+| WP-14 | open | | |
+| WP-15 | open | | |
+| WP-16 | open | | |
+| WP-17 | open | | |
+| WP-18 | open | | |
+| WP-19 | done | see `git log --grep WP-19` | Watchdog stops on non-playable statuses. No "Blocking ads" chip from DOM removal under uBO (Option B). UNVERIFIED. |
+| WP-20 | open | | |
+| WP-21 | open | | |
+| WP-22 | open | | |
+| WP-23 | open | | |
+| WP-24 | open | | |
+| WP-25 | open | | |
 
 ## Facts
 
