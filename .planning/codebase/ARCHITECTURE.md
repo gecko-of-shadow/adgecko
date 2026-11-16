@@ -175,7 +175,7 @@ Rules of the flow:
 - A failed run (`ran: true`, `ok: false`) makes the retry alarm.
 - If `listState.ruleCount` is above 0 but no list rule is installed, the next refresh builds the set again.
 - `PARSER_VERSION` is 5. A stored payload with a different version is downloaded again.
-- The parser never makes a rule for a never-block host, an ICANN public suffix or a non-public address.
+- The parser drops ICANN public suffixes and non-public addresses. The merge step (`mergeDomains`, `mergeScoped`) removes never-block hosts.
 - `src/general/filter-options.js` converts filter options to a scope key. The packer uses the same table. An option with no exact DNR equivalent drops the filter.
 
 Other entry points: `applyEnabled(deps, enabled)` (lists switch), `fallback(deps)`, `revertLists(deps)`, `rebuildThreatRules(deps)`, `removeThreatRules(deps)`.
