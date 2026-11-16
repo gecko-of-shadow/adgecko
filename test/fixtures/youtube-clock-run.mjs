@@ -2,8 +2,14 @@
 // performance) with the uBO marker set before load, then drives two watch navigations and records reload times.
 // SCENARIO: "prev-reply" (105B SABR wait reply during video A, video B stalls),
 // "own-reply" (the reply comes during video B), "no-reply". YT_SRC overrides the
-// youtube.js path. Used by test/youtube-decoy-nav.test.js. All urls are synthetic.
+// youtube.js path. PLAYABILITY sets what player.getPlayerResponse() reports:
+// unset = no getPlayerResponse; a status such as "LOGIN_REQUIRED"; "OFFLINE_SLATE"
+// = status OK with an upcoming-live offline slate; "OTHER_VIDEO:<status>" = the
+// status belongs to another video id (a stale response). Used by
+// test/youtube-decoy-nav.test.js and test/youtube-watchdog-playability.test.js.
+// All urls are synthetic.
 const SCENARIO = Deno.env.get("SCENARIO") || "prev-reply";
+const PLAYABILITY = Deno.env.get("PLAYABILITY") || "";
 import { withYtOpts } from "./source-opts.mjs";
 // Options go into the source (youtube.js no longer reads localStorage).
 const source = withYtOpts(await Deno.readTextFile(Deno.env.get("YT_SRC") || new URL("../../src/youtube.js", import.meta.url)), {});
@@ -23,6 +29,13 @@ const listeners = {};
 const video = { tagName: "VIDEO", currentTime: 0, readyState: 1, paused: true, buffered: { length: 0, end: () => 0 }, src: "", currentSrc: "", play: () => Promise.resolve() };
 const reloads = [];
 const player = { id: "movie_player", className: "unstarted-mode", querySelector: (s) => (s === "video" ? video : null), loadVideoById: () => reloads.push(now - BASE), getVideoData: () => ({ video_id: "abcdefghijk" }), getPlayerState: () => -1, getCurrentTime: () => video.currentTime, playVideo() {} };
+if (PLAYABILITY) {
+  const otherVideo = PLAYABILITY.startsWith("OTHER_VIDEO:");
+  const status = otherVideo ? PLAYABILITY.slice("OTHER_VIDEO:".length) : PLAYABILITY === "OFFLINE_SLATE" ? "OK" : PLAYABILITY;
+  const playabilityStatus = { status };
+  if (PLAYABILITY === "OFFLINE_SLATE") playabilityStatus.liveStreamability = { liveStreamabilityRenderer: { videoId: "abcdefghijk", offlineSlate: { liveStreamOfflineSlateRenderer: {} } } };
+  player.getPlayerResponse = () => ({ playabilityStatus, videoDetails: { videoId: otherVideo ? "zyxwvutsrqp" : "abcdefghijk" } });
+}
 const docEl = { setAttribute() {}, removeAttribute() {}, appendChild() {}, querySelector: () => null };
 const document = {
   readyState: "complete", hidden: false, documentElement: docEl, head: docEl, body: docEl,
@@ -66,4 +79,4 @@ for (; now - BASE <= 25000; now += 1) {
   }
   await Promise.resolve();
 }
-console.log(JSON.stringify({ scenario: SCENARIO, reloads, lines: lines.filter((l) => /stall|reload|SABR|gentle/.test(l)) }));
+console.log(JSON.stringify({ scenario: SCENARIO, playability: PLAYABILITY, reloads, lines: lines.filter((l) => /stall|reload|SABR|gentle/.test(l)) }));

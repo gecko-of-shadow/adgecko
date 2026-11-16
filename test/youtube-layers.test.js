@@ -65,6 +65,16 @@ Deno.test("no uBO layer: the navigation sweep still hides the interruptions #toa
   assert(nav.hidden && nav.display === "none!important" && nav.pointerEvents === "none!important", "interruptions #toast not hidden: " + JSON.stringify(nav));
 });
 
+Deno.test("uBO layer: the navigation sweep still removes leftover ad nodes, but adds no 'Blocking ads' chip", () => {
+  assert(sweepUbo.adNodeRemoved, "rendered sidebar ad slot removed");
+  assert(sweepUbo.appendedToPlayer.length === 0, "appended into #movie_player: " + JSON.stringify(sweepUbo.appendedToPlayer));
+});
+
+Deno.test("no uBO layer: a DOM ad removal still shows the 'Blocking ads' chip", () => {
+  assert(sweepYt.adNodeRemoved, "rendered sidebar ad slot removed");
+  assert(sweepYt.appendedToPlayer.some((n) => n.id === "gk-n1" && n.text === "Blocking ads"), "chip: " + JSON.stringify(sweepYt.appendedToPlayer));
+});
+
 Deno.test("wait-reply catcher: only 104/105-byte videoplayback replies count", () => {
   assert(manifestOrder.waitReplies.join() === "105,104", "seen " + manifestOrder.waitReplies);
   assert(ytOnly.waitReplies.length === 0, "not watched without uBO");

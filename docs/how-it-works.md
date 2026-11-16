@@ -19,7 +19,7 @@ The extra requests this sends to Twitch are listed under [What it transmits](per
 
 Covers `youtube.com`, `www.youtube.com`, and `m.youtube.com`, top frame only.
 
-- **Player ads.** uBlock Origin’s YouTube scriptlets (`src/vendor/ubo-youtube.js` and the isolated script) and `src/vendor/ubo-youtube.css`, from uBlock Origin 1.75.0, prune ads in player responses. While that layer is present, `src/youtube.js` does not strip player fields itself and does not run its DOM sweep.
+- **Player ads.** uBlock Origin’s YouTube scriptlets (`src/vendor/ubo-youtube.js` and the isolated script) and `src/vendor/ubo-youtube.css`, from uBlock Origin 1.75.0, prune ads in player responses. While that layer is present, `src/youtube.js` does not strip player fields itself and does not watch the page for changes. After each navigation it removes some leftover ad nodes, but it does not show the “Blocking ads” chip for them and does not hide toasts itself.
 - **Feed and toasts.** `src/youtube-ads.css` always hides sponsored feed cards and the “Experiencing interruptions?” toast. The toast is hidden in place. Saved and clipboard toasts stay.
 - **Sponsors in the video.** Nothing in these files edits the video file, so a sponsorship that is part of the video still plays.
 - **Other YouTube sites.** YouTube Music, `youtube-nocookie.com`, and YouTube Kids are outside these content scripts.

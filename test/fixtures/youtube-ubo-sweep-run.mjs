@@ -1,6 +1,7 @@
 // Loads src/vendor/ubo-youtube.js and src/youtube.js in one realm, in the order
 // given by LAYERS ("ubo,yt" is the manifest order; "yt" has no uBO layer), under
-// a minimal watch-page DOM with YouTube's singleton tp-yt-paper-toast#toast.
+// a minimal watch-page DOM with YouTube's singleton tp-yt-paper-toast#toast,
+// #movie_player and a rendered sidebar ad slot.
 // Fires yt-navigate-finish and prints what the yt-navigate-finish sweep did to
 // the page. Used by test/youtube-layers.test.js. All content is synthetic.
 import "./memory-storage.mjs";
@@ -31,13 +32,27 @@ const toast = {
 };
 const toastState = () => ({ hidden: toast.hidden === true, display: toastStyle.display || "", pointerEvents: toastStyle["pointer-events"] || "" });
 
+// #movie_player records what youtube.js appends into it ("Blocking ads" chip).
+const appended = [];
+const player = {
+  id: "movie_player", className: "", querySelector: () => null,
+  appendChild(n) { appended.push(n); n.parentElement = player; return n; },
+};
+// A rendered sidebar ad slot (one of youtube.js DOM_AD_SELECTORS).
+const adNode = { id: "", childElementCount: 1, textContent: "Sponsored", remove() { adNode.removed = true; } };
+
 const listeners = {};
 const appendChild = (el) => { if (el) el.isConnected = true; return el; };
 globalThis.document = {
   readyState: "complete", currentScript: null, hidden: false,
   addEventListener: (t, f) => (listeners[t] = listeners[t] || []).push(f), removeEventListener() {},
-  querySelectorAll: (s) => (String(s).includes("tp-yt-paper-toast") ? [toast] : []),
-  querySelector: () => null, getElementById: () => null,
+  querySelectorAll: (s) => {
+    if (String(s).includes("tp-yt-paper-toast")) return [toast];
+    if (String(s).includes("ytd-watch-flexy ytd-ad-slot-renderer")) return adNode.removed ? [] : [adNode];
+    return [];
+  },
+  querySelector: (s) => (s === "#movie_player" ? player : null),
+  getElementById: (id) => appended.find((n) => n.id === id && n.parentElement === player) || null,
   createElement: (tag) => ({ tag, style: {} }),
   documentElement: { appendChild, setAttribute() {}, removeAttribute() {} }, head: { appendChild },
 };
@@ -62,6 +77,8 @@ out.toastAfterNav = toastState();
 // uBO layer youtube.js has no DOM observer.
 toast.textContent = "Saved to Watch later";
 out.toastAfterReuse = toastState();
+out.adNodeRemoved = adNode.removed === true;
+out.appendedToPlayer = appended.map((n) => ({ id: n.id, text: n.textContent }));
 
 log(JSON.stringify(out));
 Deno.exit(0);
