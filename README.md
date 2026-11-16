@@ -45,7 +45,7 @@ Adgecko is not on the Chrome Web Store. You load it into Chrome yourself:
 
 Nothing to set up: it works as soon as it is installed.
 
-1. Click the gecko in the toolbar. A small window shows the site and one line: **✅ Protected**, or **Allowed – not blocking here**.
+1. Click the gecko in the toolbar. A small window shows the site and one line: **✅ Protected**, or **Allowed – not blocking here**. On YouTube and Twitch, an allowed site shows **Allowed – built-in YouTube ad blocking still runs** (or Twitch). When the ad lists are off on the settings page, the line is **Ad lists off – turned off in settings**.
 2. **Something broke?** Click **Fix this site**. It turns off the extra filters for this site only (hidden boxes and the page guards). Click **Reload page** and look, then answer **Did that fix it?** **Yes** keeps it. **No** turns them back on and suggests the next step. A kept fix shows as **Protected – some filters off here (Fix this site)**, with an **Undo fix** button.
 3. Still broken? Click **Allow this site**: the ad lists stop blocking what this site itself loads, ad boxes are no longer hidden, and the pop-up guard stops working on this site. The clipboard guard stays on. Known malware sites stay blocked, and on Twitch and YouTube the built-in ad blocking keeps running. The button turns into **Block again** to undo it. After either button, **Reload page** reloads the tab (it never reloads by itself).
 4. Chrome shows "blocked by an extension" for a site you trust? Click the gecko, then **Chrome says the page is blocked? Allow its domain**. It opens the **Allow this domain** box on the settings page.
