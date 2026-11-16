@@ -59,7 +59,7 @@ Section 5 lists items that were checked and are not a concern now.
 ### H4. YouTube response patching depends on upstream shapes
 
 - **What.** Two layers change YouTube data in the page world: the generated uBlock Origin layer and `src/youtube.js`, which replaces `fetch`, XHR methods and `JSON.parse` of the page.
-- **Evidence.** The local patches in `scripts/sync-ubo-youtube.mjs` are text replacements. A patch that matches nothing gives only a warning, and the script exits with code 0. The weekly drift job only becomes red. It opens no issue. `CHANGELOG.md` records that one uAssets change already removed a patch match.
+- **Evidence.** The local patches in `scripts/sync-ubo-youtube.mjs` are text replacements. A patch that matches nothing gives only a warning, and the script exits with code 0. The weekly drift job only becomes red. It opens no issue. `CHANGELOG.md` records that one uAssets change already made a new local patch necessary.
 - **Impact.** A YouTube change or an upstream filter change can break playback or let ads through, and a person must see the red job.
 - **Action.** Make the sync exit with a non-zero code when a patch matches nothing. Do a manual YouTube test before each release. Split `src/youtube.js` only together with tests, because many tests read its source text.
 
@@ -111,7 +111,7 @@ Section 5 lists items that were checked and are not a concern now.
 
 | File | Lines | Note |
 |---|---|---|
-| `src/youtube.js` | 2,256 | Two functions of approximately 1,000 lines each |
+| `src/youtube.js` | 2,256 | Two functions of approximately 1,000 and 1,230 lines |
 | `scripts/pack-filter-lists.py` | 1,432 | |
 | `src/general/update.js` | 1,370 | One closure |
 | `src/general-background.js` | 1,248 | |
@@ -127,7 +127,7 @@ Section 5 lists items that were checked and are not a concern now.
 | What | Impact |
 |---|---|
 | The Twitch conflict version is a literal (`ourTwitchAdSolutionsVersion = 23`). | The update script does not edit the gate. The owner must change the line by hand. |
-| Two lines print PASS with no check ("ad-server names permitted inside src/rules/ only", "youtube malformed JSON covered by deno suite"). | The output looks stronger than the checks are. |
+| Three lines print PASS with no real check ("ad-server names permitted inside src/rules/ only", "youtube malformed JSON covered by deno suite", and the Kick video host line in section 2). | The output looks stronger than the checks are. |
 | Old comments ("General-adblock beta (Phase 0)", "YouTube is the beta script", "Manual list Update (popup fetch)"). | They describe an older design. |
 | Fixed file names in the system temp folder (`gate-popup.txt`, `gate-danger.txt`, `gate-deno.txt` and others). | Two gate runs at the same time on one machine can mix their results. |
 | The Deno tests run two times in CI (job `tests` and gate section 5). | Longer CI time. |
@@ -171,8 +171,8 @@ Five manifest entries run in the MAIN world. The page can see and change the sam
 |---|---|---|
 | Eight `docs/cards*` folders | 26,520 KB | `docs/cards-release/`: `docs/release-notes/v0.2.3.md`. `docs/cards-beta-0.2.x/`: the old `docs/beta-0.2.x-release.md` pages. The others: none. |
 | `docs/install/`, `docs/safe/`, `docs/icon-preview/` | 2,792 KB | None |
-| Four loose images in `docs/` | 1,234 KB | `what-it-is.png`: `docs/release-notes/v0.2.3.md`. `gecko-avatar.jpg`: `docs/README-backup-2026-10-24.md`. |
-| Old notes: eight `docs/beta-0.2.*-release.md`, `docs/release-notes/`, `docs/agent-notes/`, three dated files | approximately 100 KB | Only each other and `TODO.md` |
+| Four loose images in `docs/` | 1,244 KB | `what-it-is.png`: `docs/release-notes/v0.2.3.md`. `gecko-avatar.jpg`: `docs/README-backup-2026-10-24.md`. |
+| Old notes: eight `docs/beta-0.2.*-release.md`, `docs/release-notes/`, `docs/agent-notes/`, three dated files | approximately 100 KB | Only each other and the codebase map |
 
 - `docs/design/` and `docs/review-2026-11-16/` are in use.
 - `scripts/pack-zip.sh` does not pack `docs/`. Thus the package size does not change.

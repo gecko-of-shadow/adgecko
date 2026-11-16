@@ -112,7 +112,7 @@ deno run --allow-read --allow-write --allow-net=raw.githubusercontent.com --allo
 git diff --stat -- src/vendor/ubo-youtube.js src/vendor/ubo-youtube-isolated.js src/vendor/ubo-youtube.css src/rules/ubo-youtube-network.json
 ```
 
-If only the `// Filters: uBlockOrigin/uAssets@...` line changed in each file, there is no drift. To discard the result of a check:
+If only the `Filters: uBlockOrigin/uAssets@...` line changed in the two JavaScript files and the CSS file, and the JSON file did not change, there is no drift. To discard the result of a check:
 
 ```powershell
 git checkout -- src/vendor/ubo-youtube.js src/vendor/ubo-youtube-isolated.js src/vendor/ubo-youtube.css src/vendor/ubo-youtube-meta.json src/rules/ubo-youtube-network.json

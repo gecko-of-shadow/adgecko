@@ -6,7 +6,7 @@ Last update: 2026-11-16, after version 0.3.6 was merged into `main`.
 
 - **Last release:** [v0.3.5](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.5), published 2026-11-15.
 - **On `main`, not released:** version 0.3.6 (pull request 14, commit `5cd4ab6`, merged 2026-11-16). It has the corrections of the 2026-11-16 code review. See `CHANGELOG.md`, section 0.3.6.
-- **Checks on 0.3.6:** 884 tests passed, 0 failed, 9 ignored. The release gate was CLEAN on the checkout and on the zip (64 files, 7,862,441 bytes; the cap is 8,000,000).
+- **Checks on 0.3.6:** 884 tests passed, 0 failed, 9 ignored, and the release gate was CLEAN on the checkout (Linux container, Deno 2.9.8). The package has 64 files and 7,862,441 bytes; the cap is 8,000,000.
 - **UNVERIFIED:** all behaviour of 0.3.6 in Chrome. No run on the owner's PC or on live sites was done.
 
 ## Next steps
@@ -20,7 +20,7 @@ Last update: 2026-11-16, after version 0.3.6 was merged into `main`.
   - One news site, Gmail, GitHub and one React site: the page is complete and ad boxes are hidden.
   - Clipboard guard: a copy on an ordinary site gives plain text; Ctrl+C on your own selection works.
   - Popup: **Fix this site**, **Allow this site**, **Block again**, **Undo fix**.
-- [ ] **Actions** -> **release** -> **Run workflow**. The README link to `adgecko-0.3.6.zip` works only after this step.
+- [ ] **Actions** -> **release** -> **Run workflow**. The README links to the latest release page, which shows v0.3.5 until this step is done.
 - [ ] After the release, update this file and remove the UNVERIFIED marks that the tests proved.
 
 ### 2. Owner decisions

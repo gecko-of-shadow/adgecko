@@ -33,7 +33,19 @@ Not changed, on purpose:
 
 ## Checks
 
-PENDING
+Checked in the last session (Linux container, Deno 2.9.8):
+
+- `bash scripts/release-gate.sh` on the changed tree: `VERDICT: CLEAN`. It includes the full test suite: 884 passed, 0 failed, 9 ignored.
+- `python3 -I scripts/privacy-check.py`: passed. It used only the generic checks, because the secret pattern list is not available in the container.
+- A script compared 2,072 code names and paths in the map with the repository.
+- Four independent agents compared the map, `README.md`, `TODO.md`, `CLAUDE.md`, `docs/threat-tier.md` and `docs/UPDATING-DEPENDENCIES.md` with the code. They found 24 wrong or weak statements. All are corrected.
+
+Not checked:
+
+- UNVERIFIED: all behaviour in Chrome. No run on the owner's PC or on live sites was done.
+- The uBlock Origin sync commands in `docs/UPDATING-DEPENDENCIES.md` were not run.
+- The CI result of the pull request, at the time of this note.
+- One gate run failed on the test "pack-zip.sh: two packs of the same checkout give the same SHA-256", because a commit was made during that run (the zip uses the time of the last commit). The cause is probable, not proven. The next run was clean.
 
 ## Next steps
 

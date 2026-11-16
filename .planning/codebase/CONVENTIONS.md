@@ -36,7 +36,7 @@ UNVERIFIED: the effect of these rules in a real Chrome page.
 
 | Item | Convention | Examples |
 |---|---|---|
-| Globals | `Gecko*` (settings, threat tier, feed), `General*` (list tier), `GeneralAdblock*` (install modules of the list tier) | `GeckoFeatures`, `GeneralSettings`, `GeneralAdblockUpdate` |
+| Globals | `Gecko*` (settings, threat tier, feed), `General*` (list tier; one exception: `GeckoNeverBlockCaptcha`), `GeneralAdblock*` (install modules of the list tier) | `GeckoFeatures`, `GeneralSettings`, `GeneralAdblockUpdate` |
 | Constants | `UPPER_SNAKE_CASE` | `REFRESH_ALARM`, `LIST_RULE_ID_BASE` |
 | Functions, variables, feature ids, storage keys | `camelCase`. A key for each list or host has a prefix that ends in a colon. | `listData:`, `cosS:` |
 | Files in `src/` and `scripts/` | `kebab-case`. One directory for each subsystem. Scripts: `.mjs` for Deno or Node, `.py` for Python 3, `.sh` for Bash. | `src/threat/protected-hosts.js`, `scripts/pack-zip.sh` |
@@ -112,11 +112,11 @@ These rules apply to `src/youtube.js`, `src/kick.js`, `src/guards/clipboard.js` 
 | No `chrome.*` or `browser.*`. | Gate section 4 |
 | No product name in `Symbol.for` ids, DOM ids or style ids. | `test/hardening.test.js` |
 | No marker property on page objects. Use a `WeakSet` or `WeakMap`. | `test/hardening.test.js` (old marker names only) |
-| No output to the page console unless a debug switch is on. | `test/hardening.test.js` |
+| No output to the page console unless a debug switch is on. | `test/hardening.test.js` (for `src/youtube.js` and `src/kick.js`) |
 | No options from `localStorage` or other storage that the page can write. | `test/hardening.test.js` |
 | No `.innerHTML =`, `eval(`, `document.write(`, `new Function(`. Make DOM with `createElement` and `textContent`. | Gate section 3 |
 | Flags come only through the private port. A feature stays on until a flag says off. | `test/settings.test.js`, `test/guards.test.js`, `test/flags-port-window.test.js` |
-| Capture built-ins and getters at the top of the file, before page scripts run. Call them with `Reflect.apply`. | `test/guards.test.js` |
+| Capture built-ins and getters at the top of the file, before page scripts run. Call them with `Reflect.apply`. | `test/guards.test.js` (in part: the captured MessageEvent getters, and the clipboard guard with changed built-ins) |
 | Fail-open: an internal error lets the page call continue. Exceptions are in `ARCHITECTURE.md` section 16. | - |
 
 Related rules:
@@ -135,7 +135,7 @@ How to run the gate: `TESTING.md` section 8. The owner must approve each change 
 |---|---|
 | 1. Package | The manifest version equals the expected version. Each file in `REQUIRED` exists. With `--zip`: each file agrees with `ALLOWED_RE`, the zip holds exactly the derived file list, and a zip with the version of the checkout holds the same bytes as the checkout. `src/popup.html` loads only `popup.js`. The package size is 8,000,000 bytes or less. |
 | 1b. Frozen files | `src/vendor/video-swap-new.user.js` and `src/kick.js` have no content difference from `origin/main` (or `main`). Each file also equals its SHA-256 pin in `scripts/frozen-pins.json`, in repository mode and in zip mode. No debug file is in the package. |
-| 2. Manifest and DNR | Only the 13 known top-level manifest keys. `host_permissions` is exactly the list of filter-list hosts, or that list plus the one feed host when `FEED_ORIGIN` is set. Permissions: `declarativeNetRequest` and `storage` are necessary, `alarms` is permitted, nothing else. No optional permissions. The shapes of the Twitch, YouTube and Kick content-script entries are fixed. The stream scripts do not match YouTube Music, Studio or Kids. The cosmetic script excludes the stream sites. Each ruleset has unique ids and only `block`, `allow`, `allowAllRequests` or `upgradeScheme` actions. The enabled rulesets together have 30,000 rules or fewer. |
+| 2. Manifest and DNR | Only the 13 known top-level manifest keys. `host_permissions` is empty, or exactly the list of filter-list hosts, or that list plus the one feed host. Permissions: `declarativeNetRequest` and `storage` are necessary, `alarms` is permitted, nothing else. No optional permissions. The shapes of the Twitch, YouTube and Kick content-script entries are fixed. The stream scripts do not match YouTube Music, Studio or Kids. The cosmetic script excludes the stream sites. Each ruleset has unique ids and only `block`, `allow`, `allowAllRequests` or `upgradeScheme` actions. The enabled rulesets together have 30,000 rules or fewer. |
 | 2c. List sources | `scripts/lib/curben_check.py` must pass: only the `urlhaus_hosts` source from one fixed URL (#13, #18b). |
 | 3. Dangerous APIs | No `eval(`, `.innerHTML =`, `document.write(`, `importScripts(`, identity APIs, `sendBeacon`, geolocation or WebRTC in `src/**/*.js`. Three exceptions: `eval(workerString)` and one `innerHTML` write in the vendored Twitch file, and the one `importScripts` line of the worker. No `new Function(`. No secret patterns in `manifest.json` and `src/` (not `src/rules/`). Tracker names only in `src/rules/`. Each `http(s)://` URL in a JS code line has a host from the permitted list. |
 | 4. Extension API scope | See the table below. No `setInterval` in the worker. Only the `gecko-refresh` alarm and the one-shot `gecko-refresh-retry` alarm. |
@@ -167,7 +167,7 @@ When you add a shipped file, add its path to `REQUIRED` and to `ALLOWED_RE` in t
 | `src/vendor/video-swap-new.user.js`, `scripts/vendor-pins.json` | Upstream userscript at a pinned commit | `scripts/update-twitch-vendor.mjs`. `--check` writes nothing. |
 | `icons/icon{16,48,128}{,-working,-off}.png` | `icons/source/*.svg` | `node scripts/build-icons.mjs` |
 
-- A generated JS or CSS file names its generator in line 1. Generated JSON has a UTC time field (`*_at_utc`). The vendored Twitch file is an upstream copy with no added header.
+- A generated JS or CSS file names its generator in line 1. Generated metadata JSON has a UTC time field (`*_at_utc`). The vendored Twitch file is an upstream copy with no added header.
 - Tests compare generated files with the generator output (for example `test/hcaptcha-never-block.test.js`, `test/meta-counts.test.js`, `test/docs-claims.test.js` for `LICENSES.md`).
 - `scripts/pack-filter-lists.py` and `scripts/sync-ubo-youtube.mjs` download from the network. `scripts/build-threat-rules.mjs`, `scripts/pack-cosmetic.mjs` and `scripts/build-psl-subset.mjs` read local files only.
 - The packer refuses an empty, HTML or very short list body, and a list that shrinks by more than 25 % (`--accept-shrink` overrides). On a refusal it writes nothing.
@@ -227,5 +227,5 @@ Limits that came from owner decisions and that code enforces: only the two alarm
 - Minimum token permissions: `contents: read`, or `contents: write` only on the release job. `persist-credentials: false` on each checkout.
 - The runner (`ubuntu-24.04`) and the Deno version (`v2.9.8`) are pinned.
 - Values from the `github` context go into `env:` first. Then the script reads the variable.
-- A pull request does not run its own code with the secret (M-6). Python runs in isolated mode (`python3 -I`).
+- A pull request does not run its own code with the secret (M-6). The workflow steps run Python in isolated mode (`python3 -I`).
 - A retired workflow stays as a stub with a comment and `permissions: {}`.

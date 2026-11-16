@@ -23,7 +23,7 @@ bash scripts/release-gate.sh
 python3 -I scripts/privacy-check.py
 ```
 
-- The last line of the gate must be `VERDICT: CLEAN`. The gate runs the tests again (section 5 of the gate).
+- The last line of the gate must start with `VERDICT: CLEAN`. The gate with `--zip` also needs `unzip`. The gate runs the tests again (section 5 of the gate).
 - The serial test run takes approximately 4.5 minutes. CI adds `--parallel`. The gate stays serial.
 - The test command gives no network permission and no write permission. Child processes that a test starts do not have these limits.
 - There is no `deno.json`, no lock file and no package manifest. Four test files import `jsr:@std/assert@1`, which Deno downloads one time.
@@ -48,7 +48,7 @@ The source files are not ES modules. Thus the tests cannot import functions from
 - `withYtOpts()` and `withUboOpts()` (`test/fixtures/source-opts.mjs`) write test options into the source text.
 - The gate refuses `new Function` in `src/`. It is a test method only.
 
-Style: most files define a local `function assert(c, l) { if (!c) throw new Error(l); }`. The label is the failure message, with the actual value in it. Tests are flat `Deno.test("name", fn)` calls with full-sentence names. The object form `Deno.test({ name, ignore, fn })` is for a test with an `ignore` condition.
+Style: most files define a local `function assert(c, l) { if (!c) throw new Error(l); }`. The label is the failure message, with the actual value in it. Tests are flat `Deno.test("name", fn)` calls with full-sentence names. The object form `Deno.test({ name, ignore, fn })` is for a test with an `ignore` condition or with sanitizer options.
 
 ## 3. Fixtures in `test/fixtures/`
 
@@ -124,10 +124,10 @@ A usual local run shows 9 ignored tests: the 6 above, the storage budget test an
 
 | Need | Tests |
 |---|---|
-| `python3` | 19 files start Python (packer, privacy checker, parity and tooling tests). They have no ignore condition for Python. |
+| `python3` | 20 files start Python (packer, privacy checker, parity and tooling tests). Only `release-tooling` has an ignore condition for Python. |
 | `git` | `privacy-generic`, `privacy-mask`. A full git checkout is necessary. |
 | `bash`, `zip`, `rg` | `packaging`, `release-tooling` |
-| Child `deno` | `ubo-youtube`, `ubo-youtube-edge`, `youtube-layers`, `youtube-decoy-nav`, `youtube-watchdog-playability`, `feed-client`, `feed-serial-recovery` |
+| Child `deno` | `ubo-youtube`, `ubo-youtube-edge`, `youtube-layers`, `youtube-decoy-nav`, `youtube-watchdog-playability`, `feed-client`, `feed-serial-recovery`, `wave2-lists-cosmetic-pack` |
 | Network, one time | The four files that import `jsr:@std/assert@1` |
 | `PRIVACY_PATTERNS` (secret) | Two tests in `privacy-generic`. CI gives the secret to the `tests` job only on a push to `main`. |
 | `scripts/.list-cache/` | `final-storage-budget` |
@@ -175,7 +175,7 @@ What it scans: the diff between `BASE_SHA` and `HEAD_SHA`, the full content of e
 |---|---|---|
 | Forbidden personal strings | Yes | One regular expression for each line of `PRIVACY_PATTERNS`. Joined words (camelCase, underscore, hyphen, letter-digit) are split first. |
 | Obvious secrets | No | Private-key blocks, common API token shapes, JSON web tokens. |
-| IP addresses | No | IPv4 and IPv6 literals outside the documentation ranges. `src/rules/*.json` files skip this check. |
+| IP addresses | No | Public IPv4 and IPv6 literals outside the documentation ranges. Private and loopback addresses are not reported. `src/rules/*.json` files skip this check. |
 | E-mail addresses | No | All addresses but noreply addresses and example, test and invalid domains. |
 | Home-directory paths | No | Linux, macOS and Windows home paths with a name that looks real. |
 | Image metadata | No | EXIF, XMP, comments, PNG text chunks. |

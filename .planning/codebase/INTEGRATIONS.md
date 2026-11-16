@@ -142,7 +142,7 @@ Tools: `scripts/feed-keygen.mjs` makes a key pair and refuses an output path in 
 
 - The script copies the `Authorization`, `Client-Integrity` and device id headers from the page's own GraphQL requests. Thus each replacement of this file needs a code review.
 - The backup player types are `autoplay`, `picture-by-picture` and `embed`. The script changes `playerType` to `popout` in the page's own token requests.
-- The script reads and writes three `localStorage` keys of the page: `video-quality`, `video-muted` and `volume`.
+- The script reads and hooks five `localStorage` keys of the page (`video-quality`, `video-muted`, `volume`, `lowLatencyModeEnabled`, `persistenceEnabled`). It writes the first three only when the hook failed.
 - One synchronous `XMLHttpRequest` reads the player worker script from a blob URL. This is a local read.
 - Known upstream gap: the ad tracking-URL rewrite in `stripAdSegments` has no effect (`test/twitch-playlist.test.js` records it).
 
@@ -159,7 +159,7 @@ Tools: `scripts/feed-keygen.mjs` makes a key pair and refuses an output path in 
 | Tool | Upstream | Network | Notes |
 |---|---|---|---|
 | `scripts/update-twitch-vendor.mjs` | `pixeltris/TwitchAdSolutions` (the docs say: archived) | `api.github.com`, `raw.githubusercontent.com` only | Finds the newest commit that changed the file, downloads the file at that commit, reads it as text and does not run it. Writes the file and `scripts/vendor-pins.json`. `--check` writes nothing and gives exit code 1 when upstream is different. It does not update `scripts/frozen-pins.json` and the gate. |
-| `scripts/sync-ubo-youtube.mjs` | `uBlockOrigin/uAssets` (filters) and `gorhill/uBlock` at a release tag (scriptlets) | `raw.githubusercontent.com`, and `git` for the clone | It imports and runs uBlock Origin code. It stops if the clone is not the commit in `ublock_commit` of `src/vendor/ubo-youtube-meta.json`. A new tag needs `--ubo-commit` after a review of that commit. A local patch that matches nothing gives only a warning and exit code 0. |
+| `scripts/sync-ubo-youtube.mjs` | `uBlockOrigin/uAssets` (filters) and `gorhill/uBlock` at a release tag (scriptlets) | `raw.githubusercontent.com`, and `git` for the clone | It imports and runs uBlock Origin code. It stops if the clone is not the commit in `ublock_commit` of `src/vendor/ubo-youtube-meta.json`. A new tag needs `--ubo-commit` after a review of that commit. A `PATCHES` or `ARG_PATCHES` text patch that matches nothing gives only a warning and exit code 0. A failure of `ensurePlayerAdsPruned` or `widenYoutubeExpireWindow` stops the sync with an error. |
 | `scripts/build-psl-subset.mjs` | Public Suffix List (MPL 2.0) | None. You download the file. | Also keeps the hand-kept platform lists. |
 | `scripts/pack-filter-lists.py` | The eight list URLs | Yes | See section 2. |
 
@@ -174,7 +174,7 @@ Pins and versions: `STACK.md` section 7. Procedures: `docs/UPDATING-DEPENDENCIES
 | `ubo-youtube-drift.yml` | Monday 06:00 UTC, manual | `contents: read` | Runs the uBlock Origin sync with explicit Deno permissions. Fails if a shipped YouTube file is different. Commits nothing. |
 | `refresh-release-notes.yml` | Manual | none | Retired. Prints one line. A test reads its text. |
 
-- All jobs use `ubuntu-24.04`, Deno `v2.9.8`, `actions/checkout` v7.0.1 (`3d3c42e5aac5ba805825da76410c181273ba90b1`) and `denoland/setup-deno` v2.0.5 (`22d081ff2d3a40755e97629de92e3bcbfa7cf2ed`).
+- All jobs use `ubuntu-24.04`. The jobs `tests`, `release-gate`, `release` and `drift` use Deno `v2.9.8`, `actions/checkout` v7.0.1 (`3d3c42e5aac5ba805825da76410c181273ba90b1`) and `denoland/setup-deno` v2.0.5 (`22d081ff2d3a40755e97629de92e3bcbfa7cf2ed`). The job `privacy` uses only the checkout action.
 - Secret `PRIVACY_PATTERNS`: the job `tests` gets it only on a push to `main`. The job `privacy` gets it on all events, but a pull request runs the checker from the base commit. `REQUIRE_PATTERNS` makes a push to `main` fail when the secret is missing.
 - The jobs `release-gate` and `drift` use no secret. The release job uses only the token of the run.
 - The release job publishes nothing if a step fails. The concurrency group `release` prevents two releases at the same time.
@@ -194,7 +194,7 @@ The full list of outbound destinations is thus: the nine filter-list host patter
 ## 10. Before a change
 
 - A new list host needs a change in `LIST_HOSTS` (runtime and gate), `manifest.json`, the packer and `docs/permissions-and-privacy.md`.
-- A new list needs an entry in the two `SOURCES` tables, with the same name and URL. Full steps: `STRUCTURE.md` section 5.
+- A new list needs an entry in the two `SOURCES` tables, with the same name and URL. Full steps: `STRUCTURE.md` section 6.
 - Do not edit `src/vendor/video-swap-new.user.js` by hand. Use `scripts/update-twitch-vendor.mjs`.
 - A new third-party action must be pinned to a full commit SHA.
 - Use `src/rules/meta.json` as the source for list counts.
