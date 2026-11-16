@@ -9,10 +9,13 @@ Last update: 2026-11-16.
 - One agent wrote each document. A second, independent agent then compared each claim with the source files and corrected the document.
 - No file in `src/`, `scripts/`, `test/`, `docs/` or `icons/` was changed. The release zip does not contain `.planning/` or this file.
 
+- `CLAUDE.md` (new) tells coding agents to read the map first. `.planning/codebase/README.md` (new) is the index and gives the rules to keep the map correct.
+- `README.md` has a link to the map. `TODO.md` has a new section 1b with the actions that come from the map.
+
 ## State of the checks
 
 - Checked: `scripts/privacy-check.py` passed on the new files (generic checks only; the `PRIVACY_PATTERNS` secret was not available).
-- Not checked: the Deno tests and `scripts/release-gate.sh` did not run. Deno was not installed in the session.
+- Checked: the CI jobs `tests`, `release-gate` and `privacy` passed on the first commit of pull request 15. Deno was not installed in the session, so these did not run locally.
 - UNVERIFIED: all statements in the map about behaviour in Chrome. No run on the owner's PC proved them. Each document has a "Checked and not checked" section.
 
 ## Next steps
