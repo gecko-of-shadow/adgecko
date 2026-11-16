@@ -93,3 +93,76 @@ Deno.test("release gate: --zip mode asks for the byte check when it derives the 
   const gate = await Deno.readTextFile(new URL("scripts/release-gate.sh", ROOT));
   assert(/--check-zip "\$ZIP" "\$\{CHECK_BYTES\[@\]\}"/.test(gate) && /CHECK_BYTES=\(--check-bytes\)/.test(gate), "gate passes --check-bytes when DERIVE_ROOT is ROOT");
 });
+
+// The list packer with a stub download (no network). ROOT, OUT_DIR, CACHE_DIR
+// and packed-cross.json point into a temp dir that holds a copy of the
+// committed meta.json; subprocess is a stub, so nothing runs and nothing in
+// the checkout can change. Prints "rc=<main() result>" and "files=<temp files>".
+const PACKER = (body, argv = "") => `d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
+mkdir -p "$d/out" && cp src/rules/meta.json "$d/out/meta.json" && echo "[]" > "$d/out/general-network.json"
+python3 -B - "$d" <<'PY'
+import importlib.util, io, sys, types
+from pathlib import Path
+d = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("pfl", "scripts/pack-filter-lists.py")
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+mod.ROOT, mod.OUT_DIR, mod.CACHE_DIR = d, d / "out", d / "cache"
+mod.PACKED_CROSS_JSON = d / "out" / "packed-cross.json"
+mod.subprocess = types.SimpleNamespace(run=lambda *a, **k: types.SimpleNamespace(returncode=0))
+BODY = ${JSON.stringify(body)}
+class Resp(io.BytesIO):
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+mod.urllib.request.urlopen = lambda req, timeout=0: Resp(BODY.encode())
+sys.argv = ["pack-filter-lists.py"] + ${JSON.stringify(argv ? [argv] : [])}
+rc = mod.main()
+print("rc=" + str(rc))
+files = sorted(p.relative_to(d).as_posix() for p in d.rglob("*") if p.is_file())
+print("files=" + ",".join(files))
+PY
+cmp -s src/rules/meta.json "$d/out/meta.json" && echo "meta=same" || echo "meta=changed"`;
+const NOTHING_WRITTEN = "files=out/general-network.json,out/meta.json\nmeta=same";
+
+Deno.test("packer: an empty or HTML list body exits non-zero and writes nothing", async () => {
+  for (const body of ["", "\n\n", "<!DOCTYPE html><html><head><title>Sign in to Wi-Fi</title></head><body>login</body></html>\n"]) {
+    const r = await bash(PACKER(body));
+    assert(/rc=[1-9]/.test(r.text), "exit code for " + JSON.stringify(body.slice(0, 20)) + ":\n" + r.text.slice(-1500));
+    assert(r.text.includes(NOTHING_WRITTEN), "nothing written:\n" + r.text.slice(-1500));
+    assert(/refus/i.test(r.text), "says why:\n" + r.text.slice(-1500));
+  }
+});
+
+Deno.test("packer: a list that shrinks by more than 25% against meta.json is refused unless --accept-shrink is given", async () => {
+  const small = "[Adblock Plus 2.0]\n" + Array.from({ length: 40 }, (_, i) => "||ad" + i + ".example.com^").join("\n") + "\n";
+  const r = await bash(PACKER(small));
+  assert(/rc=[1-9]/.test(r.text) && r.text.includes(NOTHING_WRITTEN), "shrink refused, nothing written:\n" + r.text.slice(-1500));
+  assert(/shrinks/.test(r.text) && /--accept-shrink/.test(r.text), "names the flag:\n" + r.text.slice(-1500));
+  const ok = await bash(PACKER(small, "--accept-shrink"));
+  assert(/rc=0/.test(ok.text) && /out\/packed-cross\.json/.test(ok.text), "--accept-shrink packs:\n" + ok.text.slice(-1500));
+});
+
+// feed-sign with a fresh key and feed in a temp dir (bash makes and removes it).
+const FEED_SIGN = (notBefore, notAfter, created = notBefore) => `d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
+deno run --no-lock --allow-read --allow-write scripts/feed-keygen.mjs --key-id t1 --out "$d/k.json" >/dev/null || exit 9
+printf '%s' '{"format":1,"serial":5,"createdAt":"${created}","notBefore":"${notBefore}","notAfter":"${notAfter}","dnr":[{"id":1,"requestDomains":["evil.example"]}]}' > "$d/f.json"
+deno run --no-lock --allow-read --allow-write scripts/feed-sign.mjs --key "$d/k.json" --feed "$d/f.json"; echo "rc=$?"
+[ -f "$d/f.json.sig" ] && echo "sig=yes" || echo "sig=no"`;
+const iso = (ms) => new Date(ms).toISOString().replace(/\.\d+Z$/, "Z");
+const HOUR = 3600000;
+
+Deno.test("feed-sign: a feed whose notAfter has passed is not signed", async () => {
+  const r = await bash(FEED_SIGN("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"));
+  assert(/rc=[1-9]/.test(r.text) && /sig=no/.test(r.text), "expired feed was signed:\n" + r.text);
+  assert(/expired/.test(r.text), "says expired:\n" + r.text);
+});
+
+Deno.test("feed-sign: a valid feed is signed; less than 24 h left gives a warning; a future notBefore still signs", async () => {
+  const now = Date.now();
+  const ok = await bash(FEED_SIGN(iso(now - HOUR), iso(now + 5 * 24 * HOUR)));
+  assert(/rc=0/.test(ok.text) && /sig=yes/.test(ok.text) && !/WARNING/.test(ok.text), "valid feed:\n" + ok.text);
+  const soon = await bash(FEED_SIGN(iso(now - HOUR), iso(now + 3 * HOUR)));
+  assert(/rc=0/.test(soon.text) && /sig=yes/.test(soon.text) && /WARNING.*24 h/.test(soon.text), "short feed warns:\n" + soon.text);
+  const ahead = await bash(FEED_SIGN(iso(now + 48 * HOUR), iso(now + 6 * 24 * HOUR)));
+  assert(/rc=0/.test(ahead.text) && /sig=yes/.test(ahead.text), "signing ahead of time still works:\n" + ahead.text);
+});

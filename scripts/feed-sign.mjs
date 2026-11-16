@@ -33,7 +33,14 @@ if (record.kind === "kill") {
   S.validateKill(doc, { storedKillSerial: 0 });
 } else {
   if (doc && typeof doc === "object" && "kill" in doc) throw new Error("a kill document must be signed with the kill key");
+  // now = notBefore lets the owner sign ahead of time (a future notBefore).
   S.validateFeed(doc, { storedSerial: 0, now: Date.parse(doc.notBefore) });
+  // That "now" can never see an expired feed, so check notAfter against the
+  // real clock too (review 2026-11-16): the extension rejects such a file.
+  const realNow = Date.now();
+  const notAfter = Date.parse(doc.notAfter);
+  if (notAfter <= realNow) throw new Error("feed expired (notAfter " + doc.notAfter + " is in the past); not signed");
+  if (notAfter - realNow < 24 * 60 * 60 * 1000) console.warn("WARNING: less than 24 h left before notAfter " + doc.notAfter);
 }
 // Review 2026-11-16 WP-11: a serial at the cap (2^31-1) blocks every later
 // file signed with the same key. Warn well before it (10,000,000 below).
