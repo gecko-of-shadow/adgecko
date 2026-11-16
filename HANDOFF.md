@@ -114,13 +114,13 @@ Status values: done, changed, discarded, owner decision, open. All behavior is U
 | WP-15 | open | | |
 | WP-16 | open | | |
 | WP-17 | open | | |
-| WP-18 | open | | |
+| WP-18 | changed | see `git log --grep WP-18` | CHANGE: no handshake count (headless Chromium showed the guard scripts run before flags.js, so a count would give the slots to the page). The request window closes when the parser inserts the first `<script>`, on the first readystatechange, or at setTimeout(0). kick.js not changed. Owner decision: script order is measured only in headless Chromium. UNVERIFIED. |
 | WP-19 | done | see `git log --grep WP-19` | Watchdog stops on non-playable statuses. No "Blocking ads" chip from DOM removal under uBO (Option B). UNVERIFIED. |
 | WP-20 | done (item 4 changed) | see `git log --grep WP-20` | Cache write failure restores the saved file's rules; tier off removes feed rules; same file again is "unchanged"; the wake fast path also compares a fingerprint of the saved file. New feedState fields. UNVERIFIED. |
 | WP-21 | changed | see `git log --grep WP-21` | IDN suffixes kept as punycode. CHANGE: a hand-kept REGIONAL_WILDCARD_BASES list (12) instead of every private wildcard base, because the full set refused 3 packed malware hosts (single EC2 machines). Owner decision: check that list. psl.js 117,094 bytes (budget 120,000). UNVERIFIED. |
 | WP-22 | open | | |
-| WP-23 | open | | |
-| WP-24 | open | | |
+| WP-23 | done | see `git log --grep WP-23` | 8 items. Double-click protection kept. aria-pressed removed; the look uses data-allowed. Kick keeps "Allowed – not blocking here". Settings page writes go through one queue. UNVERIFIED. |
+| WP-24 | done (items 1-2 Option B) | see `git log --grep WP-24` | A trusted keydown starts a new gesture. Anchor, form and child-frame coverage documented as out of scope; Option A is owner decision 10. UNVERIFIED. |
 | WP-25 | open | | |
 
 ## Facts
