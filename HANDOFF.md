@@ -109,7 +109,7 @@ Status values: done, changed, discarded, owner decision, open. All behavior is U
 | WP-10 | done | see `git log --grep WP-10` | Under uBO the toast sweep only restores. The CSS hides the interruptions toast. Gap: a toast with the text only in plain textContent is not hidden under uBO (owner decision). UNVERIFIED. |
 | WP-11 | changed | see `git log --grep WP-11` | Serial bound to its signing key; a key removed from the pin list resets the serial. Expiry escape needs a stored file that lived 24 h. No step limit for kill serials. CHANGE: no serial reset on kill release (it would let pre-kill files back with the same key). Owner decision: accept this. UNVERIFIED (feed is dormant). |
 | WP-12 | done | see `git log --grep WP-12` | Docs, README (new structure from main), licence and credit files, LICENSES.md writer text, settings note. New `test/docs-claims.test.js`. Option B for "Off"; embedded players documented only. Owner decisions 3, 4, 5 and 7 stay open. |
-| WP-13 | open | | |
+| WP-13 | done | see `git log --grep WP-13` | SERVICE_PLATFORMS (33) and SERVICE_HOSTS (12) are refused by the threat tier and the allow box. PSL refreshed to 2026-11-15 (download, no cache existed). Packed threat set: 0 hosts refused, no rebuild. UNVERIFIED. |
 | WP-14 | open | | |
 | WP-15 | open | | |
 | WP-16 | open | | |
@@ -117,7 +117,7 @@ Status values: done, changed, discarded, owner decision, open. All behavior is U
 | WP-18 | open | | |
 | WP-19 | done | see `git log --grep WP-19` | Watchdog stops on non-playable statuses. No "Blocking ads" chip from DOM removal under uBO (Option B). UNVERIFIED. |
 | WP-20 | done (item 4 changed) | see `git log --grep WP-20` | Cache write failure restores the saved file's rules; tier off removes feed rules; same file again is "unchanged"; the wake fast path also compares a fingerprint of the saved file. New feedState fields. UNVERIFIED. |
-| WP-21 | open | | |
+| WP-21 | changed | see `git log --grep WP-21` | IDN suffixes kept as punycode. CHANGE: a hand-kept REGIONAL_WILDCARD_BASES list (12) instead of every private wildcard base, because the full set refused 3 packed malware hosts (single EC2 machines). Owner decision: check that list. psl.js 117,094 bytes (budget 120,000). UNVERIFIED. |
 | WP-22 | open | | |
 | WP-23 | open | | |
 | WP-24 | open | | |
