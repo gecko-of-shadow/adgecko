@@ -4,39 +4,41 @@
 
 <img src="icons/icon128-working.png" width="128" height="128" alt="Adgecko icon: a neon purple gecko head on a dark rounded square, its tongue snapping a cluster of pixel squares (an ad)">
 
-**A Chrome extension (Manifest V3, version 0.3.5) that blocks ads on Twitch, YouTube, Kick, and other websites.**<br>
-It works inside Chrome: no separate program, no account.
+**A Chrome extension (Manifest V3) that blocks ads on Twitch, YouTube, Kick and other websites, blocks known malware sites, and stops pages from copying shell commands into your clipboard.**<br>
+Current version: 0.3.5. It runs inside Chrome (version 137 or newer): no separate program, no account.
 
-<img src="icons/icon48-working.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is on: purple gecko, the pixel ad at its tongue lit up bright"> &nbsp; <img src="icons/icon48-off.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is off: the same gecko in grey, pixel ad not lit">
-
-<sub>The toolbar gecko is purple with the pixel "ad" at its tongue lit up while blocking on ordinary sites is on, and grey when it is off. Twitch, YouTube, and Kick filters keep running when only the list blocking switch is off; the master switch also stops the Kick ad skip, the Twitch banner hiding, the YouTube helpers and the malware lists. How the art was chosen: <a href="docs/design/README.md">docs/design</a>.</sub>
-
-[Install](#install) · [How to use](#how-to-use) · [Privacy](#privacy) · [Troubleshooting](#troubleshooting) · [Docs](#links)
+[Features](#features) · [Install](#install) · [How to use](#how-to-use) · [Privacy and permissions](#privacy-and-permissions) · [Troubleshooting](#troubleshooting) · [Development](#development) · [License](#license-and-brand)
 
 </div>
 
-## What it does and doesn't do
+## Features
 
-- ✅ Blocks video ads on Twitch, YouTube, and Kick.
+- ✅ Blocks video ads on Twitch, YouTube and Kick (see the limits below).
 - ✅ Blocks ads on other websites using public ad lists, and hides the empty boxes the ads leave behind.
 - ✅ Blocks sites that public malware lists name as known-bad, on every page (also inside Twitch, YouTube and Kick pages), without ever blocking those sites' own servers. [Details](docs/threat-tier.md)
-- ✅ Stops pages from putting a shell command into your clipboard (the "paste this into Run to verify you" trick). Pop-ups opened without a click can be blocked too (off by default).
-- ❌ Phishing pages are only blocked when one of these public lists names them; Chrome's own Safe Browsing stays your main phishing protection.
+- ✅ Stops pages from putting a shell command into your clipboard (the "paste this into Run to verify you" trick).
+- ✅ Optional pop-up guard: blocks pop-ups opened without a click (off by default).
+
+### Limits
+
+- ❌ Phishing pages are blocked only when one of the public lists names them. Chrome's own Safe Browsing stays your main phishing protection.
 - ❌ Ads that are part of the video itself still play. Example: a YouTuber reading out a sponsor.
 - ❌ On Twitch, the picture can drop to lower quality for a moment during an ad break. The stream keeps playing.
 - ❌ Sometimes a Twitch ad still shows, when no ad-free copy of the stream is available.
-- ❌ On Kick, some ads still play. It only skips an ad when it can do that safely.
+- ❌ On Kick, some ads still play. Adgecko only skips an ad when it can do that safely.
 - ❌ YouTube Music and YouTube Kids are not covered.
 
 ## Install
 
+Adgecko is not on the Chrome Web Store. You load it into Chrome yourself:
+
 1. Get the files and unzip them. Pick one:
    - **Release zip:** [adgecko-0.3.5.zip](https://github.com/gecko-of-shadow/adgecko/releases/download/v0.3.5/adgecko-0.3.5.zip) ([release v0.3.5](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.5), [all releases](https://github.com/gecko-of-shadow/adgecko/releases)).
-   - **Newest code:** click the green **Code** button on this page, then **Download ZIP**. That copy is the newest code in this repository. It may be newer than the last numbered release; Chrome shows the version from `manifest.json`.
+   - **Newest code:** click the green **Code** button on this page, then **Download ZIP**. This may be newer than the last numbered release; Chrome shows the version from `manifest.json`.
 2. In Chrome, type `chrome://extensions` in the address bar and press Enter. If you had an older copy loaded, remove it first.
 3. Turn on **Developer mode** (top right). This switch lets Chrome add an extension from a folder on your computer.
-4. Click **Load unpacked** and pick the unzipped folder: the one with `manifest.json` directly inside it. Keep the folder where it is. Chrome runs the extension from that folder.
-5. Optional: click the puzzle-piece icon next to the address bar, then the pin next to **Adgecko**. The gecko then stays visible in your toolbar (the row of icons to the right of the address bar).
+4. Click **Load unpacked** and pick the unzipped folder: the one with `manifest.json` directly inside it. Keep the folder where it is; Chrome runs the extension from that folder.
+5. Optional: click the puzzle-piece icon next to the address bar, then the pin next to **Adgecko**. The gecko then stays visible in your toolbar.
 
 ## How to use
 
@@ -44,34 +46,60 @@ Nothing to set up: it works as soon as it is installed.
 
 1. Click the gecko in the toolbar. A small window shows the site and one line: **✅ Protected**, or **Allowed – not blocking here**.
 2. **Something broke?** Click **Fix this site**. It turns off the extra filters for this site only (hidden boxes and the page guards). Click **Reload page** and look, then answer **Did that fix it?** **Yes** keeps it. **No** turns them back on and suggests the next step. A kept fix shows as **Protected – some filters off here (Fix this site)**, with an **Undo fix** button.
-3. Still broken? Click **Allow this site**: the ad lists stop blocking what this site itself loads, ad boxes are no longer hidden, and the pop-up guard stops working on this site. The clipboard guard stays on. Known malware sites stay blocked, and on Twitch and YouTube the built-in ad blocking keeps running. Details: [docs/allow-a-page.md](docs/allow-a-page.md). The button turns into **Block again** to undo it. After either button, **Reload page** reloads the tab (it never reloads by itself).
+3. Still broken? Click **Allow this site**: the ad lists stop blocking what this site itself loads, ad boxes are no longer hidden, and the pop-up guard stops working on this site. The clipboard guard stays on. Known malware sites stay blocked, and on Twitch and YouTube the built-in ad blocking keeps running. The button turns into **Block again** to undo it. After either button, **Reload page** reloads the tab (it never reloads by itself).
 4. Chrome shows "blocked by an extension" for a site you trust? Click the gecko, then **Chrome says the page is blocked? Allow its domain**. It opens the **Allow this domain** box on the settings page.
 5. **Show more** has the list status and the version. The gear opens the settings page with every switch, the per-site list, the list update button and the popup look (Automatic, Purple or High contrast).
 
-A small magenta dot on the gecko means a page guard just blocked something on that tab (for example a page trying to put a command into your clipboard). Open the window to see what; the dot then goes away (it also goes away when the tab opens another page). There are no pop-ups or counters.
-
 An allow counts for the whole website address and stays until you undo it. Details: [docs/allow-a-page.md](docs/allow-a-page.md)
 
-## Privacy
+**Toolbar icon:**
+
+<img src="icons/icon48-working.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is on: purple gecko, the pixel ad at its tongue lit up bright"> &nbsp; <img src="icons/icon48-off.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is off: the same gecko in grey, pixel ad not lit">
+
+- Purple, with the pixel "ad" at its tongue lit up: blocking on ordinary sites is on.
+- Grey: blocking on ordinary sites is off. If only the list blocking switch is off, the Twitch, YouTube and Kick filters keep running. The master switch also stops the Kick ad skip, the Twitch banner hiding, the YouTube helpers and the malware lists.
+- A small magenta dot: a page guard just blocked something on that tab (for example a page trying to put a command into your clipboard). Open the window to see what; the dot then goes away (it also goes away when the tab opens another page). There are no pop-ups or counters.
+
+How the art was chosen: [docs/design](docs/design/README.md).
+
+## Privacy and permissions
 
 - No tracking: it does not send your browsing history anywhere.
-- No account, and no analytics call of its own. Settings stay in Chrome's storage on this browser.
-- Every 3 hours it checks eight public filter lists over HTTPS without cookies (a real download at most every 12 hours). The sites it contacts are: `easylist.to`, `pgl.yoyo.org`, `malware-filter.gitlab.io`, `ublockorigin.github.io`, `easylist-downloads.adblockplus.org` and `secure.fanboy.co.nz` (EasyList mirrors, only if the first try fails), `raw.githubusercontent.com` (HaGeZi and Dandelion Sprout lists only) and `filters.adtidy.org`. Those sites see the list address and your IP address. The page you are visiting is not part of that address.
-- The clipboard guard looks at the text a page tries to copy only inside your browser. Nothing is sent anywhere.
-- The one Curben list we use: URLhaus data, no OpenPhish. curbengh's urlhaus-filter (abuse.ch URLhaus malware hosts, CC0) is the only list from Curben's malware-filter project, kept by owner decision #18b; his phishing list and every OpenPhish source stay out. [Details](docs/threat-tier.md#where-the-hosts-come-from)
+- No account and no analytics. Settings stay in Chrome's storage in this browser.
+- Every 3 hours it checks eight public filter lists over HTTPS without cookies (a real download at most every 12 hours). The sites it contacts are `easylist.to`, `pgl.yoyo.org`, `malware-filter.gitlab.io`, `ublockorigin.github.io`, `easylist-downloads.adblockplus.org` and `secure.fanboy.co.nz` (EasyList mirrors, only if the first try fails), `raw.githubusercontent.com` (HaGeZi and Dandelion Sprout lists only) and `filters.adtidy.org`. Those sites see the list address and your IP address. The page you are visiting is not part of that address.
+- The clipboard guard checks the text a page tries to copy inside your browser only. Nothing is sent anywhere.
+- Only one list comes from Curben's malware-filter project: curbengh's urlhaus-filter (abuse.ch URLhaus malware hosts, CC0). His phishing list and every OpenPhish source are not used. [Details](docs/threat-tier.md#where-the-hosts-come-from)
 - On Twitch, it asks Twitch for ad-free copies of the stream. Those requests go to Twitch.
+- **Permissions:** exactly `storage`, `declarativeNetRequest`, `alarms`, and host access to the list sites above (only for downloading the public filter lists).
 
-Full details, permissions, and the list sites: [docs/permissions-and-privacy.md](docs/permissions-and-privacy.md)
+Full details: [docs/permissions-and-privacy.md](docs/permissions-and-privacy.md)
 
 ## Troubleshooting
 
 - **"Allow this site" is grey?** The window says why, in the status line under the site name or in the line under the button. Common reasons:
   - *Off – turned off in settings.* The whole extension is switched off on the settings page.
   - *Open a normal http(s) page to allow it. Already on one? Reload it.* Chrome's own pages cannot be allowed. On a normal website, the page was open before you installed or reloaded the extension: reload it, then open the window again.
+  - *Malware blocking only – ad scripts don't run on this site.* Shown on YouTube Music, YouTube Studio, YouTube TV, YouTube Kids and youtube-nocookie pages.
 - **A copy button on a website does not copy a command?** The clipboard guard stops pages from writing commands like `powershell ...` or `curl ... | sh` unless you copy them yourself: select the text and press Ctrl+C. Documentation sites such as GitHub are trusted. Or use **Fix this site** (on an allowed site, click **Block again** first; Allow leaves the clipboard guard on).
 - **Blocked things still missing after you allow a site?** Reload the page.
 - **Chrome says "This page has been blocked by an extension"?** A filter list or the malware list blocks opening that site (mostly ad servers and known bad sites). If you trust it: settings page (the gear) -> **Allow this domain** -> type the domain -> reload. The popup's **Allow this site** cannot help on that page. [Details](docs/allow-a-page.md#a-page-chrome-says-is-blocked)
 - **Loading a new copy?** Remove the old one first. Removing the extension, or loading a copy from a different folder, forgets the allowed sites, so allow them again.
+
+## Development
+
+- There is no build step. From a git clone, load the repository root (the directory that contains `manifest.json`) with **Load unpacked**. `docs/`, `test/` and `scripts/` are not part of the running extension.
+- The version is the `version` field in `manifest.json`.
+- `scripts/pack-zip.sh` writes `adgecko-<version>.zip`, whose root holds `manifest.json`, `src/` and `icons/`.
+- Releases are published from GitHub Actions (**Actions** -> **release** -> **Run workflow**); the release notes come from the matching `CHANGELOG.md` section.
+- Updating the vendored Twitch script and the uBlock Origin YouTube filters: [docs/UPDATING-DEPENDENCIES.md](docs/UPDATING-DEPENDENCIES.md).
+
+Tests and checks (need [Deno](https://deno.com/)):
+
+```bash
+deno test --no-lock --allow-read --allow-run --allow-env test/
+bash scripts/release-gate.sh
+bash scripts/pack-zip.sh
+```
 
 ## License and brand
 
@@ -81,18 +109,5 @@ Full details, permissions, and the list sites: [docs/permissions-and-privacy.md]
 
 ## Links
 
-- **Docs:** [How it works](docs/how-it-works.md) · [Allow a site](docs/allow-a-page.md) · [Permissions and privacy](docs/permissions-and-privacy.md) · [Threat tier](docs/threat-tier.md) · [Signed threat feed setup](docs/feed-setup.md)
-- **Permissions:** exactly `storage`, `declarativeNetRequest`, `alarms`, and the listed hosts (all for downloading public filter lists). [Full list](docs/permissions-and-privacy.md#permissions)
-- **Credits and licenses:** TwitchAdSolutions (MIT), uBlock Origin and uAssets (GPLv3), the EasyList authors and the other lists. [Details and license files](docs/credits.md) · [LICENSE](LICENSE)
-- **Development:** there is no build step. From a git clone, load the repository root (the directory that contains `manifest.json`); `docs/`, `test/`, and `scripts/` are not part of the running extension. The version is the `version` field in `manifest.json`. The release zip root is `manifest.json`, `src/`, and `icons/`, and `scripts/pack-zip.sh` writes `adgecko-<version>.zip` containing the same three.
-
-<details>
-<summary>Development commands</summary>
-
-```bash
-deno test --no-lock --allow-read --allow-run --allow-env test/
-bash scripts/release-gate.sh
-bash scripts/pack-zip.sh
-```
-
-</details>
+- **Docs:** [How it works](docs/how-it-works.md) · [Allow a site](docs/allow-a-page.md) · [Permissions and privacy](docs/permissions-and-privacy.md) · [Threat tier](docs/threat-tier.md) · [Signed threat feed setup](docs/feed-setup.md) · [Updating dependencies](docs/UPDATING-DEPENDENCIES.md)
+- **Project:** [Changelog](CHANGELOG.md) · [To do](TODO.md) · [Releases](https://github.com/gecko-of-shadow/adgecko/releases)
