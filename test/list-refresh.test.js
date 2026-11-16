@@ -24,6 +24,19 @@ Deno.test("parser keeps domain rules and skips exceptions, cosmetics, scoped and
   assert(U.parseExpires("no header") === 86400000, "default 1 day");
 });
 
+// Review 2026-11-16 WP-09 item 6: update.js localAddress rejects the CGNAT
+// range 100.64.0.0/10 (100.64.0.0 - 100.127.255.255). The addresses just
+// outside the range are kept.
+Deno.test("parser rejects CGNAT (100.64.0.0/10) IP literals and keeps the addresses next to the range", () => {
+  const rejected = ["0.0.0.0 100.64.0.1", "||100.127.255.255^", "||100.64.1.1^", "100.100.100.100"];
+  for (const line of rejected) {
+    assert(U.parseList(line).length === 0, "CGNAT kept: " + line + " -> " + JSON.stringify(U.parseList(line)));
+  }
+  const kept = ["100.63.255.255", "100.128.0.1"]; // privacy-check: allow (CGNAT boundary test addresses)
+  const text = ["0.0.0.0 " + kept[0], "||" + kept[1] + "^"].join("\n");
+  assert(JSON.stringify(U.parseList(text)) === JSON.stringify(kept), "boundary addresses: " + JSON.stringify(U.parseList(text)));
+});
+
 Deno.test("merge drops stream domains and dupes; 80 domains per rule", () => {
   const merged = U.mergeDomains({ peter_lowe: ["a.com", "googlevideo.com", "r1.googlevideo.com"], easylist: ["a.com", "b.com", "x.twitch.tv"] });
   assert(JSON.stringify(merged) === '["a.com","b.com"]', JSON.stringify(merged));
