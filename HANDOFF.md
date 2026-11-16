@@ -118,10 +118,10 @@ Status values: done, changed, discarded, owner decision, open. All behavior is U
 | WP-19 | done | see `git log --grep WP-19` | Watchdog stops on non-playable statuses. No "Blocking ads" chip from DOM removal under uBO (Option B). UNVERIFIED. |
 | WP-20 | done (item 4 changed) | see `git log --grep WP-20` | Cache write failure restores the saved file's rules; tier off removes feed rules; same file again is "unchanged"; the wake fast path also compares a fingerprint of the saved file. New feedState fields. UNVERIFIED. |
 | WP-21 | changed | see `git log --grep WP-21` | IDN suffixes kept as punycode. CHANGE: a hand-kept REGIONAL_WILDCARD_BASES list (12) instead of every private wildcard base, because the full set refused 3 packed malware hosts (single EC2 machines). Owner decision: check that list. psl.js 117,094 bytes (budget 120,000). UNVERIFIED. |
-| WP-22 | open | | |
+| WP-22 | done (item 1 changed) | see `git log --grep WP-22` | 8 items. CHANGE item 1: content pins in a new `scripts/frozen-pins.json` (the Twitch updater rewrites vendor-pins.json). Owner decisions: accept the pins (decision 2); the Windows tar.exe zip is not reproducible (decision 12). Not run in GitHub Actions. |
 | WP-23 | done | see `git log --grep WP-23` | 8 items. Double-click protection kept. aria-pressed removed; the look uses data-allowed. Kick keeps "Allowed – not blocking here". Settings page writes go through one queue. UNVERIFIED. |
 | WP-24 | done (items 1-2 Option B) | see `git log --grep WP-24` | A trusted keydown starts a new gesture. Anchor, form and child-frame coverage documented as out of scope; Option A is owner decision 10. UNVERIFIED. |
-| WP-25 | open | | |
+| WP-25 | done | see `git log --grep WP-25` | `--parallel` in checks.yml only; the gate stays serial (owner decision 11). New `test/twitch-playlist.test.js` runs the vendor playlist code. New upstream gap: vendor 1.55 stripAdSegments tracking-URL rewrite has no effect (writes a local variable). Not run in CI. |
 
 ## Facts
 
