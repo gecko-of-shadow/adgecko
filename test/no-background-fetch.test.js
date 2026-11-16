@@ -1,8 +1,5 @@
 import "../src/general/never-block-captcha.js";
 import updateSource from "../src/general/update.js" with { type: "text" };
-import exclusionsSource from "../src/general/exclusions.js" with { type: "text" };
-import togglesSource from "../src/general/toggles.js" with { type: "text" };
-import cosmeticSource from "../src/general/cosmetic.js" with { type: "text" };
 import popupSource from "../src/popup.js" with { type: "text" };
 import popupHtml from "../src/popup.html" with { type: "text" };
 import youtubeSource from "../src/youtube.js" with { type: "text" };
@@ -29,8 +26,8 @@ install(api);
 // content scripts, the script tags of the extension pages and the worker
 // importScripts list, so a new live script is scanned too. Only update.js and
 // general-background.js (the worker, which fetches the lists) are left out.
-// The dead modules (exclusions.js, toggles.js, general/cosmetic.js) are still
-// packed, so they stay in the scan.
+// The dead modules (exclusions.js, toggles.js, general/cosmetic.js) were
+// removed in 0.3.6 with the owner's approval, so they are not scanned.
 const ROOT = new URL("../", import.meta.url);
 const LIST_FETCHERS = new Set(["src/general/update.js", "src/general-background.js"]);
 function liveScriptPaths() {
@@ -48,9 +45,6 @@ const livePaths = liveScriptPaths();
 const packagedJs = livePaths.map((f) => Deno.readTextFileSync(new URL(f, ROOT))).concat([
   popupSource,
   youtubeSource,
-  exclusionsSource,
-  togglesSource,
-  cosmeticSource,
 ]);
 
 Deno.test("the fetch scan covers the live scripts (manifest, pages, worker imports)", () => {
@@ -58,7 +52,7 @@ Deno.test("the fetch scan covers the live scripts (manifest, pages, worker impor
     assert(livePaths.includes(f), "not scanned: " + f + " in " + JSON.stringify(livePaths));
   }
   assert(!livePaths.some((f) => LIST_FETCHERS.has(f)), "list fetchers are left out");
-  assert(packagedJs.length === livePaths.length + 5 && packagedJs.every((t) => typeof t === "string" && t.length > 0), "each scanned file has text");
+  assert(packagedJs.length === livePaths.length + 2 && packagedJs.every((t) => typeof t === "string" && t.length > 0), "each scanned file has text");
 });
 
 Deno.test("update policy is alarm refresh + manual, list hosts only", () => {

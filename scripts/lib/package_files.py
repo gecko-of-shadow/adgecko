@@ -41,8 +41,6 @@ EXTRA_REQUIRED = [
     "src/vendor/LICENSE-uBlock.md",
     "src/vendor/LICENSE-uBlock-GPLv3.txt",
     "src/vendor/README.md",
-    # In the release gate's REQUIRED list; nothing loads it (dead module).
-    "src/general-exclude-hosts.js",
 ]
 EXTRA_OPTIONAL = [
     "src/rules/README.md",
@@ -50,11 +48,6 @@ EXTRA_OPTIONAL = [
     "src/rules/threat-meta.json",
     "src/rules/cosmetic-sample.json",
     "src/vendor/ubo-youtube-meta.json",
-    # Dead modules, packed before by a src/general/*.js glob. Not loaded by the
-    # manifest or the worker; kept packed until the owner decides (NEEDS OWNER).
-    "src/general/toggles.js",
-    "src/general/exclusions.js",
-    "src/general/cosmetic.js",
 ]
 
 LOCAL_REF = re.compile(r"""["'`]((?:\.\./|\./)*(?:src|icons)/[A-Za-z0-9_./-]+\.(?:js|json|css|html|png|txt|md))["'`]""")

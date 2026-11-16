@@ -57,6 +57,15 @@ A code review of 0.3.5 (2026-11-16) confirmed 64 findings. This release does the
 - CI runs the tests with `--parallel`. The release gate stays serial.
 - None of this was run in GitHub Actions.
 
+### Removed
+
+The owner approved these deletions (2026-11-16).
+
+- Dead modules that nothing loaded: `src/general/toggles.js`, `src/general/exclusions.js`, `src/general/cosmetic.js` and `src/general-exclude-hosts.js`. They are no longer in the zip. The release gate and `scripts/lib/package_files.py` no longer list them.
+- Their tests: `test/toggles.test.js`, `test/exclusions.test.js` and `test/general-cosmetic-contract.test.js`. The one test of live files ("master toggle is the only popup switch") moved to `test/popup-general.test.js`. `test/dnr.test.js` keeps the stream-host lists as fixed constants and still checks the packed allow rules and the block rules against them.
+- 21 Twitch tests that only checked strings in the vendored file, which the SHA-256 pin already covers: `test/page.test.js` (7), `test/swap.test.js` (5), `test/reload.test.js` (4), `test/bug.test.js` (3) and `test/memory.test.js` (2). `test/twitch-playlist.test.js` runs the vendored playlist code instead. The conflict-version check stays in `test/hardening.test.js` and the release gate.
+- `docs/cards2/` and `docs/cards-main/` (copies of `docs/cards/`).
+
 ### Merged after 0.3.5 (PR #13)
 
 - Added: `scripts/update-twitch-vendor.mjs` updates `src/vendor/video-swap-new.user.js` in one command, with a SHA-256 pin in `scripts/vendor-pins.json`. `test/vendor-pin.test.js` fails when the file and the pin do not agree. Since 0.3.6, `scripts/frozen-pins.json` must also be updated by hand (see `docs/UPDATING-DEPENDENCIES.md`).

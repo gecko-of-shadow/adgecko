@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Merge stream-exclusion allows + list-pack block rules into general-network.json.
 
-Uses the same domain lists as src/general-exclude-hosts.js (buildDnrExclusionRules).
+test/dnr.test.js checks the merged allow rules against its own copy of these
+domain lists (they were in src/general-exclude-hosts.js, removed in 0.3.6).
 Renumbers list-pack block ids so they never collide with exclusion ids 1–2.
 Does not edit playback files.
 """
@@ -26,7 +27,7 @@ LIST_BLOCKS = (
     else ROOT / "scripts" / ".dnr-cache" / "general-network.blocks.json"
 )
 
-# Keep in sync with src/general-exclude-hosts.js
+# Keep in sync with SITE_DOMAINS and VIDEO_CDN_DOMAINS in test/dnr.test.js
 SITE_DOMAINS = [
     "twitch.tv",
     "youtube.com",

@@ -76,3 +76,17 @@ Deno.test("storage key contract matches settings module", () => {
   // Block H: the feature registry loads first.
   assert(backgroundSource.replace(/\s+/g, " ").includes("importScripts(\"settings/features.js\", \"general-settings.js\", \"general/filter-options.js\", \"general/never-block-captcha.js\", \"threat/psl.js\", \"threat/protected-hosts.js\", \"threat/compile.js\", \"general/update.js\", \"general/cosmetic-parse.js\", \"feed/config.js\", \"feed/keys.js\", \"feed/canonical.js\", \"feed/schema.js\", \"feed/verify.js\", \"feed/compile.js\", \"feed/client.js\")"), "worker loads shared settings");
 });
+
+// Moved in 0.3.6 from test/toggles.test.js (that file tested the removed dead
+// module src/general/toggles.js; this test checks only live files).
+Deno.test("master toggle is the only popup switch", () => {
+  assert(!popupHtml.includes("debug-on"), "debug on is gone");
+  assert(!popupHtml.includes("debug-off"), "debug off is gone");
+  assert(!popupHtml.includes("Copy debug"), "copy debug is gone");
+  assert(!popupSource.includes("sendDebug"), "popup does not message a debug log");
+  // Redesign: no switches in the popup at all; the master switch is on the settings page.
+  assert(!popupHtml.includes("<input") && !popupHtml.includes("general-enabled"), "no switches in the popup");
+  assert(Deno.readTextFileSync(new URL("../src/settings.html", import.meta.url)).includes('id="master"'), "master switch on the settings page");
+  assert(!popupSource.includes("kick.js"), "popup does not load Kick playback");
+  assert(!popupSource.includes("youtube.js"), "popup does not load YouTube playback");
+});

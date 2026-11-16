@@ -145,7 +145,7 @@ The zip is not committed (`*.zip` is in `.gitignore`).
 ### Privacy check: open item
 
 - The two commit messages name test addresses (the CGNAT test and the `192.168.` boundary test). The checker honors the allow marker per line, and these lines have none.
-- The fix is a reword of the two messages and a force push of this branch. The session's permission check denied the history rewrite. The owner must choose:
+- The fix is a reword of the two messages and a force push of this branch. The session's permission check denied the history rewrite. Answered on 2026-11-16: the owner approved option 2 (squash merge). The options were:
   1. Approve a history rewrite of `claude/festive-dirac-a043po` (reword ae6f02d and 0308df8, then `git push --force-with-lease`), or
   2. Use a squash merge for PR 14, so that the messages do not reach `main`, or
   3. Accept the failed check on the PR.
@@ -182,15 +182,23 @@ New in this session:
 23. WP-21: check the `REGIONAL_WILDCARD_BASES` list (12 entries) in `scripts/build-psl-subset.mjs`; the non-AWS URL forms are not checked live.
 24. WP-25: upstream gap in TwitchAdSolutions 1.55: the ad tracking-URL rewrite in `stripAdSegments` writes a local variable and has no effect.
 25. `src/vendor/LICENSE-uBlock.md` still shows `deno run -A` for the sync. It ships in the zip, so it was not changed.
-26. Privacy check on two commit messages (see above).
+26. Privacy check on two commit messages: answered. The owner approved a squash merge of PR 14.
 
-## Deletion candidates (the owner must approve; nothing was deleted)
+## Deletions (done, approved by the owner on 2026-11-16)
 
-- `src/general/toggles.js`, `src/general/exclusions.js`, `src/general/cosmetic.js` and `src/general-exclude-hosts.js` (dead modules, "NEEDS OWNER").
-- Their tests: `test/toggles.test.js`, `test/exclusions.test.js` and `test/general-cosmetic-contract.test.js` (rename them instead, if the modules stay).
-- The string-presence Twitch tests that the SHA pin covers. `test/twitch-playlist.test.js` now exists, so they can be merged.
-- `docs/cards2/` and `docs/cards-main/` (the same as `docs/cards/`; TODO.md:41).
-- Local only, not in git: the 9 agent worktrees under `.claude/worktrees/` (excluded in `.git/info/exclude`) and their branches `worktree-agent-*`.
+The owner approved all four items. The approval came through the parent session and was confirmed in this session.
+
+- Deleted: `src/general/toggles.js`, `src/general/exclusions.js`, `src/general/cosmetic.js`, `src/general-exclude-hosts.js`.
+- Deleted: `test/toggles.test.js`, `test/exclusions.test.js`, `test/general-cosmetic-contract.test.js`. The live popup check moved to `test/popup-general.test.js`. `test/dnr.test.js` keeps the stream-host lists as constants.
+- Deleted: the Twitch string-presence tests `test/page.test.js`, `test/swap.test.js`, `test/reload.test.js`, `test/bug.test.js`, `test/memory.test.js` (21 tests). `test/fixtures.test.js` and `test/playlist.test.js` stay, because they check fixtures, `youtube.js`, the manifest and the licence.
+- Deleted: `docs/cards2/`, `docs/cards-main/`.
+- References removed or updated: release gate (REQUIRED list and ALLOWED_RE), `scripts/lib/package_files.py`, `scripts/lib/twitch-vendor.mjs` pin sites, `scripts/update-twitch-vendor.mjs`, `test/vendor-pin.test.js`, `test/no-background-fetch.test.js`, `docs/UPDATING-DEPENDENCIES.md`, comments in `scripts/merge-dnr-rules.py`, `scripts/pack-filter-lists.py` and `test/fixtures/stream-hosts.txt`.
+- Not deleted: the local agent worktrees under `.claude/worktrees/` (container only, not in git).
+
+## Owner answers (2026-11-16)
+
+- Privacy check on two commit messages: the owner approved a squash merge of PR 14. The parent session does the merge. No history rewrite.
+- Deletion candidates: approved and done (see above).
 
 ## Facts
 

@@ -73,8 +73,7 @@ Exit codes: 0 = done or current. 1 = `--check` found a difference. 2 = error. Th
 
 ### Text that the script updates
 
-- `test/page.test.js` (userscript version, conflict version)
-- `test/exclusions.test.js`, `test/general-cosmetic-contract.test.js`, `test/hardening.test.js` (conflict version)
+- `test/hardening.test.js` (conflict version)
 - `src/vendor/README.md` (commit link, versions)
 - `docs/STORE-REVIEW-NOTES.md` (version, line numbers of the `eval` call and of `getWasmWorkerJs`)
 - `docs/credits.md`, `docs/how-it-works.md` (version)
@@ -95,7 +94,7 @@ The gate freezes the Twitch file. After an update, expect these results:
 - **Section 6 fails** if upstream changed `ourTwitchAdSolutionsVersion`. Line 774 of the gate holds the number. The owner must change that line by hand. `test/vendor-pin.test.js` also fails until that line agrees with the new number.
 - **Section 3 fails** if upstream added an `eval` call or an `innerHTML` write. Do not widen the gate's allow-list without a code review of the new lines.
 
-Some tests read the code inside the vendored file (`test/page.test.js`, `swap`, `bug`, `memory`, `reload`, `fixtures`, `playlist`). They can fail on a real upstream change. Read each failure. Do not edit the vendored file to make a test pass.
+Some tests read the code inside the vendored file (`test/twitch-playlist.test.js`, `fixtures`, `playlist`, `hardening`). They can fail on a real upstream change. Read each failure. Do not edit the vendored file to make a test pass.
 
 ## 2. uBlock Origin YouTube filters
 

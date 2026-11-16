@@ -130,7 +130,7 @@ NEVER_BLOCK_SUFFIXES = (
     "kick.com",
     "kick-streamer.com",
     # Player CDN and the other YouTube/Kick frame hosts from
-    # src/general-exclude-hosts.js. HaGeZi lists stats.live-video.net.
+    # scripts/merge-dnr-rules.py. HaGeZi lists stats.live-video.net.
     "live-video.net",
     "youtube-nocookie.com",
     "youtubekids.com",
