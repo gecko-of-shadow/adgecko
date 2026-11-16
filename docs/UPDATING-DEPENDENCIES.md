@@ -55,6 +55,14 @@ The script does these steps:
 
 `test/vendor-pin.test.js` fails when the file and `scripts/vendor-pins.json` do not agree. A hand edit of the vendored file thus fails the tests.
 
+Since 0.3.6, the release gate also checks the vendored file against a second pin in `scripts/frozen-pins.json` (section 1b, on every branch and in the release job). The script does not update that file. After an update, do these steps by hand:
+
+1. Copy the new `sha256` from `scripts/vendor-pins.json` to the `src/vendor/video-swap-new.user.js` entry in `scripts/frozen-pins.json`.
+2. Set `bytes` in the same entry to the new file size.
+3. Run the tests. `test/release-tooling.test.js` fails while the two pins do not agree.
+
+A change to `scripts/frozen-pins.json` is an owner decision, because it unfreezes a playback file.
+
 Options:
 
 - `--ref <branch, tag or commit>`: take the file from that point. Use this to go back to an older version.
