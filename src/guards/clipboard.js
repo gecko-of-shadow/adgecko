@@ -100,11 +100,24 @@ function installClipboardGuard(target) {
     { id: "bitsadmin", re: /\bbitsadmin(?:\.exe)?\s+\/transfer\b/i },
     { id: "certutil", re: /\bcertutil(?:\.exe)?\s+[^\n]{0,80}-urlcache\b/i },
     { id: "rundll32", re: /\brundll32(?:\.exe)?\s+[^\n]{0,80}(?:javascript:|https?:|\\\\)/i },
-    { id: "regsvr32", re: /\bregsvr32(?:\.exe)?\s+[^\n]{0,40}\/i:\s*https?:/i },
-    { id: "msiexec-remote", re: /\bmsiexec(?:\.exe)?\s+[^\n]{0,40}\/(?:i|package)\s+["']?https?:/i },
-    { id: "curl-pipe-shell", re: /\b(?:curl|wget)\b[^\n|]{0,300}\|\s*(?:sudo\s+)?(?:ba|z|da)?sh\b/i },
+    // Remote files also come from a UNC path (\\host\share, WebDAV).
+    { id: "regsvr32", re: /\bregsvr32(?:\.exe)?\s+[^\n]{0,40}\/i:\s*(?:https?:|\\\\)/i },
+    { id: "msiexec-remote", re: /\bmsiexec(?:\.exe)?\s+[^\n]{0,40}\/(?:i|package)\s+["']?(?:https?:|\\\\)/i },
+    { id: "powershell-unc-file", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s-(?:f|fi|fil|file)\s+["']?\\\\/i },
+    // Pipe to a shell, also by path (/bin/bash) and after sudo / nohup / env
+    // (with up to three flags each). Every gap is bounded (linear matching).
+    { id: "curl-pipe-shell", re: /\b(?:curl|wget)\b[^\n|]{0,300}\|\s*(?:(?:[^\s|]{0,100}\/)?(?:sudo|nohup|env)\s+(?:-[\w-]{1,20}\s+){0,3}){0,3}(?:[^\s|]{0,100}\/)?(?:ba|z|da|k)?sh\b/i },
+    // Process substitution: bash <(curl -fsSL URL).
+    { id: "shell-process-download", re: /\b(?:(?:ba|z|da|k)?sh|source)\s+<\(\s*(?:curl|wget)\b/i },
     // macOS form without a pipe: /bin/bash -c "$(curl -fsSL URL)".
     { id: "shell-c-download", re: /\b(?:ba|z|da)?sh\s+-c\s+["']?\$\(\s*(?:curl|wget)\b/i },
+    // The same with a base64 payload: /bin/bash -c "$(echo ... | base64 -d)".
+    { id: "shell-c-base64", re: /\b(?:ba|z|da)?sh\s+-c\s+["']?\$\([^)]{0,300}\bbase64\s+(?:-d|--decode|-D)\b/i },
+    // Windows: finger user@host | cmd (the reply is run as commands).
+    { id: "finger-pipe-cmd", re: /\bfinger(?:\.exe)?\b[^\n|]{0,100}\|\s*cmd\b/i },
+    // A WebDAV path pasted into Run: \\host@SSL\..., \\host@80\..., DavWWWRoot.
+    // A plain \\server\share path does not match.
+    { id: "webdav-unc", re: /\\\\[^\\\s]{1,255}@(?:ssl|\d{1,5})(?:@\d{1,5})?\\|\bdavwwwroot\b/i },
     { id: "osascript-curl", re: /\bosascript\b[^\n]{0,200}(?:curl|do shell script)/i },
     { id: "base64-pipe-shell", re: /\bbase64\s+(?:-d|--decode|-D)\b[^\n]{0,80}\|\s*(?:ba|z)?sh\b/i },
   ];

