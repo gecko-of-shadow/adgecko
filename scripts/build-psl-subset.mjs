@@ -21,11 +21,15 @@
 //   privateSuffixes  every plain PRIVATE rule with at most 3 labels and the
 //                 base of every PRIVATE wildcard rule (github.io, ru.com,
 //                 webhop.me, s3.amazonaws.com). The threat tier, the feed and
-//                 the allow box use these too.
-//   privateDeep   PRIVATE rules with 4+ labels (and 4+ label bases of PRIVATE
-//                 wildcard rules) under a PLATFORMS parent, e.g. the regional
-//                 S3 endpoints s3.us-east-2.amazonaws.com; same grouping as
-//                 icannDeep. A block on one would take out every bucket there.
+//                 the allow box use these too. Only the 2-label names are
+//                 stored here; the 3-label names are stored grouped in
+//                 privateDeep (file size; the set at load is the same).
+//   privateDeep   the 3-label privateSuffixes, plus PRIVATE rules with 4+
+//                 labels (and 4+ label bases of PRIVATE wildcard rules) under
+//                 a PLATFORMS parent, e.g. the regional S3 endpoints
+//                 s3.us-east-2.amazonaws.com; same grouping as icannDeep. A
+//                 block on one would take out every bucket there. Joined
+//                 into privateSuffixes at load.
 //   wildcardTlds  ICANN rules "*.<tld>": every "<x>.<tld>" is a suffix.
 //   platforms     PLATFORMS below (hand-kept): shared hosting, cloud and CDN
 //                 parents and a few big sites. Never blocked themselves (nor
@@ -45,9 +49,19 @@
 //   generic       second-level labels (2+ characters) the PSL lists under at
 //                 least three country TLDs ("co", "com", "ac", "gov", ...).
 //                 Data for the popup guard's small same-site check only.
+//   privateWildcardBases  REGIONAL_WILDCARD_BASES below (hand-kept, checked
+//                 against the PSL): PRIVATE wildcard bases whose children are
+//                 shared regional namespaces ("*.compute.amazonaws.com":
+//                 us-west-1.compute.amazonaws.com holds every EC2 host in that
+//                 region). Every "<x>.<base>" is refused by suffixReason()
+//                 only: the threat tier, the feed and the allow box.
+//                 isIcannSuffix() stays ICANN only (review 2026-11-16, WP-21).
+// Unicode (IDN) rules are converted to punycode (公司.cn -> xn--55qx5d.cn).
 // Left out: PRIVATE rules with 4+ labels that are not under a PLATFORMS
 // parent (file size; UNVERIFIED blast radius, small), and the children of
-// PRIVATE wildcard rules.
+// the other PRIVATE wildcard rules. Most of those children are ONE customer
+// or ONE machine (ec2-1-2-3-4.compute-1.amazonaws.com, <id>.auiusercontent.com),
+// and the packed threat set blocks such hosts.
 const PLATFORMS = [
   // Cloud / object storage / app hosting
   "amazonaws.com", "cloudfront.net", "elasticbeanstalk.com", "awsapprunner.com", "on.aws", "amplifyapp.com",
@@ -95,6 +109,19 @@ const SERVICE_HOSTS = [
   "firebasestorage.googleapis.com", "lh3.googleusercontent.com", "yt3.googleusercontent.com",
   "www.recaptcha.net", "js.stripe.com",
 ];
+// PRIVATE wildcard bases ("*.<base>" in the PSL) whose children are regions
+// or shards that many customers share, not one customer: EC2 and ELB
+// regions, object-storage regions (<bucket>.nyc3.digitaloceanspaces.com),
+// App Engine and Cloud Run shards (<app>.uc.r.appspot.com,
+// <svc>.a.run.app), Firebase App Hosting, API Gateway and Azure Container
+// Instances regions. Not "*.compute-1.amazonaws.com": each child there is one
+// EC2 machine (UNVERIFIED for the non-AWS entries: from the providers' URL
+// formats, not from a live check).
+const REGIONAL_WILDCARD_BASES = [
+  "compute.amazonaws.com", "compute.amazonaws.com.cn", "elb.amazonaws.com", "elb.amazonaws.com.cn",
+  "digitaloceanspaces.com", "linodeobjects.com", "vultrobjects.com",
+  "r.appspot.com", "run.app", "hosted.app", "gateway.dev", "azurecontainer.io",
+];
 for (const p of SERVICE_PLATFORMS) if (!PLATFORMS.includes(p)) throw new Error("SERVICE_PLATFORMS entry not in PLATFORMS: " + p);
 for (const h of SERVICE_HOSTS) {
   if (SERVICE_PLATFORMS.some((p) => h === p || h.endsWith("." + p))) throw new Error("SERVICE_HOSTS entry already under SERVICE_PLATFORMS: " + h);
@@ -116,9 +143,21 @@ for (const raw of text.split(/\r?\n/)) {
   if (l.includes("===BEGIN ICANN DOMAINS===")) { section = "icann"; continue; }
   if (l.includes("===BEGIN PRIVATE DOMAINS===")) { section = "private"; continue; }
   if (!l || l.startsWith("//") || !section) continue;
-  // PSL entries may be Unicode; DNR and URL hosts use punycode. Keep ASCII only.
-  if (!/^[!*a-z0-9.-]+$/.test(l)) continue;
-  (section === "icann" ? icann : priv).push(l);
+  // PSL entries may be Unicode (公司.cn); DNR, URL hosts and list hosts use
+  // punycode (xn--55qx5d.cn). Convert with the URL parser (IDNA mapping) and
+  // keep the "*." / "!" prefix. Skip a line only when the conversion fails
+  // (review 2026-11-16, WP-21: the old code skipped every Unicode line).
+  let rule = l;
+  if (/[^\x00-\x7f]/.test(rule)) {
+    const prefix = rule.startsWith("*.") ? "*." : rule.startsWith("!") ? "!" : "";
+    try {
+      rule = prefix + new URL("http://" + rule.slice(prefix.length)).hostname;
+    } catch {
+      continue;
+    }
+  }
+  if (!/^[!*a-z0-9.-]+$/.test(rule)) continue;
+  (section === "icann" ? icann : priv).push(rule);
 }
 const isPlain = (r) => !r.startsWith("*") && !r.startsWith("!");
 const twoLabel = icann.filter((r) => isPlain(r) && r.split(".").length === 2);
@@ -157,6 +196,14 @@ const privateDeepList = [];
 for (const r of priv.filter(isPlain).concat(wildBase(priv))) {
   if (labelsOf(r) >= 4 && underPlatform(r) && !icannAll.has(r) && !privateSuffixes.has(r) && !privateDeepList.includes(r)) privateDeepList.push(r);
 }
+// REGIONAL_WILDCARD_BASES must be PRIVATE wildcard bases. The base itself is
+// kept too (compute.amazonaws.com.cn has 4 labels and no PLATFORMS parent).
+const privateWildBases = new Set(wildBase(priv));
+for (const b of REGIONAL_WILDCARD_BASES) {
+  if (!privateWildBases.has(b)) throw new Error("REGIONAL_WILDCARD_BASES entry is not a PRIVATE wildcard base in this PSL: " + b);
+  if (!privateSuffixes.has(b) && !privateDeepList.includes(b) && !icannAll.has(b)) privateDeepList.push(b);
+}
+const privateWildcardBaseList = [...new Set(REGIONAL_WILDCARD_BASES)].sort();
 // {parent: "label label ..."}: about half the size of a flat list.
 function group(names) {
   const g = new Map();
@@ -175,15 +222,18 @@ const servicePlatforms = [...new Set(SERVICE_PLATFORMS)].sort();
 const serviceHosts = [...new Set(SERVICE_HOSTS)].sort();
 const data = {
   generic, wildcardTlds, wildcardBases, icannExceptions, suffixes: [...suffixes].sort(), icannDeep: group(icannDeepList),
-  privateSuffixes: [...privateSuffixes].sort(), privateDeep: group(privateDeepList), platforms, servicePlatforms, serviceHosts,
+  privateSuffixes: [...privateSuffixes].filter((r) => labelsOf(r) <= 2).sort(),
+  privateDeep: group([...privateSuffixes].filter((r) => labelsOf(r) > 2).concat(privateDeepList)),
+  privateWildcardBases: privateWildcardBaseList,
+  platforms, servicePlatforms, serviceHosts,
 };
 
 const body = `// GENERATED by scripts/build-psl-subset.mjs. Do not edit by hand; edit the
 // generator's PLATFORMS list and re-run it with a fresh copy of the PSL.
 // Source: Public Suffix List, https://publicsuffix.org/list/public_suffix_list.dat
 // (Mozilla Public License 2.0, https://mozilla.org/MPL/2.0/), VERSION ${version},
-// COMMIT ${commit}. Subset: ${data.suffixes.length + icannDeepList.length} ICANN + ${data.privateSuffixes.length + privateDeepList.length} private suffixes, ${data.wildcardTlds.length} wildcard TLDs,
-// ${data.wildcardBases.length} deeper ICANN wildcard bases, ${data.icannExceptions.length} ICANN exceptions,
+// COMMIT ${commit}. Subset: ${data.suffixes.length + icannDeepList.length} ICANN + ${privateSuffixes.size + privateDeepList.length} private suffixes, ${data.wildcardTlds.length} wildcard TLDs,
+// ${data.wildcardBases.length} deeper ICANN wildcard bases, ${data.icannExceptions.length} ICANN exceptions, ${privateWildcardBaseList.length} private wildcard bases,
 // ${data.platforms.length} hand-kept shared-hosting / platform parents (${data.servicePlatforms.length} of them single-service: every host
 // under them is refused too), ${data.serviceHosts.length} exact shared service hosts; ${data.generic.length} generic labels (popup guard only).
 //
@@ -215,6 +265,7 @@ const body = `// GENERATED by scripts/build-psl-subset.mjs. Do not edit by hand;
   };
   ungroup(DATA.icannDeep, suffixes);
   ungroup(DATA.privateDeep, privateSuffixes);
+  const privateWildcardBases = new Set(DATA.privateWildcardBases);
   const platforms = new Set(DATA.platforms);
   const servicePlatforms = new Set(DATA.servicePlatforms);
   // Every listed name and every parent of it -> the reason it may not be blocked.
@@ -266,6 +317,8 @@ const body = `// GENERATED by scripts/build-psl-subset.mjs. Do not edit by hand;
       if (servicePlatforms.has(parent)) return "part of shared platform " + parent;
     }
     if (ruleSuffix(h)) return "public suffix " + h;
+    // Children of PRIVATE wildcard rules (us-west-1.compute.amazonaws.com).
+    if (labels.length >= 3 && privateWildcardBases.has(labels.slice(1).join("."))) return "public suffix " + h;
     return null;
   }
 
