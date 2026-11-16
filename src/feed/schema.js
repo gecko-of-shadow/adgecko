@@ -14,7 +14,8 @@
 //    createdAt cannot stretch the window; security review M-5)
 //   (serial <= 2^31-1 and at most 1,000,000 above the stored serial while
 //    the stored document is still valid, so one document cannot push the
-//    serial out of reach; L-7)
+//    serial out of reach; L-7. The larger step after expiry needs a stored
+//    document that lived at least 24 h, review 2026-11-16 WP-11)
 //   minExtension dotted version or null; maxExtension dotted version or null
 //   killFeed     boolean (default false): drop every feed rule
 //   dropRuleIds  integers 1..4500 to leave out of the compiled set
@@ -35,6 +36,7 @@
   const CLOCK_SKEW_MS = 60 * 60 * 1000; // allowed clock difference signer vs. browser
   const MAX_SERIAL = 2147483647; // 2^31 - 1
   const MAX_SERIAL_STEP = 1000000; // largest jump over the stored serial
+  const ESCAPE_MIN_LIFETIME_MS = 24 * 60 * 60 * 1000; // see storedExpired below
   const MAX_RULE_ID = 4500;
   const MAX_HOSTS_PER_ENTRY = 80;
   const THREAT_TYPES = Object.freeze(["main_frame", "sub_frame", "script", "xmlhttprequest", "ping", "media", "websocket", "other"]);
@@ -73,17 +75,28 @@
   // storedExpired: the browser's stored document is past its notAfter. Then a
   // large step is allowed (follow-up review: a publisher who changes the
   // serial scheme must not lock browsers out for good; at most 14 days).
-  function checkSerialBound(serial, stored, name, storedExpired) {
+  // The stored document must have lived at least 24 h (notAfter - notBefore;
+  // review 2026-11-16 WP-11): else one document with a 60 s life opens a
+  // jump to 2^31-1 on the next check.
+  function storedExpired(c, now) {
+    const na = c.storedNotAfter;
+    const nb = c.storedNotBefore;
+    if (typeof na !== "number" || !(na > 0) || now < na) return false;
+    return typeof nb === "number" && nb > 0 && na - nb >= ESCAPE_MIN_LIFETIME_MS;
+  }
+  // noStep: no step limit (kill documents).
+  function checkSerialBound(serial, stored, name, noStep) {
     if (serial > MAX_SERIAL) fail(name + " " + serial + " is above " + MAX_SERIAL);
-    if (!storedExpired && (stored || 0) > 0 && serial - stored > MAX_SERIAL_STEP) fail(name + " jumps from " + stored + " to " + serial + " (more than " + MAX_SERIAL_STEP + ")");
+    if (!noStep && (stored || 0) > 0 && serial - stored > MAX_SERIAL_STEP) fail(name + " jumps from " + stored + " to " + serial + " (more than " + MAX_SERIAL_STEP + ")");
   }
 
   function onlyKeys(obj, allowed, where) {
     for (const k of Object.keys(obj)) if (!allowed.includes(k)) fail("unknown key " + JSON.stringify(k) + " in " + where);
   }
 
-  // ctx: { now (ms), storedSerial (number|0), extensionVersion (string),
-  //        protectedReason(host) -> null|string }
+  // ctx: { now (ms), storedSerial (number|0), storedNotBefore and
+  //        storedNotAfter (ms|0, the stored document's window),
+  //        extensionVersion (string), protectedReason(host) -> null|string }
   // Returns the document (normalised defaults) or throws { feedReject }.
   function validateFeed(doc, ctx) {
     const c = ctx || {};
@@ -94,7 +107,7 @@
     if (!isPosInt(doc.serial)) fail("serial must be a positive integer");
     if (doc.serial <= (c.storedSerial || 0)) fail("serial " + doc.serial + " is not newer than " + (c.storedSerial || 0) + " (replay or rollback attack)");
     const nowForBound = typeof c.now === "number" ? c.now : Date.now();
-    checkSerialBound(doc.serial, c.storedSerial, "serial", typeof c.storedNotAfter === "number" && c.storedNotAfter > 0 && nowForBound >= c.storedNotAfter);
+    checkSerialBound(doc.serial, c.storedSerial, "serial", storedExpired(c, nowForBound));
     const created = parseTime(doc.createdAt, "createdAt");
     const notBefore = parseTime(doc.notBefore, "notBefore");
     const notAfter = parseTime(doc.notAfter, "notAfter");
@@ -179,6 +192,9 @@
   }
 
   // ctx: { storedKillSerial }
+  // No step limit for kill serials (review 2026-11-16 WP-11): a kill key can
+  // only switch the feed off, and with date-like kill serials a step limit
+  // refused the second kill for ever. The cap and "must increase" stay.
   function validateKill(doc, ctx) {
     const c = ctx || {};
     if (!isObj(doc)) fail("kill document must be a JSON object");
@@ -187,13 +203,13 @@
     if (doc.format !== FORMAT || doc.kill !== true) fail("not a format-1 kill document");
     if (!isPosInt(doc.serial)) fail("kill serial must be a positive integer");
     if (doc.serial <= (c.storedKillSerial || 0)) fail("kill serial " + doc.serial + " is not newer than " + (c.storedKillSerial || 0));
-    checkSerialBound(doc.serial, c.storedKillSerial, "kill serial");
+    checkSerialBound(doc.serial, c.storedKillSerial, "kill serial", true);
     parseTime(doc.createdAt, "createdAt");
     return doc;
   }
 
   root.GeckoFeedSchema = Object.freeze({
-    FORMAT, MAX_LIFETIME_MS, CLOCK_SKEW_MS, MAX_SERIAL, MAX_SERIAL_STEP, MAX_RULE_ID, MAX_HOSTS_PER_ENTRY, THREAT_TYPES,
+    FORMAT, MAX_LIFETIME_MS, CLOCK_SKEW_MS, MAX_SERIAL, MAX_SERIAL_STEP, ESCAPE_MIN_LIFETIME_MS, MAX_RULE_ID, MAX_HOSTS_PER_ENTRY, THREAT_TYPES,
     validateFeed, validateKill, validateSnapshot, validateEntries, compareVersions,
   });
 })(typeof self !== "undefined" ? self : globalThis);

@@ -46,8 +46,7 @@ Deno.test("pin sites: a new version rewrites every site; a lost anchor stops the
   assert(manual.length === 0, "no manual work");
   const out = {};
   for (const site of sites) out[site.file] = applyRules(site.file, await read(site.file), site.rules);
-  assert(out["test/page.test.js"].includes('"// @version      2.0"), "userscript version 2.0"') && out["test/page.test.js"].includes("ourTwitchAdSolutionsVersion = 31"), "page test");
-  for (const f of ["test/exclusions.test.js", "test/general-cosmetic-contract.test.js", "test/hardening.test.js"]) {
+  for (const f of ["test/hardening.test.js"]) {
     assert(out[f].includes("ourTwitchAdSolutionsVersion = 31") && !out[f].includes("ourTwitchAdSolutionsVersion = " + pin.conflict_version), f);
   }
   assert(out["src/vendor/README.md"].includes("https://github.com/someone/Fork/blob/" + "a".repeat(40) + "/a/b.user.js") && out["src/vendor/README.md"].includes("(userscript v2.0, ourTwitchAdSolutionsVersion 31)"), "vendor README");

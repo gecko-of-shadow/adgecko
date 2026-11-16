@@ -919,7 +919,12 @@ function installYoutubeAdblock(target) {
   // Toast nodes this script hid, so a reused toast can be shown again.
   const hiddenToasts = new WeakSet();
 
-  function removeInterruptionsToast(root) {
+  // restoreOnly: only undo our own earlier hides, never hide. It is the
+  // default while the uBO layer is present: youtube.js has no DOM observer then,
+  // so an inline hide would stay on a reused toast ("Saved", "Link copied")
+  // until the next navigation, and the manifest CSS (src/youtube-ads.css
+  // :has() rules) already hides the interruptions toast.
+  function removeInterruptionsToast(root, restoreOnly = uboLayerPresent()) {
     const scope = root || (typeof document !== "undefined" ? document : null);
     if (!scope || typeof scope.querySelectorAll !== "function") return;
     let candidates;
@@ -947,6 +952,7 @@ function installYoutubeAdblock(target) {
         }
         continue;
       }
+      if (restoreOnly === true) continue;
       // Keep the node. Removing it makes the popup open again on the next frame.
       hiddenToasts.add(outer);
       outer.hidden = true;
@@ -1298,7 +1304,10 @@ function startYoutubeAdblock() {
       node.remove();
       removed = true;
     }
-    if (removed) notify(true);
+    // uBO layer: these removals are leftovers that uBO and the manifest CSS
+    // mostly cover; they say nothing about the player ads, so no chip in the
+    // page (docs/how-it-works.md, YouTube section).
+    if (removed && !api.UBO_LAYER) notify(true);
   }
 
   function nudgeStart() {
@@ -1420,6 +1429,31 @@ function startYoutubeAdblock() {
     stallArmedAt = 0;
   }
 
+  // Playability states where a stalled 0:00 start is expected: an upcoming live
+  // stream or premiere, a sign-in or age check, an unplayable or failed video.
+  // A reload cannot help there; it only resets the slate and asks /player again.
+  // Only the player response counts. A .ytp-error overlay alone does not, because
+  // decoy starts show it for a short time (see createErrorFlashGuard).
+  const NOT_PLAYABLE_STATUSES = ["LIVE_STREAM_OFFLINE", "LOGIN_REQUIRED", "UNPLAYABLE", "ERROR", "AGE_CHECK_REQUIRED"];
+
+  function notPlayableReason(player, id) {
+    try {
+      if (typeof player.getPlayerResponse !== "function") return "";
+      const response = player.getPlayerResponse();
+      const ps = response && response.playabilityStatus;
+      if (!ps || typeof ps !== "object") return "";
+      // A response that belongs to another video says nothing about this one.
+      const responseId = response.videoDetails && response.videoDetails.videoId;
+      if (responseId && id && responseId !== id) return "";
+      if (NOT_PLAYABLE_STATUSES.includes(ps.status)) return String(ps.status);
+      const live = ps.liveStreamability && ps.liveStreamability.liveStreamabilityRenderer;
+      if (live && live.offlineSlate) return "offline slate";
+    } catch {
+      // The player API is optional; fail open to the normal watchdog.
+    }
+    return "";
+  }
+
   function checkStall() {
     stallTimer = 0;
     if (!OPTS.stallReload || (typeof flagOn === "function" && !flagOn("youtubeWatchdog")) || stalledReloaded >= 2 || startLogged || playbackSeen.any || (!strippedThisVideo && !mediaFailed && !uboLayerPresent()) || !onWatchSurface()) return stopStall();
@@ -1502,6 +1536,11 @@ function startYoutubeAdblock() {
       id = "";
     }
     if (!id) return again();
+    const notPlayable = notPlayableReason(player, id);
+    if (notPlayable) {
+      diag("no reload: the page is not meant to play (" + notPlayable + ")");
+      return stopStall();
+    }
     diag("reload reason: no progress " + (now - stallLastProgressAt) + "ms, armed " + (now - stallArmedAt) + "ms ago, decoyThisNav=" + decoyThisNav + ", uboDecoys=" + uboDecoyThisNav + ", mediaFailed=" + mediaFailed + ", uBO=" + api.UBO_LAYER + ", reloads=" + stalledReloaded);
     reloadVideo(player, id, now, "start stalled at 0:00" + (mediaFailed ? " after media server failures" : ""));
   }
@@ -2081,6 +2120,7 @@ function startYoutubeAdblock() {
 
   // Switch "youtubeCosmetic" (security review L-16): every DOM ad sweep and
   // the interruptions-toast removal go through here, not only the observer.
+  // Under the uBO layer the toast call only restores (see removeInterruptionsToast).
   function cosmeticSweep() {
     if (typeof flagOn === "function" && !flagOn("youtubeCosmetic")) return;
     removeDomAds();

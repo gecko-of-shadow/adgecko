@@ -1,8 +1,5 @@
 import "../src/general/never-block-captcha.js";
 import updateSource from "../src/general/update.js" with { type: "text" };
-import exclusionsSource from "../src/general/exclusions.js" with { type: "text" };
-import togglesSource from "../src/general/toggles.js" with { type: "text" };
-import cosmeticSource from "../src/general/cosmetic.js" with { type: "text" };
 import popupSource from "../src/popup.js" with { type: "text" };
 import popupHtml from "../src/popup.html" with { type: "text" };
 import youtubeSource from "../src/youtube.js" with { type: "text" };
@@ -25,13 +22,38 @@ install(api);
 
 // update.js names forbidden list hosts on purpose (deny list). Do not scan it
 // for those substrings — scan the code that must never phone them.
-const packagedJs = [
+// Review 2026-11-16 WP-09 item 5: the scanned files come from the manifest
+// content scripts, the script tags of the extension pages and the worker
+// importScripts list, so a new live script is scanned too. Only update.js and
+// general-background.js (the worker, which fetches the lists) are left out.
+// The dead modules (exclusions.js, toggles.js, general/cosmetic.js) were
+// removed in 0.3.6 with the owner's approval, so they are not scanned.
+const ROOT = new URL("../", import.meta.url);
+const LIST_FETCHERS = new Set(["src/general/update.js", "src/general-background.js"]);
+function liveScriptPaths() {
+  const files = new Set();
+  for (const cs of manifest.content_scripts || []) for (const js of cs.js || []) files.add(js);
+  for (const page of ["src/popup.html", "src/settings.html"]) {
+    const html = Deno.readTextFileSync(new URL(page, ROOT));
+    for (const m of html.matchAll(/<script[^>]*\ssrc="([^"]+)"/g)) files.add("src/" + m[1]);
+  }
+  const imports = /importScripts\(([^)]*)\)/.exec(backgroundSource);
+  for (const m of (imports ? imports[1] : "").matchAll(/"([^"]+)"/g)) files.add("src/" + m[1]);
+  return [...files].filter((f) => !LIST_FETCHERS.has(f));
+}
+const livePaths = liveScriptPaths();
+const packagedJs = livePaths.map((f) => Deno.readTextFileSync(new URL(f, ROOT))).concat([
   popupSource,
   youtubeSource,
-  exclusionsSource,
-  togglesSource,
-  cosmeticSource,
-];
+]);
+
+Deno.test("the fetch scan covers the live scripts (manifest, pages, worker imports)", () => {
+  for (const f of ["src/cosmetic.js", "src/settings/flags.js", "src/guards/clipboard.js", "src/guards/popups.js", "src/twitch-directory-ads.js", "src/settings.js", "src/popup.js", "src/feed/client.js", "src/threat/compile.js"]) {
+    assert(livePaths.includes(f), "not scanned: " + f + " in " + JSON.stringify(livePaths));
+  }
+  assert(!livePaths.some((f) => LIST_FETCHERS.has(f)), "list fetchers are left out");
+  assert(packagedJs.length === livePaths.length + 2 && packagedJs.every((t) => typeof t === "string" && t.length > 0), "each scanned file has text");
+});
 
 Deno.test("update policy is alarm refresh + manual, list hosts only", () => {
   assertEquals(api.POLICY, "alarm-and-manual");
@@ -54,7 +76,12 @@ Deno.test("only the background worker fetches lists, and only list hosts", () =>
   // Owner decision 2026-11-02: one alarm drives refreshes (was: no alarms at all).
   const creates = backgroundSource.match(/chrome\.alarms\.create\(/g) || [];
   assert(creates.length >= 1 && /chrome\.alarms\.create\(REFRESH_ALARM,/.test(backgroundSource), "only the refresh alarm is created");
-  assert(!/chrome\.alarms\.create\((?!REFRESH_ALARM,)/.test(backgroundSource), "no other alarm");
+  // Review 2026-11-16 WP-16: plus one one-shot retry alarm after a failed run
+  // (no periodInMinutes, so it never polls).
+  assertEquals(api.RETRY_ALARM, "gecko-refresh-retry");
+  assert(api.RETRY_DELAY_MINUTES > 30, "the retry passes the 30-min throttle");
+  assert(/chrome\.alarms\.create\(GU\.RETRY_ALARM, \{ delayInMinutes: GU\.RETRY_DELAY_MINUTES \}/.test(backgroundSource), "retry alarm is one-shot");
+  assert(!/chrome\.alarms\.create\((?!REFRESH_ALARM,|GU\.RETRY_ALARM, \{ delayInMinutes: GU\.RETRY_DELAY_MINUTES \})/.test(backgroundSource), "no other alarm");
 });
 
 Deno.test("manifest: alarms is the only background-scheduling permission", () => {

@@ -1,0 +1,12 @@
+const R="";
+await import(R+"src/threat/psl.js");
+await import(R+"src/general/filter-options.js");
+await import(R+"src/general/never-block-captcha.js");
+await import(R+"src/general/update.js");
+await import(R+"src/threat/protected-hosts.js");
+await import(R+"src/threat/compile.js");
+const U=globalThis.GeneralAdblockUpdate, TC=globalThis.GeckoThreatCompile;
+const lines=["||Upper.EXAMPLE.com^","||trail.example.com.^","0.0.0.0 hostsfile.example.com.","||port.example.com:8080^","||203.0.113.9^","||[2001:db8::1]^","||doc.example.com^$doc","||docpop.example.com^$document,popup","||*.wild.example.com^","||path.example.com/evil.exe","||path2.example.com/x^","|https://pipe.example.com/path","||csp.example.com^$csp=script-src 'none'","||rp.example.com^$removeparam=utm","||redir.example.com^$redirect=noopjs","||redir2.example.com^$redirect-rule=noopjs","||hdr.example.com^$header=x-foo","||den.example.com^$denyallow=a.com","||mt.example.com^$match-case","||imp.example.com^$important","||all.example.com^$all","||frame.example.com^$frame","||third.example.com^$3p","||first.example.com^$1p","||strict.example.com^$strict3p","||to.example.com^$to=x.com","||m.example.com^$method=post","||ping.example.com^$ping","||dom.example.com^$domain=a.com","||neg.example.com^$domain=~a.com","||ehide.example.com^$ehide","||ghide.example.com^$ghide","||gen.example.com^$generichide","||elem.example.com^$elemhide","||ss.example.com^$specifichide","||shide.example.com^$shide","||perm.example.com^$permissions=geolocation=()","||ufy.example.com^$urlskip=?u","||replace.example.com^$replace=/a/b/","||empty.example.com^$empty","||mp4.example.com^$mp4","||popunder.example.com^$popunder","||cname.example.com^$cname", "||xhr.example.com^$xhr","||inl.example.com^$inline-script","||inlf.example.com^$inline-font","||rewrite.example.com^$rewrite=abp-resource:blank-js","||j.example.com^$jsonprune=a","||doc2.example.com^$document,3p","||doc3.example.com^$doc,domain=x.com","||badfil.example.com^$doc,badfilter","||cookie.example.com^$cookie","||noop.example.com^$_","||stealth.example.com^$stealth","||network.example.com^$network","||ext.example.com^$extension","||ct.example.com^$content","||urlb.example.com^$urlblock","||cspall.example.com^$csp","||dc.example.com^$doc,csp=foo","host.example.org/path/file","dot..example.com","||a.b^$doc,to=~x.com","||rmh.example.com^$removeheader=refresh","||uri.example.com^$uritransform=/a/b/"];
+const p=U.parseEntries(lines.join("\n"));
+console.log(JSON.stringify(p,null,0));
+console.log("threat:",TC.threatHostsFromEntries(p));

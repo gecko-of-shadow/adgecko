@@ -172,7 +172,7 @@ async function main() {
   }
   say();
   say("Next: run the tests and the release gate (docs/UPDATING-DEPENDENCIES.md). Tests that read the");
-  say("vendored code (test/page.test.js, swap, bug, memory, reload, fixtures, playlist) can fail on a");
+  say("vendored code (test/twitch-playlist.test.js, fixtures, playlist, hardening) can fail on a");
   say("real upstream change. Read each failure; do not edit the vendored file.");
   return manual.length ? 3 : 0;
 }

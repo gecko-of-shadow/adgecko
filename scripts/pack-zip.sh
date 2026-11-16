@@ -47,6 +47,22 @@ for f in "${FILES[@]}"; do
   mkdir -p "$TMP/$(dirname "$f")"
   cp "$ROOT/$f" "$TMP/$f"
 done
+# Reproducible zip (review 2026-11-16): every entry gets the same time (the
+# last commit, or SOURCE_DATE_EPOCH) and mode 644, the names go in sorted
+# order, and zip -X -D leaves out extra fields and directory entries. Two
+# packs of one commit then give the same bytes (Info-ZIP path only; the
+# Windows tar.exe fallback below is not byte for byte reproducible).
+EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$ROOT" log -1 --format=%ct 2>/dev/null || true)}"
+[[ "$EPOCH" =~ ^[0-9]+$ ]] || EPOCH=315532800
+python3 - "$TMP" "$EPOCH" <<'PY'
+import os, sys
+root, epoch = sys.argv[1], max(int(sys.argv[2]), 315532800)  # zip times start in 1980
+for d, _dirs, files in os.walk(root):
+    for f in files:
+        p = os.path.join(d, f)
+        os.chmod(p, 0o644)
+        os.utime(p, (epoch, epoch))
+PY
 
 rm -f "$OUT"
 pack_with_windows_tar() {
@@ -60,7 +76,8 @@ pack_with_windows_tar() {
 }
 
 if command -v zip >/dev/null 2>&1; then
-  (cd "$TMP" && zip -qr "$OUT" manifest.json src icons)
+  # TZ=UTC: zip stores local time, so the bytes must not depend on the zone.
+  (cd "$TMP" && printf '%s\n' "${FILES[@]}" | TZ=UTC zip -q -X -D "$OUT" -@)
 elif pack_with_windows_tar; then
   : # bsdtar on Windows writes a real zip when the name ends in .zip
 else
@@ -72,5 +89,5 @@ ZIP_ARG="$OUT"
 if command -v cygpath >/dev/null 2>&1; then
   ZIP_ARG="$(cygpath -m "$OUT")"
 fi
-python3 "$LIST_PY" --root "$ROOT" --check-zip "$ZIP_ARG"
+python3 "$LIST_PY" --root "$ROOT" --check-zip "$ZIP_ARG" --check-bytes
 echo "Wrote $OUT (${#FILES[@]} files)"

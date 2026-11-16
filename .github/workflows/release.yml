@@ -7,8 +7,8 @@ name: release
 # scripts/release-gate.sh on the checkout and on that zip (the same gate as
 # checks.yml). Only then does it create the tag v<version> on the checked-out
 # commit and the release "Adgecko <version>", with the changelog section as
-# the notes and adgecko-<version>.zip attached. Nothing is published if any
-# step fails. No secret beyond the run's own GITHUB_TOKEN.
+# the notes and adgecko-<version>.zip plus its .sha256 attached. Nothing is
+# published if any step fails. No secret beyond the run's own GITHUB_TOKEN.
 on:
   workflow_dispatch:
 
@@ -80,9 +80,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
+        # The zip is reproducible (scripts/pack-zip.sh: fixed times, sorted
+        # names), so anyone can pack the tag again and compare with the
+        # published adgecko-<version>.zip.sha256 asset.
         run: |
-          sha256sum "$RUNNER_TEMP/adgecko-$VERSION.zip"
-          gh release create "v$VERSION" "$RUNNER_TEMP/adgecko-$VERSION.zip" \
+          (cd "$RUNNER_TEMP" && sha256sum "adgecko-$VERSION.zip" > "adgecko-$VERSION.zip.sha256")
+          cat "$RUNNER_TEMP/adgecko-$VERSION.zip.sha256"
+          gh release create "v$VERSION" "$RUNNER_TEMP/adgecko-$VERSION.zip" "$RUNNER_TEMP/adgecko-$VERSION.zip.sha256" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Adgecko $VERSION" \

@@ -27,7 +27,9 @@ Deno.test("worker start creates the gecko-refresh alarm when missing: 3 h period
   assert(name === "gecko-refresh" && info.periodInMinutes === 180, JSON.stringify(info));
   assert(info.delayInMinutes >= 5 && info.delayInMinutes <= 30, "first fire " + info.delayInMinutes);
   assert(info.persistAcrossSessions === true, "asks to persist across sessions");
-  assert(w.alarmListenerCount === 1, "onAlarm registered at top level");
+  // Two top-level onAlarm listeners: "gecko-refresh" and the one-shot
+  // "gecko-refresh-retry" (review 2026-11-16 WP-16). No retry alarm at start.
+  assert(w.alarmListenerCount === 2, "onAlarm registered at top level: " + w.alarmListenerCount);
 });
 
 Deno.test("an existing alarm is left alone (not reset) at worker start and on install; a missing one is recreated on install", async () => {
@@ -109,6 +111,62 @@ Deno.test("a refresh that fails everywhere sets lastAttemptAt but not lastRunAt,
   assert(st && st.lastAttemptAt > 0 && !st.lastRunAt, "attempt only: " + JSON.stringify({ a: st && st.lastAttemptAt, r: st && st.lastRunAt }));
   assert(U.shouldRun({ lastAttemptAt: st.lastAttemptAt }, st.lastAttemptAt + 3 * HOUR, false), "next 3 h alarm retries");
   assert(!U.shouldRun({ lastAttemptAt: st.lastAttemptAt }, st.lastAttemptAt + 60 * 1000, false), "not hammered right away");
+});
+
+// Review 2026-11-16 WP-16 item 1: the first "gecko-refresh" alarm comes 5 to
+// 30 min after it is created, so after a failed install-time refresh it was
+// always throttled, and the real retry came about 3 h later. A failed run
+// (ran:true, ok:false) now creates one one-shot "gecko-refresh-retry" alarm
+// 31 min later. The retry run does not create another one (no 31-min loop
+// while the network stays down); the 3 h alarm takes over after it.
+Deno.test("a failed run creates one retry alarm 31 min later; the retry runs a refresh and creates no new retry", async () => {
+  const counter = { n: 0 };
+  const w = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [] }, listFetch: countingFetch(counter, true) });
+  await settle(50);
+  w.fireAlarm("gecko-refresh");
+  for (let i = 0; i < 50 && !(w.store.generalListStatus || "").includes("Problem"); i++) await settle(100);
+  await settle(100);
+  const retries = () => w.alarmCreates.filter((a) => a.name === "gecko-refresh-retry");
+  assert(retries().length === 1, "retry alarm created once: " + JSON.stringify(w.alarmCreates));
+  const info = retries()[0].info;
+  assert(info.delayInMinutes === 31 && !("periodInMinutes" in info), "one-shot, 31 min: " + JSON.stringify(info));
+  assert(U.shouldRun({ lastAttemptAt: w.store.listState.lastAttemptAt }, w.store.listState.lastAttemptAt + 31 * 60 * 1000, false), "the retry passes the throttle");
+  // The retry alarm fires 31 min later (move the stored attempt back by 31 min).
+  w.store.listState = Object.assign({}, w.store.listState, { lastAttemptAt: w.store.listState.lastAttemptAt - 31 * 60 * 1000 });
+  const before = counter.n;
+  w.fireAlarm("gecko-refresh-retry");
+  for (let i = 0; i < 50 && counter.n === before; i++) await settle(100);
+  await settle(300);
+  assert(counter.n > before, "the retry alarm ran a refresh");
+  assert(retries().length === 1, "the failed retry did not create another retry: " + retries().length);
+});
+
+Deno.test("a successful run and a throttled run create no retry alarm", async () => {
+  const counter = { n: 0 };
+  const old = { schema: 2, lastRunAt: Date.now() - 13 * HOUR, lists: {} };
+  const w = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [], listState: old }, listFetch: countingFetch(counter) });
+  await settle(50);
+  w.fireAlarm("gecko-refresh");
+  for (let i = 0; i < 100 && !(w.store.listState.lastRunAt > old.lastRunAt); i++) await settle(100);
+  w.fireAlarm("gecko-refresh");
+  await settle(200);
+  assert(!w.alarmCreates.some((a) => a.name === "gecko-refresh-retry"), "retry after success: " + JSON.stringify(w.alarmCreates));
+});
+
+// Review 2026-11-16 WP-16 item 2: a stored time far in the future (the clock
+// was once set ahead) must not stop automatic refreshes until that time.
+Deno.test("stored times later than now + 5 min do not throttle (clock skew)", () => {
+  const now = Date.UTC(2026, 10, 16);
+  const year = 365 * 24 * HOUR;
+  assert(U.shouldRun({ lastRunAt: now + year }, now, false), "lastRunAt in the future");
+  assert(U.shouldRun({ lastAttemptAt: now + year }, now, false), "lastAttemptAt in the future");
+  assert(U.shouldRun({ lastRunAt: now + year, lastAttemptAt: now + year }, now, false), "both in the future");
+  assert(U.listDue({ fetchedAt: now + year, expiresMs: 4 * 24 * HOUR }, now, false, true), "fetchedAt in the future");
+  // Small differences stay as they are (the throttle still applies).
+  assert(!U.shouldRun({ lastRunAt: now + 60 * 1000 }, now, false), "lastRunAt 1 min ahead still throttles");
+  assert(!U.shouldRun({ lastRunAt: now - 13 * HOUR, lastAttemptAt: now + 60 * 1000 }, now, false), "lastAttemptAt 1 min ahead still throttles");
+  assert(!U.listDue({ fetchedAt: now + 60 * 1000, expiresMs: 4 * 24 * HOUR }, now, false, true), "fetchedAt 1 min ahead is not due");
+  assert(!U.shouldRun({ lastRunAt: now - HOUR }, now, false) && !U.listDue({ fetchedAt: now - HOUR, expiresMs: 4 * 24 * HOUR }, now, false, true), "normal times unchanged");
 });
 
 // ---- migration ----

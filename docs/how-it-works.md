@@ -19,10 +19,11 @@ The extra requests this sends to Twitch are listed under [What it transmits](per
 
 Covers `youtube.com`, `www.youtube.com`, and `m.youtube.com`, top frame only.
 
-- **Player ads.** uBlock Origin’s YouTube scriptlets (`src/vendor/ubo-youtube.js` and the isolated script) and `src/vendor/ubo-youtube.css`, from uBlock Origin 1.75.0, prune ads in player responses. While that layer is present, `src/youtube.js` does not strip player fields itself and does not run its DOM sweep.
+- **Player ads.** uBlock Origin’s YouTube scriptlets (`src/vendor/ubo-youtube.js` and the isolated script) and `src/vendor/ubo-youtube.css`, from uBlock Origin 1.75.0, prune ads in player responses. While that layer is present, `src/youtube.js` does not strip player fields itself and does not watch the page for changes. After each navigation it removes some leftover ad nodes, but it does not show the “Blocking ads” chip for them and does not hide toasts itself.
 - **Feed and toasts.** `src/youtube-ads.css` always hides sponsored feed cards and the “Experiencing interruptions?” toast. The toast is hidden in place. Saved and clipboard toasts stay.
 - **Sponsors in the video.** Nothing in these files edits the video file, so a sponsorship that is part of the video still plays.
-- **Other YouTube sites.** YouTube Music, `youtube-nocookie.com`, and YouTube Kids are outside these content scripts.
+- **Other YouTube sites.** The YouTube ad scripts and hide sheets do not run on YouTube Music, YouTube Studio, YouTube TV, `youtube-nocookie.com` or YouTube Kids. These hosts get only `src/settings/flags.js`, which tells the popup the page origin (see [How the popup finds the page](#how-the-popup-finds-the-page)).
+- **Embedded players.** A YouTube player that another website embeds (an `/embed/` frame of `www.youtube.com` or `youtube-nocookie.com`) is a child frame. The YouTube ad scripts run in the top frame only, so they do not run in that player. Only the network block rules apply there.
 
 ## Kick
 
@@ -37,8 +38,8 @@ Covers `kick.com` and subdomains.
 Covers other http and https sites. The README and the popup call these "ordinary sites".
 
 - `declarativeNetRequest` blocks domains from the packed lists, and `src/cosmetic.js` hides leftover ad boxes.
-- The packed snapshot in `src/rules/meta.json` is 194,896 whole-domain and 5,350 scoped entries in 2,536 list rules (lists downloaded 2026-11-09 03:01 UTC). The merged `general-network.json` has 2,541 rules.
-- A site is blocked from opening (Chrome shows "blocked by an extension") only when a list says so with an explicit `$document` filter, or when it is a known malware host (the threat tier). A whole-domain entry blocks the site's pieces inside other pages, not opening it. Filters that name only types to skip (`$~script`) never block opening the site. Twitch, YouTube, Kick and their player hosts, and a few affiliate redirectors people click on purpose, are never blocked from opening by the lists. To open such a page anyway: settings page -> **Allow this domain** ([Allow a site](allow-a-page.md#a-page-chrome-says-is-blocked)).
+- The packed snapshot in `src/rules/meta.json` is 195,069 whole-domain and 18,422 scoped entries in 2,851 list rules (lists downloaded 2026-11-14 22:00 UTC). The merged `general-network.json` has 2,856 rules. `src/rules/meta.json` always has the current totals (`domains_total`, `scoped_entries_total`, `dnr_rules_total` and `general_network_rules_total`); `test/docs-claims.test.js` checks that the numbers here agree with it.
+- A site is blocked from opening (Chrome shows "blocked by an extension") only when a list says so with an explicit `$document` filter or a plain `$all` filter, or when it is a known malware host (the threat tier). A whole-domain entry blocks the site's pieces inside other pages, not opening it. Filters that name only types to skip (`$~script`) never block opening the site. Twitch, YouTube, Kick and their player hosts, and a few affiliate redirectors people click on purpose, are never blocked from opening by the lists. To open such a page anyway: settings page -> **Allow this domain** ([Allow a site](allow-a-page.md#a-page-chrome-says-is-blocked)).
 - Twitch, YouTube (including `youtu.be`, nocookie, Kids, and the video CDNs), and Kick are excluded from this general pass.
 - Ordinary-site blocking starts **on**.
 
@@ -49,7 +50,7 @@ How the lists are downloaded and refreshed: [What it transmits](permissions-and-
 On ordinary sites (never Twitch, YouTube or Kick) two small scripts run in the page itself, in every frame including blank and `srcdoc` frames:
 
 - **Clipboard guard (on by default).** Checks `navigator.clipboard.writeText` and `.write`, `document.execCommand("copy"/"cut")`, the browser's own copy of the selection, and the text a copy handler sets. A command that looks like the "paste this into Run / PowerShell / a terminal" trick is not written unless you copied exactly that text yourself (Ctrl/Cmd+C or the context menu on your selection) or the site is a known documentation host. A copy button on the page does not count. A short notice explains it.
-- **Pop-up guard (off by default).** Blocks `window.open` without a click, a second window per click, and pop-unders from clicks on plain page content, unless the target is the same site (same registrable domain) or a known sign-in or share page.
+- **Pop-up guard (off by default).** Blocks `window.open` without a click, a second window per click, and pop-unders from clicks on plain page content, unless the target is the same site (same registrable domain) or a known sign-in or share page. A key press in a focused control (for example Enter in a search box) starts a new gesture of its own. Limits: the guard checks only `window.open`. A new window from a link with `target="_blank"` (also a script `.click()` on such a link) or from a form with `target="_blank"` is not checked. Each frame judges its own clicks, so a `window.open` in a same-site child frame after a click in the parent is not checked as a pop-under, and a new blank frame has the guard off until its switch arrives.
 
 Both get their on/off switch from the extension over a private channel the page cannot read or forge, and both keep working if the page replaces built-in functions after it loads.
 
@@ -61,4 +62,4 @@ The popup shows the site, one status line (**✅ Protected** or **Allowed – no
 
 This manifest does not include `tabs` or `activeTab`, so Chrome leaves `tab.url` unset on a normal page. The popup instead asks the page's top-frame content script (`src/cosmetic.js`) for its origin with `chrome.tabs.sendMessage`, and shows “Checking this page…” while it waits.
 
-On Twitch, YouTube and Kick `src/settings/flags.js` answers instead. Pages with neither script (Chrome's own pages, pages opened before the extension loaded, and YouTube hosts such as YouTube Music) give no answer, so the button stays disabled there with “Open a normal http(s) page to allow it. Already on one? Reload it.”
+On Twitch, YouTube and Kick `src/settings/flags.js` answers instead. This includes YouTube Music, YouTube Studio, YouTube TV, YouTube Kids and `youtube-nocookie.com`. There, no ad script runs, so the popup shows “Malware blocking only – ad scripts don't run on this site” (or “Nothing runs on this site” when the malware lists are off), and **Allow this site** and **Fix this site** stay disabled. Pages with neither script (Chrome's own pages, pages opened before the extension loaded, and sites that are outside the **Site access** you gave the extension in `chrome://extensions`) give no answer, so the button stays disabled there with “Open a normal http(s) page to allow it. Already on one? Reload it.”

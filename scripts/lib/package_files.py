@@ -41,8 +41,6 @@ EXTRA_REQUIRED = [
     "src/vendor/LICENSE-uBlock.md",
     "src/vendor/LICENSE-uBlock-GPLv3.txt",
     "src/vendor/README.md",
-    # In the release gate's REQUIRED list; nothing loads it (dead module).
-    "src/general-exclude-hosts.js",
 ]
 EXTRA_OPTIONAL = [
     "src/rules/README.md",
@@ -50,11 +48,6 @@ EXTRA_OPTIONAL = [
     "src/rules/threat-meta.json",
     "src/rules/cosmetic-sample.json",
     "src/vendor/ubo-youtube-meta.json",
-    # Dead modules, packed before by a src/general/*.js glob. Not loaded by the
-    # manifest or the worker; kept packed until the owner decides (NEEDS OWNER).
-    "src/general/toggles.js",
-    "src/general/exclusions.js",
-    "src/general/cosmetic.js",
 ]
 
 LOCAL_REF = re.compile(r"""["'`]((?:\.\./|\./)*(?:src|icons)/[A-Za-z0-9_./-]+\.(?:js|json|css|html|png|txt|md))["'`]""")
@@ -180,18 +173,20 @@ def derive(root: Path) -> tuple[list[str], list[str]]:
 
 
 def main(argv: list[str]) -> int:
-    root, zip_path = None, None
+    root, zip_path, check_bytes = None, None, False
     it = iter(argv)
     for a in it:
         if a == "--root":
             root = next(it, None)
         elif a == "--check-zip":
             zip_path = next(it, None)
+        elif a == "--check-bytes":
+            check_bytes = True
         else:
             print(f"usage: unknown argument {a!r}", file=sys.stderr)
             return 2
     if not root:
-        print("usage: package_files.py --root DIR [--check-zip ZIP]", file=sys.stderr)
+        print("usage: package_files.py --root DIR [--check-zip ZIP [--check-bytes]]", file=sys.stderr)
         return 2
     files, problems = derive(Path(root))
     if problems:
@@ -199,17 +194,30 @@ def main(argv: list[str]) -> int:
             print("FAIL  " + p)
         return 1
     if zip_path:
+        # --check-bytes (review 2026-11-16): the names alone let a zip packed
+        # before a later same-version commit pass. With the flag, each entry
+        # must also hold the same bytes as the file under --root. Without it
+        # (an older zip, no matching checkout) only the names are compared.
+        differ = []
         with zipfile.ZipFile(zip_path) as z:
-            names = {n.replace("\\", "/").lstrip("./") for n in z.namelist() if not n.endswith("/")}
+            entries = {n.replace("\\", "/").lstrip("./"): n for n in z.namelist() if not n.endswith("/")}
+            names = set(entries)
+            if check_bytes:
+                for p in sorted(names & set(files)):
+                    if z.read(entries[p]) != (Path(root) / p).read_bytes():
+                        differ.append(p)
         missing = sorted(set(files) - names)
         extra = sorted(names - set(files))
         for p in missing:
             print("FAIL  not in zip: " + p)
         for p in extra:
             print("FAIL  unexpected in zip: " + p)
-        if missing or extra:
+        for p in differ:
+            print("FAIL  zip is not a pack of this checkout: " + p + " differs")
+        if missing or extra or differ:
             return 1
-        print(f"PASS  zip holds exactly the {len(files)} derived package files")
+        same = " with the same bytes as the checkout" if check_bytes else ""
+        print(f"PASS  zip holds exactly the {len(files)} derived package files{same}")
         return 0
     print("\n".join(files))
     return 0

@@ -6,7 +6,7 @@ In short: the extension does not send your browsing history anywhere. It downloa
 
 ## Permissions
 
-The permissions are exactly: `storage`, `declarativeNetRequest`, `alarms`, and the listed hosts below. `manifest.json` requests these three API permissions:
+`manifest.json` requests three API permissions (`storage`, `declarativeNetRequest` and `alarms`) and the list hosts below. Its content scripts also give it access to all http and https websites: see [Site access](#site-access). The three API permissions:
 
 | Permission | Used for |
 | --- | --- |
@@ -28,6 +28,18 @@ Host permissions, all for downloading public filter lists:
 - `https://raw.githubusercontent.com/DandelionSprout/adfilt/*` — Dandelion Sprout’s Anti-Malware List
 - `https://filters.adtidy.org/extension/ublock/*` — AdGuard Base
 
+### Site access
+
+The `content_scripts` in `manifest.json` match `http://*/*` and `https://*/*`. Chrome counts these matches as host access. Thus the install prompt and the extension details show "Read and change all your data on all websites". These scripts run on all http and https websites (except Twitch, YouTube and Kick, which have their own scripts):
+
+- `src/cosmetic.js` applies the hide rules. It also tells the popup the origin of the page.
+- `src/settings/flags.js` gets the on/off switches for the page.
+- `src/guards/clipboard.js` and `src/guards/popups.js` (the clipboard and pop-up guards) run in the page itself (`"world": "MAIN"`), in all frames.
+
+These scripts do their work in the page. They do not send page content anywhere. The list hosts above are the only host permissions, and the extension uses them only to download the lists.
+
+If you limit **Site access** in `chrome://extensions` ("On click" or "On specific sites"), Chrome does not inject these scripts on the sites that you did not grant. On those sites, the hide rules, the clipboard guard and the pop-up guard are off, and the popup cannot find the page. It then shows "Open a normal http(s) page to allow it. Already on one? Reload it." The network block rules (`declarativeNetRequest`) do not need site access and continue to work.
+
 ### Local only
 
 - The clipboard and pop-up guards run inside the page and decide there; the text a page tries to copy is never sent anywhere.
@@ -44,7 +56,7 @@ Once the signed threat feed is set up ([feed-setup.md](feed-setup.md)), its one 
 
 ### What it transmits
 
-- **Filter lists.** The service worker downloads the eight public lists named under [Host permissions](#host-permissions). The `gecko-refresh` alarm wakes the worker every 3 hours (the first time 5 to 30 minutes after install or browser start). A refresh is skipped if one finished in the last 12 hours (or one failed in the last 30 minutes), and each list waits out its own `! Expires:` header (default 24 hours). **Update lists** checks every list immediately. Requests are HTTPS `GET`s with `credentials: "omit"` (no cookies). When a saved validator exists, the request also sends `If-None-Match` and `If-Modified-Since`. Those hosts see the list URL and this browser’s IP address. The page you are visiting is not part of the URL.
+- **Filter lists.** The service worker downloads the eight public lists named under [Host permissions](#host-permissions). A fresh install downloads the lists at once. After that, the `gecko-refresh` alarm wakes the worker every 3 hours. When the worker starts and the alarm does not exist, the worker creates it. The first alarm then comes 5 to 30 minutes later. A refresh is skipped if one finished in the last 12 hours (or one failed in the last 30 minutes), and each list waits out its own `! Expires:` header (default 24 hours). **Update lists** checks every list immediately. Requests are HTTPS `GET`s with `credentials: "omit"` (no cookies). When a saved validator exists, the request also sends `If-None-Match` and `If-Modified-Since`. Those hosts see the list URL and this browser’s IP address. The page you are visiting is not part of the URL.
 - **Twitch.** On Twitch pages, video-swap-new sends extra requests to Twitch (`gql.twitch.tv`, `usher.ttvnw.net`, and ad media URLs). Its GraphQL calls copy the page’s `Authorization` and `Client-Integrity` headers. Those requests go to Twitch.
 - **YouTube.** On YouTube, the uBlock scripts wrap the page’s own XHR and fetch and edit the responses. `src/youtube.js` and `src/kick.js` do not call `fetch`. A declarativeNetRequest ruleset blocks some YouTube ad URLs (`src/rules/ubo-youtube-network.json`).
 

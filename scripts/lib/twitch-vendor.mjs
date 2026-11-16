@@ -125,12 +125,6 @@ export function scanDelta(before, after) {
 export function pinSites(pin, scan) {
   const conflict = [/ourTwitchAdSolutionsVersion = \d+/, "ourTwitchAdSolutionsVersion = " + pin.conflict_version];
   const sites = [
-    { file: "test/page.test.js", rules: [
-      [/\/\/ @version      [\w.]+"\), "userscript version [\w.]+"/, `// @version      ${pin.userscript_version}"), "userscript version ${pin.userscript_version}"`],
-      conflict,
-    ] },
-    { file: "test/exclusions.test.js", rules: [conflict] },
-    { file: "test/general-cosmetic-contract.test.js", rules: [conflict] },
     { file: "test/hardening.test.js", rules: [conflict] },
     { file: "src/vendor/README.md", rules: [
       [/https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/blob\/[0-9a-f]{40}\/\S+/, `https://github.com/${pin.repo}/blob/${pin.commit}/${pin.path}`],

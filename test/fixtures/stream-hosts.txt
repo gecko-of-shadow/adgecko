@@ -1,7 +1,7 @@
 # Hosts Twitch, YouTube and Kick need for pages and playback. No threat rule may
 # ever match one of these (test/threat-tier.test.js). Seeded on 2026-11-02 from
 # the repo's own exclusion lists: src/general-exclude-hosts.js (SITE_DOMAINS,
-# VIDEO_CDN_DOMAINS), scripts/merge-dnr-rules.py, src/general/update.js
+# VIDEO_CDN_DOMAINS; removed in 0.3.6, the lists are now in test/dnr.test.js), scripts/merge-dnr-rules.py, src/general/update.js
 # NEVER_BLOCK_SUFFIXES, the manifest's stream-site exclude_matches, and host
 # names that appear in src/youtube.js, src/kick.js and src/vendor/*.
 # Every host here must also be rejected by src/threat/protected-hosts.js itself.

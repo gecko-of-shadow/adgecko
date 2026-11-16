@@ -22,7 +22,7 @@ const anyUnder = (h, list) => (list || []).some((d) => under(h, d));
 const site = (h) => String(h || "").split(".").slice(-2).join(".");
 const ACTION_RANK = { allow: 3, allowAllRequests: 2, block: 1 };
 
-function urlFilterToRegExp(f) {
+export function urlFilterToRegExp(f) {
   let s = f;
   let prefix = "";
   let suffix = "";

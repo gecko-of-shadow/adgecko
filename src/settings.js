@@ -41,11 +41,29 @@
     return F.normalizeSettings(stored.settings);
   }
 
-  async function saveSettings(mutate) {
-    const s = currentSettings();
-    mutate(s);
-    await set({ settings: s });
-    await load();
+  // Every read-modify-write runs in one queue and reads fresh storage first.
+  // Two changes that overlap a slow write (the worker writes big list data
+  // at the same time) then both stay; before, the second one was built from
+  // the old snapshot and wrote the first one away.
+  let writes = Promise.resolve();
+  function queued(step) {
+    const run = writes.then(async () => {
+      stored = await get();
+      await step();
+      await load();
+    });
+    writes = run.catch(() => {});
+    return run;
+  }
+
+  // The caller reads the control's value at click time: a re-render from an
+  // earlier write can change the box before this step runs.
+  function saveSettings(mutate) {
+    return queued(async () => {
+      const s = currentSettings();
+      mutate(s);
+      await set({ settings: s });
+    });
   }
 
   function renderFeatures() {
@@ -78,7 +96,10 @@
       input.checked = !!s.features[f.id];
       input.disabled = !s.enabled;
       input.dataset.feature = f.id;
-      input.addEventListener("change", () => saveSettings((x) => { x.features[f.id] = input.checked; }));
+      input.addEventListener("change", () => {
+        const on = input.checked;
+        return saveSettings((x) => { x.features[f.id] = on; });
+      });
       label.appendChild(input);
       label.appendChild(el("span", f.label + " (" + (f.apply === "live" ? "live" : "next page load") + (f.perSite ? ", can be changed per site" : "") + ")"));
       box.appendChild(label);
@@ -159,6 +180,16 @@
       // Same node, new words: a row can turn from Allowed into Fixed.
       const words = item.button || buttonText;
       if (row.button.textContent !== words) row.button.textContent = words;
+      // The name says which domain: "Remove example.com", not five "Remove".
+      const name = words + " " + item.key;
+      if (row.name !== name) {
+        row.name = name;
+        try {
+          row.button.setAttribute("aria-label", name);
+        } catch {
+          // fake DOM in tests
+        }
+      }
     }
     // Keep the order; move rows only when it is wrong (a move can drop focus).
     const order = [...ul.children || []].filter((n) => n !== ul._empty);
@@ -186,11 +217,10 @@
   function renderAllow() {
     const list = Array.isArray(stored.threatAllowDomains) ? stored.threatAllowDomains : [];
     const items = [...new Set(list)].map((d) => ({ key: d, text: d + " " }));
-    syncList($("allow-list"), items, "No domains allowed.", "Remove", async (d) => {
+    syncList($("allow-list"), items, "No domains allowed.", "Remove", (d) => queued(async () => {
       const now = Array.isArray(stored.threatAllowDomains) ? stored.threatAllowDomains : [];
       await set({ threatAllowDomains: now.filter((x) => x !== d) });
-      await load();
-    });
+    }));
   }
 
   // The switches "Fix this site" in the popup turns off (same list as popup.js).
@@ -211,7 +241,8 @@
   function renderSites() {
     const o = F.normalizeOverrides(stored.siteOverrides);
     const items = Object.keys(o).sort().map((h) => siteRow(h, o[h]));
-    syncList($("site-list"), items, "No per-site switches. Use the popup on a site to add one.", "Reset", async (h, kind) => {
+    // `kind` is the row's kind at click time; the step reads fresh storage.
+    syncList($("site-list"), items, "No per-site switches. Use the popup on a site to add one.", "Reset", (h, kind) => queued(async () => {
       const next = F.normalizeOverrides(stored.siteOverrides);
       const e = next[h];
       if (!e) return;
@@ -222,8 +253,7 @@
       } else delete next[h];
       if (next[h] && !Object.keys(next[h]).length) delete next[h];
       await set({ siteOverrides: next });
-      await load();
-    });
+    }));
   }
 
   async function load() {
@@ -258,8 +288,14 @@
     });
   }
 
-  $("master").addEventListener("change", () => saveSettings((s) => { s.enabled = $("master").checked; }));
-  $("pause-feed").addEventListener("change", () => saveSettings((s) => { s.features.threatFeed = !$("pause-feed").checked; }));
+  $("master").addEventListener("change", () => {
+    const on = $("master").checked;
+    return saveSettings((s) => { s.enabled = on; });
+  });
+  $("pause-feed").addEventListener("change", () => {
+    const paused = $("pause-feed").checked;
+    return saveSettings((s) => { s.features.threatFeed = !paused; });
+  });
   $("update-lists").addEventListener("click", async () => {
     $("status").textContent = "Checking filter lists…";
     const r = await send("updateLists");
@@ -281,11 +317,12 @@
         : "That name is shared by many sites (" + checked.reason + "). Allow the one site instead, for example name.github.io.";
       return;
     }
-    const list = Array.isArray(stored.threatAllowDomains) ? stored.threatAllowDomains.slice() : [];
-    if (!list.includes(d)) list.push(d);
-    await set({ threatAllowDomains: list });
     $("allow-domain").value = "";
-    await load();
+    await queued(async () => {
+      const list = Array.isArray(stored.threatAllowDomains) ? stored.threatAllowDomains.slice() : [];
+      if (!list.includes(d)) list.push(d);
+      await set({ threatAllowDomains: list });
+    });
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;

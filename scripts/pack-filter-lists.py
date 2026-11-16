@@ -130,7 +130,7 @@ NEVER_BLOCK_SUFFIXES = (
     "kick.com",
     "kick-streamer.com",
     # Player CDN and the other YouTube/Kick frame hosts from
-    # src/general-exclude-hosts.js. HaGeZi lists stats.live-video.net.
+    # scripts/merge-dnr-rules.py. HaGeZi lists stats.live-video.net.
     "live-video.net",
     "youtube-nocookie.com",
     "youtubekids.com",
@@ -606,9 +606,51 @@ def keeps_whole_domain(opts: str) -> bool:
 COSMETIC_RE = re.compile(r"^([^#\n]*?)(#@?#|#\$#)(.+)$")
 
 
+class ListRefused(Exception):
+    """A downloaded list is not usable; the packer writes nothing."""
+
+
+# A list body needs at least this many non-blank lines (the smallest source,
+# urlhaus_hosts, had 574 entries at 0.3.5).
+MIN_LIST_LINES = 10
+# Same limit as the runtime refresh guard (src/general/update.js
+# MAX_CHANGE_RATIO): a source whose raw entry count falls by more than this
+# against the committed src/rules/meta.json is refused, unless --accept-shrink.
+MAX_SHRINK_RATIO = 0.25
+
+
+def check_body(name: str, text: str) -> None:
+    """Refuse an empty, HTML or very short body (a captive portal, a CDN error
+    page or a cut download answers HTTP 200 too). Review 2026-11-16."""
+    head = text.lstrip("\ufeff \t\r\n")[:200].lower()
+    if not head:
+        raise ListRefused(f"{name}: empty body")
+    if head.startswith("<!doctype") or head.startswith("<html") or head.startswith("<?xml") or "<html" in head:
+        raise ListRefused(f"{name}: the body is an HTML page, not a filter list")
+    lines = sum(1 for line in text.splitlines() if line.strip())
+    if lines < MIN_LIST_LINES:
+        raise ListRefused(f"{name}: only {lines} non-blank lines (minimum {MIN_LIST_LINES})")
+
+
+def check_shrink(stats: dict, old_meta: dict, accept: bool) -> list[str]:
+    """Sources whose raw count (whole-domain + scoped) fell by more than
+    MAX_SHRINK_RATIO against the committed meta.json. Empty when accepted."""
+    problems = []
+    old_sources = (old_meta or {}).get("sources") or {}
+    for name, st in stats.items():
+        old = old_sources.get(name)
+        if not old:
+            continue  # a new source has nothing to compare with
+        before = int(old.get("raw", 0)) + int(old.get("scoped_raw", 0))
+        after = int(st.get("raw", 0)) + int(st.get("scoped_raw", 0))
+        if before > 0 and after < before * (1 - MAX_SHRINK_RATIO):
+            problems.append(f"{name} shrinks from {before} to {after} entries (more than {int(MAX_SHRINK_RATIO * 100)}%)")
+    return [] if accept else problems
+
+
 def fetch(url: str, name: str) -> tuple[str, str]:
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache_path = CACHE_DIR / f"{name}.txt"
+    """Download one list and check its body. The cache file is written by
+    main() only after every list passed (a refused pack writes nothing)."""
     print(f"fetch {name}: {url}")
     req = urllib.request.Request(
         url,
@@ -617,7 +659,7 @@ def fetch(url: str, name: str) -> tuple[str, str]:
     with urllib.request.urlopen(req, timeout=120) as resp:
         data = resp.read()
     text = data.decode("utf-8", errors="replace")
-    cache_path.write_text(text, encoding="utf-8")
+    check_body(name, text)
     digest = hashlib.sha256(data).hexdigest()
     return text, digest
 
@@ -1114,7 +1156,11 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
         [
             "## How we use them",
             "",
-            "- Network blocking only in `general-network.json` (domain -> DNR `requestDomains`).",
+            "- Network blocking in `general-network.json` (domain -> DNR `requestDomains`), from all lists.",
+            "- The malware and threat lists also go into the `threat` ruleset in `threat-network.json`",
+            "  (built by `scripts/build-threat-rules.mjs`).",
+            "- At run time the extension downloads new copies of the lists and puts them in dynamic",
+            "  DNR rules. See `docs/permissions-and-privacy.md`.",
             "- Hide rules (`##`) from " + ", ".join(BUNDLED_COSMETIC_LISTS) + " in `cosmetic-rules.json` (built by `scripts/pack-cosmetic.mjs`).",
             "- Cosmetic sample (generic `##` only) in `cosmetic-sample.json` for the cosmetic agent - not applied by DNR.",
             "- Twitch / YouTube / Kick (and related player hosts) are stripped from block targets here;",
@@ -1179,8 +1225,14 @@ def main() -> int:
     ordered_names = sorted(
         SOURCES.keys(), key=lambda n: SOURCES[n]["priority"], reverse=True
     )
+    texts: dict[str, str] = {}
     for name in ordered_names:
-        text, digest = fetch(SOURCES[name]["url"], name)
+        try:
+            text, digest = fetch(SOURCES[name]["url"], name)
+        except ListRefused as e:
+            print(f"ERROR: refused list {e}; nothing written", file=sys.stderr)
+            return 1
+        texts[name] = text
         digests[name] = digest
         entry = extract_list(text)
         extracted.append(entry)
@@ -1211,6 +1263,24 @@ def main() -> int:
     if len(rules) > MAX_DNR_RULES:
         print(f"ERROR: {len(rules)} DNR rules exceed the budget of {MAX_DNR_RULES}; nothing written", file=sys.stderr)
         return 1
+    # Shrink guard against the committed meta.json (review 2026-11-16), before
+    # any write: a list that lost more than 25% of its entries is refused.
+    old_meta_path = OUT_DIR / "meta.json"
+    try:
+        old_meta = json.loads(old_meta_path.read_text(encoding="utf-8")) if old_meta_path.is_file() else {}
+    except ValueError:
+        old_meta = {}
+    shrunk = check_shrink(stats, old_meta, "--accept-shrink" in sys.argv[1:])
+    if shrunk:
+        for line in shrunk:
+            print(f"ERROR: refused list {line}", file=sys.stderr)
+        print("ERROR: nothing written. Check the downloads; if the shrink is real, run again with --accept-shrink", file=sys.stderr)
+        return 1
+    # Every list passed: now fill the download cache (pack-cosmetic.mjs and
+    # build-threat-rules.mjs read it).
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    for name, text in texts.items():
+        (CACHE_DIR / f"{name}.txt").write_text(text, encoding="utf-8")
     # Each list's full cross-list data, for the runtime refresh while
     # that list has no parsed copy (final review #6). Only after the budget
     # check, so a refused pack writes nothing.

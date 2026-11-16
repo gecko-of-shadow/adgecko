@@ -25,7 +25,9 @@ Deno.test("general popup defaults on and never auto-fetches lists", () => {
   assert(popupSource.includes("generalEnabled: true") || popupSource.includes("generalEnabled: true,"), "storage default ON");
   assert(!popupSource.includes("chrome.alarms"), "no alarms in popup");
   // The worker's single 3 h "gecko-refresh" alarm is allowed (owner decision 2026-11-02).
-  assert(!/chrome\.alarms\.create\((?!REFRESH_ALARM,)/.test(backgroundSource), "only the refresh alarm in background");
+  // Plus the one-shot "gecko-refresh-retry" alarm after a failed run (review
+  // 2026-11-16 WP-16; no periodInMinutes, so it never polls).
+  assert(!/chrome\.alarms\.create\((?!REFRESH_ALARM,|GU\.RETRY_ALARM, \{ delayInMinutes: GU\.RETRY_DELAY_MINUTES \})/.test(backgroundSource), "only the refresh alarm and the one-shot retry in background");
   assert(!backgroundSource.includes("setInterval"), "no interval polling for lists");
   assert(backgroundSource.includes("manual"), "update path is manual");
 });
@@ -73,4 +75,18 @@ Deno.test("storage key contract matches settings module", () => {
   // Then the signed-feed client (dormant until configured).
   // Block H: the feature registry loads first.
   assert(backgroundSource.replace(/\s+/g, " ").includes("importScripts(\"settings/features.js\", \"general-settings.js\", \"general/filter-options.js\", \"general/never-block-captcha.js\", \"threat/psl.js\", \"threat/protected-hosts.js\", \"threat/compile.js\", \"general/update.js\", \"general/cosmetic-parse.js\", \"feed/config.js\", \"feed/keys.js\", \"feed/canonical.js\", \"feed/schema.js\", \"feed/verify.js\", \"feed/compile.js\", \"feed/client.js\")"), "worker loads shared settings");
+});
+
+// Moved in 0.3.6 from test/toggles.test.js (that file tested the removed dead
+// module src/general/toggles.js; this test checks only live files).
+Deno.test("master toggle is the only popup switch", () => {
+  assert(!popupHtml.includes("debug-on"), "debug on is gone");
+  assert(!popupHtml.includes("debug-off"), "debug off is gone");
+  assert(!popupHtml.includes("Copy debug"), "copy debug is gone");
+  assert(!popupSource.includes("sendDebug"), "popup does not message a debug log");
+  // Redesign: no switches in the popup at all; the master switch is on the settings page.
+  assert(!popupHtml.includes("<input") && !popupHtml.includes("general-enabled"), "no switches in the popup");
+  assert(Deno.readTextFileSync(new URL("../src/settings.html", import.meta.url)).includes('id="master"'), "master switch on the settings page");
+  assert(!popupSource.includes("kick.js"), "popup does not load Kick playback");
+  assert(!popupSource.includes("youtube.js"), "popup does not load YouTube playback");
 });

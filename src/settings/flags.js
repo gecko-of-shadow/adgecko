@@ -10,15 +10,21 @@
 // MessageEvent "gk-p1" on window SYNCHRONOUSLY carrying one end of a fresh
 // MessageChannel; each page-world script takes the first one it sees and stops
 // listening. A page-world script injected after this one asks for its port by
-// dispatching "gk-r1" synchronously; requests are answered only until the first
-// task after injection (setTimeout 0), so page scripts cannot obtain a port to
-// read the settings later. Flags travel only over the port: the page cannot
-// write to it (it never holds the other end), and later window messages are
-// ignored by everyone. If no port arrives, page-world features keep their
-// built-in defaults (fail-open). That every document_start script of this
-// extension runs in one task, in manifest order, is UNVERIFIED (Chrome
-// behaviour); both orders are handled. Vendored scripts get no flags (always
-// on, D-3).
+// dispatching "gk-r1" synchronously. Requests are answered only until the
+// first of these: the parser inserts a <script> element (a page inline <head>
+// script runs in the same task as document_start, before any timer; the
+// parser does a microtask checkpoint before it runs the script, so a
+// MutationObserver sees the element first), the first "readystatechange"
+// (about:blank frames, which have no parser), or the first task after
+// injection (setTimeout 0). A page-world script injected after this one asks
+// before any of these, at document_start. Flags travel only over the port:
+// the page cannot write to it (it never holds the other end), and later
+// window messages are ignored by everyone. If no port arrives, page-world
+// features keep their built-in defaults (fail-open). In Chromium (headless,
+// review 2026-11-16) every page-world script of this extension ran BEFORE
+// this script and took the first port; the order is not a documented Chrome
+// guarantee, so both orders are handled. Live Chrome on the owner's PC is
+// UNVERIFIED. Vendored scripts get no flags (always on, D-3).
 (function () {
   const PORT_EVENT = "gk-p1"; // same ids in src/youtube.js, src/kick.js, src/guards/*.js
   const REQ_EVENT = "gk-r1";
@@ -109,15 +115,45 @@
   // Page-world scripts injected before this one are already listening.
   handshake();
   let requestsOpen = true;
+  let watcher = null;
+  function closeRequests() {
+    requestsOpen = false;
+    try {
+      if (watcher) watcher.disconnect();
+      watcher = null;
+    } catch {
+      // the timer closes the window anyway
+    }
+  }
   try {
     window.addEventListener(REQ_EVENT, () => {
       if (requestsOpen) handshake();
     }, true);
-    setTimeout(() => {
-      requestsOpen = false;
-    }, 0);
+    setTimeout(closeRequests, 0);
   } catch {
     // scripts injected before this one still got their port
+  }
+  // A parser-inserted page <script> can run before that timer (same parser
+  // task). The parser does a microtask checkpoint before it runs such a
+  // script, so this observer sees the element first and closes the window.
+  // Extension page-world scripts are never <script> elements.
+  try {
+    if (typeof MutationObserver === "function" && typeof document !== "undefined" && document) {
+      watcher = new MutationObserver((records) => {
+        for (const r of records) {
+          for (const n of r.addedNodes) {
+            if (n && n.nodeType === 1 && String(n.localName).toLowerCase() === "script") {
+              closeRequests();
+              return;
+            }
+          }
+        }
+      });
+      watcher.observe(document, { childList: true, subtree: true });
+      document.addEventListener("readystatechange", closeRequests, { once: true });
+    }
+  } catch {
+    // the timer closes the window anyway
   }
   load();
   try {

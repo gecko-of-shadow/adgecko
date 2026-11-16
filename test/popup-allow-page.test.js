@@ -229,7 +229,7 @@ Deno.test("Allow this site works on a normal https page without the tabs permiss
   assertEquals(p.status.textContent, "✅ Protected");
   assertEquals(p.button.disabled, false, "button is clickable");
   assertEquals(p.button.textContent, "Allow this site");
-  assertEquals(p.button.attrs["aria-pressed"], "false");
+  assertEquals([p.button.attrs["aria-pressed"], p.button.dataset.allowed], [undefined, "false"], "no aria-pressed (WP-23 item 7); data-allowed gives the look");
 
   await p.button.fire("click");
   // The popup writes the site switch to siteOverrides (keyed by host);
@@ -237,7 +237,7 @@ Deno.test("Allow this site works on a normal https page without the tabs permiss
   assertEquals(p.storage.siteOverrides, { "news.example.com": { enabled: false } }, "host saved, path dropped");
   assertEquals(p.storage.generalAllowedOrigins, undefined, "legacy key left to the worker");
   assertEquals(p.button.textContent, "Block again");
-  assertEquals(p.button.attrs["aria-pressed"], "true");
+  assertEquals([p.button.attrs["aria-pressed"], p.button.dataset.allowed], [undefined, "true"], "no aria-pressed (WP-23 item 7); data-allowed gives the look");
   assertEquals(p.status.textContent, "Allowed – not blocking here");
   assert(p.background.some((m) => m.type === "applyGeneralState"), "rules re-applied after the click");
   assertEquals(p.el["fix-site"].disabled, true, "Fix is off while the site is allowed");
@@ -411,7 +411,7 @@ Deno.test("a failed Allow changes nothing on screen, says so plainly, and a retr
   assertEquals(p.storage.siteOverrides, undefined);
   assertEquals(p.status.textContent, "✅ Protected");
   assertEquals(p.button.textContent, "Allow this site");
-  assertEquals(p.button.attrs["aria-pressed"], "false");
+  assertEquals([p.button.attrs["aria-pressed"], p.button.dataset.allowed], [undefined, "false"], "no aria-pressed (WP-23 item 7); data-allowed gives the look");
   assertEquals(p.note.textContent, SAVE_ERR);
   failSet.on = false;
   await p.button.fire("click");

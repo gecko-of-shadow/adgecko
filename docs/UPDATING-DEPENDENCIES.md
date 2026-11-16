@@ -55,6 +55,14 @@ The script does these steps:
 
 `test/vendor-pin.test.js` fails when the file and `scripts/vendor-pins.json` do not agree. A hand edit of the vendored file thus fails the tests.
 
+Since 0.3.6, the release gate also checks the vendored file against a second pin in `scripts/frozen-pins.json` (section 1b, on every branch and in the release job). The script does not update that file. After an update, do these steps by hand:
+
+1. Copy the new `sha256` from `scripts/vendor-pins.json` to the `src/vendor/video-swap-new.user.js` entry in `scripts/frozen-pins.json`.
+2. Set `bytes` in the same entry to the new file size.
+3. Run the tests. `test/release-tooling.test.js` fails while the two pins do not agree.
+
+A change to `scripts/frozen-pins.json` is an owner decision, because it unfreezes a playback file.
+
 Options:
 
 - `--ref <branch, tag or commit>`: take the file from that point. Use this to go back to an older version.
@@ -65,8 +73,7 @@ Exit codes: 0 = done or current. 1 = `--check` found a difference. 2 = error. Th
 
 ### Text that the script updates
 
-- `test/page.test.js` (userscript version, conflict version)
-- `test/exclusions.test.js`, `test/general-cosmetic-contract.test.js`, `test/hardening.test.js` (conflict version)
+- `test/hardening.test.js` (conflict version)
 - `src/vendor/README.md` (commit link, versions)
 - `docs/STORE-REVIEW-NOTES.md` (version, line numbers of the `eval` call and of `getWasmWorkerJs`)
 - `docs/credits.md`, `docs/how-it-works.md` (version)
@@ -87,7 +94,7 @@ The gate freezes the Twitch file. After an update, expect these results:
 - **Section 6 fails** if upstream changed `ourTwitchAdSolutionsVersion`. Line 774 of the gate holds the number. The owner must change that line by hand. `test/vendor-pin.test.js` also fails until that line agrees with the new number.
 - **Section 3 fails** if upstream added an `eval` call or an `innerHTML` write. Do not widen the gate's allow-list without a code review of the new lines.
 
-Some tests read the code inside the vendored file (`test/page.test.js`, `swap`, `bug`, `memory`, `reload`, `fixtures`, `playlist`). They can fail on a real upstream change. Read each failure. Do not edit the vendored file to make a test pass.
+Some tests read the code inside the vendored file (`test/twitch-playlist.test.js`, `fixtures`, `playlist`, `hardening`). They can fail on a real upstream change. Read each failure. Do not edit the vendored file to make a test pass.
 
 ## 2. uBlock Origin YouTube filters
 

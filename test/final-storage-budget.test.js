@@ -9,7 +9,12 @@
 // reads the packer's cache, scripts/.list-cache/<name>.txt (git-ignored), and
 // is skipped when the cache does not hold every list (CI has no cache).
 // Peak bytes must stay <= 9,000,000: about 1.4 MB headroom for list growth.
+//
+// Review 2026-11-16 WP-20: the signed feed cache shares the same quota. In the
+// worst case it holds two 512 KB files as base64 (current and previous), so
+// the list peak plus that cache must also fit the quota.
 import "../src/general/filter-options.js";
+import "../src/feed/canonical.js";
 import "../src/general/never-block-captcha.js";
 import { loadWorker } from "./fixtures/fake-chrome-worker.js";
 import source from "../src/general/update.js" with { type: "text" };
@@ -29,6 +34,14 @@ const cached = (name) => {
   }
 };
 const haveCache = U.SOURCES.every((s) => cached(s.name));
+// Worst-case feedCache bytes: two base64 copies of a 512 KB file, plus the
+// key names, the two signature files and feedState.
+const b64Len = (n) => Math.ceil(n / 3) * 4;
+const FEED_CACHE_MAX = 2 * b64Len(globalThis.GeckoFeedCanonical.MAX_FEED_BYTES) + 4096;
+
+Deno.test("storage budget: the list peak limit plus the worst-case feed cache fits the quota", () => {
+  assert(PEAK_LIMIT + FEED_CACHE_MAX <= QUOTA, "list peak " + PEAK_LIMIT + " + feed cache " + FEED_CACHE_MAX + " = " + (PEAK_LIMIT + FEED_CACHE_MAX) + " > quota " + QUOTA);
+});
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 
 Deno.test({
@@ -73,5 +86,6 @@ Deno.test({
     assert(!("cosmetic" in ag), "AdGuard payload carries no hide data");
     assert(st.dynamicActive === true, "list rules active");
     assert(peak <= PEAK_LIMIT, "peak " + peak + " bytes > " + PEAK_LIMIT);
+    assert(peak + FEED_CACHE_MAX <= QUOTA, "peak " + peak + " + feed cache " + FEED_CACHE_MAX + " bytes > quota " + QUOTA);
   },
 });

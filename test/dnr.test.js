@@ -1,7 +1,6 @@
 import manifest from "../manifest.json" with { type: "json" };
 import rules from "../src/rules/general-network.json" with { type: "json" };
 import mergeMeta from "../src/rules/dnr-merge-meta.json" with { type: "json" };
-import excludeSource from "../src/general-exclude-hosts.js" with { type: "text" };
 
 function assert(condition, label) {
   if (!condition) throw new Error(label);
@@ -13,9 +12,17 @@ function assertEquals(actual, expected, label) {
   if (left !== right) throw new Error(`${label || "expected equal"}\n${left}\n${right}`);
 }
 
-const api = {};
-const install = new Function(`${excludeSource}\nreturn installGeneralExcludeHosts;`)();
-install(api);
+// Stream page hosts and their video CDNs. These lists were in the dead module
+// src/general-exclude-hosts.js (removed in 0.3.6 with the owner's approval).
+// The packed high-priority allow rules (scripts/merge-dnr-rules.py) must still
+// cover them, and no block rule may target them.
+const SITE_DOMAINS = Object.freeze(["twitch.tv", "youtube.com", "youtu.be", "youtube-nocookie.com", "youtubekids.com", "kick.com"]);
+const VIDEO_CDN_DOMAINS = Object.freeze(["ttvnw.net", "jtvnw.net", "twitchcdn.net", "googlevideo.com", "ytimg.com", "ggpht.com", "live-video.net"]);
+const ALL_EXCLUDED = Object.freeze([...new Set(SITE_DOMAINS.concat(VIDEO_CDN_DOMAINS))]);
+function isExcludedHost(host) {
+  const h = String(host || "").toLowerCase().replace(/\.$/, "");
+  return ALL_EXCLUDED.some((d) => h === d || h.endsWith("." + d));
+}
 
 Deno.test("ruleset id is general (popup contract) pointing at general-network.json", () => {
   const resource = manifest.declarative_net_request.rule_resources[0];
@@ -40,9 +47,7 @@ function allowsHost(rule, host) {
   return covered && !skipped;
 }
 
-Deno.test("buildDnrExclusionRules matches packed high-priority allows", () => {
-  const built = api.buildDnrExclusionRules({ idStart: 1, priority: 2_000_000 });
-  assertEquals(built.length, 3);
+Deno.test("packed high-priority allows cover the stream sites and their video CDNs", () => {
   assertEquals(mergeMeta.allow_rules, 3);
   assertEquals(rules[0].action.type, "allowAllRequests");
   assertEquals(rules[1].action.type, "allow");
@@ -54,7 +59,7 @@ Deno.test("buildDnrExclusionRules matches packed high-priority allows", () => {
   assert(allowsHost(rules[1], "gql.twitch.tv"), "gql stays allowed");
   assert(allowsHost(rules[1], "www.twitch.tv"), "twitch pages stay allowed");
   assert(!allowsHost(rules[1], "edge.ads.twitch.tv"), "directory ad host is not force-allowed");
-  for (const host of api.VIDEO_CDN_DOMAINS) {
+  for (const host of VIDEO_CDN_DOMAINS) {
     assert(rules[2].condition.requestDomains.includes(host), `cdn ${host}`);
   }
   assert(allowsHost(rules[2], "usher.ttvnw.net"), "usher stays allowed");
@@ -76,7 +81,7 @@ Deno.test("extra tracker hosts are blocked and are not stream allows", () => {
   const blocked = new Set(blocks.flatMap((rule) => rule.condition?.requestDomains || []));
   for (const host of extra) {
     assert(blocked.has(host), `block ${host}`);
-    assert(!api.isExcludedHost(host), `${host} is not a stream host`);
+    assert(!isExcludedHost(host), `${host} is not a stream host`);
   }
   const allowBlob = JSON.stringify(rules.filter((rule) => rule.priority >= 9000));
   for (const host of extra) {
@@ -85,16 +90,45 @@ Deno.test("extra tracker hosts are blocked and are not stream allows", () => {
 });
 
 Deno.test("block rules never target protected stream hosts", () => {
-  const excluded = api.ALL_EXCLUDED;
+  const excluded = ALL_EXCLUDED;
   for (const rule of rules) {
     if (rule.action?.type !== "block") continue;
     for (const domain of rule.condition?.requestDomains || []) {
-      assert(!api.isExcludedHost(domain), `must not block ${domain}`);
+      assert(!isExcludedHost(domain), `must not block ${domain}`);
       for (const suf of excluded) {
         assert(domain !== suf && !domain.endsWith("." + suf), `block hit ${domain}`);
       }
       assert(domain !== "live-video.net" && !domain.endsWith(".live-video.net"), `live-video ${domain}`);
     }
+  }
+});
+
+// Review 2026-11-16 WP-09 item 4: the check above uses the fixed lists at the
+// top of this file (from the removed module general-exclude-hosts.js).
+// Those lists do not have ext-twitch.tv, twitchcdn.com, kickusercontent.com
+// or kick-streamer.com. This test uses the live registry
+// (GeckoFeatures.isStreamHost, src/settings/features.js) as the oracle.
+// ubo-youtube-network.json is not checked here: its rule 1 blocks
+// ads.youtube.com on purpose (uBO filter), and that host is under
+// youtube.com. Whether to accept that rule is an owner decision.
+Deno.test("shipped general and threat block rules never target a STREAM_SITES host (live registry oracle)", async () => {
+  await import("../src/settings/features.js");
+  const F = globalThis.GeckoFeatures;
+  assert(F && typeof F.isStreamHost === "function", "GeckoFeatures loaded");
+  for (const host of ["ext-twitch.tv", "a.twitchcdn.com", "files.kickusercontent.com", "kick-streamer.com"]) {
+    assert(F.isStreamHost(host), "oracle knows " + host);
+  }
+  const { default: threatRules } = await import("../src/rules/threat-network.json", { with: { type: "json" } });
+  for (const [name, set] of [["general", rules], ["threat", threatRules]]) {
+    let checked = 0;
+    for (const rule of set) {
+      if (rule.action?.type !== "block") continue;
+      for (const domain of rule.condition?.requestDomains || []) {
+        checked += 1;
+        assert(!F.isStreamHost(domain), `${name} rule ${rule.id} blocks stream host ${domain}`);
+      }
+    }
+    assert(checked > 0, name + ": no block domain checked");
   }
 });
 

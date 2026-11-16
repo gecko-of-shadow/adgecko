@@ -1,10 +1,14 @@
-#!/usr/bin/env -S deno run -A
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=raw.githubusercontent.com --allow-run=git
 // Refresh the YouTube port of uBlock Origin's own filters.
 //
-//   deno run -A scripts/sync-ubo-youtube.mjs [--uassets <commit|master>] [--ubo <tag>]
+//   deno run --allow-read --allow-write --allow-net=raw.githubusercontent.com --allow-run=git \
+//     scripts/sync-ubo-youtube.mjs [--uassets <commit|master>] [--ubo <tag> --ubo-commit <40-hex>]
 //
-// Pulls uBlockOrigin/uAssets filters/{filters,quick-fixes,unbreak}.txt at a
-// pinned commit and gorhill/uBlock scriptlet sources at a release tag, keeps
+// (The weekly workflow also limits --allow-write to src/vendor, src/rules and
+// its temp dir.) Pulls uBlockOrigin/uAssets filters/{filters,quick-fixes,unbreak}.txt
+// at a pinned commit and gorhill/uBlock scriptlet sources at a release tag
+// whose commit must equal ublock_commit in src/vendor/ubo-youtube-meta.json
+// (a new tag needs --ubo-commit, after a review of that commit), keeps
 // only the YouTube-scoped filters (as uBO would see them on Chromium, MV2,
 // no HTML filtering), and writes:
 //   src/vendor/ubo-youtube.js            MAIN-world scriptlets, built exactly as uBO injects them
@@ -14,6 +18,7 @@
 // uBlock Origin and uAssets are GPLv3; see src/vendor/LICENSE-uBlock.md.
 import { widenYoutubeExpireWindow } from "./lib/youtube-expire-window.mjs";
 import { ensurePlayerAdsPruned, excludeCaptchaFromAdMediaRule } from "./lib/youtube-local-patches.mjs";
+import { expectedUboCommit, verifyUboClone } from "./lib/ubo-commit-pin.mjs";
 const ROOT = decodeURIComponent(new URL("..", import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, "$1");
 const arg = (k, d) => { const i = Deno.args.indexOf(k); return i >= 0 ? Deno.args[i + 1] : d; };
 const run = async (cmd, cwd) => {
@@ -23,6 +28,14 @@ const run = async (cmd, cwd) => {
 };
 
 const uboTag = arg("--ubo", "1.75.0");
+// The uBO code below is imported and run, so the clone must be the commit
+// pinned in src/vendor/ubo-youtube-meta.json (or --ubo-commit, after a
+// review); a moved tag stops here (review 2026-11-16).
+const uboExpected = expectedUboCommit({
+  tag: uboTag,
+  commitArg: arg("--ubo-commit", null),
+  meta: JSON.parse(await Deno.readTextFile(ROOT + "src/vendor/ubo-youtube-meta.json")),
+});
 let uassets = arg("--uassets", "master");
 if (!/^[0-9a-f]{40}$/.test(uassets)) {
   const ref = uassets === "master" ? "HEAD" : uassets;
@@ -30,7 +43,7 @@ if (!/^[0-9a-f]{40}$/.test(uassets)) {
 }
 const tmp = await Deno.makeTempDir({ prefix: "ubo-sync-" });
 await run(["git", "clone", "-q", "--depth", "1", "--branch", uboTag, "https://github.com/gorhill/uBlock", tmp + "/ubo"]);
-const uboCommit = await run(["git", "rev-parse", "HEAD"], tmp + "/ubo");
+const uboCommit = await verifyUboClone({ tag: uboTag, expected: uboExpected, revParse: () => run(["git", "rev-parse", "HEAD"], tmp + "/ubo") });
 const LISTS = ["filters", "quick-fixes", "unbreak"];
 const texts = {};
 for (const name of LISTS) {

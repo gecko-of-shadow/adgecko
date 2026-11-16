@@ -24,6 +24,19 @@ Deno.test("parser keeps domain rules and skips exceptions, cosmetics, scoped and
   assert(U.parseExpires("no header") === 86400000, "default 1 day");
 });
 
+// Review 2026-11-16 WP-09 item 6: update.js localAddress rejects the CGNAT
+// range 100.64.0.0/10 (100.64.0.0 - 100.127.255.255). The addresses just
+// outside the range are kept.
+Deno.test("parser rejects CGNAT (100.64.0.0/10) IP literals and keeps the addresses next to the range", () => {
+  const rejected = ["0.0.0.0 100.64.0.1", "||100.127.255.255^", "||100.64.1.1^", "100.100.100.100"];
+  for (const line of rejected) {
+    assert(U.parseList(line).length === 0, "CGNAT kept: " + line + " -> " + JSON.stringify(U.parseList(line)));
+  }
+  const kept = ["100.63.255.255", "100.128.0.1"]; // privacy-check: allow (CGNAT boundary test addresses)
+  const text = ["0.0.0.0 " + kept[0], "||" + kept[1] + "^"].join("\n");
+  assert(JSON.stringify(U.parseList(text)) === JSON.stringify(kept), "boundary addresses: " + JSON.stringify(U.parseList(text)));
+});
+
 Deno.test("merge drops stream domains and dupes; 80 domains per rule", () => {
   const merged = U.mergeDomains({ peter_lowe: ["a.com", "googlevideo.com", "r1.googlevideo.com"], easylist: ["a.com", "b.com", "x.twitch.tv"] });
   assert(JSON.stringify(merged) === '["a.com","b.com"]', JSON.stringify(merged));
@@ -252,4 +265,45 @@ Deno.test("list fetches refuse redirects, on mirrors too; a refused redirect fal
   assert(r.ok, JSON.stringify(r));
   assert(d.calls.length > U.SOURCES.length && d.calls.every((c) => c.redirect === "error"), "a list fetch can follow a redirect");
   assert(d.calls.some((c) => c.url.includes("ublockorigin.github.io/uAssets/thirdparties")), "mirror was not tried");
+});
+
+// Review 2026-11-16 WP-09 item 2: the expiry branch of listDue in an
+// automatic (alarm) refresh. Expired lists are fetched again; lists that are
+// not expired are not fetched. Also the DEFAULT_EXPIRES_MS (1 day) fallback.
+const sourceOf = (url) => U.SOURCES.find((s) => [s.url].concat(s.mirrors || []).includes(url));
+
+Deno.test("automatic refresh refetches expired lists only (listDue expiry)", async () => {
+  const d = fakeDeps({ responses: ok });
+  const t0 = d.t;
+  assert((await U.refresh(d, {})).ok, "first refresh");
+  const st = await d.getState();
+  assert(U.SOURCES.every((s) => st.lists[s.name] && st.lists[s.name].expiresMs === 4 * 86400000), "each list has a 4-day expiry");
+  // 13 h later: past MIN_INTERVAL_MS, but no list expired.
+  d.t = t0 + 13 * 3600 * 1000;
+  d.calls.length = 0;
+  const notDue = await U.refresh(d, {});
+  assert(notDue.ran && d.calls.length === 0, "lists not expired were fetched: " + d.calls.length + " " + JSON.stringify(notDue));
+  // 10 days later: every list expired, so each one is fetched again.
+  d.t = t0 + 10 * 86400000;
+  d.calls.length = 0;
+  const due = await U.refresh(d, {});
+  const fetched = new Set(d.calls.map((c) => sourceOf(c.url)?.name));
+  assert(due.ran && U.SOURCES.every((s) => fetched.has(s.name)), "expired lists not fetched: " + JSON.stringify([...fetched]) + " " + JSON.stringify(due));
+  assert(d.calls.every((c) => c.headers["If-None-Match"]), "expired lists are fetched with validators");
+});
+
+Deno.test("automatic refresh uses the 1-day default expiry when a list has no Expires header", async () => {
+  const noExpires = (url) => ({ ok: true, status: 200, headers: new Headers({ ETag: '"e"' }), text: async () => big(new URL(url).pathname.replace(/[^a-z0-9]/gi, "")).replace(/^! Expires:.*\n/, "") });
+  const d = fakeDeps({ responses: noExpires });
+  const t0 = d.t;
+  assert((await U.refresh(d, {})).ok, "first refresh");
+  d.t = t0 + 13 * 3600 * 1000;
+  d.calls.length = 0;
+  await U.refresh(d, {});
+  assert(d.calls.length === 0, "fetched before the 1-day default: " + d.calls.length);
+  d.t = t0 + 26 * 3600 * 1000;
+  d.calls.length = 0;
+  await U.refresh(d, {});
+  const fetched = new Set(d.calls.map((c) => sourceOf(c.url)?.name));
+  assert(U.SOURCES.every((s) => fetched.has(s.name)), "not fetched after the 1-day default: " + JSON.stringify([...fetched]));
 });

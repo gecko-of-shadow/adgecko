@@ -331,6 +331,9 @@ function syncFromSettings() {
         if (!nextThreat) await GU.removeThreatRules(listDeps()).catch(() => {});
         else if (!firstSync || await threatRulesMissing()) await GU.rebuildThreatRules(listDeps()).catch(() => {});
       });
+      // The feed's snapshot fallback follows the threat tier (review
+      // 2026-11-16 WP-20). Not awaited: the feed queues its own DNR write.
+      applyCachedFeed();
     }
   });
   settingsQueue = run.catch(() => {});
@@ -377,6 +380,12 @@ function feedDeps() {
     getCache: async () => (await getKey(FC.CACHE_KEY)) || {},
     setCache: (cache) => localSet({ [FC.CACHE_KEY]: cache }),
     getPaused: async () => (await getKey(FC.PAUSE_KEY)) === true,
+    // The packed snapshot is the packed threat set: not used with the threat
+    // tier off (review 2026-11-16 WP-20).
+    snapshotAllowed: async () => {
+      const s = FEAT.normalizeSettings(await getKey("settings"));
+      return s.enabled && s.features.threatTier;
+    },
     getSessionRules: () => new Promise((resolve) => dnr.getSessionRules((r) => {
       void chrome.runtime.lastError;
       resolve(r || []);
@@ -796,7 +805,7 @@ function listStatusText(state, result, writeError) {
     : "Using packed lists" + (result.ok ? "." : " (refresh failed; will retry later).")) + errText + storageText;
 }
 
-async function refreshLists(manual) {
+async function refreshLists(manual, opts) {
   // A manual click does not take the result of a running automatic run (it
   // may be a throttled no-op, and it checks only due lists): it waits for
   // that run to end, then starts its own manual run.
@@ -842,6 +851,10 @@ async function refreshLists(manual) {
     } catch (e) {
       result = { ok: false, reason: String(e && e.message || e) };
     }
+    // A failed run gets one retry 31 min later (review 2026-11-16 WP-16). A
+    // failed retry creates none: the 3 h alarm takes over, so a long outage
+    // does not download every 31 min.
+    if (result && result.ran === true && result.ok === false && !(opts && opts.retry)) createRetryAlarm();
     // The switch may have flipped while the refresh was swapping rules in.
     await applyGeneralState();
     if (result && result.ran === false) return result;
@@ -952,6 +965,26 @@ function ensureRefreshAlarm() {
   } catch (e) {
     console.warn("adgecko: refresh alarm:", e && e.message);
   }
+}
+
+// One-shot "gecko-refresh-retry" alarm after a failed run. The first 3 h alarm
+// comes 5 to 30 min after it is created, so it cannot pass the 30-min retry
+// throttle after a failed install-time run. A new create with the same name
+// replaces the old one, so retries never stack.
+function createRetryAlarm() {
+  if (!chrome.alarms || !chrome.alarms.create) return;
+  try {
+    chrome.alarms.create(GU.RETRY_ALARM, { delayInMinutes: GU.RETRY_DELAY_MINUTES }, () => { void chrome.runtime.lastError; });
+  } catch (e) {
+    console.warn("adgecko: retry alarm:", e && e.message);
+  }
+}
+
+// Top level, so a worker woken by the retry alarm has the listener in place.
+if (chrome.alarms && chrome.alarms.onAlarm) {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm && alarm.name === GU.RETRY_ALARM) refreshLists(false, { retry: true });
+  });
 }
 
 // Top level, so a worker woken by the alarm has the listener in place.

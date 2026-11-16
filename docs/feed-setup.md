@@ -23,6 +23,9 @@ signs, by hand or automatically (D-7). The scripts below work for either.
   keeps the last two verified files for rollback.
 - On browser start and after an update it re-applies the saved file (if not
   expired), otherwise the packed snapshot `src/rules/threat-snapshot.json`.
+  The snapshot is the packed threat list, so it is not used when the user
+  switched off "Block known malware hosts" (then no feed rules until a valid
+  file arrives). A worker wake with the right rules in place changes nothing.
 - The popup shows serial, rule count, time of the last check, the last
   problem, and paused/killed.
 
@@ -76,8 +79,11 @@ signs, by hand or automatically (D-7). The scripts below work for either.
    `notBefore` may not be more than 1 hour before `createdAt`, and `createdAt`
    may not be more than 1 hour ahead of the browser's clock. `serial` may not
    go above 2,147,483,647 or jump more than 1,000,000 past the last one a
-   browser applied (a date-like serial such as 2026111001 is fine). Publish a
-   new file (higher `serial`) before `notAfter`. Then sign it:
+   browser applied (a date-like serial such as 2026111001 is fine). A larger
+   jump is accepted only after the browser's stored file has expired, and only
+   when that file lived at least 24 hours (`notAfter` - `notBefore`). Publish
+   a new file (higher `serial`) before `notAfter`. `scripts/feed-sign.mjs`
+   warns when a serial is within 10,000,000 of the cap. Then sign it:
 
    ```
    deno run --allow-read --allow-write scripts\feed-sign.mjs --key <folder outside the repo>\feed-2026-11.key.json --feed feed.json
@@ -100,6 +106,15 @@ signs, by hand or automatically (D-7). The scripts below work for either.
   feed stays off, and nothing signed with the feed key is accepted, until the
   extension itself is updated (ship new pinned keys in that update if the
   feed key was stolen). Clients do not even download the feed meanwhile.
+  Kill serials: any increasing number (1, 2, 3 or date-like). They have the
+  2,147,483,647 cap but no step limit.
+- **Key rotation (recovery):** each browser binds its stored serial to the
+  key that signed the file. When an update removes that key from `FEED_KEYS`,
+  the browser forgets the old serial and the saved files, so the new key can
+  start again at serial 1. The same applies to the kill serial and
+  `KILL_KEYS`. This is the only way to recover a feed whose serial reached the
+  cap (a stolen key or a typo). While the old key stays pinned, nothing is
+  reset, also not after a kill: files signed before the kill stay refused.
 - **Pause the feed rules (soft):** publish a normal feed with
   `"killFeed": true`. Clients drop the feed rules; a later feed with a higher
   serial turns them back on.

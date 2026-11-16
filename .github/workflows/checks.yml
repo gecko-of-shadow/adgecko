@@ -37,13 +37,22 @@ jobs:
         with:
           deno-version: v2.9.8
 
+      # test/release-tooling.test.js runs the release gate, which needs ripgrep.
+      # Without it, two tests show as ignored.
+      - name: Ensure ripgrep
+        run: command -v rg >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ripgrep)
+
       # Security review M-6: pull request code must not run with the secret, so
       # the tests get it on pushes to main only. Elsewhere the two tests that
       # need it show as ignored.
       - name: Run tests
         env:
           PRIVACY_PATTERNS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.PRIVACY_PATTERNS || '' }}
-        run: deno test --no-lock --allow-read --allow-run --allow-env test/
+        # --parallel (review 2026-11-16): about 4x faster. No test gets
+        # --allow-write, so test files cannot share written files. The release
+        # gate (scripts/release-gate.sh section 5) stays serial until this job
+        # is green over 5 or more runs (owner decision).
+        run: deno test --parallel --no-lock --allow-read --allow-run --allow-env test/
 
   privacy:
     name: privacy

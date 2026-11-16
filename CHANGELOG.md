@@ -4,22 +4,101 @@ All notable changes to Adgecko, newest first. Each released version matches a Gi
 
 Dates in this file are the owner's local date (UTC-6). The dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.
 
-## Unreleased
+## 0.3.6 (2026-11-16)
 
-Merged after 0.3.5 (PR #13, 2026-11-15); not in a release yet.
+A code review of 0.3.5 (2026-11-16) confirmed 64 findings. This release does the 25 work packages of that review (`docs/review-2026-11-16/PLAN.md`). Each code fix has a regression test that failed on 0.3.5. No item was tested on the owner's PC or on live sites, so all behavior below is UNVERIFIED until a run on the owner's PC proves it. The release also has the changes that were merged after 0.3.5 (PR #13).
 
-### Added
+### Security
 
-- Vendored Twitch script: `scripts/update-twitch-vendor.mjs` updates `src/vendor/video-swap-new.user.js` in one command. It downloads the file at a fixed upstream commit, checks it as text (it is never run), writes it byte for byte, records commit, version and SHA-256 in `scripts/vendor-pins.json`, and updates the version text in the tests and docs. It does not edit `scripts/release-gate.sh`. When an update stops part way, the error names the files already written. `test/vendor-pin.test.js` fails when the file and the pin do not agree.
-- Docs: `docs/UPDATING-DEPENDENCIES.md` gives the PowerShell 5.1 commands for both vendored dependencies (the Twitch script and the uBlock Origin YouTube filters), and what to expect from the release gate after an update (for example, `test/vendor-pin.test.js` fails until line 774 of `scripts/release-gate.sh` agrees with a new upstream `ourTwitchAdSolutionsVersion`).
+- Clipboard guard: a value that throws while it is converted to text now makes `setData`, `items.add` or `execCommand` fail. Before, the value went to the clipboard with no check.
+- Clipboard guard: on ordinary sites, a copy now writes the exact text that the guard checked. A page can no longer change the selection during the copy. Image alt text and form-field values in a selection can no longer hide a command. **Change:** copies on these sites are plain text only (no formatting, and a selected image copies nothing). A page's own "cut" command no longer removes the text. Your own Ctrl+X works as before. Trusted documentation sites do not change.
+- Clipboard guard: `clipboard.write()` is blocked when the check cannot read the text. A page can no longer change Promise behavior to get past the check. Image-only writes still work.
+- Clipboard guard: more ClickFix commands are detected: pipes to `/bin/bash`, `nohup` or `sudo`, `bash <(curl ...)`, base64 payloads in `sh -c "$(...)"`, `finger ... | cmd`, WebDAV paths (`\\host@SSL\DavWWWRoot\...`), and `msiexec`, `regsvr32` or `powershell -f` with a network path.
+- Clipboard guard: Ctrl+C counts as your own copy only for text that you selected yourself and that is visible. A page can no longer pre-select a hidden command and wait for you to press Ctrl+C.
+- Page settings channel: a page's first inline script can no longer get the private settings channel (it could read the guard switches and fake a "blocked" dot).
+- Malware blocking: one bad list line can no longer block the hosts that run a big platform (`www.facebook.com`, `login.live.com`, `cdn.jsdelivr.net`, `raw.githubusercontent.com`, `js.stripe.com` and more). Internationalized public suffixes (`公司.cn`, `政府.hk` and about 290 more) and cloud region names (`us-west-1.compute.amazonaws.com`) are no longer blocked as a whole. **Allow this domain** for the malware list refuses these names too. The public-suffix data is from the Public Suffix List of 2026-11-15.
 
-### Changed
+### Fixes
 
-- YouTube: the uBlock Origin YouTube filters are synced to uAssets `c7e01d3`. Upstream replaced the `lactmilli` marker with `oaeb`, removed the `lactMilliseconds` edit and one snackbar hide, and renamed the minified variables of the `rpnt` payload; the sync's first local patch (`ARG_PATCHES[0]`, which no longer matched) has its anchor and reset variable updated. The synced files now carry uAssets `e140ffc` (banner line only, no filter change). uBlock Origin scriptlet code stays at tag 1.75.0. Not tested in Chrome.
+- Filter lists: switching the lists off and on keeps the refreshed list rules when malware rules exist. The next refresh repairs a set that 0.3.5 lost.
+- List updates: after a failed refresh, one retry comes about 31 minutes later (a second, one-shot alarm). If it also fails, the next try is the normal 3-hour alarm. A stored time in the future (the clock was ahead once) no longer stops automatic refreshes.
+- Hidden ad boxes: **Block ads and trackers** off no longer also stops **Hide leftover ad boxes**.
+- Hidden ad boxes: EasyList `$generichide`, `$specifichide` and `$elemhide` page exceptions now apply (for example on Gmail, GitHub, localhost and router pages). They apply after the first successful list refresh. The hide-rule parser version changed, so every list is downloaded and parsed again once after the update.
+- Hidden ad boxes: the hide rules go into an adopted style sheet, not a `<style>` element. This stops a conflict with React whole-document hydration, and the rules stay after a full page re-render. A `<style>` element is still the fallback.
+- Hidden ad boxes: a deeply nested `:is()` / `:where()` hide rule can no longer freeze the list refresh. Hide rules with more than 8 nested brackets are dropped. More whole-page hide rules from a broken list (`html:has(.x) > *`, `:root:has(.x) > *`, `&:has(.x)` and namespaced forms) are dropped. Frames no longer rewrite an unchanged sheet, and a site switch re-reads storage only in frames whose result changes.
+- YouTube: with the uBlock Origin layer, "Saved to Watch later" and "Link copied" toasts show again after an "Experiencing interruptions?" toast. The CSS alone hides that toast now.
+- YouTube: the start watchdog no longer reloads upcoming premieres or live streams, sign-in or age-check pages, or unplayable videos. With the uBlock Origin layer, the "Blocking ads" chip no longer shows for leftover sidebar ad nodes.
+- Popup: clicks on **No** and **Block again** are no longer lost while the extension is busy. Keyboard focus stays on the next button after **Fix this site**, **No** and **Undo fix**. The status line says **Ad lists off – turned off in settings** when the lists are off. On YouTube and Twitch, an allowed site shows **Allowed – built-in YouTube ad blocking still runs** (or Twitch). No old "Did that fix it?" shows after an Undo on the settings page. The Allow button no longer has a changing label together with `aria-pressed`.
+- Settings page: two quick switch changes are both saved. List buttons name their domain for screen readers.
+- Pop-up guard (off by default): Enter in a search box can open results in a new window again.
+- Signed threat feed (dormant; no feed is configured): a key rotation now recovers a feed whose serial reached the cap. A file with a short life no longer opens a large serial jump (24 h minimum). Kill serials can be any increasing number. A failed cache write no longer leaves rules that differ from the saved file. With **Block known malware hosts** off, the feed fallback no longer installs the packed malware list again. A rollback file that is served again no longer shows a false replay warning. A worker wake no longer rewrites unchanged feed rules.
 
-### Fixed
+### Tests
 
-- YouTube: a third local patch in `scripts/sync-ubo-youtube.mjs` restores the optional chaining on the `#masthead` logo-type read that uAssets `c7e01d3` dropped. Tests cover a missing header and a missing attribute on watch, home and embed URLs.
+- New regression tests for each fix above (for example `test/clipboard-0.3.6.test.js`, `test/list-toggle-threat.test.js`, `test/cosmetic-generichide.test.js`, `test/feed-robustness.test.js`, `test/popup-ui-review.test.js`, `test/nightly-threat-4-*.test.js`, `test/nightly-threat-5-*.test.js`).
+- Tests that could not fail now can: the hCaptcha shipped-rule check, the list-fetch scan of the live scripts, the stream-host oracle for the shipped block rules (`GeckoFeatures.isStreamHost`), the list expiry branch, the worker `siteInfo` parent override, and the CGNAT range.
+- `test/twitch-playlist.test.js` runs the vendored Twitch playlist code on the m3u8 fixtures (the vendored file does not change). It records one upstream gap: in TwitchAdSolutions 1.55 the ad tracking-URL rewrite in `stripAdSegments` has no effect.
+- `test/docs-claims.test.js` checks the shipped licence text and the doc numbers against the code.
+
+### Docs and licences
+
+- The docs and the README now say that the content scripts run on all http(s) websites (Chrome shows "Read and change all your data on all websites"), and what happens with limited site access.
+- The licence and credit files in the zip no longer say "Updates are manual", "No background auto-fetch" or "not shipped". `LICENSES.md` names `threat-network.json`.
+- The privacy doc and the README say that a fresh install downloads the lists at once.
+- The README and the settings note say what keeps running when the master switch is off. The README says that YouTube players embedded in other websites are not covered. `docs/how-it-works.md` has the current pack numbers and the plain `$all` page block. `docs/threat-tier.md` describes the new host protection.
+
+### Release tooling
+
+- Release gate: `src/kick.js` and the vendored Twitch script are checked against SHA-256 content pins (`scripts/frozen-pins.json`) on every branch and in the release job. Only the current top-level manifest keys are allowed. The rules data is excluded from the secret scan again (the old glob had no effect). A zip with the checkout's version must match the checkout byte for byte.
+- List packer: it refuses an empty, HTML or very short list body, and a list that shrinks by more than 25% (`--accept-shrink` overrides). On a refusal it writes nothing.
+- `feed-sign`: it refuses a feed whose `notAfter` has passed, warns when less than 24 h is left, and warns near the serial cap.
+- The release zip is reproducible with Info-ZIP (fixed times and modes, sorted names). The release workflow attaches `adgecko-<version>.zip.sha256`.
+- The uBlock Origin YouTube sync stops when the cloned commit is not the recorded `ublock_commit`, and the drift workflow runs it with explicit permissions instead of `-A`.
+- CI runs the tests with `--parallel`. The release gate stays serial.
+- None of this was run in GitHub Actions.
+
+### Removed
+
+The owner approved these deletions (2026-11-16).
+
+- Dead modules that nothing loaded: `src/general/toggles.js`, `src/general/exclusions.js`, `src/general/cosmetic.js` and `src/general-exclude-hosts.js`. They are no longer in the zip. The release gate and `scripts/lib/package_files.py` no longer list them.
+- Their tests: `test/toggles.test.js`, `test/exclusions.test.js` and `test/general-cosmetic-contract.test.js`. The one test of live files ("master toggle is the only popup switch") moved to `test/popup-general.test.js`. `test/dnr.test.js` keeps the stream-host lists as fixed constants and still checks the packed allow rules and the block rules against them.
+- 21 Twitch tests that only checked strings in the vendored file, which the SHA-256 pin already covers: `test/page.test.js` (7), `test/swap.test.js` (5), `test/reload.test.js` (4), `test/bug.test.js` (3) and `test/memory.test.js` (2). `test/twitch-playlist.test.js` runs the vendored playlist code instead. The conflict-version check stays in `test/hardening.test.js` and the release gate.
+- `docs/cards2/` and `docs/cards-main/` (copies of `docs/cards/`).
+
+### Merged after 0.3.5 (PR #13)
+
+- Added: `scripts/update-twitch-vendor.mjs` updates `src/vendor/video-swap-new.user.js` in one command, with a SHA-256 pin in `scripts/vendor-pins.json`. `test/vendor-pin.test.js` fails when the file and the pin do not agree. Since 0.3.6, `scripts/frozen-pins.json` must also be updated by hand (see `docs/UPDATING-DEPENDENCIES.md`).
+- Added: `docs/UPDATING-DEPENDENCIES.md` gives the PowerShell 5.1 commands for both vendored dependencies.
+- Changed: the uBlock Origin YouTube filters are synced to uAssets `c7e01d3` (files carry `e140ffc`). uBlock Origin scriptlet code stays at tag 1.75.0. Not tested in Chrome.
+- Fixed: a third local patch in the uBO sync restores the optional chaining on the `#masthead` logo-type read.
+
+### Reviewed, not changed
+
+- WP-11: the feed serial is not reset when a kill is released. With the same key still pinned, a reset would let files signed before the kill come back. A key rotation resets the serial instead.
+- WP-14: `src/rules/cosmetic-rules.json` was not repacked, because no list cache was available in the build container. The exceptions apply after the first list refresh.
+- WP-18: the plan's handshake count was not used. In headless Chromium the guard scripts take their channel before `flags.js` runs, so a count would give the free slots to the page. The request window closes at the first page script instead.
+- WP-21: not every private wildcard base is protected. Most children of private wildcard rules are one customer or one machine (for example `ec2-*.compute-1.amazonaws.com`, which has 3 hosts in the packed malware set). A hand-kept list of 12 regional bases is protected instead.
+- WP-24: the pop-up guard still checks `window.open` only. Links and forms with `target=_blank`, and gesture state across frames, are documented as out of scope.
+- Findings 6, 50 and 51 (cross-list `@@` semantics, the EasyList licence option, the project LICENSE in the zip) are owner decisions, not code fixes.
+- The 15 findings that the review rejected (PLAN section 4) are not changed.
+
+### Owner decisions open
+
+- Kick fixes (`docs/proposals/kick-0.3.5-fixes.patch`); `src/kick.js` stays frozen.
+- Accept the frozen-file content pins (`scripts/frozen-pins.json`).
+- Master switch and the ubo-youtube ruleset: the docs say what keeps running (Option B). Option A (a code change) is open.
+- Embedded YouTube players: documented only.
+- EasyList licence option (CC BY-SA 3.0 or GPL-3.0-or-later) and the project LICENSE in the zip.
+- Peter Lowe list terms ("non-commercial"), open since 0.3.4.
+- Cross-list `@@` exceptions: keep the documented same-host rule.
+- Cosmetic storage layout; repack `cosmetic-rules.json` from a list cache and measure the storage budget.
+- Pop-up guard coverage of links, forms and child frames.
+- Release gate tests in parallel; reproducible zip with Windows `tar.exe`.
+- Clipboard: plain-text copies on ordinary sites; the 500 ms timing limit for 100 KB pattern inputs.
+- `ubo-youtube-network.json` blocks `ads.youtube.com`, which the stream-host registry lists.
+- A second (one-shot) alarm for the refresh retry.
+- The `REGIONAL_WILDCARD_BASES` list in `scripts/build-psl-subset.mjs`.
 
 ## 0.3.5 (2026-11-14)
 

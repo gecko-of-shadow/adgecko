@@ -48,8 +48,69 @@ function installCosmeticHide(api) {
 
   let cssText = null;
   let styleEl = null;
+  // The hide CSS lives in a constructed sheet in document.adoptedStyleSheets.
+  // A <style> node under <html> (added at document_start, before <head>
+  // exists) breaks React 18 whole-document hydration (hydrateRoot(document)):
+  // React re-renders the whole document and the node is lost. An adopted
+  // sheet is not a DOM node. It has no id, so the page sees no product name.
+  // The <style> node stays as the fallback when the sheet API fails.
+  let sheet = null;
+  let sheetOn = false; // our sheet should be adopted now
+  let sheetFailed = false;
+  // The CSS text now in our sheet or <style> node (null = none). An equal
+  // text is not written again: a write re-parses the whole sheet (about
+  // 500 KB) and restyles the page, in every frame of every tab.
+  let sheetText = null;
+  let watchers = false;
+  let styleObserver = null;
+
+  function adoptedHas(s) {
+    return Array.prototype.includes.call(document.adoptedStyleSheets || [], s);
+  }
+
+  function adoptSheet() {
+    if (!sheet || !sheetOn || adoptedHas(sheet)) return;
+    document.adoptedStyleSheets = Array.from(document.adoptedStyleSheets || []).concat(sheet);
+  }
+
+  // A page script may replace document.adoptedStyleSheets. Check again when
+  // the document is parsed and when the page has loaded.
+  function watchAdopted() {
+    if (watchers) return;
+    watchers = true;
+    const again = () => {
+      try {
+        adoptSheet();
+      } catch {
+        // The page made the list read-only: nothing more to do.
+      }
+    };
+    try {
+      document.addEventListener("DOMContentLoaded", again, { once: true });
+      if (typeof window !== "undefined" && window && window.addEventListener) window.addEventListener("load", again, { once: true });
+    } catch {
+      // No events in unit tests without a DOM.
+    }
+  }
 
   function removeStyle() {
+    sheetOn = false;
+    sheetText = null;
+    if (sheet) {
+      try {
+        if (adoptedHas(sheet)) document.adoptedStyleSheets = Array.from(document.adoptedStyleSheets).filter((s) => s !== sheet);
+      } catch {
+        // document may be unavailable in unit tests.
+      }
+    }
+    if (styleObserver) {
+      try {
+        styleObserver.disconnect();
+      } catch {
+        // ignore
+      }
+      styleObserver = null;
+    }
     if (styleEl) {
       try {
         styleEl.remove();
@@ -66,15 +127,55 @@ function installCosmeticHide(api) {
     }
   }
 
+  function injectSheet(text) {
+    if (sheetFailed || typeof CSSStyleSheet === "undefined" || !document.adoptedStyleSheets) return false;
+    try {
+      if (!sheet) sheet = new CSSStyleSheet();
+      if (sheetText !== text || !sheetOn) sheet.replaceSync(text);
+      sheetText = text;
+      sheetOn = true;
+      adoptSheet();
+      watchAdopted();
+      return true;
+    } catch {
+      sheetFailed = true;
+      sheetOn = false;
+      sheetText = null;
+      sheet = null;
+      return false;
+    }
+  }
+
+  function appendStyleEl() {
+    const root = document.documentElement || document.head || document;
+    root.appendChild(styleEl);
+  }
+
+  // Fallback only: put the <style> node back when the page (or a hydration
+  // re-render) removes it.
+  function watchStyleEl() {
+    if (styleObserver || typeof MutationObserver === "undefined") return;
+    try {
+      styleObserver = new MutationObserver(() => {
+        if (styleEl && !styleEl.isConnected) appendStyleEl();
+      });
+      styleObserver.observe(document, { childList: true });
+      if (document.documentElement) styleObserver.observe(document.documentElement, { childList: true });
+    } catch {
+      styleObserver = null;
+    }
+  }
+
   function injectStyle(text) {
     if (typeof document === "undefined") return;
+    if (injectSheet(text)) return;
     if (!styleEl || !styleEl.isConnected) {
       styleEl = document.createElement("style");
       styleEl.id = STYLE_ID;
-      const root = document.documentElement || document.head || document;
-      root.appendChild(styleEl);
+      appendStyleEl();
     }
-    styleEl.textContent = text;
+    if (styleEl.textContent !== text) styleEl.textContent = text;
+    watchStyleEl();
   }
 
   // The bundled fallback sheet comes from the service worker by message: it is
@@ -132,23 +233,31 @@ function installCosmeticHide(api) {
       removeStyle();
       return Promise.resolve(false);
     }
-    const enabled = state && typeof state === "object" ? state.enabled : state;
-    const allowed = state && typeof state === "object" ? state.allowedOrigins : undefined;
-    if (!isEnabled(enabled)) {
-      removeStyle();
-      return Promise.resolve(false);
-    }
-    if (originAllowed(pageOrigin(hostname, href), allowed)) {
-      removeStyle();
-      return Promise.resolve(false);
-    }
     const stored = state && typeof state === "object" ? state.stored : null;
     // Feature switches (src/settings/features.js): the "cosmetic" feature, the
     // extension master and this site's override. Live: storage.onChanged re-runs.
+    // When settings exist, they alone decide. generalEnabled and
+    // generalAllowedOrigins mirror the "network" feature (legacyMirror), so
+    // they must not switch off "Hide leftover ad boxes". They decide only
+    // before the migration, when no settings key exists yet.
     const F = features();
-    if (F && stored && stored[SETTINGS_KEY] && !F.resolve(stored[SETTINGS_KEY], stored[OVERRIDES_KEY], hostname).cosmetic) {
-      removeStyle();
-      return Promise.resolve(false);
+    const settings = stored && stored[SETTINGS_KEY];
+    if (F && settings && typeof settings === "object") {
+      if (!F.resolve(settings, stored[OVERRIDES_KEY], hostname).cosmetic) {
+        removeStyle();
+        return Promise.resolve(false);
+      }
+    } else {
+      const enabled = state && typeof state === "object" ? state.enabled : state;
+      const allowed = state && typeof state === "object" ? state.allowedOrigins : undefined;
+      if (!isEnabled(enabled)) {
+        removeStyle();
+        return Promise.resolve(false);
+      }
+      if (originAllowed(pageOrigin(hostname, href), allowed)) {
+        removeStyle();
+        return Promise.resolve(false);
+      }
     }
     // Refreshed / installed rules in storage: generic sheet (top frame only)
     // plus this host's site rules, minus its #@# exceptions. One <style>.
@@ -215,8 +324,35 @@ function installCosmeticHide(api) {
       return;
     }
 
+    // The settings and site switches this frame last read. A change to them
+    // re-reads storage only when it changes this frame's cosmetic result
+    // (an Allow on another site does not).
+    let seen = null;
     const sync = () => {
-      readStorage(opts.getLocal).then((state) => applyState(state, opts.fetch));
+      readStorage(opts.getLocal).then((state) => {
+        const st = (state && state.stored) || {};
+        seen = { settings: st[SETTINGS_KEY], overrides: st[OVERRIDES_KEY] };
+        return applyState(state, opts.fetch);
+      });
+    };
+    const frameHost = () => (opts.hostname != null ? opts.hostname : (api.hostname != null ? api.hostname : (typeof location !== "undefined" ? location.hostname : "")));
+    const resultUnchanged = (changes) => {
+      const F = features();
+      if (!F || !seen || changes.cosMeta) return false;
+      const valid = (x) => !!x && typeof x === "object";
+      if (!valid(seen.settings)) return false;
+      const next = {
+        settings: changes[SETTINGS_KEY] ? changes[SETTINGS_KEY].newValue : seen.settings,
+        overrides: changes[OVERRIDES_KEY] ? changes[OVERRIDES_KEY].newValue : seen.overrides,
+      };
+      if (!valid(next.settings)) return false;
+      const host = frameHost();
+      const before = F.resolve(seen.settings, seen.overrides, host).cosmetic;
+      const after = F.resolve(next.settings, next.overrides, host).cosmetic;
+      seen = next;
+      // With settings, generalEnabled / generalAllowedOrigins do not decide
+      // (applyState), so a change to them alone changes nothing here.
+      return before === after;
     };
 
     sync();
@@ -242,6 +378,7 @@ function installCosmeticHide(api) {
         onChanged.addListener((changes, area) => {
           if (area && area !== "local") return;
           if (!changes || (!changes[STORAGE_KEY] && !changes[ALLOWED_ORIGINS_KEY] && !changes.cosMeta && !changes[SETTINGS_KEY] && !changes[OVERRIDES_KEY])) return;
+          if (resultUnchanged(changes)) return;
           sync();
         });
       }

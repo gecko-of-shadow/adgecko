@@ -18,7 +18,7 @@ Some websites break or refuse to work when ads are blocked. Try **Fix this site*
 1. Open the website you want to allow.
 2. Click the gecko icon in the toolbar. A small window opens.
 3. Click **Allow this site**.
-4. The button now says **Block again**, and the line under the site says **Allowed – not blocking here**.
+4. The button now says **Block again**, and the line under the site says **Allowed – not blocking here**. On YouTube and Twitch the line says **Allowed – built-in YouTube ad blocking still runs** (or Twitch), because the site's own ad blocking does not stop for an Allow.
 5. Click **Reload page** under the button, so the things that were blocked can load. The window never reloads the page by itself.
 
 When the window opens, the site line may say **Checking this page…** for a moment while it asks the page for its address.

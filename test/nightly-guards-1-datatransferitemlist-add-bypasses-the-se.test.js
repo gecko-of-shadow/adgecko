@@ -55,9 +55,11 @@ Deno.test("copy handler cannot swap in a command through clipboardData.items.add
   p.tick(50);
   const dt0 = new p.window.DataTransfer();
   const ev0 = p.input("copy", { clipboardData: dt0 });
-  assert(!ev0.prevented, "own copy of harmless selection goes through");
+  // Since 0.3.6 (review 2026-11-16 WP-02) the guard cancels the browser's own
+  // copy and writes the checked selection itself.
+  assert(!ev0.prevented || dt0.data["text/plain"] === "Verification ID: 4821", "own copy of harmless selection goes through");
   dt0.setData("text/plain", BAD);
-  assert(dt0.data["text/plain"] === undefined, "setData path is guarded (harness sanity)");
+  assert(dt0.data["text/plain"] !== BAD, "setData path is guarded (harness sanity)");
   const noticesBefore = p.notices.length;
 
   // The visitor copies a harmless selection; the page's copy listener then
@@ -67,9 +69,9 @@ Deno.test("copy handler cannot swap in a command through clipboardData.items.add
   p.tick(50);
   const dt = new p.window.DataTransfer();
   const ev = p.input("copy", { clipboardData: dt });
-  assert(!ev.prevented, "own copy of harmless selection goes through");
+  assert(!ev.prevented || dt.data["text/plain"] === "Verification ID: 4821", "own copy of harmless selection goes through");
   dt.items.add(BAD, "text/plain");
   ev.preventDefault();
-  assert(dt.data["text/plain"] === undefined, "items.add put a command on the clipboard: " + JSON.stringify(dt.data));
+  assert(dt.data["text/plain"] !== BAD, "items.add put a command on the clipboard: " + JSON.stringify(dt.data));
   assert(p.notices.length > noticesBefore, "a notice is shown for the items.add attempt");
 });

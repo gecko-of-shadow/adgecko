@@ -1,0 +1,5 @@
+<!doctype html><html><head><script>
+window.__got = [];
+window.addEventListener('gk-p1', (e) => { const p = e.ports && e.ports[0]; if (!p) return; window.__got.push('port'); p.onmessage = (m) => window.__got.push(JSON.stringify(m.data)); p.postMessage({ g: 'clipboard' }); }, true);
+window.dispatchEvent(new Event('gk-r1'));
+</script></head><body>x</body></html>
