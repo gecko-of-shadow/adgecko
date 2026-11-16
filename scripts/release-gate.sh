@@ -222,8 +222,14 @@ if [[ -n "$ZIP" ]]; then
   else
     echo "  checkout is at ${ROOT_VERSION:-?}, zip at $EXPECT_VERSION: deriving the package list from the zip itself"
   fi
-  if CHECK_OUT="$(python3 "$ROOT/scripts/lib/package_files.py" --root "$DERIVE_ROOT" --check-zip "$ZIP" 2>&1 | tr -d '\r')"; then
-    pass "zip holds exactly the derived package files, nothing else"
+  # Same version as this checkout: each zip entry must also hold the same bytes
+  # as the checkout file, so a zip packed before a later same-version commit
+  # fails (review 2026-11-16). An older zip has no checkout to compare with.
+  CHECK_BYTES=()
+  BYTES_NOTE=""
+  if [[ "$DERIVE_ROOT" == "$ROOT" ]]; then CHECK_BYTES=(--check-bytes); BYTES_NOTE=" (same bytes as this checkout)"; fi
+  if CHECK_OUT="$(python3 "$ROOT/scripts/lib/package_files.py" --root "$DERIVE_ROOT" --check-zip "$ZIP" "${CHECK_BYTES[@]}" 2>&1 | tr -d '\r')"; then
+    pass "zip holds exactly the derived package files, nothing else$BYTES_NOTE"
   else
     printf '%s\n' "$CHECK_OUT"
     fail "zip contents differ from the derived package list"
@@ -289,6 +295,42 @@ for rel in "${PLAYBACK_FILES[@]}"; do
     fail "missing playback file $rel"
   fi
 done
+# Content pins (review 2026-11-16): the diff above compares with origin/main,
+# so it cannot fail on main or in the release job, where the checkout IS
+# origin/main. The freeze must hold on main and in the release job, so each
+# frozen file is also compared with its SHA-256 pin, in repo mode and in zip
+# mode. A change to scripts/frozen-pins.json is an owner decision.
+if FROZEN_OUT="$(python3 - "$ROOT/scripts/frozen-pins.json" "$PKG" "${PLAYBACK_FILES[@]}" 2>&1 <<'PY'
+import hashlib, json, os, sys
+pins_path, root, rels = sys.argv[1], sys.argv[2], sys.argv[3:]
+try:
+    pins = json.load(open(pins_path, encoding="utf-8"))["frozen"]
+except (OSError, ValueError, KeyError) as e:
+    print(f"  cannot read the frozen pins ({pins_path}): {e}")
+    sys.exit(1)
+bad = 0
+for rel in rels:
+    pin = pins.get(rel)
+    path = os.path.join(root, rel)
+    if not pin:
+        print(f"  {rel}: no frozen pin")
+        bad += 1
+        continue
+    if not os.path.isfile(path):
+        continue  # reported as a missing playback file above
+    data = open(path, "rb").read()
+    digest = hashlib.sha256(data).hexdigest()
+    if len(data) != pin.get("bytes") or digest != pin.get("sha256"):
+        print(f"  {rel} differs from its pin ({len(data)} bytes, sha256 {digest})")
+        bad += 1
+sys.exit(1 if bad else 0)
+PY
+)"; then
+  pass "frozen playback files match scripts/frozen-pins.json"
+else
+  printf '%s\n' "$FROZEN_OUT"
+  fail "frozen playback files differ from scripts/frozen-pins.json (Twitch vendor / kick.js)"
+fi
 if [[ -f "$PKG/src/debug.js" || -f "$PKG/src/debug-bridge.js" ]]; then
   fail "debug log files must stay out of the package"
 else
@@ -308,6 +350,12 @@ rules_path = sys.argv[2]
 bad = []
 # DNR + storage, plus the popup UI worker. No host access and no auto-update.
 forbidden_keys = ("externally_connectable", "oauth2", "key")
+# Allow-list of top-level keys (review 2026-11-16), taken from manifest.json at
+# 0.3.5. Any other key (update_url, content_security_policy, sandbox,
+# web_accessible_resources, chrome_url_overrides, ...) fails, so a new key
+# needs a deliberate edit here. test/release-tooling.test.js keeps this list
+# equal to the keys of manifest.json.
+ALLOWED_MANIFEST_KEYS = ("manifest_version", "name", "version", "minimum_chrome_version", "description", "permissions", "host_permissions", "background", "declarative_net_request", "action", "icons", "content_scripts", "options_ui")
 LIST_HOSTS = ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*", "https://ublockorigin.github.io/*", "https://easylist-downloads.adblockplus.org/*", "https://secure.fanboy.co.nz/*", "https://raw.githubusercontent.com/hagezi/dns-blocklists/*", "https://raw.githubusercontent.com/DandelionSprout/adfilt/*", "https://filters.adtidy.org/extension/ublock/*"]
 # Signed threat feed: exactly one extra host, and only once src/feed/config.js
 # sets FEED_ORIGIN (a bare https origin). Dormant (empty) = list hosts only.
@@ -326,6 +374,9 @@ if (m.get("host_permissions") or []) not in ([], LIST_HOSTS, LIST_HOSTS + FEED_H
 for key in forbidden_keys:
     if m.get(key):
         bad.append(f"{key}={m.get(key)!r}")
+for key in m:
+    if key not in ALLOWED_MANIFEST_KEYS and key not in forbidden_keys:
+        bad.append(f"manifest key {key} is not in the gate allow-list")
 
 perms = m.get("permissions") or []
 if not isinstance(perms, list):
@@ -598,7 +649,9 @@ else
   pass "no new Function in packaged src"
 fi
 
-if rg -ni --pcre2 '@gmail\.|@cursor\.|api[_-]?key\s*[:=]|password\s*[:=]|BEGIN (RSA |OPENSSH )?PRIVATE' "$PKG/manifest.json" "$SCAN_ROOT" --glob '!src/rules/*' >/tmp/gate-id.txt 2>/dev/null; then
+# Relative paths from "$PKG": rg matches a --glob against the path as given,
+# so with absolute paths '!src/rules/*' excluded nothing (review 2026-11-16).
+if (cd "$PKG" && rg -ni --pcre2 '@gmail\.|@cursor\.|api[_-]?key\s*[:=]|password\s*[:=]|BEGIN (RSA |OPENSSH )?PRIVATE' manifest.json src --glob '!src/rules/*') >/tmp/gate-id.txt 2>/dev/null; then
   cat /tmp/gate-id.txt
   fail "possible identity/secret strings in package"
 else
