@@ -39,6 +39,32 @@ Deno.test("uBO detection: youtube.js loaded before the bundle keeps its hooks (m
   assert(ytFirst.marker && ytFirst.hookedByYoutube.includes("fetch"), "hooks decided at install: " + ytFirst.hookedByYoutube);
 });
 
+// yt-navigate-finish sweep against a small DOM (test/fixtures/youtube-ubo-sweep-run.mjs).
+async function sweep(layers) {
+  const out = await new Deno.Command(Deno.execPath(), {
+    env: { LAYERS: layers },
+    args: ["run", "-A", "--location", "https://www.youtube.com/watch?v=abcdefghijk", new URL("./fixtures/youtube-ubo-sweep-run.mjs", import.meta.url).pathname],
+    stdout: "piped", stderr: "piped",
+  }).output();
+  if (!out.success) throw new Error(new TextDecoder().decode(out.stderr));
+  return JSON.parse(new TextDecoder().decode(out.stdout).trim().split("\n").pop());
+}
+const [sweepUbo, sweepYt] = await Promise.all([sweep("ubo,yt"), sweep("yt")]);
+
+Deno.test("uBO layer: the navigation sweep does not hide #toast inline (manifest CSS owns it), so a reused toast shows", () => {
+  assert(sweepUbo.marker, "marker set by the bundle");
+  const nav = sweepUbo.toastAfterNav;
+  assert(!nav.hidden && !nav.display && !nav.pointerEvents, "stale interruptions #toast hidden inline: " + JSON.stringify(nav));
+  const reuse = sweepUbo.toastAfterReuse;
+  assert(!reuse.hidden && !reuse.display && !reuse.pointerEvents, "reused 'Saved to Watch later' #toast not visible: " + JSON.stringify(reuse));
+});
+
+Deno.test("no uBO layer: the navigation sweep still hides the interruptions #toast inline (the observer restores it)", () => {
+  assert(!sweepYt.marker, "no marker");
+  const nav = sweepYt.toastAfterNav;
+  assert(nav.hidden && nav.display === "none!important" && nav.pointerEvents === "none!important", "interruptions #toast not hidden: " + JSON.stringify(nav));
+});
+
 Deno.test("wait-reply catcher: only 104/105-byte videoplayback replies count", () => {
   assert(manifestOrder.waitReplies.join() === "105,104", "seen " + manifestOrder.waitReplies);
   assert(ytOnly.waitReplies.length === 0, "not watched without uBO");

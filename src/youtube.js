@@ -919,7 +919,12 @@ function installYoutubeAdblock(target) {
   // Toast nodes this script hid, so a reused toast can be shown again.
   const hiddenToasts = new WeakSet();
 
-  function removeInterruptionsToast(root) {
+  // restoreOnly: only undo our own earlier hides, never hide. It is the
+  // default while the uBO layer is present: youtube.js has no DOM observer then,
+  // so an inline hide would stay on a reused toast ("Saved", "Link copied")
+  // until the next navigation, and the manifest CSS (src/youtube-ads.css
+  // :has() rules) already hides the interruptions toast.
+  function removeInterruptionsToast(root, restoreOnly = uboLayerPresent()) {
     const scope = root || (typeof document !== "undefined" ? document : null);
     if (!scope || typeof scope.querySelectorAll !== "function") return;
     let candidates;
@@ -947,6 +952,7 @@ function installYoutubeAdblock(target) {
         }
         continue;
       }
+      if (restoreOnly === true) continue;
       // Keep the node. Removing it makes the popup open again on the next frame.
       hiddenToasts.add(outer);
       outer.hidden = true;
@@ -2081,6 +2087,7 @@ function startYoutubeAdblock() {
 
   // Switch "youtubeCosmetic" (security review L-16): every DOM ad sweep and
   // the interruptions-toast removal go through here, not only the observer.
+  // Under the uBO layer the toast call only restores (see removeInterruptionsToast).
   function cosmeticSweep() {
     if (typeof flagOn === "function" && !flagOn("youtubeCosmetic")) return;
     removeDomAds();

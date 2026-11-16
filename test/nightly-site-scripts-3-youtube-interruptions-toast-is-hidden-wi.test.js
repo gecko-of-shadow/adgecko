@@ -3,6 +3,9 @@
 // later "Saved to Watch later" / "Link copied" message put into the same element
 // stays invisible for the rest of the session (the CSS path uses :has() and
 // re-evaluates; the JS path does not).
+// The harness has no uBO layer, so the DOM observer exists and runs the second
+// sweep. With the uBO layer there is no observer: removeInterruptionsToast then
+// only restores (restoreOnly) and never hides; the second test checks that mode.
 import source from "../src/youtube.js" with { type: "text" };
 import { unwrapMain } from "./fixtures/main-source.mjs";
 
@@ -69,7 +72,7 @@ Deno.test("a reused #toast shows the next message after the interruptions toast 
 
   // User clicks Save to Watch later: YouTube reuses the same element.
   toast.textContent = "Saved to Watch later";
-  // Later cosmeticSweep (observer / yt-navigate-finish).
+  // Later cosmeticSweep (the DOM observer; it exists without the uBO layer).
   api.removeInterruptionsToast(popup);
 
   assert(!api.isInterruptionsToast(toast), "the reused toast is no longer the interruptions toast");
@@ -78,4 +81,24 @@ Deno.test("a reused #toast shows the next message after the interruptions toast 
     "the Saved toast must not keep inline display:none!important");
   assert(toast.style.getPropertyValue("pointer-events") !== "none",
     "the Saved toast must not keep inline pointer-events:none!important");
+});
+
+Deno.test("restoreOnly mode (uBO layer): never hides the toast, but still undoes an earlier hide", () => {
+  const toast = el("tp-yt-paper-toast", { id: "toast", text: "Experiencing interruptions?" });
+  const popup = el("ytd-popup-container", { children: [toast] });
+
+  // uBO layer: no observer will run again, so the sweep must not hide inline.
+  api.removeInterruptionsToast(popup, true);
+  assert(toast.hidden !== true, "restoreOnly must not set the hidden attribute");
+  assert(toast.style.getPropertyValue("display") !== "none", "restoreOnly must not set inline display:none");
+  assert(toast.style.getPropertyValue("pointer-events") !== "none", "restoreOnly must not set inline pointer-events:none");
+
+  // An earlier hide (for example before the uBO marker was set) is still undone.
+  api.removeInterruptionsToast(popup);
+  assert(toast.hidden === true, "precondition: the default mode hides without the uBO layer");
+  toast.textContent = "Link copied";
+  api.removeInterruptionsToast(popup, true);
+  assert(toast.hidden !== true, "restoreOnly undoes the hidden attribute on a reused toast");
+  assert(toast.style.getPropertyValue("display") !== "none", "restoreOnly undoes inline display:none");
+  assert(toast.style.getPropertyValue("pointer-events") !== "none", "restoreOnly undoes inline pointer-events:none");
 });
