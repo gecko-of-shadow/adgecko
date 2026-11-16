@@ -20,12 +20,12 @@ Last updated: 2026-11-16.
 ## Facts
 
 - Checked in the review session: `deno test` on 0.3.5 gave 776 passed, 0 failed, 9 ignored (Deno 2.9.6, Linux container). The privacy check passed on the review files.
-- Not checked: no finding was tested on Bran's PC or on live sites. All findings are UNVERIFIED until a run on Bran's PC proves them.
+- Not checked: no finding was tested on the owner's PC or on live sites. All findings are UNVERIFIED until a run on the owner's PC proves them.
 
 ## Owner decisions open
 
 - See section 3 of `docs/review-2026-11-16/PLAN.md`.
 
-## Deletion candidates (Bran must approve; nothing was deleted)
+## Deletion candidates (the owner must approve; nothing was deleted)
 
 - See section 3 of `docs/review-2026-11-16/PLAN.md`.

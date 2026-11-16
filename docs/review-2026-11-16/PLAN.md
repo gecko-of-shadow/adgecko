@@ -11,10 +11,10 @@ Target: Adgecko 0.3.6, ready to push.
   - Scratch reproductions under `docs/review-2026-11-16/repros/` for many findings. Examples: clipboard t2, t3, t4, t7 and t8; popup p1, p3 and p5; feed repro A, C, D, F and G; toast-ubo; notice-ubo; the mutation runs; the rg glob run; two zip hashes.
   - Some findings were confirmed by code reading only. Each work package below shows which kind of proof it has.
 - **Not checked by anybody:**
-  - No item was tested on Bran's PC.
+  - No item was tested on the owner's PC.
   - No item was tested on live sites: YouTube, React 18 sites, Gmail and GitHub with the generic sheet, or embedded YouTube players.
   - No item was tested in GitHub Actions.
-- All behavior claims in this plan are **UNVERIFIED** until a run on Bran's PC proves them.
+- All behavior claims in this plan are **UNVERIFIED** until a run on the owner's PC proves them.
 
 ## 1. Rules for the executing session
 
@@ -43,7 +43,7 @@ Target: Adgecko 0.3.6, ready to push.
    - The baseline result is 776 passed, 0 failed and 9 ignored. The run takes about 5 minutes.
 9. Do not stop to ask questions. When a decision is necessary, use the safer option, record it as an owner decision and continue.
 10. Write commit messages and notes in ASD-STE100. End each commit message with the attribution lines that the session gives.
-11. Keep HANDOFF.md up to date after each WP. Mark each item as one of: done, changed, discarded or owner decision. Mark it UNVERIFIED until a run on Bran's PC proves it.
+11. Keep HANDOFF.md up to date after each WP. Mark each item as one of: done, changed, discarded or owner decision. Mark it UNVERIFIED until a run on the owner's PC proves it.
 12. Do not write a token or a password in output.
 13. **Coverage check first.** `findings.json` is the source of truth. This plan was written from it without reading the code. Before WP-01, make sure that each confirmed finding (64) is in a WP. Put each missing finding in a WP, or record it as DISCARD with a reason. Write the map in HANDOFF.md.
 
@@ -113,7 +113,7 @@ The order is by severity, then by risk: high severity first, and low risk first 
   - Cases (a) to (f) leave no command on the clipboard.
   - Case (g) copies the text.
   - CHANGELOG states any copy behavior change, for example text/html.
-  - UNVERIFIED on Bran's PC.
+  - UNVERIFIED on the owner's PC.
 
 ---
 
@@ -774,7 +774,7 @@ Do these steps after all the WPs are done, changed or discarded.
 8. Run `bash scripts/release-gate.sh --zip adgecko-0.3.6.zip`. The result must be CLEAN.
 9. Run `python3 scripts/privacy-check.py`. The result must be a pass.
 10. Do not commit the zip unless the repository already tracks release zips. Check with `git ls-files '*.zip'`.
-11. Update HANDOFF.md. Give the status of each WP, the open owner decisions, the deletion candidates and the UNVERIFIED items for a run on Bran's PC.
+11. Update HANDOFF.md. Give the status of each WP, the open owner decisions, the deletion candidates and the UNVERIFIED items for a run on the owner's PC.
 12. Commit on the branch `claude/festive-dirac-a043po`. Use ASD-STE100 messages with the attribution lines.
 13. Push the branch `claude/festive-dirac-a043po` after each finished WP and at the end (the container is temporary; unpushed commits are lost). Update the draft pull request. Do not push to `main`, do not tag, and do not run the release workflow. The work is complete when the branch holds version 0.3.6 and all the checks above pass.
 14. Give the final report. Include:
