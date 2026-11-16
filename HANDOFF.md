@@ -108,7 +108,7 @@ Status values: done, changed, discarded, owner decision, open. All behavior is U
 | WP-09 | open | | |
 | WP-10 | done | see `git log --grep WP-10` | Under uBO the toast sweep only restores. The CSS hides the interruptions toast. Gap: a toast with the text only in plain textContent is not hidden under uBO (owner decision). UNVERIFIED. |
 | WP-11 | open | | |
-| WP-12 | open | | |
+| WP-12 | done | see `git log --grep WP-12` | Docs, README (new structure from main), licence and credit files, LICENSES.md writer text, settings note. New `test/docs-claims.test.js`. Option B for "Off"; embedded players documented only. Owner decisions 3, 4, 5 and 7 stay open. |
 | WP-13 | open | | |
 | WP-14 | open | | |
 | WP-15 | open | | |
