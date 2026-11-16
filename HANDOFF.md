@@ -97,11 +97,11 @@ Status values: done, changed, discarded, owner decision, open. All behavior is U
 
 | WP | Status | Commit | Notes |
 |---|---|---|---|
-| WP-01 | open | | |
-| WP-02 | open | | |
-| WP-03 | open | | |
-| WP-04 | open | | |
-| WP-05 | open | | |
+| WP-01 | done | see `git log --grep WP-01` | setData, items.add and execCommand rethrow a conversion error. Chrome repro t8 clean after the fix (headless). UNVERIFIED on the owner's PC. |
+| WP-02 | done (cut changed) | see `git log --grep WP-02` | Trusted copy on a non-safe host: native preventDefault, then native setData of the checked text (text/plain only). CHANGE for the visitor's own Ctrl+X: plan fallback (range clone and a last bubble recheck). Owner decisions: loss of text/html; a page-started cut no longer removes text; copying a selected image copies nothing. Headless Chrome repros t2, t3, t4 clean. UNVERIFIED. |
+| WP-03 | done | see `git log --grep WP-03` | No await; native then; any error blocks the write while the guard is on. Image-only write still passes. UNVERIFIED. |
+| WP-04 | done | see `git log --grep WP-04` | 11 missed forms now match; 9 near-miss benign strings do not. Timing limit 500 ms for 100 KB (old patterns already took 65-95 ms; owner decision 50 ms vs 500 ms). |
+| WP-05 | done | see `git log --grep WP-05` | (a), (b) and (c): the selection must come from a visitor gesture within 500 ms and be visible. Drag-select, Ctrl+A and textarea copies still work (headless Chrome). Limits: a page click handler within 500 ms; visible but disguised text. UNVERIFIED. |
 | WP-06 | open | | |
 | WP-07 | open | | |
 | WP-08 | open | | |
