@@ -34,7 +34,8 @@ const tick = (ms) => { clock += ms; };
 function page(host = "verify-human.example") {
   const cap = {};
   const bub = {};
-  const st = { sel: "", copyText: null, field: null };
+  // rect: the selection's bounding box (WP-05); the viewport is 1000 x 800.
+  const st = { sel: "", copyText: null, field: null, rect: { left: 10, top: 10, right: 300, bottom: 30, width: 290, height: 20 } };
   const notices = [];
   const clipboard = { text: "PREV", cutDone: false };
   class Event {
@@ -51,7 +52,13 @@ function page(host = "verify-human.example") {
     constructor() { this.data = {}; }
     setData(t, s) { t = String(t); s = String(s); setDataCalls.push([t, s]); this.data[t] = s; }
   }
-  class Selection { toString() { return st.sel; } }
+  class Range { getBoundingClientRect() { return st.rect; } }
+  class Selection {
+    toString() { return st.sel; }
+    get rangeCount() { return st.sel ? 1 : 0; }
+    getRangeAt() { return new Range(); }
+  }
+  class Element { getBoundingClientRect() { return st.rect; } }
   class Document {
     execCommand(cmd) {
       cmd = String(cmd);
@@ -69,12 +76,15 @@ function page(host = "verify-human.example") {
     return !e.defaultPrevented;
   };
   const window = {
-    getSelection: () => new Selection(), Selection, DataTransfer, Event, ClipboardEvent, Document,
+    getSelection: () => new Selection(), Selection, DataTransfer, Event, ClipboardEvent, Document, Range, Element,
     queueMicrotask: (f) => { micro.push(f); },
     addEventListener(t, f, c) { ((c ? cap : bub)[t] ||= []).push(f); },
     removeEventListener(t, f, c) { const l = (c ? cap : bub)[t] || []; const i = l.indexOf(f); if (i >= 0) l.splice(i, 1); },
     dispatchEvent(e) { return dispatch(e, false); },
   };
+  // Like Chrome: own accessors on the window object.
+  Object.defineProperty(window, "innerWidth", { get: () => 1000, configurable: true });
+  Object.defineProperty(window, "innerHeight", { get: () => 800, configurable: true });
   const fieldText = () => (st.field.type === "email" ? st.sel : st.field.value.slice(st.field.selectionStart, st.field.selectionEnd));
   const r = {
     window, notices, clipboard, setDataCalls, st,
@@ -99,9 +109,24 @@ function page(host = "verify-human.example") {
       return ev;
     },
     trusted(type, props = {}) { const ev = Object.assign(new Event(type), props); ev.isTrusted = true; dispatch(ev, true); drain(); return ev; },
+    written: [],
+    // Script sets the selection: Chrome then fires a trusted selectionchange.
+    pageSelect(s, rect) { st.sel = s; st.copyText = null; if (rect) st.rect = rect; r.trusted("selectionchange"); },
+    // The visitor drags over visible text: pointer events, then selectionchange.
+    userDrag(s) {
+      r.trusted("pointerdown", { buttons: 1 });
+      tick(120);
+      r.trusted("pointermove", { buttons: 1 });
+      st.sel = s; st.copyText = null;
+      r.trusted("selectionchange");
+      tick(80);
+      r.trusted("pointerup", { buttons: 0 });
+    },
   };
   r.document = new Document();
-  loadClip().install({ window, document: r.document, navigator: {}, location: { hostname: host }, now: () => clock, notify: (id) => notices.push(id), flagOn: () => true });
+  const navClipboard = { writeText(x) { r.written.push(x); return Promise.resolve(); } };
+  loadClip().install({ window, document: r.document, navigator: { clipboard: navClipboard }, location: { hostname: host }, now: () => clock, notify: (id) => notices.push(id), flagOn: () => true });
+  r.navClipboard = navClipboard;
   return r;
 }
 const hasCmd = (s) => typeof s === "string" && s.includes("powershell");
@@ -291,4 +316,77 @@ Deno.test("WP-03 controls: image-only and ordinary text writes pass; the switch 
     const r = await outcome(q.clipboard.write([new q.ClipboardItem({ "text/plain": new q.Blob([CMD]) }, { throwOnGetType: true })]));
     assert(r === "resolved" && q.written.length === 1, `guard not active (${host}, ${flag}): ` + r);
   }
+});
+
+// ---- WP-05: a page-made selection is not the visitor's copy ----
+
+const OFFSCREEN = { left: -9999, top: 100, right: -9600, bottom: 120, width: 399, height: 20 };
+const VISIBLE = { left: 10, top: 10, right: 300, bottom: 30, width: 290, height: 20 };
+const rejectedWrite = (p, text) => p.navClipboard.writeText(text).then(() => false, () => true);
+
+Deno.test("WP-05: the page selects an off-screen command, the visitor presses Ctrl+C: no command, and no 1.5 s page-write window", async () => {
+  const p = page();
+  p.pageSelect(CMD, OFFSCREEN); // at load, no visitor input
+  tick(3000);
+  p.trusted("keydown", { key: "c", ctrlKey: true });
+  p.browserCopy("copy");
+  assert(!hasCmd(p.clipboard.text), "command copied: " + p.clipboard.text);
+  tick(200);
+  assert(await rejectedWrite(p, CMD), "page writeText of the command inside the key window was allowed");
+  assert(p.notices.length > 0, "no notice");
+});
+
+Deno.test("WP-05: a visible command that the page selected (no visitor input) does not count as the visitor's copy", async () => {
+  const p = page();
+  p.pageSelect(CMD, VISIBLE);
+  tick(3000);
+  p.trusted("keydown", { key: "c", ctrlKey: true });
+  p.browserCopy("copy");
+  assert(!hasCmd(p.clipboard.text), "command copied: " + p.clipboard.text);
+  assert(await rejectedWrite(p, CMD), "page writeText allowed");
+});
+
+Deno.test("WP-05: a page click handler that selects an off-screen command is caught by the visibility check", () => {
+  const p = page();
+  p.trusted("pointerdown", { buttons: 1 });
+  p.trusted("pointerup", { buttons: 0 });
+  p.pageSelect(CMD, OFFSCREEN); // inside the click handler: within 500 ms of trusted input
+  tick(1000);
+  p.trusted("keydown", { key: "c", ctrlKey: true });
+  p.browserCopy("copy");
+  assert(!hasCmd(p.clipboard.text), "command copied: " + p.clipboard.text);
+});
+
+Deno.test("WP-05 controls: the visitor drag-selects or Ctrl+A-selects a visible command and presses Ctrl+C: it is copied (README)", async () => {
+  const p = page();
+  p.st.rect = VISIBLE;
+  p.userDrag("run: " + CMD);
+  tick(2000); // the visitor reads, then copies
+  p.trusted("keydown", { key: "c", ctrlKey: true });
+  p.browserCopy("copy");
+  assert(p.clipboard.text === "run: " + CMD, "drag-select copy broke: " + p.clipboard.text);
+  // The page's copy button right after the visitor's own Ctrl+C still works (1.5 s window).
+  tick(300);
+  assert(!(await rejectedWrite(p, CMD)), "page write of the visitor's selected text refused");
+  const k = page();
+  k.st.rect = VISIBLE;
+  k.trusted("keydown", { key: "a", ctrlKey: true });
+  k.st.sel = CMD;
+  k.trusted("selectionchange");
+  tick(1500);
+  k.trusted("keydown", { key: "c", ctrlKey: true });
+  k.browserCopy("copy");
+  assert(k.clipboard.text === CMD, "Ctrl+A, Ctrl+C copy broke: " + k.clipboard.text);
+});
+
+Deno.test("WP-05: the visitor's selection, later changed by a page timer to a command, does not count", () => {
+  const p = page();
+  p.st.rect = VISIBLE;
+  p.userDrag("Hello world");
+  tick(2000);
+  p.pageSelect(CMD, VISIBLE); // timer, no visitor input in the last 500 ms
+  tick(100);
+  p.trusted("keydown", { key: "c", ctrlKey: true });
+  p.browserCopy("copy");
+  assert(!hasCmd(p.clipboard.text), "command copied: " + p.clipboard.text);
 });

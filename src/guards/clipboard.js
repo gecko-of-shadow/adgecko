@@ -17,7 +17,9 @@
 // "Copied it themselves" (security review M-2 and its follow-up review): the
 // text is part of the selection the visitor had when they pressed Ctrl/Cmd+C
 // (or opened the context menu; that counts only for the browser's own copy
-// event, never for a page-initiated write). A button labelled "Copy" does not count: a
+// event, never for a page-initiated write). The visitor must also have made
+// that selection with a selection gesture, and it must be visible (review
+// 2026-11-16 WP-05). A button labelled "Copy" does not count: a
 // page can label, hide or fake anything it shows (opacity:0, off-screen text).
 // The page runs in this same JavaScript world, so everything on the decision
 // path is captured when this file runs (document_start, before any page
@@ -286,6 +288,14 @@ function installClipboardGuard(target) {
     const getAttrFn = protoOf(win.Element) && typeof win.Element.prototype.getAttribute === "function" ? win.Element.prototype.getAttribute : null;
     const taValueGet = getter(protoOf(win.HTMLTextAreaElement), "value");
     const inValueGet = getter(protoOf(win.HTMLInputElement), "value");
+    // Who made the selection, and can the visitor see it (WP-05).
+    const buttonsGet = getter(protoOf(win.MouseEvent), "buttons");
+    const rangeRectFn = protoOf(win.Range) && typeof win.Range.prototype.getBoundingClientRect === "function" ? win.Range.prototype.getBoundingClientRect : null;
+    const elementRectFn = protoOf(win.Element) && typeof win.Element.prototype.getBoundingClientRect === "function" ? win.Element.prototype.getBoundingClientRect : null;
+    const rectProto = protoOf(win.DOMRectReadOnly);
+    const rectGet = { left: getter(rectProto, "left"), top: getter(rectProto, "top"), right: getter(rectProto, "right"), bottom: getter(rectProto, "bottom"), width: getter(rectProto, "width"), height: getter(rectProto, "height") };
+    const innerWidthGet = getter(win, "innerWidth");
+    const innerHeightGet = getter(win, "innerHeight");
     const read = (g, obj, name) => (g ? apply(g, obj, []) : obj[name]);
     const blocked = () => new DOMExceptionCtor("Write blocked by the browser's protection", "NotAllowedError");
 
@@ -343,6 +353,44 @@ function installClipboardGuard(target) {
         return true;
       }
     }
+    // Can the visitor see the selection (WP-05)? A box with a size that is at
+    // least partly inside the viewport: the focused field's box when it has
+    // a selection, else the box of one of the selected ranges. true when the
+    // browser gives no way to tell (old engines, tests); an error means "no".
+    // Known limit: text that is visible but disguised (opacity, colour, 1px
+    // font) passes.
+    function selectionVisible() {
+      try {
+        const vw = innerWidthGet ? apply(innerWidthGet, win, []) : undefined;
+        const vh = innerHeightGet ? apply(innerHeightGet, win, []) : undefined;
+        if (typeof vw !== "number" || typeof vh !== "number") return true;
+        const shown = (r) => {
+          const left = read(rectGet.left, r, "left");
+          const top = read(rectGet.top, r, "top");
+          const right = read(rectGet.right, r, "right");
+          const bottom = read(rectGet.bottom, r, "bottom");
+          const width = read(rectGet.width, r, "width");
+          const height = read(rectGet.height, r, "height");
+          return width > 0 && height > 0 && right > 0 && bottom > 0 && left < vw && top < vh;
+        };
+        if (fieldSelection()) {
+          if (!elementRectFn) return true;
+          const active = nativeActive ? apply(nativeActive, doc, []) : doc.activeElement;
+          return !!active && shown(apply(elementRectFn, active, []));
+        }
+        if (!nativeGetSelection || !rangeCountGet || !getRangeAtFn || !rangeRectFn) return true;
+        const sel = apply(nativeGetSelection, win, []);
+        if (!sel) return true;
+        const n = apply(rangeCountGet, sel, []);
+        if (!n) return true; // nothing selected: nothing to protect
+        for (let i = 0; i < n; i++) {
+          if (shown(apply(rangeRectFn, apply(getRangeAtFn, sel, [i]), []))) return true;
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    }
     // The selected ranges as Chrome's text/plain copy has them: text, plus the
     // alt text of images and the values of text fields inside the ranges
     // (Selection.toString() leaves those out). Read from a clone through
@@ -398,7 +446,9 @@ function installClipboardGuard(target) {
         const hit = matchDangerous(text);
         if (!hit) return true;
         if (onSafeHost(hostOf(env.location))) return true;
-        const last = lastCopy && (lastCopy.kind !== "menu" || nativeCopy === true) ? lastCopy : null;
+        // A gesture on a selection that the visitor did not make, or cannot
+        // see, never counts (WP-05).
+        const last = lastCopy && (lastCopy.kind !== "menu" || nativeCopy === true) && lastCopy.user !== false ? lastCopy : null;
         if (deliberateCopy(last, now(), text)) return true;
         if (env.notify) env.notify(hit);
         return false;
@@ -413,6 +463,63 @@ function installClipboardGuard(target) {
     const listenOn = typeof win.addEventListener === "function" ? win : doc;
     const addListener = listenOn.addEventListener;
     const removeListener = listenOn.removeEventListener;
+    // Did the visitor make the current selection (WP-05, review 2026-11-16)?
+    // A page can select a hidden command and ask the visitor to press Ctrl+C.
+    // Every selection change fires a trusted "selectionchange", also a change
+    // made by page script. It counts as the visitor's when a selection
+    // gesture came in the last 500 ms: a press, move with a button down, or
+    // release of a pointer button, a double click, Shift with a navigation
+    // key, or Ctrl/Cmd+A. null = no selectionchange seen yet (old engines,
+    // tests): not known, the old rule is used. Known limit: a page listener
+    // on such a gesture (a click handler) can still set the selection inside
+    // the 500 ms; the visibility check then still applies.
+    let userSel = null;
+    let lastSelInput = -1e15;
+    const SEL_INPUT_MS = 500;
+    const visitorSelection = () => userSel !== false && selectionVisible();
+    try {
+      const pointerInput = (e) => {
+        try {
+          if (e && e.isTrusted === true) lastSelInput = now();
+        } catch {
+          // not counted
+        }
+      };
+      for (const t of ["pointerdown", "pointerup", "mousedown", "mouseup", "dblclick"]) listenOn.addEventListener(t, pointerInput, true);
+      const moveInput = (e) => {
+        try {
+          if (e && e.isTrusted === true && read(buttonsGet, e, "buttons")) lastSelInput = now();
+        } catch {
+          // not counted
+        }
+      };
+      listenOn.addEventListener("pointermove", moveInput, true);
+      listenOn.addEventListener("mousemove", moveInput, true);
+      listenOn.addEventListener("keydown", (e) => {
+        try {
+          if (!e || e.isTrusted !== true) return;
+          const key = lower(StringFn(read(keyGet, e, "key") || ""));
+          const mod = !!(read(ctrlGet, e, "ctrlKey") || read(metaGet, e, "metaKey"));
+          const nav = key === "arrowleft" || key === "arrowright" || key === "arrowup" || key === "arrowdown" || key === "home" || key === "end" || key === "pageup" || key === "pagedown";
+          const code = StringFn(read(codeGet, e, "code") || "");
+          if ((nav && read(shiftGet, e, "shiftKey")) || (mod && (key === "a" || code === "KeyA"))) lastSelInput = now();
+        } catch {
+          // not counted
+        }
+      }, true);
+      listenOn.addEventListener("selectionchange", (e) => {
+        try {
+          if (e && e.isTrusted === true) {
+            const t = now();
+            userSel = t >= lastSelInput && t - lastSelInput <= SEL_INPUT_MS;
+          }
+        } catch {
+          userSel = false;
+        }
+      }, true);
+    } catch {
+      // no tracking: the old rule
+    }
     try {
       listenOn.addEventListener("keydown", (e) => {
         try {
@@ -426,14 +533,14 @@ function installClipboardGuard(target) {
           const letter = latin ? key : (key.length === 1 ? (code === "KeyC" ? "c" : code === "KeyX" ? "x" : "") : "");
           const mod = !!(read(ctrlGet, e, "ctrlKey") || read(metaGet, e, "metaKey"));
           const copyKey = (mod && (letter === "c" || letter === "x")) || (mod && key === "insert") || (!!read(shiftGet, e, "shiftKey") && key === "delete");
-          lastCopy = copyKey ? { kind: "key", at: now(), sel: selectionText() + "\n" + fieldSelection() } : null;
+          lastCopy = copyKey ? { kind: "key", at: now(), sel: selectionText() + "\n" + fieldSelection(), user: visitorSelection() } : null;
         } catch {
           lastCopy = null;
         }
       }, true);
       listenOn.addEventListener("contextmenu", (e) => {
         try {
-          lastCopy = e && e.isTrusted === true ? { kind: "menu", at: now(), sel: selectionText() + "\n" + fieldSelection() } : lastCopy;
+          lastCopy = e && e.isTrusted === true ? { kind: "menu", at: now(), sel: selectionText() + "\n" + fieldSelection(), user: visitorSelection() } : lastCopy;
         } catch {
           lastCopy = null;
         }
