@@ -226,6 +226,24 @@ Deno.test("worker: siteInfo answers the popup; the settings page may message the
   assert(cs === undefined, "content script refused");
 });
 
+// Review 2026-11-16 WP-09 item 3: the popup tests use hand-made siteInfo
+// fakes. This test asks the real worker about a subdomain whose parent has
+// the override, so a wrong worker overrideHost is caught.
+Deno.test("worker: siteInfo on a subdomain names the parent override (overrideHost, siteEnabled, feature fields)", async () => {
+  const w = await worker({ settings: { v: 1, enabled: true, features: {} }, siteOverrides: { "example.com": { enabled: false, features: { cosmetic: false } } } });
+  const info = await w.send({ source: "adgecko-general", type: "siteInfo", origin: "https://shop.example.com" });
+  assert(info.ok && info.host === "shop.example.com", JSON.stringify(info));
+  assert(info.overrideHost === "example.com", "overrideHost: " + info.overrideHost);
+  assert(info.siteEnabled === false, "siteEnabled: " + info.siteEnabled);
+  assert(info.features.length > 0 && info.features.every((f) => "global" in f && "on" in f && "site" in f), "feature fields: " + JSON.stringify(info.features[0]));
+  const cos = info.features.find((f) => f.id === "cosmetic");
+  assert(cos && cos.site === false && cos.global === true, "parent feature entry: " + JSON.stringify(cos));
+  // A host with no entry on itself or a parent: overrideHost is the host.
+  const other = await w.send({ source: "adgecko-general", type: "siteInfo", origin: "https://shop.example.net" });
+  assert(other.overrideHost === "shop.example.net" && other.siteEnabled === true, JSON.stringify({ o: other.overrideHost, e: other.siteEnabled }));
+  assert(other.features.find((f) => f.id === "cosmetic").site === null, "no per-site value without an entry");
+});
+
 Deno.test("safety net: no switch state removes a stream site's allows or blocks its hosts on its own pages", async () => {
   const STREAM = ["www.twitch.tv", "usher.ttvnw.net", "video-edge-x.abc.hls.ttvnw.net", "static-cdn.jtvnw.net", "www.youtube.com", "rr1---sn-x.googlevideo.com", "i.ytimg.com", "yt3.ggpht.com", "youtubei.googleapis.com", "kick.com", "files.kick.com", "cdn.kickusercontent.com", "x.live-video.net"];
   const pages = { youtube: ["www.youtube.com"], embed: ["news.example", "www.youtube-nocookie.com"], kick: ["kick.com"], twitch: ["www.twitch.tv"] };
