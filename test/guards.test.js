@@ -74,6 +74,15 @@ Deno.test("clipboard guard: docs hosts are safe; only the visitor's own copy of 
   assert(g.squash("  a \n\t b  ") === "a b", "squash");
 });
 
+// Does a trusted copy/cut event copy `sel`? Since 0.3.6 (review 2026-11-16
+// WP-02) the guard cancels the browser's own copy and writes the checked text
+// itself, so "goes through" means: not cancelled, or the event's data holds it.
+function copiedSelection(p, type, sel) {
+  const dt = new p.window.DataTransfer();
+  const ev = p.input(type, { clipboardData: dt });
+  return !ev.prevented || dt.data["text/plain"] === sel;
+}
+
 function fakePage(host, opts = {}) {
   const listeners = {};
   const written = [];
@@ -137,7 +146,8 @@ Deno.test("clipboard guard blocks a page writing a dangerous command (writeText,
   const dt = new p.window.DataTransfer();
   p.input("copy", { clipboardData: dt });
   dt.setData("text/plain", DANGEROUS[1]);
-  assert(dt.data["text/plain"] === undefined, "copy handler cannot swap in a command");
+  // Since 0.3.6 the guard itself writes the checked selection first (WP-02).
+  assert(dt.data["text/plain"] === "just some text", "copy handler cannot swap in a command");
   dt.setData("text/plain", "fine");
   assert(dt.data["text/plain"] === "fine", "normal setData works");
   // Drag-and-drop (or any other) DataTransfer: a command is checked too since
@@ -177,7 +187,7 @@ Deno.test("clipboard guard: the visitor's own copy works; copy buttons, swapped 
   p.input("keydown", { key: "c", ctrlKey: true });
   await p.clipboard.writeText(cmd);
   assert(p.written.length === 1, "copy shortcut on the selection");
-  assert(!p.input("copy", { clipboardData: new p.window.DataTransfer() }).prevented, "the browser's own copy of the selection goes through");
+  assert(copiedSelection(p, "copy", "install with: " + cmd), "the browser's own copy of the selection goes through");
   p.select("an ordinary paragraph");
   p.input("keydown", { key: "c", ctrlKey: true });
   let rejected = false;
@@ -213,7 +223,7 @@ Deno.test("clipboard guard: the visitor's own copy works; copy buttons, swapped 
   p.select(cmd);
   p.input("contextmenu", {});
   p.tick(5000);
-  assert(!p.input("copy", { clipboardData: new p.window.DataTransfer() }).prevented, "menu copy of the selection");
+  assert(copiedSelection(p, "copy", cmd), "menu copy of the selection");
   // A "Copy" button (even next to the visible command) no longer authorises a command.
   const q = fakePage("blog.example");
   q.input("click", { target: { getAttribute: () => "Copy code", className: "copy", id: "", textContent: "Copy", innerText: "Copy " + cmd, parentElement: null } });

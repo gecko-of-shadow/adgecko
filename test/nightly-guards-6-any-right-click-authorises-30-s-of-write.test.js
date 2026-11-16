@@ -41,7 +41,11 @@ Deno.test("control: the browser's own context-menu Copy of the selection still g
   p.select(CMD);
   p.input("contextmenu", {});
   p.tick(5000);
-  assert(!p.input("copy", { clipboardData: new p.window.DataTransfer() }).prevented, "menu copy of the selection");
+  // Since 0.3.6 (review 2026-11-16 WP-02) the guard cancels the browser's own
+  // copy and writes the checked selection itself.
+  const dt = new p.window.DataTransfer();
+  const ev = p.input("copy", { clipboardData: dt });
+  assert(!ev.prevented || dt.data["text/plain"] === CMD, "menu copy of the selection");
 });
 
 Deno.test("a right-click on a page-selected hidden command does not authorise writeText of that command", async () => {

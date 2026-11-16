@@ -167,7 +167,7 @@ Deno.test("8: an untrusted pointerdown does not end the gesture (menu Copy still
   p.window.dispatchEvent(new p.window.Event("pointerdown")); // synthetic, from the page
   tick(4000);
   const ev = p.browserCopy();
-  assert(!ev.defaultPrevented && p.clipboard.text === CMD, "menu Copy of the visitor's selection broke");
+  assert(p.clipboard.text === CMD, "menu Copy of the visitor's selection broke");
 });
 
 // ---- 9: nested synthetic copy event ----
@@ -258,7 +258,7 @@ Deno.test("control: context-menu Copy of the visitor's selection still works", (
   p.trusted("contextmenu");
   tick(1500);
   const ev = p.browserCopy();
-  assert(!ev.defaultPrevented && p.clipboard.text === CMD, "menu Copy broke");
+  assert(p.clipboard.text === CMD, "menu Copy broke");
 });
 
 Deno.test("control: copy buttons (textarea + execCommand, and writeText) with benign text work", async () => {
@@ -378,5 +378,5 @@ Deno.test("P3 control: without queueMicrotask (old engines) the browser's menu C
   p.trusted("contextmenu");
   tick(1000);
   const ev = p.browserCopy();
-  assert(!ev.defaultPrevented && p.clipboard.text === CMD, "menu Copy broke without queueMicrotask");
+  assert(p.clipboard.text === CMD, "menu Copy broke without queueMicrotask");
 });

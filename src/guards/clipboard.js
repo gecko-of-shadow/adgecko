@@ -252,6 +252,24 @@ function installClipboardGuard(target) {
       const g = { value: getter(p, "value"), start: getter(p, "selectionStart"), end: getter(p, "selectionEnd") };
       if (g.value && g.start && g.end) fieldGetters.push(g);
     }
+    // The native setData, captured before the wrapper below replaces it: the
+    // guard writes the checked text of a copy with it (review 2026-11-16).
+    const setDataOwner = protoOf(win.DataTransfer) && ownerOf(win.DataTransfer.prototype, "setData");
+    const nativeSetData = setDataOwner && typeof setDataOwner.setData === "function" ? setDataOwner.setData : null;
+    const inputTypeGet = getter(protoOf(win.HTMLInputElement), "type");
+    // For the text a cut really copies: alt text and field values in the range.
+    const selProto = protoOf(win.Selection);
+    const rangeCountGet = getter(selProto, "rangeCount");
+    const getRangeAtFn = selProto && typeof selProto.getRangeAt === "function" ? selProto.getRangeAt : null;
+    const cloneContentsFn = protoOf(win.Range) && typeof win.Range.prototype.cloneContents === "function" ? win.Range.prototype.cloneContents : null;
+    const firstChildGet = getter(protoOf(win.Node), "firstChild");
+    const nextSiblingGet = getter(protoOf(win.Node), "nextSibling");
+    const nodeTypeGet = getter(protoOf(win.Node), "nodeType");
+    const charDataGet = getter(protoOf(win.CharacterData), "data");
+    const localNameGet = getter(protoOf(win.Element), "localName");
+    const getAttrFn = protoOf(win.Element) && typeof win.Element.prototype.getAttribute === "function" ? win.Element.prototype.getAttribute : null;
+    const taValueGet = getter(protoOf(win.HTMLTextAreaElement), "value");
+    const inValueGet = getter(protoOf(win.HTMLInputElement), "value");
     const read = (g, obj, name) => (g ? apply(g, obj, []) : obj[name]);
     const blocked = () => new DOMExceptionCtor("Write blocked by the browser's protection", "NotAllowedError");
 
@@ -292,6 +310,67 @@ function installClipboardGuard(target) {
         return "";
       }
     }
+    // Is the focused element a password field? Any error means "yes" (the
+    // guard then writes nothing). Chrome fires no copy event there.
+    function secretField() {
+      try {
+        const active = nativeActive ? apply(nativeActive, doc, []) : doc.activeElement;
+        if (!active) return false;
+        let type;
+        try {
+          type = inputTypeGet ? apply(inputTypeGet, active, []) : active.type;
+        } catch {
+          return false; // not an input element
+        }
+        return lower(StringFn(type || "")) === "password";
+      } catch {
+        return true;
+      }
+    }
+    // The selected ranges as Chrome's text/plain copy has them: text, plus the
+    // alt text of images and the values of text fields inside the ranges
+    // (Selection.toString() leaves those out). Read from a clone through
+    // getters captured at load. "" when not available (the check then uses
+    // the selection text only). Bounded, so a huge selection stays cheap.
+    function rangesText() {
+      try {
+        if (!nativeGetSelection || !rangeCountGet || !getRangeAtFn || !cloneContentsFn || !firstChildGet || !nextSiblingGet || !nodeTypeGet || !charDataGet || !localNameGet || !getAttrFn) return "";
+        const sel = apply(nativeGetSelection, win, []);
+        if (!sel) return "";
+        const n = apply(rangeCountGet, sel, []);
+        let out = "";
+        let budget = 20000; // nodes
+        for (let i = 0; i < n && budget > 0; i++) {
+          // A plain index stack (no page-replaceable Array methods).
+          const stack = [apply(cloneContentsFn, apply(getRangeAtFn, sel, [i]), [])];
+          let top = 1;
+          while (top > 0 && budget-- > 0) {
+            const node = stack[--top];
+            const t = apply(nodeTypeGet, node, []);
+            if (t === 3) {
+              out += apply(charDataGet, node, []);
+            } else if (t === 1) {
+              const name = apply(localNameGet, node, []);
+              if (name === "img" || name === "area") out += StringFn(apply(getAttrFn, node, ["alt"]) || "");
+              else if (name === "textarea" && taValueGet) out += "\n" + apply(taValueGet, node, []) + "\n";
+              else if (name === "input" && inValueGet) {
+                const it = lower(StringFn(apply(getAttrFn, node, ["type"]) || ""));
+                if (it === "image") out += StringFn(apply(getAttrFn, node, ["alt"]) || "");
+                else if (it !== "password" && it !== "hidden") out += "\n" + apply(inValueGet, node, []) + "\n";
+              }
+            }
+            // Children in document order: push the last child first.
+            const kids = [];
+            let nk = 0;
+            for (let c = apply(firstChildGet, node, []); c && nk < budget; c = apply(nextSiblingGet, c, [])) kids[nk++] = c;
+            for (let k = nk - 1; k >= 0; k--) stack[top++] = kids[k];
+          }
+        }
+        return out;
+      } catch {
+        return "";
+      }
+    }
 
     // true = let it through. nativeCopy: the check is for the browser's own
     // copy/cut event. A context-menu gesture (right-click) authorises only that
@@ -316,6 +395,8 @@ function installClipboardGuard(target) {
     // Copy gestures, recorded by listeners on window (capture) added before any
     // page script: they run first, so the selection is the visitor's own.
     const listenOn = typeof win.addEventListener === "function" ? win : doc;
+    const addListener = listenOn.addEventListener;
+    const removeListener = listenOn.removeEventListener;
     try {
       listenOn.addEventListener("keydown", (e) => {
         try {
@@ -368,7 +449,37 @@ function installClipboardGuard(target) {
           // no microtask: onCopy treats the event as page-initiated
         }
       };
-      const onCopy = (e) => {
+      const cancel = (e) => {
+        if (preventDefaultFn) apply(preventDefaultFn, e, []);
+        else e.preventDefault();
+      };
+      // The visitor's own cut (Ctrl+X) keeps the browser's cut, so the text
+      // is still removed. A page listener that runs after onCopy can change
+      // the selection, so it is checked again (with alt text and field
+      // values) by a listener added now: it runs last in the bubble phase
+      // on window. Known limit (UNVERIFIED in practice): a page that stops
+      // the event's propagation, or adds its own bubble listener on window
+      // during the dispatch, is not seen by that second check.
+      const recheckCut = (e, copyNative) => {
+        const again = (ev) => {
+          try {
+            apply(removeListener, listenOn, ["cut", again, false]);
+          } catch {
+            // stays; it only acts on its own event
+          }
+          if (ev !== e) return;
+          try {
+            const s = selectionText();
+            const f = fieldSelection();
+            const x = rangesText();
+            if (!allowed(s, copyNative) || (f && f !== s && !allowed(f, copyNative)) || (x && !allowed(x, copyNative))) cancel(ev);
+          } catch {
+            // fail open
+          }
+        };
+        apply(addListener, listenOn, ["cut", again, false]);
+      };
+      const onCopyFor = (isCut) => (e) => {
         try {
           // A synthetic event writes nothing to the clipboard: ignore it. In
           // Chrome isTrusted is an unforgeable own property of each event.
@@ -388,9 +499,32 @@ function installClipboardGuard(target) {
           const sel = selectionText();
           const field = fieldSelection();
           if (!allowed(sel, copyNative) || (field && field !== sel && !allowed(field, copyNative))) {
-            if (preventDefaultFn) apply(preventDefaultFn, e, []);
-            else e.preventDefault();
+            cancel(e);
+            return;
           }
+          if (!flagOn() || onSafeHost(hostOf(env.location))) return;
+          if (isCut && copyNative) {
+            const x = rangesText();
+            if (x && !allowed(x, copyNative)) cancel(e);
+            else recheckCut(e, copyNative);
+            return;
+          }
+          // The checked text is the copied text (review 2026-11-16): a page
+          // listener that runs later can change the selection or a field's
+          // selection range, and Selection.toString() leaves out alt text
+          // and field values that the browser's own copy puts in. So the
+          // browser does not serialise the selection: the guard cancels the
+          // event and writes the text it checked (the focused field's slice,
+          // else the selection) as text/plain with the native setData. No
+          // text/html. A page listener that runs later can still write its
+          // own data; that goes through the setData / items.add check. A
+          // page-started cut (execCommand) is copied the same way, so it
+          // does not remove the text. An empty text writes nothing (the
+          // clipboard stays as it was, as with the browser's own empty copy).
+          if (!isObj(data) || !nativeSetData) return;
+          cancel(e);
+          const text = field || sel;
+          if (text && !secretField()) apply(nativeSetData, data, ["text/plain", text]);
         } catch {
           // fail open
         }
@@ -398,9 +532,9 @@ function installClipboardGuard(target) {
       // markCopy first, onCopy right after it (same target and phase, added in
       // this order before any page script).
       listenOn.addEventListener("copy", markCopy, true);
-      listenOn.addEventListener("copy", onCopy, true);
+      listenOn.addEventListener("copy", onCopyFor(false), true);
       listenOn.addEventListener("cut", markCopy, true);
-      listenOn.addEventListener("cut", onCopy, true);
+      listenOn.addEventListener("cut", onCopyFor(true), true);
     } catch {
       // without gesture tracking every dangerous write outside safe hosts is held
     }
