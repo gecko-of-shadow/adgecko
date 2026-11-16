@@ -863,6 +863,10 @@ function installGeneralAdblockUpdate(target) {
       const stale = staleParserLists({ lists });
       for (const k of Object.keys(lists)) if (!present.has(k) || stale.includes(k)) delete lists[k];
       let changed = !state.dynamicActive || retired.length > 0 || stale.length > 0;
+      // A swap installed list rules (ruleCount), but none is installed now
+      // (review 2026-11-16 WP-06): rebuild the set, else 304 and not-due runs
+      // never repair it.
+      if (!changed && state.ruleCount > 0 && deps.enabled() && !(await dynamicLooksActive(deps, state))) changed = true;
       const errors = {};
       const mirrorNotes = {};
       const CP = deps.cosmeticParse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
@@ -1106,7 +1110,9 @@ function installGeneralAdblockUpdate(target) {
     if (!state || !state.dynamicActive) return false;
     try {
       const existing = (await deps.getDynamicRules()) || [];
-      return existing.some((r) => r.id >= LIST_RULE_ID_BASE && r.id < KEPT_RULE_ID_BASE);
+      // List rules only: the threat ids (600000-609999) are inside this range,
+      // and the lists switch does not remove them (review 2026-11-16 WP-06).
+      return existing.some((r) => isOurRule(r.id) && r.id < KEPT_RULE_ID_BASE);
     } catch {
       return false;
     }
