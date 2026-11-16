@@ -80,7 +80,7 @@ parts.forEach((p, i) => {
   if (roots > MAX_ROOTS) why.push(`${path.basename(files[i])}: ${roots} whole-page hide rules (limit ${MAX_ROOTS})`);
   if (why.length && sitesOnly(files[i])) {
     console.error("hide rules dropped (network rules unaffected): " + why.join("; "));
-    parts[i] = { generic: [], sites: {}, exceptions: {}, genericExceptions: [], exclusions: {} };
+    parts[i] = { generic: [], sites: {}, exceptions: {}, genericExceptions: [], exclusions: {}, noHide: {} };
   } else over.push(...why);
 });
 if (over.length) {
@@ -89,7 +89,7 @@ if (over.length) {
 }
 for (const p of parts) delete p.stats;
 const merged = P.mergeCosmetic(parts);
-for (const bucket of [merged.sites, merged.exceptions, merged.exclusions]) {
+for (const bucket of [merged.sites, merged.exceptions, merged.exclusions, merged.noHide]) {
   for (const host of Object.keys(bucket || {})) if (STREAM_SITE_RE.test(host)) delete bucket[host];
 }
 const sheet = fs.readFileSync(path.join(root, "src/cosmetic-hide.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
@@ -103,4 +103,4 @@ for (const block of sheet.split(/\{[^}]*\}/)) {
 }
 const out = { format: 1, packed_at_utc: packedAt || new Date().toISOString(), extras, ...merged };
 fs.writeFileSync(outPath, JSON.stringify(out));
-console.log(JSON.stringify({ lists: files.map((f) => path.basename(f)), generic: merged.generic.length, sites: Object.keys(merged.sites).length, exceptions: Object.keys(merged.exceptions).length, extras: extras.length, bytes: JSON.stringify(out).length }));
+console.log(JSON.stringify({ lists: files.map((f) => path.basename(f)), generic: merged.generic.length, sites: Object.keys(merged.sites).length, exceptions: Object.keys(merged.exceptions).length, noHide: Object.keys(merged.noHide || {}).length, extras: extras.length, bytes: JSON.stringify(out).length }));

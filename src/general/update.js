@@ -130,7 +130,10 @@ function installGeneralAdblockUpdate(target) {
   // converted (general/filter-options.js table version 2) instead of dropped,
   // a plain $all also blocks the page itself, and AdGuard Base carries hide
   // rules, so every stored copy is refetched.
-  const PARSER_VERSION = 4;
+  // 5 (0.3.6): the hide-rule part also keeps the $generichide / $specifichide
+  // / $elemhide page exceptions (cosmetic-parse.js parseNoHide), so every
+  // stored copy is parsed again and the hide sheet gets them.
+  const PARSER_VERSION = 5;
 
   // Shared with the packer: general/filter-options.js (loaded before this file).
   function filterOptions() {
@@ -730,7 +733,7 @@ function installGeneralAdblockUpdate(target) {
   // checkCosmeticChange stores this, so its network rules still apply and the
   // merged hide list (which waits for every cosmetic source) is still written.
   function emptyCosmetic() {
-    return { generic: [], sites: {}, exceptions: {}, genericExceptions: [], exclusions: {} };
+    return { generic: [], sites: {}, exceptions: {}, genericExceptions: [], exclusions: {}, noHide: {} };
   }
 
   // Lists whose stored payload came from the old (widening) parser.

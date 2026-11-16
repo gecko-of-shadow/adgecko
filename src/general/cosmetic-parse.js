@@ -224,13 +224,78 @@
 
   const LINE_RE = /^([^#]*)(#@#|##|#\?#|#@\?#)(.+)$/;
 
+  // Page exceptions for element hiding (network exception syntax):
+  //   @@||host^$generichide   (also $ghide)   no generic hide rules
+  //   @@||host^$specifichide  (also $shide)   no site hide rules
+  //   @@||host^$elemhide      (also $ehide)   neither
+  // Kept forms: "||host^", "||host/", "://host/", "|http://host/", the
+  // "://host:" port form, the "://192.168." IPv4 prefix form, and
+  // "@@$generichide,domain=a.com|b.com". A path, a regex or any other option
+  // makes the line one this parser does not model: it is ignored (the page
+  // then keeps its hide rules, as before). Value per host: a bit mask.
+  const NO_HIDE_GENERIC = 1;
+  const NO_HIDE_SITE = 2;
+  const NO_HIDE_OPTS = { generichide: 1, ghide: 1, specifichide: 2, shide: 2, elemhide: 3, ehide: 3 };
+  // A list with more page exceptions than this is broken: the rest are ignored
+  // (EasyList has about 170 in 2026-11).
+  const MAX_NO_HIDE_HOSTS = 2000;
+  const IPV4_PREFIX_RE = /^(?:\d{1,3}\.){1,3}$/;
+  const IPV4_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+
+  // The host (or IPv4 prefix "a.b.") of a page-exception pattern, or "".
+  function noHidePatternHost(pat) {
+    let rest;
+    if (pat.startsWith("||")) rest = pat.slice(2);
+    else {
+      const m = /^\|?(?:https?|\*)?:\/\/(.*)$/i.exec(pat);
+      if (!m) return "";
+      rest = m[1];
+    }
+    const m = /^([a-z0-9.*\u0080-\uffff-]+)(.*)$/i.exec(rest);
+    if (!m) return "";
+    const tail = m[2];
+    if (IPV4_PREFIX_RE.test(m[1])) return tail === "" || tail === "*" ? m[1] : "";
+    if (!/^(?::[0-9*]*)?[\^/|]*$/.test(tail)) return "";
+    return normalizeHost(m[1]);
+  }
+
+  // { flags, hosts } for a page-exception line, else null.
+  function parseNoHide(line) {
+    if (!line.startsWith("@@")) return null;
+    const at = line.lastIndexOf("$");
+    if (at < 2) return null;
+    let flags = 0;
+    const domains = [];
+    for (const raw of line.slice(at + 1).split(",")) {
+      const opt = raw.trim().toLowerCase();
+      if (NO_HIDE_OPTS[opt]) flags |= NO_HIDE_OPTS[opt];
+      else if (opt.startsWith("domain=")) {
+        for (const d of opt.slice(7).split("|")) {
+          if (!d || d.startsWith("~")) continue;
+          const h = normalizeHost(d);
+          if (!h) return null;
+          domains.push(h);
+        }
+      } else return null;
+    }
+    if (!flags) return null;
+    const pat = line.slice(2, at);
+    if (!pat) return domains.length ? { flags, hosts: domains } : null;
+    if (domains.length) return null;
+    const host = noHidePatternHost(pat);
+    return host ? { flags, hosts: [host] } : null;
+  }
+
   // Returns { generic: [sel], sites: {host: [sel]}, exceptions: {host: [sel]},
-  //           genericExceptions: [sel], stats }
+  //           genericExceptions: [sel], exclusions: {host: [sel]},
+  //           noHide: {host: NO_HIDE_* mask}, stats }
   // opts.sitesOnly (AdGuard Base, `cosmetic: "sites"` in update.js SOURCES):
   // keep only rules scoped to a site (site.com##x, site.com#@#x). Generic
-  // "##x", "~a.com##x" and "#@#x" are dropped, because the parser does not
-  // support AdGuard's `$generichide` / `$elemhide` page exceptions, so its
-  // generic selectors would hide things on sites AdGuard exempts.
+  // "##x", "~a.com##x" and "#@#x" are dropped. Reason: this parser models
+  // only the host forms of the `$generichide` / `$elemhide` page exceptions
+  // (see parseNoHide), not all of AdGuard's forms, so AdGuard's generic
+  // selectors could hide things on sites AdGuard exempts. Page exceptions
+  // (noHide) are kept for every list: they only remove hide rules.
   function parseCosmetic(text, opts) {
     const sitesOnly = !!(opts && opts.sitesOnly);
     const genericSet = new Set();
@@ -244,7 +309,8 @@
     const genericExcl = new Map();
     const siteExcl = [];
     const cleanSites = new Map();
-    const stats = { lines: 0, kept: 0, skipped: 0, unscopedGeneric: 0, pageRootSite: 0, genericDropped: 0 };
+    const noHide = new Map();
+    const stats = { lines: 0, kept: 0, skipped: 0, unscopedGeneric: 0, pageRootSite: 0, genericDropped: 0, noHide: 0, noHideDropped: 0 };
     const add = (map, host, sel) => {
       let set = map.get(host);
       if (!set) map.set(host, (set = new Set()));
@@ -253,6 +319,19 @@
     for (const raw of String(text || "").split(/\r?\n/)) {
       const line = raw.trim();
       if (!line || line[0] === "!" || line[0] === "[") continue;
+      const nh = line[0] === "@" ? parseNoHide(line) : null;
+      if (nh) {
+        for (const h of nh.hosts) {
+          if (SKIP_HOST_RE.test(h)) continue;
+          if (!noHide.has(h) && noHide.size >= MAX_NO_HIDE_HOSTS) {
+            stats.noHideDropped += 1;
+            continue;
+          }
+          noHide.set(h, (noHide.get(h) || 0) | nh.flags);
+        }
+        stats.noHide += 1;
+        continue;
+      }
       const m = LINE_RE.exec(line);
       if (!m) continue;
       stats.lines += 1;
@@ -350,6 +429,7 @@
       exceptions: toObj(exceptions),
       genericExceptions: Array.from(genericExceptions),
       exclusions: toObj(exclusions),
+      noHide: Object.fromEntries(noHide),
       stats,
     };
   }
@@ -365,6 +445,7 @@
     const sites = {};
     const exceptions = {};
     const exclusions = {};
+    const noHide = {};
     const pending = [];
     const has = (obj, h, sel) => !!(obj && obj[h] && obj[h].includes(sel));
     const into = (dst, src, skip) => {
@@ -381,6 +462,7 @@
       for (const s of p.generic || []) generic.add(s);
       for (const s of p.genericExceptions || []) genericExceptions.add(s);
       into(sites, p.sites);
+      for (const [h, f] of Object.entries(p.noHide || {})) noHide[h] = (noHide[h] | 0) | (f | 0);
       into(exceptions, p.exceptions, (h, s) => {
         if (!has(p.exclusions, h, s)) return false;
         pending.push([h, s, i]);
@@ -395,7 +477,7 @@
       into(exceptions, { [h]: [s] });
       into(exclusions, { [h]: [s] });
     }
-    return { generic: Array.from(generic), sites, exceptions, exclusions };
+    return { generic: Array.from(generic), sites, exceptions, exclusions, noHide };
   }
 
   // Lookup keys for a page host: itself, each parent domain, and "name.*"
@@ -412,6 +494,20 @@
       }
     }
     return Array.from(new Set(out));
+  }
+
+  // Lookup keys for page exceptions: candidateHosts, the host itself (also a
+  // one-label host such as "localhost") and, for an IPv4 host, its prefixes
+  // ("192.", "192.168.", "192.168.1.").
+  function noHideHosts(hostname) {
+    const host = String(hostname || "").toLowerCase().replace(/\.$/, "");
+    const out = new Set(candidateHosts(host));
+    if (host) out.add(host);
+    if (IPV4_RE.test(host)) {
+      const p = host.split(".");
+      for (let i = 1; i <= 3; i++) out.add(p.slice(0, i).join(".") + ".");
+    }
+    return Array.from(out);
   }
 
   const HIDE = "{display:none!important}";
@@ -436,6 +532,9 @@
   const KEY_INDEX = "cosKeys";
   const PREFIX_SITE = "cosS:";
   const PREFIX_EXC = "cosE:";
+  // Page exceptions ($generichide / $specifichide / $elemhide): one small key
+  // per listed host, value = the NO_HIDE_* bit mask.
+  const PREFIX_NO_HIDE = "cosNoG:";
 
   function toStorage(data, meta) {
     const items = {};
@@ -444,6 +543,7 @@
     items[KEY_GENERIC] = (data.generic || []).join("\n");
     for (const [h, sels] of Object.entries(data.sites || {})) items[PREFIX_SITE + h] = sels;
     for (const [h, sels] of Object.entries(data.exceptions || {})) items[PREFIX_EXC + h] = sels;
+    for (const [h, f] of Object.entries(data.noHide || {})) if (f | 0) items[PREFIX_NO_HIDE + h] = f | 0;
     const m = Object.assign({}, meta || {});
     delete m.keys;
     items[KEY_META] = Object.assign({ count: Object.keys(items).length }, m);
@@ -454,11 +554,14 @@
   function keysForHost(hostname, withGeneric) {
     const keys = withGeneric === false ? [KEY_META] : [KEY_GENERIC, KEY_META];
     for (const h of candidateHosts(hostname)) keys.push(PREFIX_SITE + h, PREFIX_EXC + h);
+    for (const h of noHideHosts(hostname)) keys.push(PREFIX_NO_HIDE + h);
     return keys;
   }
 
   // Build the page's stylesheet from what storage returned for keysForHost().
   function buildPageCss(hostname, stored, fallbackGenericCss) {
+    let noHide = 0;
+    for (const h of noHideHosts(hostname)) noHide |= stored[PREFIX_NO_HIDE + h] | 0;
     const exc = new Set();
     const siteSels = [];
     for (const h of candidateHosts(hostname)) {
@@ -466,19 +569,22 @@
       for (const s of stored[PREFIX_SITE + h] || []) siteSels.push(s);
     }
     let generic = "";
-    if (typeof stored[KEY_GENERIC] === "string" && stored[KEY_GENERIC]) {
+    if (noHide & NO_HIDE_GENERIC) {
+      // $generichide: no generic rule, and no fallback sheet either.
+    } else if (typeof stored[KEY_GENERIC] === "string" && stored[KEY_GENERIC]) {
       let list = stored[KEY_GENERIC];
       if (exc.size) list = list.split("\n").filter((sel) => !exc.has(sel)).join("\n");
       if (list) generic = list.replaceAll("\n", HIDE + "\n") + HIDE + "\n";
     } else if (fallbackGenericCss) {
       generic = fallbackGenericCss + "\n";
     }
-    return generic + cssForSelectors(siteSels, exc);
+    return generic + (noHide & NO_HIDE_SITE ? "" : cssForSelectors(siteSels, exc));
   }
 
   root.GeneralCosmeticParse = {
-    MAX_SELECTOR_LEN, MAX_SELECTOR_DEPTH, KEY_GENERIC, KEY_META, KEY_INDEX, PREFIX_SITE, PREFIX_EXC, HIDE,
-    sanitizeSelector, normalizeHost, isUnscopedSelector, isPageRootSelector, parseCosmetic, mergeCosmetic, candidateHosts,
+    MAX_SELECTOR_LEN, MAX_SELECTOR_DEPTH, KEY_GENERIC, KEY_META, KEY_INDEX, PREFIX_SITE, PREFIX_EXC, PREFIX_NO_HIDE, HIDE,
+    NO_HIDE_GENERIC, NO_HIDE_SITE, MAX_NO_HIDE_HOSTS,
+    sanitizeSelector, normalizeHost, isUnscopedSelector, isPageRootSelector, parseCosmetic, mergeCosmetic, candidateHosts, noHideHosts,
     cssForSelectors, toStorage, keysForHost, buildPageCss,
   };
 })(typeof self !== "undefined" ? self : globalThis);
