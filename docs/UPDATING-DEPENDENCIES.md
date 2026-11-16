@@ -91,19 +91,21 @@ The script stops before it writes anything when one of these texts is not found.
 The gate freezes the Twitch file. After an update, expect these results:
 
 - **Section 1b fails** until the new file is on `origin/main`. The gate compares the file with `origin/main`. This is by design: a change to a playback file needs the owner's approval. The script prints this as `OWNER DECISION`.
-- **Section 6 fails** if upstream changed `ourTwitchAdSolutionsVersion`. Line 774 of the gate holds the number. The owner must change that line by hand. `test/vendor-pin.test.js` also fails until that line agrees with the new number.
+- **Section 6 fails** if upstream changed `ourTwitchAdSolutionsVersion`. The gate holds the number as a literal: search `scripts/release-gate.sh` for the text `ourTwitchAdSolutionsVersion =`. The owner must change that line by hand. `test/vendor-pin.test.js` also fails until that line agrees with the new number.
 - **Section 3 fails** if upstream added an `eval` call or an `innerHTML` write. Do not widen the gate's allow-list without a code review of the new lines.
 
 Some tests read the code inside the vendored file (`test/twitch-playlist.test.js`, `fixtures`, `playlist`, `hardening`). They can fail on a real upstream change. Read each failure. Do not edit the vendored file to make a test pass.
 
 ## 2. uBlock Origin YouTube filters
 
+UNVERIFIED: since 0.3.6 the sync has explicit Deno permissions and a commit pin. No real sync was run after that change. If a command in this section fails with a permission error, read the header of `scripts/sync-ubo-youtube.mjs`.
+
 ### Check for drift
 
 The weekly job `.github/workflows/ubo-youtube-drift.yml` (Mondays 06:00 UTC) does this check. To do the same check locally, run the sync and then look at the diff.
 
 ```powershell
-deno run -A scripts/sync-ubo-youtube.mjs
+deno run --allow-read --allow-write --allow-net=raw.githubusercontent.com --allow-run=git scripts/sync-ubo-youtube.mjs
 ```
 
 ```powershell
@@ -121,13 +123,13 @@ git checkout -- src/vendor/ubo-youtube.js src/vendor/ubo-youtube-isolated.js src
 The same command replaces the filters with the newest uAssets filters. Keep the result and commit the five files.
 
 ```powershell
-deno run -A scripts/sync-ubo-youtube.mjs
+deno run --allow-read --allow-write --allow-net=raw.githubusercontent.com --allow-run=git scripts/sync-ubo-youtube.mjs
 ```
 
 To use one fixed uAssets commit, give the full commit id.
 
 ```powershell
-deno run -A scripts/sync-ubo-youtube.mjs --uassets <40-character commit id>
+deno run --allow-read --allow-write --allow-net=raw.githubusercontent.com --allow-run=git scripts/sync-ubo-youtube.mjs --uassets <40-character commit id>
 ```
 
 Read the output of the sync:
@@ -137,19 +139,31 @@ Read the output of the sync:
 
 ### Change the uBlock Origin version (scriptlet code)
 
-The uBlock Origin release tag is a default in `scripts/sync-ubo-youtube.mjs` (line 25, `arg("--ubo", "1.75.0")`). The weekly drift job uses that default. Thus a new tag needs these steps:
+The sync imports and runs uBlock Origin code from a clone of `gorhill/uBlock`. Thus it runs only one known commit:
 
-1. Change the default tag on line 25 of `scripts/sync-ubo-youtube.mjs`.
-2. Run `deno run -A scripts/sync-ubo-youtube.mjs`.
-3. Change the version text in `docs/credits.md` and `docs/how-it-works.md`.
-4. Do the steps in "After each update".
+- The release tag is a default in `scripts/sync-ubo-youtube.mjs`: search for the text `arg("--ubo", "1.75.0")`. The weekly drift job uses that default.
+- The commit of that tag is `ublock_commit` in `src/vendor/ubo-youtube-meta.json`. The sync stops before it runs upstream code if the clone is not that commit (for example, if the tag was moved).
 
-If you only pass `--ubo <tag>` and do not change line 25, the weekly drift job fails.
+A new tag needs these steps:
+
+1. Find the commit of the new tag. Review the changes between the old commit and the new commit.
+
+```powershell
+git ls-remote https://github.com/gorhill/uBlock refs/tags/<new tag>
+```
+
+2. Run the sync with the new tag and its commit. The sync records the two values in `src/vendor/ubo-youtube-meta.json`.
+
+```powershell
+deno run --allow-read --allow-write --allow-net=raw.githubusercontent.com --allow-run=git scripts/sync-ubo-youtube.mjs --ubo <new tag> --ubo-commit <40-character commit id>
+```
+
+3. Change the default tag in `scripts/sync-ubo-youtube.mjs` to the new tag. If you do not change it, the weekly drift job fails.
+4. Change the version text in `docs/credits.md` and `docs/how-it-works.md`.
+5. Do the steps in "After each update".
 
 ### Security note
 
-The sync clones `gorhill/uBlock` at the release tag and imports three of its modules with full Deno permissions (`-A`). It thus runs uBlock Origin code on your PC. Use only a release tag of the official repository. After a sync, compare `ublock_commit` in `src/vendor/ubo-youtube-meta.json` with the commit of the tag on GitHub.
-
-```powershell
-git ls-remote https://github.com/gorhill/uBlock refs/tags/1.75.0
-```
+- The sync runs uBlock Origin code on your PC, with these permissions only: read, write, the network host `raw.githubusercontent.com`, and `git`. Do not run it with `-A`.
+- Use only a release tag of the official repository, and give `--ubo-commit` only after a review of that commit.
+- `test/release-tooling.test.js` makes sure that the commit pin and the permissions of the weekly job stay in place.

@@ -1,49 +1,76 @@
 # To do
 
-Where Adgecko stands, and what is next. Last updated 2026-11-14, when 0.3.5 was prepared.
+Last update: 2026-11-16, after version 0.3.6 was merged into `main`.
 
-## Where it was left off
+## Where it stands
 
-- **Last release:** [v0.3.4](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.4), published 2026-11-12.
-- **Prepared, not pushed:** 0.3.5 on the local branch `nightly/0.3.5` (folder `adgecko-nightly`). See the `## 0.3.5` section of `CHANGELOG.md`: 35 test-proven bug fixes, site-scoped filters, cross-list `$badfilter` / `@@` (AdGuard site hide rules held back: storage quota), popup Reload page / Undo fix, lighter page frames, lists repacked 2026-11-14.
-- **Checks on `nightly/0.3.5` (2026-11-14):** `deno test` 766 passed / 0 failed / 8 ignored (6 are owner-decision or known-issue tests, 2 need tools this machine lacks); `scripts/release-gate.sh` CLEAN on the checkout and with `--zip` (68 files, 7.82 MB); privacy check passed. Headless Chrome smoke test of the packed zip (CDP `Extensions.loadUnpacked`): it loads, version 0.3.5, the `general`, `threat` and `ubo-youtube` rulesets are on, the first refresh installs 3,062 dynamic rules, the refresh alarm is set, storage about 7.8 MB (filters.adtidy.org answered HTTP 403 to headless Chrome). Not done: any live site test (YouTube, Twitch, Kick, news sites).
+- **Last release:** [v0.3.5](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.5), published 2026-11-15.
+- **On `main`, not released:** version 0.3.6 (pull request 14, commit `5cd4ab6`, merged 2026-11-16). It has the corrections of the 2026-11-16 code review. See `CHANGELOG.md`, section 0.3.6.
+- **Checks on 0.3.6:** 884 tests passed, 0 failed, 9 ignored. The release gate was CLEAN on the checkout and on the zip (64 files, 7,862,441 bytes; the cap is 8,000,000).
+- **UNVERIFIED:** all behaviour of 0.3.6 in Chrome. No run on the owner's PC or on live sites was done.
 
 ## Next steps
 
-### 0. Ship 0.3.5
+### 1. Release 0.3.6
 
-- [ ] Review the branch, push it, open a PR and merge it.
-- [ ] Try it by hand in your own Chrome: YouTube (menus, Share, Save open after an "Experiencing interruptions?" toast), Twitch, Kick, and one news site. None of these could be tested live.
-- [ ] **Actions** -> **release** -> **Run workflow**. The README zip link for 0.3.5 works only after this.
-- [ ] Owner decisions (held out of 0.3.5): block Twitch's own ad host `ads.twitch.tv`? Apply the Kick fixes in `docs/proposals/kick-0.3.5-fixes.patch` (`src/kick.js` is frozen by the release gate)?
-- [ ] Owner decisions (ideas not built): let **Allow this site** also allow third-party frames on that page (payment, video, login frames); a default allow list for checkout and login helpers (DataDome, ThreatMetrix, Sift, Quantcast consent) - fewer broken sites, but these are trackers; path filters (`||host/ads/`) and generic URL filters for more blocking.
+- [ ] Look at the CI result on `main`. The 0.3.6 workflow changes (tests with `--parallel`, the `.sha256` release file, the uBlock Origin sync permissions) did not run on GitHub before the merge.
+- [ ] Test by hand in your own Chrome, with the unpacked 0.3.6:
+  - YouTube: a video starts; menus, Share and Save open after an "Experiencing interruptions?" toast; a premiere page is not reloaded.
+  - Twitch (live stream) and Kick.
+  - One news site, Gmail, GitHub and one React site: the page is complete and ad boxes are hidden.
+  - Clipboard guard: a copy on an ordinary site gives plain text; Ctrl+C on your own selection works.
+  - Popup: **Fix this site**, **Allow this site**, **Block again**, **Undo fix**.
+- [ ] **Actions** -> **release** -> **Run workflow**. The README link to `adgecko-0.3.6.zip` works only after this step.
+- [ ] After the release, update this file and remove the UNVERIFIED marks that the tests proved.
 
-### 1. Ship the post-release fixes as 0.3.4
+### 2. Owner decisions
 
-- [x] Bump `"version"` in `manifest.json` to `0.3.4` and update the version and zip link in `README.md` (plus the two tests that check the version).
-- [x] `CHANGELOG.md`: the six PR #8 entries moved into a new `## 0.3.4` section with "Roll back to 0.3.3" steps; the "Release candidate" line is gone from 0.3.3.
-- [x] Filter lists repacked 2026-11-11 22:41 UTC (`python3 scripts/pack-filter-lists.py`): 2,518 rules in `general-network.json`, 15,844 threat hosts in 199 rules.
-- [x] Release checks: `deno test` 570 passed / 0 failed / 2 ignored; `scripts/pack-zip.sh` packed 67 files; `scripts/release-gate.sh` CLEAN on the checkout and with `--zip`; privacy check passed.
-- [x] Smoke test of the packed zip in headless Chromium: the worker starts, the `general`, `threat` and `ubo-youtube` rulesets are on, the refresh alarm is set, and the popup and settings pages open with no errors.
-- [x] Release PR merged into `main` (#9).
-- [x] Live check in headless Chromium, with and without the extension: Twitch (page works, 5 requests blocked), Kick (video plays), the Guardian (649 requests down to 136) and weather.com (905 down to 191).
-- [ ] Try YouTube by hand in your own Chrome: YouTube refused the build machine (HTTP 429, a bot check), so it was not tested live.
-- [x] Release published 2026-11-12 by the new release workflow (`.github/workflows/release.yml`, #10): [v0.3.4](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.4) with `adgecko-0.3.4.zip` (67 files). Next release: bump the version and add its changelog section, then **Actions** -> **release** -> **Run workflow**.
+The numbers are the numbers in `docs/review-2026-11-16/RESULTS.md`, section "Owner decisions open". That file has the details.
 
-### 1b. Codebase map (added 2026-11-16)
+| No. | Decision | State |
+|---|---|---|
+| 1 | Apply the Kick corrections in `docs/proposals/kick-0.3.5-fixes.patch`? | Not applied. `src/kick.js` is frozen. Three tests are ignored. |
+| 2 | Accept the content pins in `scripts/frozen-pins.json`. | Done in 0.3.6. Confirm. |
+| 3 | Master switch: must it also stop the `ubo-youtube` ruleset? | The docs say what keeps running. A code change is open. |
+| 4 | YouTube players that are embedded in other websites. | Documented as not covered. |
+| 5, 7 | EasyList licence option (CC BY-SA 3.0 or GPL-3.0-or-later). The project `LICENSE` in the zip. | Not changed. Recommendation: GPL-3.0-or-later, and add the `LICENSE`. |
+| 6 | Peter Lowe list terms ("non-commercial"). | Open since 0.3.4. |
+| 8 | Cross-list `@@` exceptions. | Recommendation: keep the same-host rule and add a note to the docs. |
+| 9, 19 | Cosmetic storage layout. Repack `cosmetic-rules.json` and measure the storage budget. | Not done. No list cache was available. See item 3 below. |
+| 10 | Pop-up guard for links, forms and child frames. | Not changed. Documented as out of scope. |
+| 11, 12 | Release gate tests in parallel. A reproducible zip with Windows `tar.exe`. | The gate stays serial. Only the Info-ZIP path is reproducible. |
+| 13, 14, 15 | Clipboard guard: plain-text copies on ordinary sites, the 500 ms timing limit, the two limits that stay. | In 0.3.6. Accept or change. |
+| 16 | `ubo-youtube-network.json` blocks `ads.youtube.com`, which the stream-host registry lists. | Add a named exception, or change the registry. |
+| 17, 22 | YouTube with the uBlock Origin layer: a toast with plain text is not hidden; CSS rules for more ad nodes. | Open. |
+| 18 | Feed: no serial reset when a kill is released. | Accept. |
+| 20 | The second, one-shot alarm `gecko-refresh-retry`. The 2026-11-02 decision named one alarm. | In 0.3.6. Confirm. |
+| 21 | The order of `document_start` scripts was measured only in headless Chromium. | Measure in Chrome on the PC. |
+| 23 | The list `REGIONAL_WILDCARD_BASES` (12 entries) in `scripts/build-psl-subset.mjs`. | Check. |
+| 24 | Upstream defect in TwitchAdSolutions 1.55: the ad tracking-URL rewrite has no effect. | Recorded by a test. No action is possible in the frozen file. |
+| 25 | `src/vendor/LICENSE-uBlock.md` shows `deno run -A` for the sync. | Not changed, because the file ships in the zip. |
 
-- [x] A codebase map is in [.planning/codebase/](.planning/codebase/README.md): seven documents, each compared with the source at commit `b01e6a5`. `CLAUDE.md` tells coding agents to read it.
-- [ ] Read [CONCERNS.md](.planning/codebase/CONCERNS.md) and decide what to do with each item. It has 5 high, 13 medium and 6 low items. The high items: storage quota headroom (H1), package size near the gate cap (H2), the archived Twitch upstream and its `eval` (H3), YouTube patches that depend on upstream shapes (H4), no live site test for 0.3.5 (H5).
-- [ ] Correct the stale documents that the map found (M1, M2, L5): the rule counts and date in `docs/how-it-works.md`, the "Where it was left off" section of this file, and `src/rules/README.md`.
-- [ ] Keep the map correct: when a change makes a statement in the map wrong, correct the map in the same pull request.
+Older decisions that are open:
 
-### 2. Keep an eye on
+- [ ] Block the Twitch ad host `ads.twitch.tv`? Two tests are ignored until this decision.
+- [ ] The vendored Twitch script has an archived upstream: stay, move to a maintained fork, or own the code (`CONCERNS.md`, H3).
+- [ ] The signed threat feed: the feed host (D-1) and the signer (D-7), or a record that the feed stays off.
+- [ ] Ideas that are not built: **Allow this site** also allows third-party frames on that page; a default allow list for checkout and login helpers; path filters and generic URL filters.
+- [ ] Remove `src/rules/cosmetic-sample.json` (172,666 bytes, no reader) from the zip (`CONCERNS.md`, H2).
 
-- [ ] The weekly uBO YouTube drift check (`.github/workflows/ubo-youtube-drift.yml`, Mondays 06:00 UTC). A red run means YouTube's upstream filters changed and `scripts/sync-ubo-youtube.mjs` needs a re-run.
-- [ ] Twitch ad changes: `src/vendor/video-swap-new.user.js` is TwitchAdSolutions 1.55, vendored unchanged. Check upstream for a newer version now and then.
+### 3. Before the next list repack
 
-### 3. Later / owner decisions
+- [ ] Run `python3 scripts/pack-filter-lists.py`, then run `test/final-storage-budget.test.js` with the full list cache. Record the peak here. The quota is 10,485,760 bytes and the test limit is 9,000,000 bytes.
+- [ ] Refresh the public-suffix data with `scripts/build-psl-subset.mjs` (now: Public Suffix List of 2026-11-15).
+- [ ] Look at the package size after the repack. The headroom to the gate cap is 137,559 bytes.
 
-- [ ] **Chrome Web Store:** nothing has been submitted. Read [docs/STORE-REVIEW-NOTES.md](docs/STORE-REVIEW-NOTES.md) first (the vendored Twitch script has an `eval` a reviewer may flag).
-- [ ] Tidy `docs/`: old one-off files (`README-backup-2026-10-24.md`, `chat-2026-10-11.md`, `agent-notes/`, the `beta-0.2.x-release.md` pages and the many `cards-*` folders) could move to an archive folder or be removed.
-- [ ] Not covered today, if wanted later: YouTube Music, YouTube Kids, and ads that are part of the video itself (see "What it does and doesn't do" in the README).
+### 4. Keep an eye on
+
+- [ ] The weekly uBlock Origin YouTube drift check (Mondays 06:00 UTC). A red run means that the upstream filters changed. Then follow `docs/UPDATING-DEPENDENCIES.md`.
+- [ ] Twitch ad changes. No upstream correction will come for the vendored script.
+
+### 5. Later
+
+- [ ] **Chrome Web Store:** nothing was submitted. Read [docs/STORE-REVIEW-NOTES.md](docs/STORE-REVIEW-NOTES.md) first.
+- [ ] Delete the old one-off documents and image folders in `docs/` (approximately 30 MB). The list is in `CONCERNS.md`, L2. The owner must approve each deletion.
+- [ ] Not covered today: YouTube Music, YouTube Kids, YouTube players in other websites, and ads that are part of the video.
+- [ ] Work through `.planning/codebase/CONCERNS.md`. It is sorted by impact.
