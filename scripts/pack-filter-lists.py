@@ -1114,7 +1114,11 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
         [
             "## How we use them",
             "",
-            "- Network blocking only in `general-network.json` (domain -> DNR `requestDomains`).",
+            "- Network blocking in `general-network.json` (domain -> DNR `requestDomains`), from all lists.",
+            "- The malware and threat lists also go into the `threat` ruleset in `threat-network.json`",
+            "  (built by `scripts/build-threat-rules.mjs`).",
+            "- At run time the extension downloads new copies of the lists and puts them in dynamic",
+            "  DNR rules. See `docs/permissions-and-privacy.md`.",
             "- Hide rules (`##`) from " + ", ".join(BUNDLED_COSMETIC_LISTS) + " in `cosmetic-rules.json` (built by `scripts/pack-cosmetic.mjs`).",
             "- Cosmetic sample (generic `##` only) in `cosmetic-sample.json` for the cosmetic agent - not applied by DNR.",
             "- Twitch / YouTube / Kick (and related player hosts) are stripped from block targets here;",

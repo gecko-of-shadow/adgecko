@@ -27,6 +27,7 @@ Current version: 0.3.5. It runs inside Chrome (version 137 or newer): no separat
 - ❌ Sometimes a Twitch ad still shows, when no ad-free copy of the stream is available.
 - ❌ On Kick, some ads still play. Adgecko only skips an ad when it can do that safely.
 - ❌ YouTube Music and YouTube Kids are not covered.
+- ❌ YouTube videos embedded in other websites are not covered: the YouTube ad scripts run only on the YouTube site itself. On those players, only the network block rules apply.
 
 ## Install
 
@@ -57,7 +58,7 @@ An allow counts for the whole website address and stays until you undo it. Detai
 <img src="icons/icon48-working.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is on: purple gecko, the pixel ad at its tongue lit up bright"> &nbsp; <img src="icons/icon48-off.png" width="48" height="48" alt="Toolbar icon while ordinary-site blocking is off: the same gecko in grey, pixel ad not lit">
 
 - Purple, with the pixel "ad" at its tongue lit up: blocking on ordinary sites is on.
-- Grey: blocking on ordinary sites is off. If only the list blocking switch is off, the Twitch, YouTube and Kick filters keep running. The master switch also stops the Kick ad skip, the Twitch banner hiding, the YouTube helpers and the malware lists.
+- Grey: blocking on ordinary sites is off. If only the list blocking switch is off, the Twitch, YouTube and Kick filters keep running. The master switch also stops the Kick ad skip, the Twitch banner hiding, the YouTube helpers and the malware lists. The vendored Twitch stream swap, the uBlock Origin YouTube scripts, the YouTube network rules and the two YouTube hide sheets keep running until you turn the extension off in `chrome://extensions`.
 - A small magenta dot: a page guard just blocked something on that tab (for example a page trying to put a command into your clipboard). Open the window to see what; the dot then goes away (it also goes away when the tab opens another page). There are no pop-ups or counters.
 
 How the art was chosen: [docs/design](docs/design/README.md).
@@ -66,18 +67,18 @@ How the art was chosen: [docs/design](docs/design/README.md).
 
 - No tracking: it does not send your browsing history anywhere.
 - No account and no analytics. Settings stay in Chrome's storage in this browser.
-- Every 3 hours it checks eight public filter lists over HTTPS without cookies (a real download at most every 12 hours). The sites it contacts are `easylist.to`, `pgl.yoyo.org`, `malware-filter.gitlab.io`, `ublockorigin.github.io`, `easylist-downloads.adblockplus.org` and `secure.fanboy.co.nz` (EasyList mirrors, only if the first try fails), `raw.githubusercontent.com` (HaGeZi and Dandelion Sprout lists only) and `filters.adtidy.org`. Those sites see the list address and your IP address. The page you are visiting is not part of that address.
+- Every 3 hours it checks eight public filter lists over HTTPS without cookies (a real download at most every 12 hours). A fresh install downloads the lists at once, and **Update lists** on the settings page downloads them when you click it. The sites it contacts are `easylist.to`, `pgl.yoyo.org`, `malware-filter.gitlab.io`, `ublockorigin.github.io`, `easylist-downloads.adblockplus.org` and `secure.fanboy.co.nz` (EasyList mirrors, only if the first try fails), `raw.githubusercontent.com` (HaGeZi and Dandelion Sprout lists only) and `filters.adtidy.org`. Those sites see the list address and your IP address. The page you are visiting is not part of that address.
 - The clipboard guard checks the text a page tries to copy inside your browser only. Nothing is sent anywhere.
 - Only one list comes from Curben's malware-filter project: curbengh's urlhaus-filter (abuse.ch URLhaus malware hosts, CC0). His phishing list and every OpenPhish source are not used. [Details](docs/threat-tier.md#where-the-hosts-come-from)
 - On Twitch, it asks Twitch for ad-free copies of the stream. Those requests go to Twitch.
-- **Permissions:** exactly `storage`, `declarativeNetRequest`, `alarms`, and host access to the list sites above (only for downloading the public filter lists).
+- **Permissions:** the API permissions `storage`, `declarativeNetRequest` and `alarms`, and host permissions for the list sites above only (to download the lists). The content scripts also run on all http and https websites (hide rules and page guards), so Chrome shows "Read and change all your data on all websites". Page content stays in your browser. [Site access](docs/permissions-and-privacy.md#site-access)
 
 Full details: [docs/permissions-and-privacy.md](docs/permissions-and-privacy.md)
 
 ## Troubleshooting
 
 - **"Allow this site" is grey?** The window says why, in the status line under the site name or in the line under the button. Common reasons:
-  - *Off – turned off in settings.* The whole extension is switched off on the settings page.
+  - *Off – turned off in settings.* The master switch on the settings page is off. This stops every switchable feature. The vendored Twitch stream swap, the uBlock Origin YouTube scripts, the YouTube network rules and the two YouTube hide sheets keep running. To stop them too, turn the extension off in `chrome://extensions`.
   - *Open a normal http(s) page to allow it. Already on one? Reload it.* Chrome's own pages cannot be allowed. On a normal website, the page was open before you installed or reloaded the extension: reload it, then open the window again.
   - *Malware blocking only – ad scripts don't run on this site.* Shown on YouTube Music, YouTube Studio, YouTube TV, YouTube Kids and youtube-nocookie pages.
 - **A copy button on a website does not copy a command?** The clipboard guard stops pages from writing commands like `powershell ...` or `curl ... | sh` unless you copy them yourself: select the text and press Ctrl+C. Documentation sites such as GitHub are trusted. Or use **Fix this site** (on an allowed site, click **Block again** first; Allow leaves the clipboard guard on).

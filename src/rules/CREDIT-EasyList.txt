@@ -7,10 +7,20 @@ Filter lists shipped with this extension include trimmed material derived from:
 
 Required credit line: The EasyList authors
 
-Additional list sources (bundled / converted for Chrome declarativeNetRequest; see general-network.json):
+Additional list sources (converted for Chrome declarativeNetRequest; see LICENSES.md):
 
   Peter Lowe’s Ad and tracking server list — https://pgl.yoyo.org/adservers/
   Troublesome / malware / threat host lists (trimmed; not whole-country blocks)
 
-Lists are packed in the zip. Updates are manual (user hits Update in the popup).
-No background auto-fetch.
+Where the list material is in this package:
+
+  general-network.json  Network block rules from all lists, EasyList and
+                        EasyPrivacy included.
+  threat-network.json   Network block rules from the malware and threat lists.
+  cosmetic-rules.json   Hide rules from EasyList and EasyPrivacy.
+
+Updates: the zip holds a packed copy of the lists. The extension also
+downloads new copies of the lists in the background. The "gecko-refresh"
+alarm wakes it every 3 hours. It downloads a list again at most every
+12 hours. A fresh install downloads the lists at once. "Update lists" on the
+settings page downloads them when you click it.
