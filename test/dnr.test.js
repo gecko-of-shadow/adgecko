@@ -98,6 +98,35 @@ Deno.test("block rules never target protected stream hosts", () => {
   }
 });
 
+// Review 2026-11-16 WP-09 item 4: the check above uses the dead module
+// general-exclude-hosts.js as its oracle (it is kept until the owner decides).
+// That list does not have ext-twitch.tv, twitchcdn.com, kickusercontent.com
+// or kick-streamer.com. This test uses the live registry
+// (GeckoFeatures.isStreamHost, src/settings/features.js) as the oracle.
+// ubo-youtube-network.json is not checked here: its rule 1 blocks
+// ads.youtube.com on purpose (uBO filter), and that host is under
+// youtube.com. Whether to accept that rule is an owner decision.
+Deno.test("shipped general and threat block rules never target a STREAM_SITES host (live registry oracle)", async () => {
+  await import("../src/settings/features.js");
+  const F = globalThis.GeckoFeatures;
+  assert(F && typeof F.isStreamHost === "function", "GeckoFeatures loaded");
+  for (const host of ["ext-twitch.tv", "a.twitchcdn.com", "files.kickusercontent.com", "kick-streamer.com"]) {
+    assert(F.isStreamHost(host), "oracle knows " + host);
+  }
+  const { default: threatRules } = await import("../src/rules/threat-network.json", { with: { type: "json" } });
+  for (const [name, set] of [["general", rules], ["threat", threatRules]]) {
+    let checked = 0;
+    for (const rule of set) {
+      if (rule.action?.type !== "block") continue;
+      for (const domain of rule.condition?.requestDomains || []) {
+        checked += 1;
+        assert(!F.isStreamHost(domain), `${name} rule ${rule.id} blocks stream host ${domain}`);
+      }
+    }
+    assert(checked > 0, name + ": no block domain checked");
+  }
+});
+
 Deno.test("permissions stay DNR + storage + alarms; only list host_permissions", () => {
   assertEquals(manifest.permissions?.slice().sort(), ["alarms", "declarativeNetRequest", "storage"].sort());
   assertEquals(manifest.host_permissions, ["https://easylist.to/*", "https://pgl.yoyo.org/*", "https://malware-filter.gitlab.io/*", "https://ublockorigin.github.io/*", "https://easylist-downloads.adblockplus.org/*", "https://secure.fanboy.co.nz/*", "https://raw.githubusercontent.com/hagezi/dns-blocklists/*", "https://raw.githubusercontent.com/DandelionSprout/adfilt/*", "https://filters.adtidy.org/extension/ublock/*"], "only the filter-list hosts");
