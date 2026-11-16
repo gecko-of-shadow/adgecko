@@ -151,6 +151,20 @@
     return list.some((f) => f.id === "threatTier" && f.on === true);
   }
 
+  function streamHere(host) {
+    return !!(host && info && info.host === host && info.stream === true);
+  }
+
+  // Allow this site cannot stop the always-on vendored parts (owner decision
+  // D-3): the uBO scriptlets and network rules on YouTube, the stream swap on
+  // Twitch (README "How to use"). Returns the site name, or "".
+  function builtInBlocker(host) {
+    if (!streamHere(host)) return "";
+    const list = Array.isArray(info.features) ? info.features : [];
+    const has = (id) => list.some((f) => f.id === id && f.apply === "always");
+    return has("youtubeScriptlets") ? "YouTube" : has("twitchPlayer") ? "Twitch" : "";
+  }
+
   function overrideKey(host) {
     return info && info.host === host && info.overrideHost ? info.overrideHost : host;
   }
@@ -213,10 +227,21 @@
     return "";
   }
 
+  // The unanswered Fix for this page, or null. A Fix that was undone in the
+  // meantime (settings page Undo fix or Reset: none of its switches is still
+  // off in that entry) is stale: no question, Fix this site shows again.
+  function fixIsLive(key, fixes) {
+    if (!key || !fixes[key]) return false;
+    const o = all[KEYS.overrides];
+    const entry = o && typeof o === "object" ? o[key] : null;
+    const features = entry && entry.features && typeof entry.features === "object" ? entry.features : {};
+    return Object.keys(fixes[key].prev).some((id) => features[id] === false);
+  }
+
   function pendingFix(host) {
     const fixes = fixMap();
     const key = fixKey(host, fixes);
-    return key ? Object.assign({ host: key }, fixes[key]) : null;
+    return fixIsLive(key, fixes) ? Object.assign({ host: key }, fixes[key]) : null;
   }
 
   // Puts back exactly the switches one Fix changed (a change made on the
@@ -286,12 +311,19 @@
     if (!origin) siteStatus.textContent = "";
     else if (!on) siteStatus.textContent = "Off – turned off in settings";
     else if (limited) siteStatus.textContent = threatHere() ? "Malware blocking only – ad scripts don't run on this site" : "Nothing runs on this site";
-    else if (allowed) siteStatus.textContent = "Allowed – not blocking here";
+    else if (allowed) siteStatus.textContent = builtInBlocker(host) ? "Allowed – built-in " + builtInBlocker(host) + " ad blocking still runs" : "Allowed – not blocking here";
+    // The "Block ads and trackers (filter lists)" switch is off: the worker
+    // mirrors it to generalEnabled (same test as the icon above).
+    // The lists never act on stream sites, so the line is for ordinary sites.
+    else if (all[KEYS.enabled] === false && !streamHere(host)) siteStatus.textContent = "Ad lists off – turned off in settings";
     else if (fixed) siteStatus.textContent = "Protected – some filters off here (Fix this site)";
     else siteStatus.textContent = "✅ Protected";
 
     allowSite.disabled = !origin || !on || limited;
-    allowSite.setAttribute("aria-pressed", allowed ? "true" : "false");
+    // No aria-pressed: the label names the action and changes, and the
+    // status line gives the state ("Block again, pressed" read as blocking).
+    // data-allowed only gives the outlined look (popup.css).
+    allowSite.dataset.allowed = allowed ? "true" : "false";
     allowSite.textContent = allowed ? "Block again" : "Allow this site";
     if (!origin) {
       // Pages open from before the extension loaded have no content script to ask.
@@ -434,22 +466,36 @@
     }
   }
 
-  async function applyRules() {
-    await notifyBackground("applyGeneralState");
+  // Asks the worker to apply the rules now. The buttons do not wait for the
+  // answer: the storage write already makes the worker apply them
+  // (storage.onChanged), and the worker's rule queue can be busy for a long
+  // time (a list swap). Waiting kept `busy` set, so clicks on No and Block
+  // again were lost.
+  function applyRules() {
+    void notifyBackground("applyGeneralState");
   }
 
   // A double click must not run a handler twice on stale state: the second
-  // click would read what the first one just wrote.
+  // click would read what the first one just wrote. `busy` covers the save
+  // and the siteInfo answer, not the rule update. The handler returns the
+  // button that gets keyboard focus. It is focused after busy is cleared,
+  // when it is enabled again (a disabled button cannot take focus).
   function guarded(fn) {
     return async () => {
       if (busy) return;
       busy = true;
       fixSite.disabled = true;
+      let target = null;
       try {
-        await fn();
+        target = await fn();
       } finally {
         busy = false;
         render();
+        try {
+          if (target && !target.hidden && !target.disabled) target.focus();
+        } catch {
+          // fake DOM
+        }
       }
     };
   }
@@ -468,7 +514,8 @@
     const key = off ? overrideKey(host) : host;
     const fixes = fixMap();
     if (!off && fixes[host]) {
-      undoFix(o, host, fixes[host].prev);
+      // A stale entry (Fix undone on the settings page) has nothing to undo.
+      if (fixIsLive(host, fixes)) undoFix(o, host, fixes[host].prev);
       delete fixes[host];
     }
     const entry = Object.assign({}, o[key]);
@@ -480,7 +527,8 @@
     if (await save(...fixWrite(fixes, { [KEYS.overrides]: o }))) offerReload = true;
     await refreshInfo();
     render();
-    await applyRules();
+    applyRules();
+    return null;
   }));
 
   // Fix writes this page's own host only, never a parent domain's entry.
@@ -493,7 +541,9 @@
     const entry = Object.assign({}, o[host]);
     const features = Object.assign({}, entry.features);
     const fixes = fixMap();
-    // An unanswered Fix on this host keeps what was there before it.
+    // An unanswered Fix on this host keeps what was there before it. A stale
+    // one (undone on the settings page) does not: today's state counts.
+    if (fixes[host] && !fixIsLive(host, fixes)) delete fixes[host];
     const prev = Object.assign({}, fixes[host] && fixes[host].prev);
     for (const id of ids) {
       if (!(id in prev)) prev[id] = typeof features[id] === "boolean" ? features[id] : null;
@@ -506,12 +556,8 @@
     await save(...fixWrite(fixes, { [KEYS.overrides]: o }));
     await refreshInfo();
     render();
-    await applyRules();
-    try {
-      fixYes.focus();
-    } catch {
-      // fake DOM
-    }
+    applyRules();
+    return fixYes;
   }));
 
   function pageHost() {
@@ -547,12 +593,8 @@
     if (saved && changed) offerReload = true;
     await refreshInfo();
     render();
-    await applyRules();
-    try {
-      allowSite.focus();
-    } catch {
-      // fake DOM
-    }
+    applyRules();
+    return allowSite;
   }));
 
   // "Undo fix": turns back on the extra filters a kept Fix switched off on
@@ -570,12 +612,8 @@
       if (await save({ [KEYS.overrides]: o })) offerReload = true;
       await refreshInfo();
       render();
-      await applyRules();
-      try {
-        fixSite.focus();
-      } catch {
-        // fake DOM
-      }
+      applyRules();
+      return fixSite;
     }));
   }
 

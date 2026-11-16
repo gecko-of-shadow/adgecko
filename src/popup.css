@@ -167,7 +167,7 @@ button.secondary {
   color: var(--text);
 }
 /* "Block again" (mockup): outlined, accent-coloured text. */
-button.primary[aria-pressed="true"] {
+button.primary[data-allowed="true"] {
   border: 1px solid var(--outline);
   background: transparent;
   color: var(--outline);
@@ -230,7 +230,7 @@ details[open] > summary::after {
   html, body, .card { background: Canvas; color: CanvasText; }
   .card, .gear, button.primary, button.secondary { border: 1px solid ButtonText; }
   button.primary, button.secondary { background: ButtonFace; color: ButtonText; }
-  button.primary[aria-pressed="true"] { border-width: 2px; color: ButtonText; }
+  button.primary[data-allowed="true"] { border-width: 2px; color: ButtonText; }
   button.primary { box-shadow: none; }
   .note, summary, button.link { color: CanvasText; }
   #brand-icon[data-glow="on"] { box-shadow: none; }

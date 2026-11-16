@@ -57,7 +57,7 @@ const rule = (css, sel) => {
 
 Deno.test("popup matches the mockups: bigger header icon, Block again outlined in the accent, Show more chevron after the text", () => {
   assert(/<img id="brand-icon"[^>]*width="40" height="40"/.test(popupHtml) && /width:\s*40px/.test(rule(popupCss, "#brand-icon")), "40 px header icon");
-  const pressed = rule(popupCss, 'button.primary[aria-pressed="true"]');
+  const pressed = rule(popupCss, 'button.primary[data-allowed="true"]');
   assert(/background:\s*transparent/.test(pressed) && /color:\s*var\(--outline\)/.test(pressed), "Block again: outline + accent text");
   assert(/border:\s*1px solid var\(--card-line\)/.test(rule(popupCss, ".card")), "card border in the accent family");
   assert(/list-style:\s*none/.test(rule(popupCss, "summary")) && /display:\s*none/.test(rule(popupCss, "summary::-webkit-details-marker")), "default marker hidden");
