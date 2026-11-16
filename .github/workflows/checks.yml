@@ -43,7 +43,11 @@ jobs:
       - name: Run tests
         env:
           PRIVACY_PATTERNS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.PRIVACY_PATTERNS || '' }}
-        run: deno test --no-lock --allow-read --allow-run --allow-env test/
+        # --parallel (review 2026-11-16): about 4x faster. No test gets
+        # --allow-write, so test files cannot share written files. The release
+        # gate (scripts/release-gate.sh section 5) stays serial until this job
+        # is green over 5 or more runs (owner decision).
+        run: deno test --parallel --no-lock --allow-read --allow-run --allow-env test/
 
   privacy:
     name: privacy
