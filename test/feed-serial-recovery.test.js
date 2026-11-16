@@ -136,24 +136,44 @@ Deno.test("kill serials have no step limit: stored kill serial 2026111001, then 
 });
 
 Deno.test("feed-sign.mjs warns when a serial is near the 2^31-1 cap", async () => {
-  const dir = await Deno.makeTempDir();
-  try {
-    const pair = await generateKeyPair("sign-test", "feed");
-    await Deno.writeTextFile(dir + "/k.json", JSON.stringify(pair.privateRecord));
-    const run = async (serial) => {
-      const now = Date.now();
-      await Deno.writeTextFile(dir + "/feed.json", JSON.stringify(feedDoc(serial, ["evil.example"], {}, now)));
+  // The suite runs without --allow-write, so a child Deno process with its own
+  // write permission makes the temporary key and feed files, runs feed-sign.mjs
+  // and removes the files again. The parent test only reads the result.
+  const pair = await generateKeyPair("sign-test", "feed");
+  const helper = `
+    const input = JSON.parse(await new Response(Deno.stdin.readable).text());
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(dir + "/k.json", input.key);
+      await Deno.writeTextFile(dir + "/feed.json", input.feed);
       const out = await new Deno.Command(Deno.execPath(), {
         args: ["run", "--no-lock", "--allow-read", "--allow-write", "scripts/feed-sign.mjs", "--key", dir + "/k.json", "--feed", dir + "/feed.json"],
-        cwd: new URL("..", import.meta.url), stdout: "piped", stderr: "piped",
+        stdout: "piped", stderr: "piped",
       }).output();
-      return { code: out.code, err: new TextDecoder().decode(out.stderr) };
-    };
-    const high = await run(MAX_SERIAL - 5);
-    assert(high.code === 0 && /near the cap/.test(high.err), "warning for a high serial: " + JSON.stringify(high));
-    const normal = await run(2026111001);
-    assert(normal.code === 0 && !/near the cap/.test(normal.err), "no warning for a date-like serial: " + JSON.stringify(normal));
-  } finally {
-    await Deno.remove(dir, { recursive: true });
-  }
+      console.log(JSON.stringify({ code: out.code, err: new TextDecoder().decode(out.stderr) }));
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  `;
+  const run = async (serial) => {
+    const now = Date.now();
+    const child = new Deno.Command(Deno.execPath(), {
+      args: ["eval", "--no-lock", helper],
+      cwd: new URL("..", import.meta.url), stdin: "piped", stdout: "piped", stderr: "piped",
+    }).spawn();
+    const writer = child.stdin.getWriter();
+    await writer.write(new TextEncoder().encode(JSON.stringify({
+      key: JSON.stringify(pair.privateRecord),
+      feed: JSON.stringify(feedDoc(serial, ["evil.example"], {}, now)),
+    })));
+    await writer.close();
+    const out = await child.output();
+    const text = new TextDecoder().decode(out.stdout).trim();
+    if (out.code !== 0 || !text) throw new Error("helper failed: " + new TextDecoder().decode(out.stderr));
+    return JSON.parse(text.split("\n").pop());
+  };
+  const high = await run(MAX_SERIAL - 5);
+  assert(high.code === 0 && /near the cap/.test(high.err), "warning for a high serial: " + JSON.stringify(high));
+  const normal = await run(2026111001);
+  assert(normal.code === 0 && !/near the cap/.test(normal.err), "no warning for a date-like serial: " + JSON.stringify(normal));
 });
