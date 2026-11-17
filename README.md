@@ -42,6 +42,8 @@ Adgecko is not on the Chrome Web Store. You load it into Chrome yourself:
 
 Removing the extension, or loading a copy from a different folder, forgets your allowed sites.
 
+Android: a separate test app, "Adgecko Shield", blocks the same ad, tracker and malware hosts in all apps of a phone (a local DNS filter). It is a prototype. Install it with adb as in [docs/android/shield.md](docs/android/shield.md). Its behaviour on a phone is UNVERIFIED.
+
 ## How to use
 
 It works as soon as it is installed. Click the gecko in the toolbar to open the popup.

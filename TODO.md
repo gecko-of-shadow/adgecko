@@ -1,6 +1,6 @@
 # To do
 
-Last update: 2026-11-17. Version 0.3.6 is the last release. An Android plan was added.
+Last update: 2026-11-17. Version 0.3.6 is the last release. Android milestone 1 (Adgecko Shield) is built in a draft pull request.
 
 ## Where it stands
 
@@ -74,7 +74,10 @@ The plan is `docs/android/PLAN.md`. All phone behaviour is UNVERIFIED.
 
 - [ ] Owner, no code (plan section 5): give the phone facts (brand, model, Android version, daily browser, other VPN apps, Private DNS mode, country).
 - [ ] Owner, no code (plan section 5, track B0): load the unchanged extension in Vivaldi for Android (Load unpacked) and report what works.
-- [ ] Milestone 1 (DNS shield): a cloud build session does it in its own draft pull request. Then install the debug APK with adb and do the checks O1 to O7 (plan section 6.11).
+- [x] Milestone 1 (DNS shield) is built: draft pull request from `claude/android-shield-m1`. The CI build job makes the APK artifact `adgecko-shield-debug`.
+- [ ] Owner: install the debug APK with adb and do the checks O1 to O7 (`docs/android/shield.md`, sections 4 and 5). Report each result. Then remove the UNVERIFIED marks that the checks prove.
+- [ ] Owner decision OD-3 (APK signing) before milestone 2. With the CI debug key, each update needs an uninstall.
+- [ ] Check on a phone: Android accepts the foreground service type `systemExempted` for the VPN with no alarm permission (lint finding, `HANDOFF.md`).
 - [ ] Owner decisions OD-1 to OD-25 (plan section 9). Milestone 1 uses the recommendations of the plan under the owner's standing approval. Change any of them in the pull request review.
 - [ ] Later milestones: link and text gates (M2), list refresh on the phone (M3), signed list (M4). Optional: in-app browser (M6), stream helpers (M7).
 

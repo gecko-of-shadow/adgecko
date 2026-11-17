@@ -6,6 +6,14 @@ Dates in this file are the owner's local date (UTC-6). The dates stored on packe
 
 ## Unreleased
 
+### Android
+
+- New: "Adgecko Shield" milestone 1 in `android/` (`docs/android/PLAN.md`, section 6). A native app with a local DNS-only VPN filter for all apps. Its data comes from `src/rules/` at build time: 194,480 list hosts and 15,291 threat names, with the never-block rules of the extension. Controls: On/Off, "Ads + threat" or "Threat only", **Pause 10 min**, a Quick Settings tile, **Recent blocks** with **Allow this domain**, an allow list with export and import, **Exclude apps**, a Self-test, a Private DNS warning and an About screen with the licences. No AndroidX library, no account, no analytics. All phone behaviour is UNVERIFIED.
+- New: `scripts/export-android-data.mjs`, `scripts/lib/android-dns-policy.mjs` and `scripts/build-android-vectors.mjs`, with the parity vectors in `test/fixtures/android/vectors/` and the tests `android-data`, `android-vectors`, `android-static` and `android-workflow`.
+- CI: new workflow `android.yml` (build job with the APK artifact `adgecko-shield-debug`, emulator job on API 33 and 36). It uses two more GitHub-owned actions: `actions/setup-java` and `actions/upload-artifact`.
+- Repository: new `.gitignore` and `.gitattributes` lines for Android build output and signing files. The extension, its permissions and its zip do not change.
+- New: `docs/android/shield.md`, the build, install and check steps.
+
 ### Docs
 
 - New: `docs/android/PLAN.md`, a plan to put the Adgecko jobs on an Android phone. Milestone 1 is "Adgecko Shield", a native app with a local DNS filter for all apps. Its data comes from `src/rules/` at build time. The plan also covers a link gate, a text check, list refresh on the phone and the browser for the web-only jobs. No Android code exists yet. All phone behaviour is UNVERIFIED.
