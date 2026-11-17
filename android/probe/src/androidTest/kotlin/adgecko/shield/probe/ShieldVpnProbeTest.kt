@@ -86,14 +86,23 @@ class ShieldVpnProbeTest {
         return vpn
     }
 
+    /**
+     * Waits until the VPN is the default network of this app, not only until
+     * a VPN network exists. CI run 8 (API 36): the VPN network was visible
+     * 150 ms before Android put this app's UID into its range; a query in
+     * that time used the real network, and bindSocket() to the VPN gave EPERM.
+     */
     private fun waitVpn(ms: Long): Network? {
         val end = System.currentTimeMillis() + ms
         while (System.currentTimeMillis() < end) {
-            vpnNetwork()?.let { n ->
-                if (cm.getLinkProperties(n)?.dnsServers?.isNotEmpty() == true) return n
-            }
+            val active = cm.activeNetwork
+            val caps = active?.let { cm.getNetworkCapabilities(it) }
+            if (active != null && caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true &&
+                cm.getLinkProperties(active)?.dnsServers?.isNotEmpty() == true
+            ) return active
             Thread.sleep(250)
         }
+        log("timeout: active network=${cm.activeNetwork} vpn=${vpnNetwork()}")
         return null
     }
 

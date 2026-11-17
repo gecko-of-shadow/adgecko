@@ -95,6 +95,7 @@ Draft pull request 19, workflow `android.yml`:
   - The consent came from `appops set adgecko.shield ACTIVATE_VPN allow`; the UI Automator fallback was not needed.
   - Note: the data load in the app process took 0.4 to 3.0 s on the emulators (plan budget A8 is 1 s on the JDK only). During that time only the Self-test name is blocked. Measure it on the phone.
 - Runs 6 and 7 (`b823c9b`, `bb76286`): GREEN. Build job, emulator API 33 and emulator API 36 passed. Run 7 has the fixes of the second review.
+- Run 8 (`1dd4f5a`, a commit that changed only HANDOFF.md): the build job failed with HTTP 429 "Too Many Requests" from Maven Central (an external rate limit). The one re-run built the APK. Emulator API 36 then failed one probe test: the probe asked 150 ms after the VPN was established, but before Android had made the VPN the default network of the probe app (`active network=100 vpn=102`); its answer came from the real network, and `bindSocket()` gave EPERM. Root cause in the probe, not in the app: it waited only until a VPN network existed. Fixed: the probe waits until its own default network is the VPN.
 
 ## Open questions for the owner
 
