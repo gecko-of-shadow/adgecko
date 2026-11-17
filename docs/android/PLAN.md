@@ -19,7 +19,7 @@ The owner wants the 8 Adgecko jobs on an Android phone. The owner said: "think o
 
 - The panel selected design "shield". Both judges selected it.
 - The base is one small native app, "Adgecko Shield", in a new `android/` folder of this repository.
-- The app uses three Android gates. No gate needs a dangerous permission.
+- The app uses three Android gates. No gate needs a dangerous permission. The app asks for `POST_NOTIFICATIONS` (a runtime permission) only for its status notification. The shield works without it.
   1. DNS gate: a local DNS-only `VpnService`. It blocks Adgecko's whole-domain ad, tracker and threat hosts in all apps. (M1)
   2. Link gate: the app holds the browser role and checks each tapped link before the real browser opens it. (M2)
   3. Text gate: "Check with Adgecko" in the selection menu, a share target and a clipboard tile. (M2)
@@ -50,7 +50,7 @@ The owner wants the 8 Adgecko jobs on an Android phone. The owner said: "think o
 | "shield" A3 expects about 15,865 threat hosts in the DNS file. 574 of them are IPv4 literals (checked). | `threat-hosts.txt` has the 15,291 names. The 574 IPv4 literals go to a gate-only file in M2. The tests compute all counts from the JSON files. |
 | "core" A2 expects 195,071 list hosts. 591 are IPv4 literals (checked). | The tests compute the count after the IP filter: 194,480 today. |
 | "experience": `src/kick.js` checks the host, so a test page on another origin sees no wrapper. | The Kick room is not in M1. If M7 builds it, the tests serve the fixture under `https://kick.com/` through `shouldInterceptRequest`. |
-| New finding: the Deno suite runs without `--allow-write`. A test cannot write an export into a temporary folder. | The export script has a pure builder function. The Deno test imports it and compares bytes in memory. |
+| New finding: the Deno suite runs without `--allow-write`. A test has no direct write permission. (A child process has no limits, TESTING.md section 1, but a pure function is simpler.) | The export script has a pure builder function. The Deno test imports it and compares bytes in memory, with no child process. |
 | New finding: if the app excludes its own package, its Self-test bypasses the VPN. | M1 does not exclude its own package (see 1.3). M3 binds its download sockets to the real network instead. |
 
 ---
@@ -110,7 +110,7 @@ How it works:
 - At build time, a Gradle task runs the export script with Deno. The script loads the real modules of `src/` and reads `src/rules/`. It writes host files, the never-block data, the public-suffix data, the licences and a manifest with SHA-256 values into a `build/` folder. Gradle adds that folder to the APK assets.
 - On the phone, the Shield routes only its fake DNS addresses into the VPN. All other traffic uses the real network as before.
 - The system resolver sends each DNS query to a fake address in a TEST-NET range. The Shield reads the packet. `DnsPolicy` decides. A blocked name gets a NODATA answer at once. An allowed query goes to the DNS servers of the real network through a socket that `VpnService.protect()` covers.
-- Layer order of `DnsPolicy` (the same order as the DNR priorities 2,000,020 > 2,000,010 > 2,000,000 > 1):
+- Layer order of `DnsPolicy`. It follows the DNR priorities 2,000,020 > 2,000,010 > 2,000,000 > 1, with one difference (see the note after the list):
   1. Self-test marker `self-test.adgecko.test`: BLOCK.
   2. User allow list (Allow this domain): FORWARD.
   3. Threat names: BLOCK.
@@ -118,6 +118,7 @@ How it works:
   5. List hosts (mode "Ads + threat" and not paused): BLOCK.
   6. All other names: FORWARD.
 - Each layer matches the host and each parent domain (`requestDomains` meaning).
+- Difference from DNR: static rule 1 is an `allowAllRequests` rule for YouTube and Kick frames (priority 2,000,000). In Chrome, each request from such a frame inherits this allow. Thus the list rules do not apply on YouTube and Kick pages, also for third-party list hosts such as `imasdk.googleapis.com`. DNS has no frame context. Thus the Shield blocks list hosts also when a YouTube or Kick page or app asks for them. Risk 21 and one documented cross-check case cover this. The effect on the phone is UNVERIFIED.
 - The tile, the notification and the screens write to `ShieldStore`. The service swaps the policy at once. The 60 s negative TTL limits the cache delay.
 
 ---
@@ -177,11 +178,11 @@ Notes:
 
 ### 4.2 Changed files
 
-- `.gitignore`: add `android/**/build/`, `android/.gradle/`, `android/.kotlin/`, `android/.idea/`, `android/local.properties`, `android/keystore.properties`, `*.apk`, `*.aab`, `*.jks`, `*.keystore`, `*.p12`, `*.pem`.
+- `.gitignore`: add `android/**/build/`, `android/**/.gradle/`, `android/**/.kotlin/`, `android/.idea/`, `android/local.properties`, `android/keystore.properties`, `*.apk`, `*.aab`, `*.jks`, `*.keystore`, `*.p12`, `*.pem`.
 - `.gitattributes`: add `*.bat text eol=crlf`, `*.jar binary`, `*.jks binary`, `*.keystore binary`, `*.webp binary`.
 - `CLAUDE.md`: a task-table row for Android and the Android build command.
-- `.planning/codebase/`: STRUCTURE.md, STACK.md, TESTING.md (sections 1, 4, 6, 10, 11), CONVENTIONS.md (section 1 line-end rule, section 8 two generator rows, section 12 two more GitHub-owned actions), INTEGRATIONS.md section 8 (new workflow row), ARCHITECTURE.md (new section "Android Shield").
-- `README.md`: the Install section only. Read TESTING.md section 7 first, because tests read some sentences.
+- `.planning/codebase/`: STRUCTURE.md, STACK.md, TESTING.md (sections 1, 3, 4, 6, 7, 10, 11), CONVENTIONS.md (the line-end rules of sections 1 and 8, section 8 two generator rows, section 12 two more GitHub-owned actions), INTEGRATIONS.md section 8 (new workflow row), ARCHITECTURE.md (new section "Android Shield").
+- `README.md`: the Install section only. Read TESTING.md section 7 first, because tests read some sentences. Do not write "permissions are exactly" or "exactly `storage`": `test/docs-claims.test.js` forbids these words.
 - `CHANGELOG.md`: a subsection under "Unreleased". Do not add an Android version heading (`scripts/release-notes.py` finds sections by "## <version> (").
 - `HANDOFF.md`, `TODO.md`.
 
@@ -205,7 +206,7 @@ Notes:
 | `threat-hosts.txt` | Threat names, same format. 15,291 lines today. | `threat-network.json`, minus IP literals, minus `protectedReason()` hosts (0 today). |
 | `never-block.json` | `{"suffixes": [21 entries], "except": ["imasdk.googleapis.com"]}` | `meta.json` `never_block_suffixes` and `GeneralAdblockUpdate.NEVER_BLOCK_EXCEPTIONS`. |
 | `psl.json` | `GeckoPublicSuffix.DATA` (12 keys, about 111 KB). | `src/threat/psl.js` |
-| `licenses/LICENSE`, `licenses/LICENSES.md`, `licenses/LICENSE-EasyList.txt`, `licenses/CREDIT-EasyList.txt` | Licence and credit texts, byte copies. | `LICENSE`, `src/rules/LICENSES.md`, `src/LICENSE-EasyList.txt`, `src/rules/CREDIT-EasyList.txt` |
+| `licenses/LICENSE`, `licenses/LICENSES.md`, `licenses/LICENSE-EasyList.txt`, `licenses/CREDIT-EasyList.txt`, `licenses/PSL-NOTICE.txt`, `licenses/KOTLIN-NOTICE.txt` | Licence and credit texts. The first four are byte copies. The PSL notice comes from the header of `src/threat/psl.js` (MPL-2.0). The Kotlin notice is the Apache-2.0 notice of the Kotlin standard library. | `LICENSE`, `src/rules/LICENSES.md`, `src/LICENSE-EasyList.txt`, `src/rules/CREDIT-EasyList.txt` |
 | `shield-manifest.json` | `format: 1`, `kind: "adgecko-shield-data"`, `serial` (YYYYMMDDHH of `packed_at_utc`), `packedAtUtc`, `parserVersion` (5 today), `projection: "whole-domain-v1"`, `sources` (list id and SHA-256 from `meta.json`), `files` (path, SHA-256, bytes, line count). | Computed. |
 
 - `ExportShieldData` (in `android/buildSrc`) is an abstract Gradle task. It declares the source files and the script as `@InputFiles` and the folder as `@OutputDirectory`. It uses `ExecOperations`. If Deno is missing, it stops with a clear message.
@@ -245,7 +246,9 @@ adb shell settings get global private_dns_mode
 adb shell cmd role get-role-holders android.app.role.BROWSER
 ```
 
-2. Keep the built-in protections on: Play Protect, Chrome Safe Browsing (Standard or Enhanced), the spam protection of the messaging app, Samsung Auto Blocker or Advanced Protection. Pause Auto Blocker or Advanced Protection only for an install, then turn it on again.
+`private_dns_mode` prints `null` when nobody changed the setting. `null` means the default, Automatic.
+
+2. Keep the built-in protections on: Play Protect, Chrome Safe Browsing (Standard or Enhanced), the spam protection of the messaging app, Samsung Auto Blocker or Advanced Protection. Pause Auto Blocker or Advanced Protection only for one adb session (install and checks), then turn it on again.
 3. Turn on USB debugging only for a session with the PC. Turn it off after the session.
 4. Do not install a second VPN or DNS-blocker app (for example RethinkDNS) for the Shield period. Android permits one VPN at a time. If you use a VPN app now, tell us. The Shield will stop it.
 5. Track B0, the browser for the web-only jobs (no code, parallel to M1):
@@ -289,7 +292,7 @@ Out of scope in M1: the link gate, the text check, the clipboard tile, list down
 | `:shield-core` | Kotlin/JVM library, no Android classes. Toolchain JDK 21, bytecode 17. | `adgecko.shield.core` | Policy, data loading, DNS and IP packet code, vector runner. JVM tests run in the cloud container. |
 | `:app` | `com.android.application`. compileSdk 36, minSdk 33, targetSdk 36. No native code. | `adgecko.shield` (placeholder, OD-2) | VPN service, tile, screens, store. |
 | `:probe` | `com.android.application`, debug only. Never shipped. | `adgecko.shield.probe` | One instrumented test that sends DNS queries through the VPN from another app. |
-| `android/buildSrc` | Gradle build logic. | (none) | `ExportShieldData`, `VerifyManifestPolicy`. |
+| `android/buildSrc` | Gradle build logic. It needs the AGP API dependency (`com.android.tools.build:gradle-api`) to read the `MERGED_MANIFEST` artifact. | (none) | `ExportShieldData`, `VerifyManifestPolicy`. |
 
 ### 6.3 Classes
 
@@ -318,12 +321,12 @@ Out of scope in M1: the link gate, the text check, the clipboard tile, list down
 - `vpn.ShieldNotification`: channel "shield", low importance, ongoing. Text "Protecting all apps" and the number of blocks today (memory only). Actions "Pause 10 min" (`PendingIntent.getService`) and "Recent blocks" (`PendingIntent.getActivity`).
 - `vpn.ShieldState`: process-wide state: On, Paused (with end time), Off; counts; `RecentBlocks`.
 - `tile.ShieldTileService : TileService`. A tap starts or stops the shield. When `VpnService.prepare()` returns an Intent, the tile opens `ConsentActivity` with `startActivityAndCollapse(PendingIntent)` on API 34+, and with the Intent form on API 33. A long press opens `MainActivity` (`QS_TILE_PREFERENCES` filter).
-- `ui.MainActivity` (launcher): On/Off switch; mode; status line; data date and counts from the manifest; Self-test button; Private DNS warning; Always-on VPN hint (`Settings.ACTION_VPN_SETTINGS`); links to the other screens.
+- `ui.MainActivity` (launcher): On/Off switch; mode; status line; data date and counts from the manifest; the Private DNS mode, the number of blocks and the last error (so that the owner checks need no adb); Self-test button; Private DNS warning; Always-on VPN hint (`Settings.ACTION_VPN_SETTINGS`); links to the other screens.
 - `ui.ConsentActivity`: calls `VpnService.prepare()` and starts the service after consent. It asks for `POST_NOTIFICATIONS` once.
 - `ui.RecentBlocksActivity`: the last 200 names with time and layer. "Allow this domain" for one name (two steps for a threat name). If `DomainRules` refuses the name, the screen shows the reason and offers "Pause 10 min" and "Exclude an app".
 - `ui.AllowListActivity`: the list, remove an entry, export with `ACTION_CREATE_DOCUMENT`, import with `ACTION_OPEN_DOCUMENT`. Format: `{"format":1,"kind":"adgecko-allow-domains","threatAllowDomains":[...]}`. Import also accepts a plain JSON array of strings. Each entry goes through `DomainRules`. Max 1,000 entries.
 - `ui.AppExclusionsActivity`: the launcher apps, found through a `queries` element (MAIN + LAUNCHER). No `QUERY_ALL_PACKAGES`.
-- `ui.AboutActivity`: the copyright lines of `LICENSE`, the no-warranty text, the full `LICENSE`, `LICENSES.md`, the EasyList credit, the data date, and the source commit (Gradle puts the commit SHA from the CI environment in `BuildConfig`; else "unknown"). This covers GPL-3.0 sections 5(d) and 6(d).
+- `ui.AboutActivity`: the copyright lines of `LICENSE`, the no-warranty text, the full `LICENSE`, `LICENSES.md`, the EasyList credit, a Public Suffix List notice (source, version 2026-11-15, MPL-2.0; from the header of `src/threat/psl.js`), the Apache-2.0 notice of the Kotlin standard library, the data date, and the source commit. Gradle puts the commit SHA in `BuildConfig` (set `buildFeatures.buildConfig = true`). On a `pull_request` run, CI passes `github.event.pull_request.head.sha` through `env:`, because `GITHUB_SHA` is then a temporary merge commit. Else the screen shows "unknown". This covers GPL-3.0 sections 5(d) and 6(d).
 - `ui.SelfTest`: see 6.6.
 - `store.ShieldStore`: `SharedPreferences` for switches. `allow-domains.json` and `excluded-apps.json` in `noBackupFilesDir`.
 - `debug.DebugStartActivity` (debug source set only, exported): it starts the shield if consent exists, then finishes. The CI emulator uses it.
@@ -343,7 +346,7 @@ The source of each version is the research of 2026-11-17 or the design "core" ch
 
 | Item | Version | Note |
 |---|---|---|
-| Gradle wrapper | 9.9.1 | distributionSha256Sum `d8a18a7a841dd5df825d35a685fad6f2d7f12ac0c280e57b67c27b4a520ba228`. Wrapper jar SHA-256 `621008afc4f5d59357fcf06ffa644dd5aade5e091bdc363742710445f73cdaf8`. The container's Gradle 8.14.3 is not used. |
+| Gradle wrapper | 9.9.1 | distributionSha256Sum `d8a18a7a841dd5df825d35a685fad6f2d7f12ac0c280e57b67c27b4a520ba228`. Wrapper jar SHA-256 `621008afc4f5d59357fcf06ffa644dd5aade5e091bdc363742710445f73cdaf8`. The wrapper task copies the jar of the Gradle version that runs it. Thus make the wrapper with Gradle 9.9.1, not with the container's 8.14.3: download `gradle-9.9.1-bin.zip`, check its SHA-256, and run its `gradle wrapper --gradle-version 9.9.1`. Or run the wrapper task a second time through `./android/gradlew`. Check the jar SHA-256 before the commit. |
 | Android Gradle Plugin | 9.5.1 | Latest stable on Google Maven (research). Fit with Gradle 9.9.1 not checked. |
 | Kotlin | 2.4.21 | Stable on Maven (checked by design "core"). AGP 9 has built-in Kotlin support (from memory, not checked). The first build decides if `:app` applies `org.jetbrains.kotlin.android` or uses the built-in support. `:shield-core` uses `org.jetbrains.kotlin.jvm` 2.4.21. Record the result in HANDOFF.md. |
 | Runtime libraries | none | Only the Kotlin standard library. No AndroidX, no OkHttp, no WorkManager, no Compose, no Google Play services, no WebView. |
@@ -381,8 +384,8 @@ Deno tests:
   - `never-block.json` equals `meta.json` `never_block_suffixes` and `NEVER_BLOCK_EXCEPTIONS`. The model gives the same answer as `isNeverBlock()` on all sample hosts.
   - The 13 hosts of static rules 1 to 3 are below a never-block suffix. A future change of rules 1 to 3 then fails this test.
   - `packed_at_utc` and the source SHA-256 values in the manifest equal `meta.json`.
-  - Cross-check: at least 400 samples go through `evaluate()` of `test/fixtures/dnr-matcher.js` (type `xmlhttprequest`, no initiator) on the projected rule set: the list hosts as priority-1 block rules, the threat rules at 2,000,010, static rules 1 to 3, and the synthetic user allow list as an allow rule at 2,000,020. BLOCK in `dnsDecision()` must equal a DNR block for each sample. (The matcher is linear, about 13 ms for each request; 400 samples take about 5 s.)
-  - One-direction check on the full packed rules (type `script`, initiator `news.example`): each DNS BLOCK of the list or threat layer is a DNR block. The test prints the count of hosts that only scoped DNR rules block.
+  - Cross-check: at least 400 samples go through `evaluate()` of `test/fixtures/dnr-matcher.js` (type `xmlhttprequest`, no initiator) on the projected rule set: the list hosts as priority-1 block rules, the threat rules at 2,000,010, static rules 1 to 3, and the synthetic user allow list as an allow rule at 2,000,020. BLOCK in `dnsDecision()` must equal a DNR block for each sample. Use only the state `{mode: "ads+threat", paused: false}`, and leave out the Self-test marker: the DNR projection has no mode, no pause and no marker. Group the list hosts as in the packed rules (80 hosts for each rule). The matcher is linear, about 7 to 13 ms for each request; 400 samples take about 5 s. Add one documented case with the frame chain `["kick.com"]` that expects the frame-allow difference of section 3.
+  - One-direction check on the full packed rules: build a host-suffix set from the block rules of the packed rule files. Do not use `evaluate()` for this check: at 7 to 13 ms for each request, about 209,771 names take more than 20 minutes. Each DNS BLOCK of the list or threat layer must be in that set. Run `evaluate()` (type `script`, initiator `news.example`) on the samples only. The test prints the count of hosts that only scoped DNR rules block.
 - `test/android-vectors.test.js`: the committed vectors equal the generator output; the JS reference passes each case; the test prints the case count of each file.
 
 Kotlin tests (`:shield-core`, JVM):
@@ -465,14 +468,14 @@ Logs:
   - The exported components are only those of 6.3.
   - An explicit allow list in the task holds any library addition. It is empty in M1.
 - A10. Deno static tests:
-  - `test/android-static.test.js` reads only tracked files (`git ls-files android/`). It finds no `addJavascriptInterface`, `WebView`, `setAllowUniversalAccessFromFileURLs`, `certificates src="user"`, `usesCleartextTraffic="true"`, `QUERY_ALL_PACKAGES`, `BIND_ACCESSIBILITY_SERVICE` or `BIND_NOTIFICATION_LISTENER_SERVICE`. It finds no public IP literal (only documentation ranges; loopback only below `src/test`). It finds none of the 8 list hosts in Kotlin. It finds no file below `android/` with the name of a `src/rules/` file. It checks the new `.gitignore` lines.
+  - `test/android-static.test.js` reads only tracked files (`git ls-files android/`). In the app and probe sources and manifests (`android/app/src/` and `android/probe/src/`; not `android/buildSrc/`, which holds the deny list of the policy task), it finds no `addJavascriptInterface`, `WebView`, `setAllowUniversalAccessFromFileURLs`, `certificates src="user"`, `usesCleartextTraffic="true"`, `QUERY_ALL_PACKAGES`, `BIND_ACCESSIBILITY_SERVICE` or `BIND_NOTIFICATION_LISTENER_SERVICE`. It finds no public IP literal (only documentation ranges; loopback only below `src/test`). It finds none of the 8 list hosts in Kotlin. It finds no file below `android/` with the name of a rule data file (`src/rules/*.json`). It checks the new `.gitignore` lines.
   - `test/android-workflow.test.js` checks `android.yml`: each `uses:` has a 40-character SHA; only the 4 actions of 6.4; `runs-on: ubuntu-24.04`; top-level `permissions: contents: read`; `persist-credentials: false` on each checkout; no `secrets.`; no `pull_request_target`; the `sha256sum -c` step for the wrapper jar.
 - A11. The APK contains `assets/shield/shield-manifest.json` and each file that the manifest names. The SHA-256 values equal the task output. The debug APK is smaller than 10 MB (estimate: 2 to 4 MB).
 - A12. `git diff --stat origin/main -- manifest.json src icons scripts/frozen-pins.json scripts/release-gate.sh .github/workflows/checks.yml` shows nothing. `bash scripts/pack-zip.sh` still writes 64 files with no `android/` entry.
 
 ### 6.8 CI workflow `.github/workflows/android.yml`
 
-- Triggers: `pull_request` and `push` to `main`, with paths `android/**`, `scripts/export-android-data.mjs`, `scripts/build-android-vectors.mjs`, `scripts/lib/android-*.mjs`, `test/fixtures/android/**`, `src/rules/**`, `src/threat/**`, `src/general/**`, `.github/workflows/android.yml`. Also `workflow_dispatch`.
+- Triggers: `pull_request` and `push` to `main`, with paths `android/**`, `scripts/export-android-data.mjs`, `scripts/build-android-vectors.mjs`, `scripts/lib/android-*.mjs`, `test/fixtures/android/**`, `src/rules/**`, `src/threat/**`, `src/general/**`, `LICENSE`, `src/LICENSE-EasyList.txt`, `.github/workflows/android.yml`. Also `workflow_dispatch`.
 - Do not make it a required check while it has a paths filter.
 - `permissions: contents: read` at the top. No secret. No `pull_request_target`. `runs-on: ubuntu-24.04`. Values from contexts go into `env:` first.
 - No Gradle cache in M1 (simpler; no cache-poisoning question). Add it later if CI time is a problem.
@@ -504,7 +507,7 @@ steps:
 
 The runner image has the Android SDK (`ANDROID_HOME`, platforms up to android-37.2, build-tools 37.0.0; research). If android-36 or build-tools 36.0.0 is missing, a step installs them with `sdkmanager`.
 
-Job `emulator` (needs `build`, matrix API 33 and API 36, `google_apis`, `x86_64`, `fail-fast: false`), in `android/ci/emulator-run.sh`, with no third-party action:
+Job `emulator` (needs `build`, matrix API 33 and API 36, `google_apis`, `x86_64`, `fail-fast: false`), in `android/ci/emulator-run.sh`, with no third-party action. Gradle runs the export again in this job, thus it also needs checkout, `actions/setup-java` (JDK 21) and `denoland/setup-deno` (v2.9.8) before Gradle. Give `android/ci/emulator-run.sh` git mode 100755, or call it with `bash`.
 
 1. Enable KVM with a udev rule (steps from memory, not checked).
 2. `sdkmanager` installs `emulator` and `system-images;android-<API>;google_apis;x86_64` (image names not checked).
@@ -529,7 +532,7 @@ CI emulator criteria (read them with the GitHub MCP tools, for example `actions_
 
 ### 6.9 Build steps for the cloud session
 
-The ordered task list is in the field `milestone1Tasks`. Summary:
+The ordered task list is in section 13. Summary:
 
 1. Fetch `origin/main`, make a branch, read the map.
 2. `.gitignore` and `.gitattributes` first.
@@ -564,7 +567,7 @@ Do not write these paths into a repository file.
 Before the install:
 
 - On the PC, download the artifact `adgecko-shield-debug` from the Actions run of the draft pull request (GitHub needs a login). The file is `adgecko-shield-debug.zip`.
-- On the phone, turn on USB debugging. On a Samsung phone, pause Auto Blocker (or Advanced Protection: "Pause temporarily") only for this install. Turn it on again after the install.
+- On the phone, turn on USB debugging. On a Samsung phone, Auto Blocker also blocks USB commands, and USB debugging is greyed out while it is on (research, not checked on a phone). Pause Auto Blocker (or Advanced Protection: "Pause temporarily") only for the adb session (install and checks). Turn it on again at the end of the session (OD-24).
 
 PowerShell 5.1 commands. Run one command at a time.
 
@@ -607,7 +610,7 @@ All results are UNVERIFIED until the owner reports them.
 - O1. Install as in 6.10. Expected: "Success".
 - O2. Open the app. Allow notifications. Turn the shield On. Accept the VPN dialog. Expected: a key icon and the notification "Protecting all apps".
 - O3. Tap "Self-test". Expected: "blocked", then "resolved".
-- O4. Read the Private DNS mode. Expected: `off` or `opportunistic`. If it is `hostname`, the app shows its warning. Changing the setting is your decision.
+- O4. Read the Private DNS mode in the app, or with the command below. Expected: `off` or `opportunistic`. The command prints `null` when nobody changed the setting; `null` means the default, Automatic. If it is `hostname`, the app shows its warning. Changing the setting is your decision.
 
 ```powershell
 adb shell settings get global private_dns_mode
@@ -742,16 +745,18 @@ Headless Chromium (Playwright, in the container) runs the unchanged frozen scrip
 10. Fail-safe: the DNS policy and the M2 gate fail open on an internal error and count the error.
 11. Do not advise "Block connections without VPN" with DNS-only routes.
 12. Keys: no signing key, keystore or password in the repository. A pull request run has no secret.
-13. Installs: pause Samsung Auto Blocker or Advanced Protection only for an install, then turn it on again. Turn off USB debugging after a session.
+13. Installs: pause Samsung Auto Blocker or Advanced Protection only for one adb session (install and checks), then turn it on again. Turn off USB debugging after a session.
 14. Repository: no absolute path, e-mail address, real IP address, token or person's name in a file or commit message. `scripts/privacy-check.py` checks each change.
 
 ---
 
 ## 9. Owner decisions
 
+Defaults: for OD-8 to OD-12, milestone 1 uses the recommendation as a default under the owner's standing approval. The owner can change each one in the pull request review.
+
 | ID | Decision | Options | Recommendation | Needed before |
 |---|---|---|---|---|
-| OD-1 | New files in this repository | Approve `android/`, `scripts/export-android-data.mjs`, `scripts/build-android-vectors.mjs`, `scripts/lib/android-dns-policy.mjs`, `test/fixtures/android/vectors/`, 4 new Deno tests, `.github/workflows/android.yml`, `docs/android/shield.md`. The cloud session cannot create a new repository. | Approve | M1 |
+| OD-1 | New files and document updates in this repository | Approve the document updates of section 4.2 (also the `CLAUDE.md` task row, the `README.md` Install section and `.planning/codebase/`) and the new files `android/`, `scripts/export-android-data.mjs`, `scripts/build-android-vectors.mjs`, `scripts/lib/android-dns-policy.mjs`, `test/fixtures/android/vectors/`, 4 new Deno tests, `.github/workflows/android.yml`, `docs/android/shield.md`. The cloud session cannot create a new repository. | Approve | M1 |
 | OD-2 | applicationId and Kotlin namespace | No personal string and no invented domain. | Placeholder `adgecko.shield` | M1 (a later change needs a reinstall) |
 | OD-3 | APK signing | (a) CI debug key, new in each run: each update needs an uninstall. (b) A release key on the owner's PC, never in the repository. (c) A manual release workflow on `main` with the key in a GitHub environment secret. | (a) for M1; (b) or (c) before M2 | M2 |
 | OD-4 | `android.yml` | Two more GitHub-owned actions (`actions/setup-java`, `actions/upload-artifact`), an emulator job with no third-party action. CONVENTIONS.md section 12 changes. Not a required check. | Approve | M1 |
@@ -760,7 +765,7 @@ Headless Chromium (Playwright, in the container) runs the unchanged frozen scrip
 | OD-7 | Phone facts | Brand, model, Android version, daily browser, other VPN apps, Private DNS mode, Chrome secure DNS, country, Auto Blocker or Advanced Protection state. | Give them | Owner check of M1 |
 | OD-8 | Default mode | "Ads + threat" or "Threat only". | "Ads + threat", with Pause and app exclusion | M1 (can change later) |
 | OD-9 | Block answer | NODATA with SOA and 60 s TTL, or NXDOMAIN. | NODATA (as DNS66 and AdAway) | M1 |
-| OD-10 | List filter for DNS | (a) Same meaning as the extension: 194,480 hosts. (b) Also remove the 70 names that are themselves public suffixes or platform parents: 194,410. (c) Remove all 268 protected names: 194,212. | (a). The extension already blocks every request to these names; DNS adds only the navigation block. The user can allow a site name below a public suffix. | M1 |
+| OD-10 | List filter for DNS | (a) Same meaning as the extension: 194,480 hosts. (b) Also remove the 70 names that are themselves public suffixes or platform parents: 194,410. (c) Remove all 268 protected names: 194,212. | (a), as a default that the owner can change. The extension blocks these names on most pages. DNS also blocks navigation to them, and it also blocks them on YouTube and Kick pages, where the frame allow of rule 1 lets them through in Chrome. Cost: `userDomainReason()` refuses 264 of the 268 names (for example `ads.twitter.com`), so "Allow this domain" can never allow them. Only Pause, Exclude this app or Threat only helps for them. | M1 |
 | OD-11 | Pause | Pause the list layer only (threat stays on), or pause all. | List layer only | M1 |
 | OD-12 | Recent blocks | Memory only, or on disk for 24 h. | Memory only | M1 |
 | OD-13 | Browser for the web-only jobs (B0) | Vivaldi with Load unpacked; Edge Canary (CRX); a Firefox variant (build step, Mozilla account); the in-app GeckoView browser (M6). | Vivaldi first | B0 |
@@ -774,7 +779,7 @@ Headless Chromium (Playwright, in the container) runs the unchanged frozen scrip
 | OD-21 | Stream helpers | Accept or reject the terms-of-service risk of YouTube, Twitch and Kick. | Decide after B0 | M7 |
 | OD-22 | Lockdown | If "Block connections without VPN" is necessary, plan M8. | Not now | M8 |
 | OD-23 | `ads.twitch.tv` (open in TODO.md) | Block or not. | The Shield follows `isNeverBlock()` and `NEVER_BLOCK_EXCEPTIONS`, so it follows the extension decision automatically. | Any time |
-| OD-24 | Installs | Pause Samsung Auto Blocker or Advanced Protection only for an adb install, then turn it on again. | Accept | M1 install |
+| OD-24 | Installs | Auto Blocker also blocks USB commands. (a) Pause Samsung Auto Blocker or Advanced Protection only for one adb session (install and checks), then turn it on again. (b) Install without adb (file install) and do the checks in the app. | (a), for one session at a time | M1 install |
 | OD-25 | Other VPN apps | The Shield and another VPN (also RethinkDNS) cannot run together. | Use only the Shield | M1 install |
 
 ---
@@ -801,6 +806,8 @@ Headless Chromium (Playwright, in the container) runs the unchanged frozen scrip
 18. Repository. Chrome loads the repository root unpacked on the PC, so it also sees `android/`. A Windows reserved name (CON, NUL and similar) or a `.pem` file there can stop or warn the load. Large `build/` trees slow a reload (not checked). Do not build Android inside the folder that Chrome loads.
 19. Privacy check. A binary file (the wrapper jar) can match a secret row by chance (not checked). The fix is a `BINARY_NOISE_BLOBS` entry, merged first in its own pull request. Committed vectors use reserved names only, but a public-suffix example could still match a secret row; CI shows it.
 20. CI schedule rules do not apply in M1 (no schedule). M4 needs a commit every 60 days, or GitHub disables a scheduled workflow.
+21. Frame allow. In Chrome, static rule 1 lets list hosts through on YouTube and Kick pages. DNS has no frame context, so the Shield blocks them there and in the YouTube and Kick apps. A page part or an app feature can fail (UNVERIFIED). Remedies: Exclude this app, Allow this domain (where `userDomainReason()` accepts the name), Threat only.
+22. Real host names in new files. The secret privacy rows match some list host names by design. New tests and documents must use reserved names (`*.test`, `*.example`, `example.com`). The container cannot run the secret rows; only CI shows a hit.
 
 ---
 
@@ -843,7 +850,11 @@ Headless Chromium (Playwright, in the container) runs the unchanged frozen scrip
 - Play Protect warnings for the APK; adb installs under Advanced Protection.
 - Latency, battery, memory and speed on a phone.
 
-### 11.4 UNVERIFIED
+### 11.4 Fact check
+
+A fact-check agent compared this plan with the research files and the code. It found 16 errors and 13 gaps. All are corrected in this version. Examples: the frame allow of rule 1 (section 3, risk 21), the wrapper procedure (section 6.4), the Samsung Auto Blocker and adb conflict (section 6.10, OD-24), two static-test conflicts (A10), the speed of the full cross-check (section 6.5), and the PSL and Kotlin notices (section 6.3).
+
+### 11.5 UNVERIFIED
 
 All phone behaviour in this plan.
 
@@ -935,17 +946,17 @@ Lists, feeds and licences:
 
 Do the tasks in this order. Each task has a done condition.
 
-1. T1 Prepare: run git fetch origin main, create the session branch, and read HANDOFF.md, TODO.md, CLAUDE.md and the .planning/codebase documents that the task table names. Confirm that the session prompt carries the owner approvals OD-1, OD-2, OD-4, OD-5 and OD-6. Done when: the branch exists, origin/main is fetched, and each approval is quoted in HANDOFF.md, or the session stops and asks for the missing approval.
-2. T2 First commit, before any Gradle run: add the .gitignore lines (android/**/build/, android/.gradle/, android/.kotlin/, android/.idea/, android/local.properties, android/keystore.properties, *.apk, *.aab, *.jks, *.keystore, *.p12, *.pem) and the .gitattributes lines (*.bat text eol=crlf, *.jar binary, *.jks binary, *.keystore binary, *.webp binary). Done when: git check-ignore matches android/app/build/x and android/local.properties, and git check-attr shows eol crlf for android/gradlew.bat and binary for android/gradle/wrapper/gradle-wrapper.jar.
+1. T1 Prepare: run git fetch origin main and git fetch origin ccr-75d7c55a-ouh23d (the docs branch of pull request 18). If pull request 18 is merged, start the session branch from origin/main. Else start it from the docs branch, so that docs/android/PLAN.md is present. Read HANDOFF.md, TODO.md, CLAUDE.md and the .planning/codebase documents that the task table names. Confirm that the session prompt carries the owner approvals OD-1, OD-2, OD-4, OD-5 and OD-6, and the defaults for OD-8 to OD-12. Done when: the branch exists, origin/main is fetched, and each approval is quoted in HANDOFF.md, or the session stops and asks for the missing approval.
+2. T2 First commit, before any Gradle run: add the .gitignore lines (android/**/build/, android/**/.gradle/, android/**/.kotlin/, android/.idea/, android/local.properties, android/keystore.properties, *.apk, *.aab, *.jks, *.keystore, *.p12, *.pem) and the .gitattributes lines (*.bat text eol=crlf, *.jar binary, *.jks binary, *.keystore binary, *.webp binary). Done when: git check-ignore matches android/app/build/x and android/local.properties, and git check-attr shows eol crlf for android/gradlew.bat and binary for android/gradle/wrapper/gradle-wrapper.jar.
 3. T3 JS reference and export: write scripts/lib/android-dns-policy.mjs (dnsDecision with the layer order Self-test, user allow, threat, never-block, list, none), scripts/export-android-data.mjs (a pure buildShieldData function plus a CLI with --out and --samples; it loads the real modules in the order of scripts/build-threat-rules.mjs and needs no network permission) and scripts/build-android-vectors.mjs (writes the 5 synthetic vector files in test/fixtures/android/vectors/ with reserved names only; --check writes nothing). Done when: two CLI runs give byte-identical files, list-hosts.txt has 194,480 lines and threat-hosts.txt has 15,291 lines today, never-block.json has 21 suffixes and the except entry imasdk.googleapis.com, and --check reports no difference.
 4. T4 Deno tests: write test/android-data.test.js (determinism through the pure builder, counts computed from the JSON files, no IP literal, no protected threat name, the imasdk.googleapis.com and ads.twitch.tv cases, the never-block model equals isNeverBlock, the hosts of rules 1 to 3 are below a never-block suffix, manifest fields equal meta.json, the dnr-matcher cross-check on at least 400 samples, and the one-direction check on the full packed rules) and test/android-vectors.test.js. Done when: deno test --no-lock --allow-read --allow-run --allow-env test/ passes.
 5. T5 Android SDK in the container: download commandlinetools-linux-16111833_latest.zip from dl.google.com into a folder outside the repository, accept the licences, install platforms;android-36, build-tools;36.0.0 and platform-tools, and set ANDROID_HOME. Done when: sdkmanager --list_installed shows the three packages and git status shows no local.properties.
-6. T6 Gradle scaffold: commit the Gradle 9.9.1 wrapper (gradlew with git mode 100755, gradlew.bat, the jar, and the properties with distributionSha256Sum), settings with :shield-core, :app and :probe, gradle/libs.versions.toml with the versions of plan section 6.4, and android/buildSrc with ExportShieldData and VerifyManifestPolicy. Register the export output as generated assets of :app and a sample export for :shield-core. Done when: sha256sum of the wrapper jar is 621008afc4f5d59357fcf06ffa644dd5aade5e091bdc363742710445f73cdaf8, ./android/gradlew -p android --no-daemon :app:assembleDebug passes, and HANDOFF.md records how AGP 9.5.1 and Kotlin 2.4.21 fit.
+6. T6 Gradle scaffold: commit the Gradle 9.9.1 wrapper (gradlew with git mode 100755, gradlew.bat, the jar, and the properties with distributionSha256Sum), settings with :shield-core, :app and :probe, gradle/libs.versions.toml with the versions of plan section 6.4, and android/buildSrc with ExportShieldData and VerifyManifestPolicy. Register the export output as generated assets of :app and a sample export for :shield-core. Make the wrapper with Gradle 9.9.1 (section 6.4), not with the container's Gradle 8.14.3. Done when: sha256sum of the wrapper jar is 621008afc4f5d59357fcf06ffa644dd5aade5e091bdc363742710445f73cdaf8, ./android/gradlew -p android --no-daemon :app:assembleDebug passes, and HANDOFF.md records how AGP 9.5.1 and Kotlin 2.4.21 fit.
 7. T7 shield-core policy: write HostName, Fnv64, HostSet, NeverBlock, PublicSuffix, DomainRules (ASCII only), DnsPolicy, MiniJson, ShieldData, RecentBlocks and the shared VectorRunner, with JVM tests. Done when: :shield-core:test passes, the closed-set runner passes 100 % of the committed vectors and fails on an unknown file, the parity test passes 100 % of at least 20,000 real-data samples, ShieldData refuses a changed byte in a temporary copy, and the JDK budgets of A8 hold.
 8. T8 Packet layer: write IpPacket, DnsMessage and PacketHandler. Test hand-made IPv4 and IPv6 packets for A, AAAA, HTTPS (65) and SVCB (64): NODATA with the SOA marker and TTL 60 for a blocked name, a forward with swapped addresses and the unchanged EDNS record for an allowed name, a TCP RST+ACK for a SYN to an alias on port 53 or 853, and Drop for malformed, short, fragmented and random input. Done when: all packet tests pass with no exception.
 9. T9 VPN service: write ShieldVpnService (TEST-NET aliases, DNS-only routes, allowFamily for both families, no allowBypass, own package not excluded, foreground type systemExempted), Upstream (protected sockets bound to the real network, 8 threads, 5 s timeout, SERVFAIL on error), NetworkWatcher, ShieldNotification, ShieldState, ConsentActivity, MainActivity with On/Off, mode, status and Self-test, and the debug-only DebugStartActivity. Done when: :app:assembleDebug, :app:lintDebug and :app:verifyManifestPolicyDebug pass, and the merged manifest has exactly the 5 permissions.
 10. T10 Controls: write ShieldTileService (On, Paused, Off), Pause 10 min (list layer only, end time stored), RecentBlocksActivity with Allow this domain (two steps for a threat name), AllowListActivity with JSON export and import (max 1,000 entries, DomainRules check), AppExclusionsActivity, the Private DNS warning and AboutActivity with the licence files and the source commit. Done when: :app:testDebugUnitTest passes for the store and import logic, and lint and the manifest policy still pass.
 11. T11 Device tests and CI: write the :app androidTest that runs VectorRunner on ART, the :probe androidTest (VPN consent through appops with a UI Automator fallback, start through DebugStartActivity, DnsResolver.rawQuery for self-test.adgecko.test and example.org, a TCP connect to the alias on port 853, a raw UDP fallback), android/ci/emulator-run.sh, .github/workflows/android.yml (build job and emulator job on API 33 and 36), test/android-static.test.js and test/android-workflow.test.js. Done when: :app:assembleDebugAndroidTest and :probe:assembleDebugAndroidTest pass in the container and the Deno suite passes.
-12. T12 Documents: write docs/android/shield.md with the owner commands of plan sections 6.10 and 6.11 (PowerShell 5.1, one command in each block), update STRUCTURE.md, STACK.md, TESTING.md, CONVENTIONS.md sections 1, 8 and 12, INTEGRATIONS.md section 8 and ARCHITECTURE.md, add the CLAUDE.md task row and build command, change only the README.md Install section after a read of TESTING.md section 7, and add CHANGELOG.md entries under Unreleased. Mark each phone behaviour UNVERIFIED. Done when: the Deno suite passes, including the documentation tests.
+12. T12 Documents: write docs/android/shield.md with the owner commands of plan sections 6.10 and 6.11 (PowerShell 5.1, one command in each block), update STRUCTURE.md, STACK.md, TESTING.md (sections 1, 3, 4, 6, 7, 10, 11), CONVENTIONS.md sections 1, 8 and 12, INTEGRATIONS.md section 8 and ARCHITECTURE.md, add the CLAUDE.md task row and build command, change only the README.md Install section after a read of TESTING.md section 7, and add CHANGELOG.md entries under Unreleased. Mark each phone behaviour UNVERIFIED. Done when: the Deno suite passes, including the documentation tests.
 13. T13 Ship: commit with ASD-STE100 messages and the attribution lines, run the Deno suite, run bash scripts/release-gate.sh (last line VERDICT: CLEAN), run python3 -I scripts/privacy-check.py after the commit, check A11 (APK assets and size below 10 MB) and A12 (no change to manifest.json, src, icons, the frozen pins, the gate or checks.yml; pack-zip still writes 64 files), push the branch and open a draft pull request. Done when: the draft pull request exists and all local checks pass.
 14. T14 CI result and handoff: read the android.yml run with the GitHub MCP tools, fix the build job until it is green, then read the emulator job on API 33 and API 36 (E2 and E3) and re-run an infrastructure failure one time. Update HANDOFF.md (state, what was checked, what was not checked, next steps) and TODO.md. Done when: the build job is green, the APK artifact exists, and HANDOFF.md records each emulator result as a pass or as a failure with its log line.
