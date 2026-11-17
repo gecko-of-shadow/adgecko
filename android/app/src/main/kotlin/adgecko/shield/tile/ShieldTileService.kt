@@ -16,6 +16,10 @@ import android.service.quicksettings.TileService
  * On -> Paused (10 min, list layer only; threat stays on) -> Off -> On.
  * When the VPN consent is missing, the tile opens ConsentActivity. A long
  * press opens MainActivity (QS_TILE_PREFERENCES). UNVERIFIED on a phone.
+ *
+ * Lock screen (review of 2026-11-17): Pause and Off ask for the unlock
+ * first (unlockAndRun), so a person who holds the locked phone cannot turn
+ * the protection off. On needs no unlock: it only adds protection.
  */
 class ShieldTileService : TileService() {
     private val listener: () -> Unit = { refresh() }
@@ -34,12 +38,20 @@ class ShieldTileService : TileService() {
     override fun onClick() {
         super.onClick()
         when (ShieldState.status) {
-            ShieldState.Status.ON -> ShieldVpnService.command(this, ShieldVpnService.ACTION_PAUSE)
-            ShieldState.Status.PAUSED -> ShieldVpnService.command(this, ShieldVpnService.ACTION_STOP)
+            ShieldState.Status.ON -> whenUnlocked { ShieldVpnService.command(this, ShieldVpnService.ACTION_PAUSE) }
+            ShieldState.Status.PAUSED -> whenUnlocked { ShieldVpnService.command(this, ShieldVpnService.ACTION_STOP) }
             ShieldState.Status.STARTING -> Unit
             ShieldState.Status.OFF, ShieldState.Status.ERROR -> start()
         }
         refresh()
+    }
+
+    private fun whenUnlocked(action: () -> Unit) {
+        if (isSecure && isLocked) {
+            unlockAndRun { action(); refresh() }
+        } else {
+            action()
+        }
     }
 
     private fun start() {

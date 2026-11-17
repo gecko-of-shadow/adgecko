@@ -61,8 +61,10 @@
 
         <!--
           systemExempted: the platform annotation lists SCHEDULE_EXACT_ALARM or
-          USE_EXACT_ALARM as "any of" permissions (conditional). For a VPN app the
-          condition is the VPN consent (from memory, not checked; plan risk 11).
+          USE_EXACT_ALARM as "any of" permissions (conditional). The AOSP policy
+          (ForegroundServiceTypePolicy, Android 14 to 16) also accepts the app op
+          OP_ACTIVATE_VPN, which the VPN consent dialog sets. Checked in AOSP
+          source on 2026-11-17; UNVERIFIED on a phone (plan risk 11).
           The two alarm permissions are not in the M1 policy (owner decision), so
           the lint check ForegroundServicePermission is suppressed here only.
         -->

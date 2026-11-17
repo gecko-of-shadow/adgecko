@@ -39,9 +39,9 @@ import java.net.InetAddress
  *   network. An app that needs this can be excluded.
  * - The own package is not excluded in M1, so the Self-test uses the normal
  *   DNS path. The upstream sockets use protect().
- * - establish() first, then startForeground() with type systemExempted
- *   (order not checked on a phone). If Android refuses the type, the
- *   service stops and shows a notice. No fallback type in M1.
+ * - startForeground() with type systemExempted first, then establish()
+ *   (the plan had the other order; see startShield()). If Android refuses
+ *   the type, the service stops and shows a notice. No fallback type in M1.
  *
  * All phone behaviour is UNVERIFIED until a run on the owner's phone.
  */

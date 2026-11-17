@@ -26,14 +26,16 @@ const GENERATOR = "scripts/build-android-vectors.mjs";
 const head = (kind, note) => ({ format: 1, kind, generator: GENERATOR, note });
 
 function hostMatch() {
-  const set = ["example.com", "ads.example.net", "tracker.test", "deep.sub.example.org", "test-only"];
+  // Look-alikes stay below reserved names: "xads.example.net" ends with the
+  // letters of "ads.example.net" but not at a label boundary.
+  const set = ["example.com", "ads.example.net", "tracker.test", "deep.sub.example.org", "invalid"];
   const hosts = [
     "example.com", "EXAMPLE.COM", "example.com.", "Example.Com.", "www.example.com", "a.b.c.example.com",
-    "xexample.com", "example.com.example", "notexample.com", "example.co", "com",
+    "xdeep.sub.example.org", "example.com.example", "notads.example.net", "example.test", "test",
     "ads.example.net", "x.ads.example.net", "example.net", "xads.example.net", "ads.example.net.test",
-    "tracker.test", "sub.tracker.test", "tracker.test.", "tracker.testx", "sub.xtracker.test",
+    "tracker.test", "sub.tracker.test", "tracker.test.", "tracker.test.example", "sub.xtracker.test",
     "deep.sub.example.org", "a.deep.sub.example.org", "sub.example.org", "example.org",
-    "test-only", "x.test-only", "test-only.example",
+    "invalid", "x.invalid", "invalid.example",
     "", ".", "..", "example..com", "example.com..", ".example.com",
     "192.0.2.1", "198.51.100.25", "203.0.113.255", "256.1.1.1", "1.2.3", "2001:db8::1", "::1",
     "a".repeat(63) + ".example.com", ("a".repeat(63) + ".").repeat(4) + "example.com",

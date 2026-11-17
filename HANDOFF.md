@@ -43,8 +43,18 @@ Build facts (record for plan T6):
 Deviations from the plan, and findings:
 
 - Lint finding: the service type `systemExempted` has the platform annotation "FOREGROUND_SERVICE_SYSTEM_EXEMPTED and any of SCHEDULE_EXACT_ALARM, USE_EXACT_ALARM" (conditional). The two alarm permissions are not in the M1 policy. The lint check `ForegroundServicePermission` is suppressed on the VPN service only, with a comment. For a VPN app, the condition is the VPN consent (from memory, not checked). If Android refuses the type, the app shows a notice and stays off (plan risk 11). On API 33 the app calls `startForeground()` with no type.
-- The Quick Settings tile cycles On, Paused, Off. The plan did not give the order.
+- Service start: `startForeground()` comes before `establish()`. The plan (section 6.6, risk 11) gave the other order. Reason: a start through `startForegroundService()` must reach `startForeground()` on each path, also when `establish()` fails, else Android stops the app. The AOSP type check reads only the VPN consent app op, not the VPN state (see "Research"). UNVERIFIED on a phone.
+- The Quick Settings tile cycles On, Paused, Off. The plan did not give the order. Its step O7 text ("Off, On, then Pause") does not match a cycle that starts at On; `docs/android/shield.md` has the correct order. On a locked phone, Paused and Off ask for the unlock first.
 - "Allow this domain" offers the blocked name itself. The registrable domain is not offered in M1.
+
+## Research and review (2026-11-17, after the first push)
+
+The owner asked for real research for each step and a reason for each choice. Results:
+
+1. Service type `systemExempted` (AOSP `ForegroundServiceTypePolicy.java`, Android 14, 15 and 16 branches and tags): the "any of" set has `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM` and the app op `OP_ACTIVATE_VPN`. The VPN consent dialog sets that app op (`Vpn.java`, android16-release). The developer page "Foreground service types" lists "VPN apps" for this type. Decision: keep `systemExempted` and no alarm permission. Not chosen: `specialUse` as a fallback type, because it needs a sixth permission (`FOREGROUND_SERVICE_SPECIAL_USE`), which is an owner decision (open question 1 below). Not chosen: no foreground service (as AdAway does), because the tile and the screens start the service with `startForegroundService()`.
+2. Resolver (AOSP DnsResolver and netd, main branch): `.test` names are not special (only `.local` is); `rawQuery(null, ...)` uses the VPN DNS for an app that is not excluded; in Private DNS Automatic mode, queries go to UDP 53 at once while DoT is not validated, and the TCP RST only stops each validation try from a wait of up to 127 s; `appops set <pkg> ACTIVATE_VPN allow` makes `VpnService.prepare()` return null. Decision: keep the Self-test name, the RST and the probe design. Only the main branch was read, not the API 33 to 36 release branches.
+3. Lifecycle review (independent agent): 10 findings, all fixed in commit `7d460d2` (start order, sticky restart, no main-thread wait, late data load, upstream queue limit, connected socket and one deadline, 65,535-byte answers, answers after a rebuild, debounce, counter races).
+4. Review workflow (5 dimensions, 3 skeptics for each finding): 37 findings, 15 confirmed, 22 refuted. No JS/Kotlin parity defect survived. Fixed: tile on the lock screen, import on a background thread with cut values, the workflow test (extra permission keys, `run: |` blocks), reserved names in the vectors, the probe consent fallback (it now uses the exported debug-only `DebugStartActivity`), `adb wait-for-device` with a time limit and a dead-emulator check, a full logcat stream file, and 7 document corrections.
 
 ## Checks
 
@@ -69,6 +79,10 @@ Not checked:
 ## CI results
 
 - Recorded after the first run of `android.yml` on the draft pull request. See the next update of this section.
+
+## Open questions for the owner
+
+1. OD-new-1: add `specialUse` as a fallback service type (a sixth permission, `FOREGROUND_SERVICE_SPECIAL_USE`)? Use: only if a phone refuses `systemExempted`. Recommendation: wait for the result of O2 on your phone.
 
 ## Open from the last session
 

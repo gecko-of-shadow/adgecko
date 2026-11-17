@@ -100,22 +100,42 @@ class AllowListActivity : Activity() {
                     contentResolver.openOutputStream(uri, "wt")!!.use { it.write(AllowListCodec.encode(store.allowDomains()).toByteArray()) }
                     result.text = "Exported ${store.allowDomains().size} entries."
                 }
-                REQ_IMPORT -> {
-                    val bytes = contentResolver.openInputStream(uri)!!.use { s -> s.readNBytes(MAX_IMPORT_BYTES + 1) }
-                    if (bytes.size > MAX_IMPORT_BYTES) throw AllowListCodec.FormatException("file is larger than $MAX_IMPORT_BYTES bytes")
-                    val r = AllowListCodec.merge(store.allowDomains(), AllowListCodec.entries(String(bytes, Charsets.UTF_8)), AllowFlow.validator())
-                    store.setAllowDomains(r.domains)
-                    result.text = buildString {
-                        append("Imported ${r.added} new entries. Refused ${r.refused.size}. Over the limit ${r.overLimit}.")
-                        for ((v, why) in r.refused.take(10)) append("\n - $v: $why")
-                    }
-                    changed()
-                }
+                REQ_IMPORT -> importAsync(uri)
             }
         } catch (e: Exception) {
             result.text = "Error: ${e.message ?: e.javaClass.simpleName}"
         }
     }
+
+    /**
+     * Reads, checks and stores the import on a background thread: a slow
+     * document provider must not block the screen. A refused value is cut to
+     * 80 characters in the result text (review of 2026-11-17).
+     */
+    private fun importAsync(uri: android.net.Uri) {
+        result.text = "Importing..."
+        val validate = AllowFlow.validator()
+        Thread({
+            val text = try {
+                val bytes = contentResolver.openInputStream(uri)!!.use { s -> s.readNBytes(MAX_IMPORT_BYTES + 1) }
+                if (bytes.size > MAX_IMPORT_BYTES) throw AllowListCodec.FormatException("file is larger than $MAX_IMPORT_BYTES bytes")
+                val r = AllowListCodec.merge(store.allowDomains(), AllowListCodec.entries(String(bytes, Charsets.UTF_8)), validate)
+                store.setAllowDomains(r.domains)
+                buildString {
+                    append("Imported ${r.added} new entries. Refused ${r.refused.size}. Over the limit ${r.overLimit}.")
+                    for ((v, why) in r.refused.take(10)) append("\n - ${cut(v)}: $why")
+                }
+            } catch (e: Exception) {
+                "Error: ${cut(e.message ?: e.javaClass.simpleName)}"
+            }
+            runOnUiThread {
+                result.text = text
+                changed()
+            }
+        }, "shield-import").start()
+    }
+
+    private fun cut(s: String) = if (s.length > 80) s.take(77) + "..." else s
 
     companion object {
         private const val REQ_EXPORT = 1

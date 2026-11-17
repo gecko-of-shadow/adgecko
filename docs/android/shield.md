@@ -11,9 +11,9 @@ Adgecko Shield is a small Android app in the folder `android/` of this repositor
 
 - Data: the Gradle build runs `scripts/export-android-data.mjs` with Deno. The script reads `src/rules/` and the real modules of `src/`. Nothing derived is committed. Today: 194,480 list hosts and 15,291 threat names.
 - Block answer: NODATA (no address, one SOA record, TTL 60 s). Thus a change of the allow list works within about 1 minute.
-- Layer order: Self-test name, your allow list, malware hosts, never-block hosts (Twitch, YouTube and Kick hosts and the captcha hosts), list hosts, all other names.
+- Layer order: Self-test name, your allow list, malware hosts, never-block hosts, list hosts, all other names. The never-block hosts are the Twitch, YouTube and Kick hosts, `googleapis.com` and `gstatic.com` (but not `imasdk.googleapis.com`), and `hcaptcha.com`, each with its subdomains.
 - Difference from the extension: DNS has no page context. The Shield also blocks list hosts on YouTube and Kick pages and in their apps, where the extension lets them through (plan section 3, risk 21).
-- Permissions: `INTERNET`, `ACCESS_NETWORK_STATE`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SYSTEM_EXEMPTED`, `POST_NOTIFICATIONS`. The build task `verifyManifestPolicy` checks the merged manifest.
+- Permissions: `INTERNET`, `ACCESS_NETWORK_STATE`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SYSTEM_EXEMPTED`, `POST_NOTIFICATIONS`. The build task `:app:verifyManifestPolicyDebug` (one task for each variant) checks the merged manifest.
 
 ## 2. Controls
 
@@ -22,9 +22,9 @@ Adgecko Shield is a small Android app in the folder `android/` of this repositor
 | Main screen switch | Shield on or off. The first time, Android shows the VPN dialog. |
 | Mode | "Ads + threat" (default) or "Threat only". |
 | Pause 10 min | Stops the list layer for 10 minutes. Malware blocking stays on. |
-| Quick Settings tile | A tap moves On, then Paused, then Off, then On. A long press opens the app. |
+| Quick Settings tile | A tap moves On to Paused, Paused to Off, and Off to On. On a locked phone, Paused and Off ask for the unlock first. A long press opens the app. |
 | Notification | "Protecting all apps", the blocks of today, "Pause 10 min" (or "Resume") and "Recent blocks". |
-| Recent blocks | The last 200 blocked names, in memory only. Tap a name to allow it. A malware name needs a second confirmation. |
+| Recent blocks | The last 200 blocked names, in memory only. The debug build also writes each blocked name to logcat (section 5, O8). Tap a name to allow it. A malware name needs a second confirmation. |
 | Allow list | Max 1,000 entries, the same format as the extension (`threatAllowDomains`). Export and import a JSON file. |
 | Exclude apps | The Shield does not filter the apps that you select. |
 | Self-test | Asks for `self-test.adgecko.test` (expected: "blocked") and `example.com` (expected: "resolved"). |
@@ -51,6 +51,7 @@ Before the install:
 - On the PC, download the artifact `adgecko-shield-debug` from the Actions run of the draft pull request (GitHub needs a login). The file is `adgecko-shield-debug.zip`.
 - On the phone, turn on USB debugging. On a Samsung phone, Auto Blocker also blocks USB commands, and USB debugging is greyed out while it is on (research, not checked on a phone). Pause Auto Blocker (or Advanced Protection: "Pause temporarily") only for the adb session. Turn it on again at the end of the session.
 - Do not use a second VPN or DNS-blocker app at the same time. Android permits one VPN at a time.
+- On the PC, `adb` must work. `adb` is in the Android SDK Platform-Tools from Google. Put its folder on the PATH, or run `adb.exe` from that folder.
 
 PowerShell 5.1 commands. Run one command at a time.
 
@@ -101,12 +102,14 @@ adb shell settings get global private_dns_mode
 
 - O5. Open one app with ad banners (a game or a free tool) for 2 minutes. Then open "Recent blocks". Expected: some names, and the app works.
 - O6. Tap one entry and "Allow". Expected: that name works again within about 1 minute. Then exclude one app. Expected: that app is not filtered.
-- O7. Use the tile: Off, On, then Pause. Expected: the tile state changes, and the notification shows the pause.
+- O7. The shield is On. Tap the tile one time. Expected: the tile shows "Paused", and the notification shows "Paused until <time>. Threat blocking stays on." Tap the tile again. Expected: "Off", and the notification goes away. Tap the tile again. Expected: "On", and the notification "Protecting all apps". (The plan text "Off, On, then Pause" does not match the tile cycle; this order is correct.)
 - O8. Send the log lines if a check fails. Stop the log with Ctrl+C.
 
 ```powershell
 adb logcat -s AdgeckoShield:V
 ```
+
+The debug build writes each blocked name to this log. Read the lines before you send them. Remove the names that you do not want to share.
 
 ```powershell
 adb shell dumpsys activity services adgecko.shield
@@ -121,4 +124,4 @@ Exit rule for milestone 1: the owner reports O1 to O7, and no app that the owner
 - Private DNS with a hostname, apps with their own encrypted DNS, and a custom provider in Chrome's "Use secure DNS" bypass the Shield.
 - Do not turn on "Block connections without VPN": the Shield routes only DNS.
 - The debug key changes with each CI run. Each update thus needs an uninstall (owner decision OD-3).
-- The lint check `ForegroundServicePermission` is suppressed for the VPN service. The platform lists `SCHEDULE_EXACT_ALARM` or `USE_EXACT_ALARM` as "any of" permissions for the service type `systemExempted`. For a VPN app the condition is the VPN consent (from memory, not checked). If Android refuses the type on the phone, the app shows the notice "Android refused the foreground service type systemExempted" and stays off (plan risk 11).
+- The lint check `ForegroundServicePermission` is suppressed for the VPN service. The platform lists `SCHEDULE_EXACT_ALARM` or `USE_EXACT_ALARM` as "any of" permissions for the service type `systemExempted`. The AOSP policy for Android 14 to 16 also accepts the app op `OP_ACTIVATE_VPN`, which the VPN consent dialog sets (checked in AOSP source on 2026-11-17, not on a phone). If Android refuses the type on the phone, the app shows the notice "Android refused the foreground service type systemExempted" and stays off (plan risk 11).

@@ -26,13 +26,40 @@ Deno.test("android vectors: the committed files equal the generator output", asy
   }
 });
 
+// Reserved names (RFC 2606, RFC 6761) and documentation IP ranges (RFC 5737,
+// RFC 3849). The public-suffix and allow-domain files are public-suffix
+// cases: plan 6.5 permits made-up names below real suffixes there.
+const RESERVED_TLD = /(^|\.)(test|example|invalid|localhost)$/;
+const RESERVED_SLD = /(^|\.)example\.(com|net|org)$/;
+const DOC_IP = /^(192\.0\.2|198\.51\.100|203\.0\.113)\.\d{1,3}$|^2001:db8:/;
+export function reservedOrInvalid(host) {
+  const n = normalizeHost(host);
+  if (n === null) return true; // a deliberately invalid input never names a real host
+  if (isIpLiteral(n)) return DOC_IP.test(n) || n === "::1";
+  // All-digit names that are not IP literals ("256.1.1.1", "1.2.3") test the
+  // edge of the IP check; no top-level domain is all digits, so they name no host.
+  if (/^[0-9.]+$/.test(n)) return true;
+  return RESERVED_TLD.test(n) || RESERVED_SLD.test(n);
+}
+
 Deno.test("android vectors: only reserved names and ASCII text", async () => {
   for (const name of VECTOR_FILES) {
     const text = await Deno.readTextFile(new URL(VECTOR_DIR + name, ROOT));
     assert(/^[\x09\x0a\x20-\x7e]*$/.test(text), `${name} has a raw non-ASCII or control character`);
+    if (name === "public-suffix.json" || name === "allow-domain.json") continue;
+    const v = JSON.parse(text);
+    const names = v.cases.map((c) => c.host);
+    for (const k of ["set", "suffixes", "except", "userAllow", "threat", "list"]) names.push(...(v.inputs[k] || []));
+    if (v.inputs.neverBlock) names.push(...v.inputs.neverBlock.suffixes, ...v.inputs.neverBlock.except);
+    const bad = names.filter((h) => !reservedOrInvalid(h));
+    assert(bad.length === 0, `${name} has names that are not reserved: ${bad.join(", ")}`);
   }
+  assert(!reservedOrInvalid("xexample.com") && reservedOrInvalid("xads.example.net") && reservedOrInvalid("a.test"), "the reserved-name check");
 });
 
+// A smoke test: the vectors come from the same functions, and the first test
+// already compares the bytes. It shows that a vector file still loads and
+// that each case shape is the one that the Kotlin runner reads.
 Deno.test("android vectors: the JS reference passes each case", async () => {
   const counts = [];
   {

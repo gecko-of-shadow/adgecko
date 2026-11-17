@@ -41,16 +41,27 @@ trap save_logcat EXIT
 echo "== Boot"
 "$ANDROID_HOME/emulator/emulator" -avd shield -no-window -no-audio -no-boot-anim -no-snapshot \
   -gpu swiftshader_indirect -camera-back none -camera-front none > "$OUT/emulator-api${API}.txt" 2>&1 &
-"$ADB" wait-for-device
+EMU_PID=$!
+infra_fail() {
+  echo "$1 (infrastructure failure)"
+  tail -n 40 "$OUT/emulator-api${API}.txt" || true
+  exit 3
+}
+if ! timeout 300 "$ADB" wait-for-device; then
+  infra_fail "the emulator did not come up within 5 minutes"
+fi
+# The full log goes to a file from the start (the probe test clears the
+# device buffer for one check).
+"$ADB" logcat -v threadtime > "$OUT/logcat-stream-api${API}.txt" 2>&1 &
 booted=""
 for _ in $(seq 1 180); do
+  kill -0 "$EMU_PID" 2>/dev/null || infra_fail "the emulator process stopped"
   booted="$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
   [ "$booted" = "1" ] && break
   sleep 5
 done
 if [ "$booted" != "1" ]; then
-  echo "emulator did not boot within 15 minutes (infrastructure failure)"
-  exit 3
+  infra_fail "the emulator did not boot within 15 minutes"
 fi
 "$ADB" shell settings put global window_animation_scale 0
 "$ADB" shell settings put global transition_animation_scale 0

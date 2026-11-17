@@ -63,12 +63,13 @@ class ShieldVpnProbeTest {
 
     private fun startShield(): Network {
         log("appops: " + shell("appops set $SHIELD ACTIVATE_VPN allow").trim())
-        shell("am start -W -n $SHIELD/.debug.DebugStartActivity")
+        log("am start: " + shell("am start -W -n $SHIELD/.debug.DebugStartActivity").trim())
         var vpn = waitVpn(15_000)
         if (vpn == null) {
-            // Fallback: the consent dialog through the main screen and UI Automator.
+            // Fallback: DebugStartActivity (exported, debug only) opens the
+            // VPN dialog when the consent is missing; UI Automator presses OK.
             log("no VPN after appops; trying the consent dialog")
-            shell("am start -W -n $SHIELD/.ui.ConsentActivity")
+            log("am start: " + shell("am start -W -n $SHIELD/.debug.DebugStartActivity").trim())
             val device = UiDevice.getInstance(inst)
             val ok = device.wait(Until.findObject(By.res("android:id/button1")), 10_000)
             ok?.click()
@@ -143,7 +144,6 @@ class ShieldVpnProbeTest {
 
     @Test
     fun theShieldBlocksTheSelfTestNameForAnotherApp() {
-        shell("logcat -c")
         val vpn = startShield()
         val lp = cm.getLinkProperties(vpn)!!
         log("vpn dns servers: ${lp.dnsServers}")
@@ -194,6 +194,9 @@ class ShieldVpnProbeTest {
 
     @Test
     fun logcatHasTheSelfTestBlockLine() {
+        // Clear here, so that only a line from this test can pass the check.
+        // emulator-run.sh streams the full log to a file, so nothing is lost.
+        shell("logcat -c")
         val vpn = startShield()
         rawQuery(null, SELF_TEST, DnsMessage.TYPE_A)
         udpToAlias(vpn, SELF_TEST, DnsMessage.TYPE_A)
