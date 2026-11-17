@@ -74,10 +74,12 @@ The plan is `docs/android/PLAN.md`. All phone behaviour is UNVERIFIED.
 
 - [ ] Owner, no code (plan section 5): give the phone facts (brand, model, Android version, daily browser, other VPN apps, Private DNS mode, country).
 - [ ] Owner, no code (plan section 5, track B0): load the unchanged extension in Vivaldi for Android (Load unpacked) and report what works.
-- [x] Milestone 1 (DNS shield) is built: draft pull request from `claude/android-shield-m1`. The CI build job makes the APK artifact `adgecko-shield-debug`.
+- [x] Milestone 1 (DNS shield) is built: draft pull request 19 from `claude/android-shield-m1`. CI is green (build job, emulator API 33 and API 36). The build job makes the APK artifact `adgecko-shield-debug`.
 - [ ] Owner: install the debug APK with adb and do the checks O1 to O7 (`docs/android/shield.md`, sections 4 and 5). Report each result. Then remove the UNVERIFIED marks that the checks prove.
 - [ ] Owner decision OD-3 (APK signing) before milestone 2. With the CI debug key, each update needs an uninstall.
 - [ ] Check on a phone: Android accepts the foreground service type `systemExempted` for the VPN with no alarm permission (lint finding, `HANDOFF.md`).
+- [ ] Check on a phone: the time from the shield start to "Lists: active" in the Self-test (0.4 to 3.0 s on the CI emulators).
+- [ ] Owner decision OD-new-1: `specialUse` as a fallback service type (a sixth permission). Only if the phone refuses `systemExempted`.
 - [ ] Owner decisions OD-1 to OD-25 (plan section 9). Milestone 1 uses the recommendations of the plan under the owner's standing approval. Change any of them in the pull request review.
 - [ ] Later milestones: link and text gates (M2), list refresh on the phone (M3), signed list (M4). Optional: in-app browser (M6), stream helpers (M7).
 

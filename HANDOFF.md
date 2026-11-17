@@ -60,9 +60,9 @@ The owner asked for real research for each step and a reason for each choice. Re
 
 Checked in this session (Linux container, no phone, no emulator):
 
-- `deno test --no-lock --allow-read --allow-run --allow-env test/`: see the pull request text for the final count.
+- `deno test --no-lock --allow-read --allow-run --allow-env test/`: 909 passed, 0 failed, 9 ignored. `bash scripts/release-gate.sh`: `VERDICT: CLEAN`. `python3 -I scripts/privacy-check.py`: passed (the secret rows were not available in the container).
 - New Deno tests: export counts 194,480 list hosts and 15,291 threat names; two builds give the same bytes; the never-block model equals `isNeverBlock()`; the hosts of rules 1 to 3 are below a never-block suffix; the dnr-matcher cross-check on 400 samples (306 blocks) agrees; the `kick.com` frame difference is documented; vectors equal the generator output.
-- Gradle (plan A2): `:shield-core:test :app:testDebugUnitTest :app:lintDebug :app:verifyManifestPolicyDebug :app:assembleDebug :app:assembleDebugAndroidTest :probe:assembleDebug :probe:assembleDebugAndroidTest` passed. 18 JVM tests in `:shield-core` and 6 in `:app`.
+- Gradle (plan A2): `:shield-core:test :app:testDebugUnitTest :app:lintDebug :app:verifyManifestPolicyDebug :app:assembleDebug :app:assembleDebugAndroidTest :probe:assembleDebug :probe:assembleDebugAndroidTest` passed. 19 JVM tests in `:shield-core` and 6 in `:app`.
 - A5: Kotlin equals `dnsDecision()` on 32,730 real-data samples, 0 mismatches.
 - A7: packet tests for IPv4 and IPv6, types A, AAAA, HTTPS, SVCB; forward through a stub upstream on the loopback address; TCP RST+ACK; 40,000 random inputs with no exception.
 - A8 (JDK): data load 191 ms, 1,000,000 lookups 735 ms, host sets 1,678,168 bytes.
@@ -73,7 +73,7 @@ Checked in this session (Linux container, no phone, no emulator):
 Not checked:
 
 - UNVERIFIED: all phone behaviour: the VPN, the tile, the notification, the Self-test, the Private DNS warning, battery and memory.
-- CI build job and emulator job: see "CI results" below.
+- The CI emulator results are below. An emulator is not a phone.
 - The phone model of the owner is not known. The code assumes no brand.
 
 ## CI results
@@ -87,6 +87,11 @@ Draft pull request 19, workflow `android.yml`:
   - E2 PASS on both: the vector runner passed all 5 files on ART; the data loaded on ART in 270 ms (API 33) and 975 ms (API 36), 194,480 list hosts and 15,291 threat names.
   - E3 PARTIAL on both: `example.org` resolved through the Shield (14 ms and 17 ms); TCP to the alias on port 853 failed in 1 ms and 5 ms (`ConnectException`). The VPN had the DNS alias `192.0.2.2`; Private DNS mode `null` (Automatic).
   - E3 FAIL on both: the Self-test name got NXDOMAIN from the upstream server (SOA `a.root-servers.net` on API 33, `localhost` on API 36), not the Shield's NODATA. Root cause: the probe asked about 0.3 s to 1 s before the data load of the new app process ended, and with no data the policy was null, so the Shield forwarded each name. Fix in the next commit: before the load ends, the policy has empty data, so the Self-test name is blocked and all other names are forwarded; the Self-test says whether the lists are active; a new probe test waits for the data and checks that a list host gets the Shield's NODATA.
+- Run 5 (`b4ec612`): GREEN. Build job, emulator API 33 and emulator API 36 all passed.
+  - E2 PASS on both: 5 vector files on ART; data load on ART 250 ms (API 33) and 2,572 ms (API 36).
+  - E3 PASS on both, all 4 probe tests: the Self-test name (types A, AAAA, HTTPS) got NODATA with the SOA `blocked.adgecko.invalid` (API 33: 100, 19, 16 ms; API 36: 33, 19, 13 ms; plan limit 200 ms); after the data load, the list host `imasdk.googleapis.com` got NODATA (layer LIST); `example.org` resolved (5 ms, 22 ms); TCP to the alias on port 853 failed (1 ms, 4 ms); logcat has `decision=block layer=SELF_TEST`.
+  - The consent came from `appops set adgecko.shield ACTIVATE_VPN allow`; the UI Automator fallback was not needed.
+  - Note: the data load in the app process took 0.4 to 3.0 s on the emulators (plan budget A8 is 1 s on the JDK only). During that time only the Self-test name is blocked. Measure it on the phone.
 
 ## Open questions for the owner
 
