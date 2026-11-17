@@ -20,7 +20,20 @@ class PolicyData(
     val threat: HostSet,
     val neverBlock: NeverBlock,
     val list: HostSet,
-)
+) {
+    companion object {
+        /**
+         * No list, threat or never-block data: the policy before the bundled
+         * data has loaded, or after a failed load. Only the Self-test marker
+         * (and the user allow list) can match, so all other names are
+         * forwarded (fail-open), and the Self-test still proves the VPN path.
+         * CI emulator run of 2026-11-17: the data load took about 1.1 to
+         * 1.3 s after a process start, and the Self-test name was forwarded
+         * in that time.
+         */
+        val EMPTY = PolicyData(HostSet.EMPTY, NeverBlock(emptyList(), emptyList()), HostSet.EMPTY)
+    }
+}
 
 /**
  * The DNS policy of the Shield (docs/android/PLAN.md section 3). The layer

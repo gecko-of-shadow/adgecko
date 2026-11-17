@@ -215,6 +215,19 @@ class PacketTest {
     }
 
     @Test
+    fun theEmptyPolicyBlocksOnlyTheSelfTestName() {
+        val p = DnsPolicy(PolicyData.EMPTY, Mode.ADS_AND_THREAT, false, emptyList())
+        assertEquals(Action.BLOCK, p.decide("self-test.adgecko.test").action)
+        assertEquals(Layer.SELF_TEST, p.decide("x.self-test.adgecko.test").layer)
+        assertEquals(DnsPolicy.NONE, p.decide("ads.example"))
+        val h = PacketHandler(listOf(alias4), { p })
+        val pkt = queryPacket(client4, alias4, "self-test.adgecko.test", DnsMessage.TYPE_A)
+        assertTrue(h.handle(pkt, pkt.size) is Outcome.Reply)
+        val other = queryPacket(client4, alias4, "ads.example", DnsMessage.TYPE_A)
+        assertTrue(h.handle(other, other.size) is Outcome.Forward)
+    }
+
+    @Test
     fun aPolicyErrorForwardsTheQuery() {
         val broken = PacketHandler(listOf(alias4), { throw IllegalStateException("broken policy") })
         val pkt = queryPacket(client4, alias4, "ads.example", DnsMessage.TYPE_A)

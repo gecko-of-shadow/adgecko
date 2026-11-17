@@ -74,6 +74,15 @@ object SelfTest {
         out.append(if (resolved) "resolved" else "not resolved (${b.error ?: "rcode " + rb?.rcode})")
         out.append('\n')
         if (!blocked) out.append("The query did not reach the Shield (Private DNS or another path).\n")
+        // The Self-test name works also before the lists load, so say if they are active.
+        val d = ShieldState.data
+        out.append(
+            when {
+                d != null -> "3. Lists: active (${"%,d".format(d.listCount)} list hosts, ${"%,d".format(d.threatCount)} threat names).\n"
+                ShieldState.dataError != null -> "3. Lists: NOT active (${ShieldState.dataError}). Only the Self-test name is blocked.\n"
+                else -> "3. Lists: still loading. Run the Self-test again in a few seconds.\n"
+            },
+        )
         return out.toString()
     }
 }

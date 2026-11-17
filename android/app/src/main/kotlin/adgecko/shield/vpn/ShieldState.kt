@@ -2,6 +2,7 @@ package adgecko.shield.vpn
 
 import adgecko.shield.BuildConfig
 import adgecko.shield.core.DnsPolicy
+import adgecko.shield.core.PolicyData
 import adgecko.shield.core.RecentBlocks
 import adgecko.shield.core.ShieldData
 import adgecko.shield.store.ShieldStore
@@ -66,10 +67,14 @@ object ShieldState {
         }, "shield-data").start()
     }
 
-    /** A new policy object from the data and the stored settings. Null while the data is missing (fail-open). */
+    /**
+     * A new policy object from the data and the stored settings. While the
+     * data is missing, the policy has empty data (PolicyData.EMPTY): only the
+     * Self-test name is blocked, all other names are forwarded (fail-open).
+     */
     fun rebuildPolicy(store: ShieldStore) {
-        val d = data
-        policy.set(if (d == null) null else DnsPolicy(d.policyData, store.mode, store.isPaused(), store.allowDomains()))
+        val d = data?.policyData ?: PolicyData.EMPTY
+        policy.set(DnsPolicy(d, store.mode, store.isPaused(), store.allowDomains()))
         changed()
     }
 

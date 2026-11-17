@@ -192,6 +192,32 @@ class ShieldVpnProbeTest {
         }
     }
 
+    /**
+     * The real data path on a device: after the bundled data loads (about 1 s
+     * after a process start on the CI emulator), a list host gets the NODATA
+     * answer of the Shield. imasdk.googleapis.com is a list host and not a
+     * never-block host (test/android-data.test.js pins this).
+     */
+    @Test
+    fun aListHostIsBlockedAfterTheDataLoads() {
+        startShield()
+        val end = System.currentTimeMillis() + 20_000
+        var last = "none"
+        while (System.currentTimeMillis() < end) {
+            val r = rawQuery(null, LIST_HOST, DnsMessage.TYPE_A)
+            val p = r.bytes?.let { DnsMessage.parseResponse(it) }
+            last = "rcode=${p?.rcode} an=${p?.ancount} soa=${p?.soaMname} err=${r.error}"
+            if (p != null && p.soaMname == DnsMessage.MNAME) {
+                log("list host $LIST_HOST blocked: $last ${r.ms} ms")
+                assertEquals(0, p.rcode)
+                assertEquals(0, p.ancount)
+                return
+            }
+            Thread.sleep(500)
+        }
+        fail("list host $LIST_HOST was not blocked within 20 s: $last")
+    }
+
     @Test
     fun logcatHasTheSelfTestBlockLine() {
         // Clear here, so that only a line from this test can pass the check.
@@ -209,5 +235,6 @@ class ShieldVpnProbeTest {
         const val TAG = "AdgeckoShieldProbe"
         const val SHIELD = "adgecko.shield"
         const val SELF_TEST = "self-test.adgecko.test"
+        const val LIST_HOST = "imasdk.googleapis.com"
     }
 }

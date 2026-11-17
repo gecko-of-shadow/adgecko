@@ -158,7 +158,7 @@ class MainActivity : Activity() {
         val d = ShieldState.data
         val dataLine = when {
             d != null -> "Data: lists packed ${d.packedAtUtc} (UTC), ${"%,d".format(d.listCount)} list hosts, ${"%,d".format(d.threatCount)} threat names."
-            ShieldState.dataError != null -> "Data error: ${ShieldState.dataError}. The shield forwards all queries (fail-open)."
+            ShieldState.dataError != null -> "Data error: ${ShieldState.dataError}. The shield forwards all queries except the Self-test name (fail-open)."
             else -> "Data: loading..."
         }
         info.text = buildString {

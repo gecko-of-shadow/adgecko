@@ -78,7 +78,15 @@ Not checked:
 
 ## CI results
 
-- Recorded after the first run of `android.yml` on the draft pull request. See the next update of this section.
+Draft pull request 19, workflow `android.yml`:
+
+- Build job: green on each run. The artifact `adgecko-shield-debug` exists (run 1, head `07d91b9`, and later runs).
+- Run 1 (`07d91b9`): both emulator jobs were cancelled at the 60-minute limit. Log line: `ERROR | Unknown AVD name [shield] ... no file shield.ini in $HOME/.android/avd`; then `adb wait-for-device` waited. Fixed in `eb02643` (one AVD folder, checks before the boot) and `1f67a3d` (time limit).
+- Runs 2 and 3 (`7d460d2`, `1f67a3d`): they have the same AVD fault (older script).
+- Run 4 (`eb02643`), API 33 and API 36: the emulator booted.
+  - E2 PASS on both: the vector runner passed all 5 files on ART; the data loaded on ART in 270 ms (API 33) and 975 ms (API 36), 194,480 list hosts and 15,291 threat names.
+  - E3 PARTIAL on both: `example.org` resolved through the Shield (14 ms and 17 ms); TCP to the alias on port 853 failed in 1 ms and 5 ms (`ConnectException`). The VPN had the DNS alias `192.0.2.2`; Private DNS mode `null` (Automatic).
+  - E3 FAIL on both: the Self-test name got NXDOMAIN from the upstream server (SOA `a.root-servers.net` on API 33, `localhost` on API 36), not the Shield's NODATA. Root cause: the probe asked about 0.3 s to 1 s before the data load of the new app process ended, and with no data the policy was null, so the Shield forwarded each name. Fix in the next commit: before the load ends, the policy has empty data, so the Self-test name is blocked and all other names are forwarded; the Self-test says whether the lists are active; a new probe test waits for the data and checks that a list host gets the Shield's NODATA.
 
 ## Open questions for the owner
 
