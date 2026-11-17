@@ -94,6 +94,7 @@ Draft pull request 19, workflow `android.yml`:
   - E3 PASS on both, all 4 probe tests: the Self-test name (types A, AAAA, HTTPS) got NODATA with the SOA `blocked.adgecko.invalid` (API 33: 100, 19, 16 ms; API 36: 33, 19, 13 ms; plan limit 200 ms); after the data load, the list host `imasdk.googleapis.com` got NODATA (layer LIST); `example.org` resolved (5 ms, 22 ms); TCP to the alias on port 853 failed (1 ms, 4 ms); logcat has `decision=block layer=SELF_TEST`.
   - The consent came from `appops set adgecko.shield ACTIVATE_VPN allow`; the UI Automator fallback was not needed.
   - Note: the data load in the app process took 0.4 to 3.0 s on the emulators (plan budget A8 is 1 s on the JDK only). During that time only the Self-test name is blocked. Measure it on the phone.
+- Runs 6 and 7 (`b823c9b`, `bb76286`): GREEN. Build job, emulator API 33 and emulator API 36 passed. Run 7 has the fixes of the second review.
 
 ## Open questions for the owner
 
