@@ -2,8 +2,8 @@
 <!--
   Adgecko Shield, milestone 1 (docs/android/PLAN.md section 6.3).
   Permissions, exactly these 5. :app:verifyManifestPolicy<Variant> checks
-  the merged manifest. No QUERY_ALL_PACKAGES, no Accessibility, no
-  notification listener, no IME, no boot receiver, no WebView.
+  the merged manifest. No all-packages query, no Accessibility, no
+  notification listener, no IME, no boot receiver, no web view.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
@@ -14,7 +14,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- App exclusion lists the launcher apps only (no QUERY_ALL_PACKAGES). -->
+    <!-- App exclusion lists the launcher apps only (no all-packages query permission). -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />

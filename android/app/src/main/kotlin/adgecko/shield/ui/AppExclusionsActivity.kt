@@ -11,7 +11,7 @@ import android.widget.LinearLayout
 /**
  * "Exclude this app" (docs/android/PLAN.md section 6.3). It lists the
  * launcher apps through the queries element (MAIN + LAUNCHER), with no
- * QUERY_ALL_PACKAGES. An excluded app uses the normal DNS, with no filter.
+ * all-packages query permission. An excluded app uses the normal DNS, with no filter.
  */
 class AppExclusionsActivity : Activity() {
     private val store get() = (application as ShieldApp).store
