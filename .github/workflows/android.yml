@@ -88,6 +88,12 @@ jobs:
       - name: Build and test
         run: bash android/ci/gradle-retry.sh :shield-core:test :app:testDebugUnitTest :app:lintDebug :app:verifyManifestPolicyDebug :app:assembleDebug :app:assembleDebugAndroidTest :probe:assembleDebug :probe:assembleDebugAndroidTest
 
+      # The emulator jobs restore the cache that this job saves. Without this
+      # step the cache has no device-test runner (UTP), and Maven Central can
+      # refuse its download with HTTP 429 (CI run 15).
+      - name: Put the device-test runner into the Gradle cache
+        run: bash android/ci/gradle-retry.sh :app:resolveDeviceTestTools :probe:resolveDeviceTestTools
+
       - name: Upload the debug APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

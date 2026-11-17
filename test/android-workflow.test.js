@@ -105,6 +105,9 @@ Deno.test("android workflow: the wrapper jar check, the build tasks and the APK 
   // Each Gradle call goes through the 429-only retry script.
   assert(!/gradlew/.test(code), "android.yml must call Gradle through android/ci/gradle-retry.sh");
   assert(code.includes("bash android/ci/gradle-retry.sh :shield-core:test"), "build step uses the retry script");
+  // The build job fills the Gradle cache with the device-test runner (CI run 15).
+  const build = code.slice(code.indexOf("\n  build:"), code.indexOf("\n  emulator:"));
+  assert(build.includes("bash android/ci/gradle-retry.sh :app:resolveDeviceTestTools :probe:resolveDeviceTestTools"), "the build job resolves the device-test runner");
   const retry = await Deno.readTextFile(new URL("../android/ci/gradle-retry.sh", import.meta.url));
   assert(/grep -q "status code 429"/.test(retry) && /for attempt in 1 2 3/.test(retry), "the retry script repeats only on HTTP 429, at most 2 times");
   // Values from contexts go into env: first; run: lines use no ${{ }}.
