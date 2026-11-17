@@ -1,6 +1,8 @@
 package adgecko.shield.vpn
 
+import adgecko.shield.BuildConfig
 import android.net.Network
+import android.util.Log
 import android.net.VpnService
 import android.os.SystemClock
 import java.net.DatagramPacket
@@ -69,14 +71,14 @@ class Upstream(
             return null
         }
         try {
-            if (!service.protect(s)) return null
+            if (!service.protect(s)) return fail("protect() refused", deadline)
             network?.bindSocket(s)
             s.connect(InetSocketAddress(server, 53))
             s.send(DatagramPacket(query, query.size))
             val buf = ByteArray(MAX_ANSWER)
             while (true) {
                 val left = deadline - SystemClock.elapsedRealtime()
-                if (left <= 0) return null
+                if (left <= 0) return fail("deadline before an answer from server ${servers.indexOf(server)}", deadline)
                 s.soTimeout = left.toInt()
                 val p = DatagramPacket(buf, buf.size)
                 s.receive(p)
@@ -84,12 +86,25 @@ class Upstream(
                 if (p.length >= 2 && buf[0] == query[0] && buf[1] == query[1]) return buf.copyOf(p.length)
             }
         } catch (e: SocketTimeoutException) {
-            return null
+            return fail("timeout, no answer from server ${servers.indexOf(server)}", deadline)
         } catch (e: Exception) {
-            return null
+            return fail("${e.javaClass.simpleName} for server ${servers.indexOf(server)}", deadline)
         } finally {
             s.close()
         }
+    }
+
+    /**
+     * Debug builds log why a forward failed (no host name, only the server
+     * index and the reason). CI run 13 (API 33): one forward got no answer in
+     * 5 s, and the log could not show why.
+     */
+    private fun fail(reason: String, deadline: Long): ByteArray? {
+        if (BuildConfig.DEBUG) {
+            val late = SystemClock.elapsedRealtime() - (deadline - TIMEOUT_MS)
+            Log.w(ShieldState.TAG, "upstream failed after $late ms: $reason (network=$network)")
+        }
+        return null
     }
 
     fun close() {

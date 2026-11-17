@@ -305,6 +305,7 @@ class ShieldVpnService : VpnService() {
 
     /** Network or exclusion change: build a new interface, then close the old one. */
     private fun rebuild() {
+        if (BuildConfig.DEBUG) Log.i(TAG, "rebuild: network=${watcher?.network} servers=${watcher?.dnsServers?.size}")
         val pfd = establishInterface()
         if (pfd == null) {
             stopShield("Android did not give a new VPN interface.")
