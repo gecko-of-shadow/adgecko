@@ -24,12 +24,31 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger --name-match=kvm
 ls -l /dev/kvm || true
 
+# One AVD folder for avdmanager and the emulator (run 1 of 2026-11-17: the
+# emulator found no AVD in $HOME/.android/avd and exited; adb then waited
+# until the job limit). Output is not hidden, so a failed install shows.
+export ANDROID_AVD_HOME="$HOME/.android/avd"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+mkdir -p "$ANDROID_AVD_HOME"
+
 echo "== SDK packages: emulator, platform-tools, $IMAGE"
-yes | "$SDKM" --licenses >/dev/null || true
-"$SDKM" --install "emulator" "platform-tools" "$IMAGE" >/dev/null
+yes | "$SDKM" --licenses >/dev/null 2>&1 || true
+"$SDKM" --install "emulator" "platform-tools" "$IMAGE" | tail -n 5
+IMAGE_DIR="$ANDROID_HOME/system-images/android-${API}/google_apis/x86_64"
+if [ ! -d "$IMAGE_DIR" ]; then
+  echo "system image folder missing: $IMAGE_DIR (infrastructure failure)"
+  env | grep -E '^ANDROID_' || true
+  exit 3
+fi
 
 echo "== AVD"
-echo "no" | "$AVDM" create avd --force -n shield -k "$IMAGE" >/dev/null
+echo "no" | "$AVDM" create avd --force -n shield -k "$IMAGE" -p "$ANDROID_AVD_HOME/shield.avd"
+if ! "$ANDROID_HOME/emulator/emulator" -list-avds | grep -qx shield; then
+  echo "the emulator does not list the AVD 'shield' (infrastructure failure)"
+  env | grep -E '^ANDROID_' || true
+  ls -la "$ANDROID_AVD_HOME" || true
+  exit 3
+fi
 
 save_logcat() {
   "$ADB" logcat -d > "$OUT/logcat-api${API}.txt" 2>/dev/null || true
