@@ -56,6 +56,8 @@ The owner asked for real research for each step and a reason for each choice. Re
 3. Lifecycle review (independent agent): 10 findings, all fixed in commit `7d460d2` (start order, sticky restart, no main-thread wait, late data load, upstream queue limit, connected socket and one deadline, 65,535-byte answers, answers after a rebuild, debounce, counter races).
 4. Review workflow (5 dimensions, 3 skeptics for each finding): 37 findings, 15 confirmed, 22 refuted. No JS/Kotlin parity defect survived. Fixed: tile on the lock screen, import on a background thread with cut values, the workflow test (extra permission keys, `run: |` blocks), reserved names in the vectors, the probe consent fallback (it now uses the exported debug-only `DebugStartActivity`), `adb wait-for-device` with a time limit and a dead-emulator check, a full logcat stream file, and 7 document corrections.
 
+5. Second review workflow (on the fixes since `07d91b9`; 89 agents; a completeness critic): 28 findings, 11 confirmed and fixed, 17 refuted. The critic checked plan A1, A2, A11 and A12 again (APK 5,000,734 bytes; assets equal the manifest; no change to the protected files). Fixed: the Self-test line 3 shows a pause and the mode Threat only; the notification "Pause 10 min" asks for the unlock (as the tile); an import result reaches the screen after a rotation; `adb` errors during the boot no longer stop the CI script; the workflow test has an allow list for `${{ }}` lines and reads more `run:` forms; the APK upload fails when the APK is missing; 5 document corrections.
+
 ## Checks
 
 Checked in this session (Linux container, no phone, no emulator):

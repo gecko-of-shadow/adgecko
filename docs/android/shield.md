@@ -23,11 +23,11 @@ Adgecko Shield is a small Android app in the folder `android/` of this repositor
 | Mode | "Ads + threat" (default) or "Threat only". |
 | Pause 10 min | Stops the list layer for 10 minutes. Malware blocking stays on. |
 | Quick Settings tile | A tap moves On to Paused, Paused to Off, and Off to On. On a locked phone, Paused and Off ask for the unlock first. A long press opens the app. |
-| Notification | "Protecting all apps", the blocks of today, "Pause 10 min" (or "Resume") and "Recent blocks". |
+| Notification | "Protecting all apps", the blocks of today, "Pause 10 min" (or "Resume") and "Recent blocks". On a locked phone, "Pause 10 min" asks for the unlock first. |
 | Recent blocks | The last 200 blocked names, in memory only. The debug build also writes each blocked name to logcat (section 5, O8). Tap a name to allow it. A malware name needs a second confirmation. |
 | Allow list | Max 1,000 entries, the same format as the extension (`threatAllowDomains`). Export and import a JSON file. |
 | Exclude apps | The Shield does not filter the apps that you select. |
-| Self-test | Asks for `self-test.adgecko.test` (expected: "blocked") and `example.com` (expected: "resolved"). |
+| Self-test | Asks for `self-test.adgecko.test` (expected: "blocked") and `example.com` (expected: "resolved"). A third line tells if the lists are active, paused, off (Threat only), still loading or not active. Before the lists load, only the Self-test name is blocked. |
 | Private DNS warning | Shows when Private DNS uses a hostname. Then apps send DNS past the Shield. |
 | About | The GPL-3.0 notice, the source commit, the data date and all licence texts. |
 
@@ -48,7 +48,7 @@ Needs: JDK 21, Deno 2.9.8, the Android SDK (platform 36, build-tools 36.0.0) and
 
 Before the install:
 
-- On the PC, download the artifact `adgecko-shield-debug` from the Actions run of the draft pull request (GitHub needs a login). The file is `adgecko-shield-debug.zip`.
+- On the PC, download the artifact `adgecko-shield-debug` from the Actions run of the draft pull request (GitHub needs a login). The file is `adgecko-shield-debug.zip`. GitHub keeps the artifact for 7 days. After that, a new CI run is necessary.
 - On the phone, turn on USB debugging. On a Samsung phone, Auto Blocker also blocks USB commands, and USB debugging is greyed out while it is on (research, not checked on a phone). Pause Auto Blocker (or Advanced Protection: "Pause temporarily") only for the adb session. Turn it on again at the end of the session.
 - Do not use a second VPN or DNS-blocker app at the same time. Android permits one VPN at a time.
 - On the PC, `adb` must work. `adb` is in the Android SDK Platform-Tools from Google. Put its folder on the PATH, or run `adb.exe` from that folder.
@@ -93,7 +93,7 @@ All results are UNVERIFIED until the owner reports them.
 
 - O1. Install as in section 4. Expected: "Success".
 - O2. Open the app. Turn the shield On. Accept the VPN dialog. Allow notifications. Expected: a key icon and the notification "Protecting all apps".
-- O3. Tap "Run Self-test". Expected: "blocked", then "resolved".
+- O3. Tap "Run Self-test". Expected: 3 lines: "1. self-test.adgecko.test: blocked", "2. example.com: resolved" and "3. Lists: active (194,480 list hosts, 15,291 threat names)." If line 3 says "still loading", wait some seconds and run the Self-test again. If line 3 says "NOT active", send the line (O8).
 - O4. Read the Private DNS mode in the app, or with the command below. Expected: `off` or `opportunistic`. The command prints `null` when nobody changed the setting; `null` means the default, Automatic. If it is `hostname`, the app shows its warning. Changing the setting is your decision.
 
 ```powershell

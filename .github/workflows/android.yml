@@ -88,6 +88,7 @@ jobs:
           name: adgecko-shield-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
+          if-no-files-found: error
 
       - name: Upload the lint report
         if: always()

@@ -2,6 +2,7 @@ package adgecko.shield.ui
 
 import adgecko.shield.core.DnsMessage
 import adgecko.shield.core.DnsPolicy
+import adgecko.shield.core.Mode
 import adgecko.shield.vpn.ShieldState
 import android.net.DnsResolver
 import android.os.CancellationSignal
@@ -78,6 +79,10 @@ object SelfTest {
         val d = ShieldState.data
         out.append(
             when {
+                d != null && ShieldState.policy.get()?.mode == Mode.THREAT_ONLY ->
+                    "3. Lists: off (mode Threat only). ${"%,d".format(d.threatCount)} threat names are active.\n"
+                d != null && ShieldState.policy.get()?.paused == true ->
+                    "3. Lists: paused. ${"%,d".format(d.threatCount)} threat names stay active.\n"
                 d != null -> "3. Lists: active (${"%,d".format(d.listCount)} list hosts, ${"%,d".format(d.threatCount)} threat names).\n"
                 ShieldState.dataError != null -> "3. Lists: NOT active (${ShieldState.dataError}). Only the Self-test name is blocked.\n"
                 else -> "3. Lists: still loading. Run the Self-test again in a few seconds.\n"

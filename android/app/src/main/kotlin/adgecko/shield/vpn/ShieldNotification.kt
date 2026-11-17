@@ -63,7 +63,13 @@ object ShieldNotification {
             .setShowWhen(false)
             .setCategory(Notification.CATEGORY_SERVICE)
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
-            .addAction(Notification.Action.Builder(null, if (paused) "Resume" else "Pause 10 min", pause).build())
+            // Pause asks for the unlock on a locked phone, as the tile does.
+            // Resume adds protection, so it needs no unlock.
+            .addAction(
+                Notification.Action.Builder(null, if (paused) "Resume" else "Pause 10 min", pause)
+                    .setAuthenticationRequired(!paused)
+                    .build(),
+            )
             .addAction(Notification.Action.Builder(null, "Recent blocks", recent).build())
             .build()
     }

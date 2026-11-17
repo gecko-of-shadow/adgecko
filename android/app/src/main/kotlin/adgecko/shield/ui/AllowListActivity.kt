@@ -21,6 +21,7 @@ import android.widget.TextView
 class AllowListActivity : Activity() {
     private lateinit var list: LinearLayout
     private lateinit var result: TextView
+    private val listener: () -> Unit = { show() }
     private val store get() = (application as ShieldApp).store
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,6 +49,18 @@ class AllowListActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        ShieldState.addListener(listener)
+        show()
+    }
+
+    override fun onPause() {
+        ShieldState.removeListener(listener)
+        super.onPause()
+    }
+
+    /** The list and the last import result. An import that ends after a screen rotation reaches the new screen here. */
+    private fun show() {
+        lastResult?.let { result.text = it }
         fill()
     }
 
@@ -113,7 +126,8 @@ class AllowListActivity : Activity() {
      * 80 characters in the result text (review of 2026-11-17).
      */
     private fun importAsync(uri: android.net.Uri) {
-        result.text = "Importing..."
+        lastResult = "Importing..."
+        result.text = lastResult
         val validate = AllowFlow.validator()
         Thread({
             val text = try {
@@ -128,16 +142,19 @@ class AllowListActivity : Activity() {
             } catch (e: Exception) {
                 "Error: ${cut(e.message ?: e.javaClass.simpleName)}"
             }
-            runOnUiThread {
-                result.text = text
-                changed()
-            }
+            lastResult = text
+            // rebuildPolicy() calls the state listeners on the main thread, so
+            // the screen that is visible now (also a new one) shows the result.
+            ShieldState.rebuildPolicy(store)
+            ShieldVpnService.command(applicationContext, ShieldVpnService.ACTION_RELOAD)
         }, "shield-import").start()
     }
 
     private fun cut(s: String) = if (s.length > 80) s.take(77) + "..." else s
 
     companion object {
+        /** The last import result, kept for the process (memory only). */
+        @Volatile private var lastResult: String? = null
         private const val REQ_EXPORT = 1
         private const val REQ_IMPORT = 2
         private const val MAX_IMPORT_BYTES = 512 * 1024

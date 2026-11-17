@@ -16,7 +16,7 @@ Dates in this file are the owner's local date (UTC-6). The dates stored on packe
 
 ### Docs
 
-- New: `docs/android/PLAN.md`, a plan to put the Adgecko jobs on an Android phone. Milestone 1 is "Adgecko Shield", a native app with a local DNS filter for all apps. Its data comes from `src/rules/` at build time. The plan also covers a link gate, a text check, list refresh on the phone and the browser for the web-only jobs. No Android code exists yet. All phone behaviour is UNVERIFIED.
+- New: `docs/android/PLAN.md`, a plan to put the Adgecko jobs on an Android phone. Milestone 1 is "Adgecko Shield", a native app with a local DNS filter for all apps. Its data comes from `src/rules/` at build time. The plan also covers a link gate, a text check, list refresh on the phone and the browser for the web-only jobs. Milestone 1 is in the Android section above. All phone behaviour is UNVERIFIED.
 - New: `docs/android/research-2026-11-17.md`, the research record for the plan.
 
 ## 0.3.6 (2026-11-16)

@@ -33,7 +33,9 @@ export function blockAfter(src, keyLineRe) {
 export function runScripts(src) {
   return blockAfter(src, /^\s*(?:-\s*)?run:/).map((b) => {
     const head = b.line.replace(/^(?:-\s*)?run:\s*/, "");
-    return /^[|>][-+]?$/.test(head) ? b.body.join("\n") : head;
+    // Block scalar heads: | > with an optional chomping and indentation
+    // indicator and an optional comment ("|2", "|+2", ">- # x").
+    return /^[|>](?:[1-9][-+]?|[-+][1-9]?)?(?:\s+#.*)?$/.test(head) ? b.body.join("\n") : [head, ...b.body].join("\n");
   });
 }
 
@@ -79,6 +81,10 @@ Deno.test("android workflow: the block parsers see extra keys and block scalars"
   const block = "steps:\n  - name: x\n    run: |\n      echo ok\n      echo ${{ github.head_ref }}\n  - run: echo y\n";
   const s = runScripts(block);
   assert(s.length === 2 && s[0].includes("${{") && s[1] === "echo y", `block scalar not read: ${JSON.stringify(s)}`);
+  for (const head of ["|2", "|+2", ">- # note", "echo a"]) {
+    const y = `steps:\n  - run: ${head}\n      echo \${{ github.head_ref }}\n`;
+    assert(runScripts(y)[0].includes("${{"), `run: ${head} body not read`);
+  }
 });
 
 Deno.test("android workflow: the wrapper jar check, the build tasks and the APK artifact", () => {
@@ -88,9 +94,18 @@ Deno.test("android workflow: the wrapper jar check, the build tasks and the APK 
   }
   assert(/name:\s*adgecko-shield-debug\b/.test(code), "no adgecko-shield-debug artifact");
   assert(code.includes("android/app/build/outputs/apk/debug/app-debug.apk"), "artifact path");
+  const apk = code.slice(code.indexOf("name: adgecko-shield-debug"), code.indexOf("name: adgecko-shield-debug") + 300);
+  assert(/if-no-files-found:\s*error/.test(apk), "the APK upload must fail when the APK is missing (E1)");
   assert(/api:\s*\[33,\s*36\]/.test(code) && /fail-fast:\s*false/.test(code), "emulator matrix API 33 and 36 with fail-fast false");
   assert(code.includes("bash android/ci/emulator-run.sh"), "emulator script");
   // Values from contexts go into env: first; run: lines use no ${{ }}.
+  // Allow list: a ${{ }} may occur only in these keys (values go into env:
+  // first; names and the matrix are not scripts). Any other line fails,
+  // whatever YAML form it has.
+  const ALLOWED_CONTEXT_LINE = /^\s*(?:-\s*)?(?:name|ADGECKO_SOURCE_SHA|API_LEVEL):\s/;
+  for (const l of code.split("\n")) {
+    if (l.includes("${{")) assert(ALLOWED_CONTEXT_LINE.test(l), `a context expression outside the allowed keys: ${l.trim()}`);
+  }
   const scripts = runScripts(code);
   assert(scripts.length >= 6, `found only ${scripts.length} run: steps`);
   for (const s of scripts) assert(!s.includes("${{"), `run: script uses a context directly: ${s}`);

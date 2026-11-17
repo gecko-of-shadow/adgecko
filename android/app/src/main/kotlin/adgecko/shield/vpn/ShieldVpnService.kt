@@ -112,8 +112,10 @@ class ShieldVpnService : VpnService() {
      * Android stops the app). The systemExempted check reads only the VPN
      * consent app op (AOSP ForegroundServiceTypePolicy: anyOf includes
      * OP_ACTIVATE_VPN), not the VPN state, so the order is safe. The data is
-     * not awaited: the policy is null (fail-open) until the background load
-     * ends, then ShieldState.onDataLoaded() builds it.
+     * not awaited: until the background load ends, the policy uses
+     * PolicyData.EMPTY (only the Self-test name is blocked, all other names
+     * are forwarded: fail-open). Then ShieldState.onDataLoaded() builds the
+     * full policy.
      */
     private fun startShield() {
         ShieldState.setStatus(ShieldState.Status.STARTING)

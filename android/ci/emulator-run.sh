@@ -75,18 +75,19 @@ fi
 booted=""
 for _ in $(seq 1 180); do
   kill -0 "$EMU_PID" 2>/dev/null || infra_fail "the emulator process stopped"
-  booted="$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+  # adb fails while adbd restarts during the boot: retry, do not stop (set -e).
+  booted="$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
   [ "$booted" = "1" ] && break
   sleep 5
 done
 if [ "$booted" != "1" ]; then
   infra_fail "the emulator did not boot within 15 minutes"
 fi
-"$ADB" shell settings put global window_animation_scale 0
-"$ADB" shell settings put global transition_animation_scale 0
-"$ADB" shell settings put global animator_duration_scale 0
+"$ADB" shell settings put global window_animation_scale 0 || true
+"$ADB" shell settings put global transition_animation_scale 0 || true
+"$ADB" shell settings put global animator_duration_scale 0 || true
 "$ADB" shell input keyevent 82 || true
-echo "API $API booted. Private DNS mode: $("$ADB" shell settings get global private_dns_mode | tr -d '\r')"
+echo "API $API booted. Private DNS mode: $("$ADB" shell settings get global private_dns_mode | tr -d '\r' || true)"
 
 cd "$ROOT"
 status=0
