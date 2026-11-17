@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug variant only: the CI emulator starts the shield through this
+  activity (docs/android/PLAN.md section 6.8). A release build has no such
+  component. :app:verifyManifestPolicyDebug allows it, the release policy
+  does not.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".debug.DebugStartActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.Shield.Translucent" />
+    </application>
+</manifest>
