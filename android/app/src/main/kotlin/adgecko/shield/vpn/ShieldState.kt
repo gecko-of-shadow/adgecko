@@ -10,8 +10,6 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -45,7 +43,9 @@ object ShieldState {
     @Volatile private var blocksDay = 0L
     @Volatile var policyErrors: Long = 0
 
-    private val loaded = CountDownLatch(1)
+    /** Set by the running service: called on the data thread when the load ends. */
+    @Volatile var onDataLoaded: (() -> Unit)? = null
+
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private val main = Handler(Looper.getMainLooper())
 
@@ -60,16 +60,10 @@ object ShieldState {
                 dataError = e.message ?: e.javaClass.simpleName
                 Log.e(TAG, "data load failed: $dataError")
             } finally {
-                loaded.countDown()
+                onDataLoaded?.invoke()
                 changed()
             }
         }, "shield-data").start()
-    }
-
-    /** Waits for the data load, at most [ms] milliseconds. */
-    fun awaitData(ms: Long): ShieldData? {
-        loaded.await(ms, TimeUnit.MILLISECONDS)
-        return data
     }
 
     /** A new policy object from the data and the stored settings. Null while the data is missing (fail-open). */
@@ -85,6 +79,7 @@ object ShieldState {
         changed()
     }
 
+    @Synchronized
     fun countBlock() {
         val day = System.currentTimeMillis() / 86_400_000L
         if (day != blocksDay) {

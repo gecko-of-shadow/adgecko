@@ -23,7 +23,7 @@ class PacketTest {
         Mode.ADS_AND_THREAT, false, emptyList(),
     )
     private val decisions = mutableListOf<Decision>()
-    private val handler = PacketHandler(listOf(alias4, alias6), { policy }, 2026111422) { _, d -> decisions += d }
+    private val handler = PacketHandler(listOf(alias4, alias6), { policy }, { 2026111422L }) { _, d -> decisions += d }
 
     private fun queryPacket(client: ByteArray, alias: ByteArray, name: String, qtype: Int, edns: Boolean = true, id: Int = 0x1234) =
         IpPacket.buildUdp(client, alias, 40000, 53, DnsMessage.query(id, name, qtype, edns))

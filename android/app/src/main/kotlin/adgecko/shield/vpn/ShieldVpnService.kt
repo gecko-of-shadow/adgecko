@@ -56,11 +56,13 @@ class ShieldVpnService : VpnService() {
     private var output: FileOutputStream? = null
     private val writeLock = Any()
     private var running = false
-    private var lastNotify = 0L
+    @Volatile private var lastNotify = 0L
 
     override fun onCreate() {
         super.onCreate()
         store = (application as ShieldApp).store
+        // A data load that ends after the start builds the policy at once.
+        ShieldState.onDataLoaded = { main.post { if (running) reloadPolicy() } }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -70,23 +72,32 @@ class ShieldVpnService : VpnService() {
                 stopShield(null)
                 return START_NOT_STICKY
             }
-            ACTION_PAUSE -> {
-                if (running) setPause(System.currentTimeMillis() + PAUSE_MS)
+            ACTION_PAUSE, ACTION_RESUME, ACTION_RELOAD, ACTION_REBUILD -> {
+                // A command for a stopped shield must not leave a started, sticky
+                // service: a later sticky restart would turn the VPN on again.
+                if (!running) {
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
+                when (intent.action) {
+                    ACTION_PAUSE -> setPause(System.currentTimeMillis() + PAUSE_MS)
+                    ACTION_RESUME -> setPause(0L)
+                    ACTION_RELOAD -> reloadPolicy()
+                    else -> rebuildDebounced()
+                }
                 return START_STICKY
             }
-            ACTION_RESUME -> {
-                if (running) setPause(0L)
+            null -> {
+                // A sticky restart after the process was killed: start only if the
+                // user wants the shield on.
+                if (!store.wantOn) {
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
+                if (!running) startShield()
                 return START_STICKY
             }
-            ACTION_RELOAD -> {
-                if (running) reloadPolicy()
-                return START_STICKY
-            }
-            ACTION_REBUILD -> {
-                if (running) rebuild()
-                return START_STICKY
-            }
-            // ACTION_START, the always-on start (action android.net.VpnService) and a restart.
+            // ACTION_START and the always-on start (action android.net.VpnService).
             else -> {
                 store.wantOn = true
                 if (!running) startShield() else reloadPolicy()
@@ -95,21 +106,18 @@ class ShieldVpnService : VpnService() {
         }
     }
 
+    /**
+     * startForeground() comes first: a start through startForegroundService()
+     * must reach it on each path, also when establish() fails afterwards (else
+     * Android stops the app). The systemExempted check reads only the VPN
+     * consent app op (AOSP ForegroundServiceTypePolicy: anyOf includes
+     * OP_ACTIVATE_VPN), not the VPN state, so the order is safe. The data is
+     * not awaited: the policy is null (fail-open) until the background load
+     * ends, then ShieldState.onDataLoaded() builds it.
+     */
     private fun startShield() {
         ShieldState.setStatus(ShieldState.Status.STARTING)
-        ShieldState.awaitData(3000)
         ShieldState.rebuildPolicy(store)
-        val w = NetworkWatcher(this) { main.post { if (running) rebuild() } }
-        w.start()
-        watcher = w
-        val pfd = establishInterface()
-        if (pfd == null) {
-            w.stop()
-            watcher = null
-            ShieldState.setStatus(ShieldState.Status.ERROR, "Android did not give the VPN interface (no VPN permission, or another VPN is always on).")
-            stopSelf()
-            return
-        }
         try {
             val n = ShieldNotification.build(this, store.pausedUntil)
             if (Build.VERSION.SDK_INT >= 34) {
@@ -120,12 +128,22 @@ class ShieldVpnService : VpnService() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "startForeground refused: ${e.javaClass.simpleName}")
-            closeQuietly(pfd)
-            w.stop()
-            watcher = null
             val msg = "Android refused the foreground service type systemExempted (${e.javaClass.simpleName}). The shield is off."
             ShieldState.setStatus(ShieldState.Status.ERROR, msg)
             ShieldNotification.notice(this, msg)
+            stopSelf()
+            return
+        }
+        val w = NetworkWatcher(this) { main.post { if (running) rebuildDebounced() } }
+        w.start()
+        watcher = w
+        val pfd = establishInterface()
+        if (pfd == null) {
+            w.stop()
+            watcher = null
+            ShieldState.policy.set(null)
+            ShieldState.setStatus(ShieldState.Status.ERROR, "Android did not give the VPN interface (no VPN permission, or another VPN is always on).")
+            stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return
         }
@@ -198,8 +216,7 @@ class ShieldVpnService : VpnService() {
         upstream = Upstream(this, network, ordered)
         ShieldState.upstreamCount = ordered.size
         ShieldState.aliasText = aliases.joinToString(", ") { InetAddress.getByAddress(it).hostAddress ?: "?" }
-        val serial = ShieldState.data?.serial ?: 1L
-        handler = PacketHandler(aliases, { ShieldState.policy.get() }, serial) { q, d ->
+        handler = PacketHandler(aliases, { ShieldState.policy.get() }, { ShieldState.data?.serial ?: 1L }) { q, d ->
             ShieldState.queries.incrementAndGet()
             if (d.action == Action.BLOCK) {
                 ShieldState.countBlock()
@@ -238,18 +255,18 @@ class ShieldVpnService : VpnService() {
             }
             val h = handler ?: continue
             when (val out = h.handle(buf, n)) {
-                is Outcome.Reply -> write(pfd, out.bytes)
+                is Outcome.Reply -> write(out.bytes)
                 is Outcome.Forward -> {
                     val up = upstream
                     if (up == null) {
-                        h.servfailReply(out.ret, out.query)?.let { write(pfd, it) }
+                        h.servfailReply(out.ret, out.query)?.let { write(it) }
                     } else {
                         up.send(out.upstreamIndex, out.query) { answer ->
                             if (answer != null) {
-                                write(pfd, h.forwardReply(out.ret, answer))
+                                write(h.forwardReply(out.ret, answer))
                             } else {
                                 ShieldState.forwardErrors.incrementAndGet()
-                                h.servfailReply(out.ret, out.query)?.let { write(pfd, it) }
+                                h.servfailReply(out.ret, out.query)?.let { write(it) }
                             }
                         }
                     }
@@ -260,15 +277,28 @@ class ShieldVpnService : VpnService() {
         }
     }
 
-    private fun write(pfd: ParcelFileDescriptor, bytes: ByteArray) {
+    /**
+     * Writes to the current interface. An answer that a query on an older
+     * interface started still reaches its client after a rebuild: the
+     * interface address and the alias stay the same while the TEST-NET range
+     * does not change.
+     */
+    private fun write(bytes: ByteArray) {
         synchronized(writeLock) {
-            if (tun !== pfd) return
             try {
                 output?.write(bytes)
             } catch (e: IOException) {
                 // The interface was closed or rebuilt.
             }
         }
+    }
+
+    private val rebuildNow = Runnable { if (running) rebuild() }
+
+    /** A network handover gives onLost and onAvailable close together: build one time. */
+    private fun rebuildDebounced() {
+        main.removeCallbacks(rebuildNow)
+        main.postDelayed(rebuildNow, 500)
     }
 
     /** Network or exclusion change: build a new interface, then close the old one. */
@@ -320,6 +350,7 @@ class ShieldVpnService : VpnService() {
     private fun stopShield(error: String?) {
         running = false
         main.removeCallbacks(pauseEnd)
+        main.removeCallbacks(rebuildNow)
         watcher?.stop()
         watcher = null
         val old = tun
@@ -342,6 +373,7 @@ class ShieldVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        ShieldState.onDataLoaded = null
         if (running) stopShield(null)
         super.onDestroy()
     }

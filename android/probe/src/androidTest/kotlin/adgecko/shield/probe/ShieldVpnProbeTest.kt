@@ -75,7 +75,14 @@ class ShieldVpnProbeTest {
             vpn = waitVpn(15_000)
         }
         assertNotNull("no network with TRANSPORT_VPN", vpn)
-        return vpn!!
+        // Facts that explain a failure (resolver research of 2026-11-17): a
+        // Strict-mode Private DNS hostname has no cleartext fallback, and a
+        // process-bound network changes the path of rawQuery(null, ...).
+        log("private_dns_mode=" + shell("settings get global private_dns_mode").trim() +
+            " private_dns_specifier=" + shell("settings get global private_dns_specifier").trim())
+        log("active network=${cm.activeNetwork} vpn=$vpn bound=${cm.boundNetworkForProcess} " +
+            "vpn dns=${cm.getLinkProperties(vpn!!)?.dnsServers} privateDnsActive=${cm.getLinkProperties(vpn)?.isPrivateDnsActive}")
+        return vpn
     }
 
     private fun waitVpn(ms: Long): Network? {

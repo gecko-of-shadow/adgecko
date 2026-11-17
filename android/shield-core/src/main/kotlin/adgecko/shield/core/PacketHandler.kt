@@ -29,7 +29,8 @@ class PacketHandler(
     /** The alias addresses; the index is the index of the real DNS server. */
     private val aliases: List<ByteArray>,
     private val policy: () -> DnsPolicy?,
-    private val serial: Long = 1,
+    /** The data serial for the SOA of a block answer; read for each answer (the data can load late). */
+    private val serial: () -> Long = { 1L },
     private val listener: Listener? = null,
 ) {
     fun interface Listener {
@@ -89,7 +90,7 @@ class PacketHandler(
             errors++
         }
         if (decision.action == Action.BLOCK) {
-            return Outcome.Reply(IpPacket.buildUdp(p.dst, p.src, 53, p.srcPort(), DnsMessage.nodata(q, serial)))
+            return Outcome.Reply(IpPacket.buildUdp(p.dst, p.src, 53, p.srcPort(), DnsMessage.nodata(q, serial())))
         }
         return Outcome.Forward(p.buf.copyOfRange(off, off + dlen), index, ReturnInfo(p.src, p.dst, p.srcPort(), 53))
     }
