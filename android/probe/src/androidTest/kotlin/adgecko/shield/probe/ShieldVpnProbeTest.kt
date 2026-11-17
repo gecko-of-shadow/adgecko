@@ -187,11 +187,25 @@ class ShieldVpnProbeTest {
     @Test
     fun aNormalNameResolvesAndTcpToTheAliasFailsFast() {
         val vpn = startShield()
-        val r = rawQuery(null, "example.org", DnsMessage.TYPE_A)
-        val p = r.bytes?.let { DnsMessage.parseResponse(it) }
-        log("rawQuery example.org: rcode=${p?.rcode} answers=${p?.answerTypes} ${r.ms} ms err=${r.error}")
-        assertNotNull("no answer for example.org (${r.error})", p)
-        assertTrue("example.org has no A record: ${p!!.answerTypes}", p.answerTypes.contains(DnsMessage.TYPE_A))
+        // An allowed name is forwarded and its answer comes back. CI run 14
+        // (API 33): the emulator DNS proxy gave no answer for example.org in
+        // 5 s ("upstream failed ... timeout, no answer from server 0") while
+        // the Shield path worked. Thus up to 3 reserved IANA names in turn;
+        // one A answer is enough, and each result goes to the log.
+        val results = ArrayList<String>()
+        var resolved: String? = null
+        for (name in listOf("example.org", "example.com", "example.net")) {
+            val r = rawQuery(null, name, DnsMessage.TYPE_A)
+            val p = r.bytes?.let { DnsMessage.parseResponse(it) }
+            val line = "$name: rcode=${p?.rcode} answers=${p?.answerTypes} ${r.ms} ms err=${r.error}"
+            log("rawQuery $line")
+            results += line
+            if (p != null && p.rcode == 0 && p.answerTypes.contains(DnsMessage.TYPE_A)) {
+                resolved = name
+                break
+            }
+        }
+        assertNotNull("no allowed name resolved through the Shield: $results", resolved)
 
         val alias = cm.getLinkProperties(vpn)!!.dnsServers.first()
         val t0 = System.nanoTime()
