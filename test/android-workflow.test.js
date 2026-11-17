@@ -72,7 +72,11 @@ Deno.test("android workflow: runner, permissions, credentials, secrets and trigg
   assert(!code.includes("pull_request_target"), "no pull_request_target");
   assert(/^\s+pull_request:/m.test(code) && /^\s+workflow_dispatch:/m.test(code), "triggers pull_request and workflow_dispatch");
   assert(!/^\s+schedule:/m.test(code), "no schedule in M1");
-  assert(!/actions\/cache/.test(code), "no Gradle cache in M1");
+  // Gradle cache only through the built-in option of setup-java (2026-11-17,
+  // HTTP 429 from Maven Central); no separate cache action.
+  assert(!/actions\/cache/.test(code), "no separate cache action");
+  const caches = [...code.matchAll(/^\s*cache:\s*(\S+)/gm)].map((m) => m[1]);
+  assert(caches.length === 2 && caches.every((c) => c === "gradle"), `cache options: ${caches.join(", ")}`);
 });
 
 Deno.test("android workflow: the block parsers see extra keys and block scalars", () => {
@@ -87,7 +91,7 @@ Deno.test("android workflow: the block parsers see extra keys and block scalars"
   }
 });
 
-Deno.test("android workflow: the wrapper jar check, the build tasks and the APK artifact", () => {
+Deno.test("android workflow: the wrapper jar check, the build tasks and the APK artifact", async () => {
   assert(code.includes('echo "621008afc4f5d59357fcf06ffa644dd5aade5e091bdc363742710445f73cdaf8  android/gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -'), "no sha256sum -c step for the wrapper jar");
   for (const t of [":shield-core:test", ":app:testDebugUnitTest", ":app:lintDebug", ":app:verifyManifestPolicyDebug", ":app:assembleDebug", ":app:assembleDebugAndroidTest", ":probe:assembleDebug", ":probe:assembleDebugAndroidTest"]) {
     assert(code.includes(t + " ") || code.includes(t + "\n"), `build step has no ${t}`);
@@ -98,6 +102,11 @@ Deno.test("android workflow: the wrapper jar check, the build tasks and the APK 
   assert(/if-no-files-found:\s*error/.test(apk), "the APK upload must fail when the APK is missing (E1)");
   assert(/api:\s*\[33,\s*36\]/.test(code) && /fail-fast:\s*false/.test(code), "emulator matrix API 33 and 36 with fail-fast false");
   assert(code.includes("bash android/ci/emulator-run.sh"), "emulator script");
+  // Each Gradle call goes through the 429-only retry script.
+  assert(!/gradlew/.test(code), "android.yml must call Gradle through android/ci/gradle-retry.sh");
+  assert(code.includes("bash android/ci/gradle-retry.sh :shield-core:test"), "build step uses the retry script");
+  const retry = await Deno.readTextFile(new URL("../android/ci/gradle-retry.sh", import.meta.url));
+  assert(/grep -q "status code 429"/.test(retry) && /for attempt in 1 2 3/.test(retry), "the retry script repeats only on HTTP 429, at most 2 times");
   // Values from contexts go into env: first; run: lines use no ${{ }}.
   // Allow list: a ${{ }} may occur only in these keys (values go into env:
   // first; names and the matrix are not scripts). Any other line fails,

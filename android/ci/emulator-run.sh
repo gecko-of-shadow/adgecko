@@ -92,7 +92,7 @@ echo "API $API booted. Private DNS mode: $("$ADB" shell settings get global priv
 cd "$ROOT"
 status=0
 echo "== E2: vector runner on ART"
-./android/gradlew -p android --no-daemon :app:connectedDebugAndroidTest || status=1
+bash android/ci/gradle-retry.sh :app:connectedDebugAndroidTest || status=1
 echo "== E3: VPN test from the probe app"
-./android/gradlew -p android --no-daemon :app:installDebug :probe:connectedDebugAndroidTest || status=1
+bash android/ci/gradle-retry.sh :app:installDebug :probe:connectedDebugAndroidTest || status=1
 exit "$status"

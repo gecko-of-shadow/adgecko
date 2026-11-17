@@ -44,8 +44,13 @@ permissions:
 #   actions/setup-java v6.3.0 -> d1374f8ac74474200d16ef8ecee22c7ae7a51880
 #   denoland/setup-deno v2.0.5 -> 22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
 #   actions/upload-artifact v7.0.2 -> cf430e030ddbb5b0abf93d22962f4752f3646cd9
-# No secret, no pull_request_target, no Gradle cache in M1. Values from
-# contexts go into env: first.
+# No secret, no pull_request_target. Values from contexts go into env: first.
+# Gradle cache: the built-in cache of actions/setup-java (cache: gradle), no
+# other action. Reason: Maven Central answered HTTP 429 "Too Many Requests" in
+# runs 8 and 10 of 2026-11-17, because each job downloaded all dependencies
+# again (the plan had no cache in M1, "add it later"). The workflow has no
+# secret and contents: read only, so a poisoned cache can reach no secret.
+# Gradle runs through android/ci/gradle-retry.sh, which repeats only on 429.
 
 jobs:
   build:
@@ -67,6 +72,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+          cache: gradle
 
       - name: Install Deno
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
@@ -80,7 +86,7 @@ jobs:
         run: bash android/ci/sdk-packages.sh
 
       - name: Build and test
-        run: ./android/gradlew -p android --no-daemon :shield-core:test :app:testDebugUnitTest :app:lintDebug :app:verifyManifestPolicyDebug :app:assembleDebug :app:assembleDebugAndroidTest :probe:assembleDebug :probe:assembleDebugAndroidTest
+        run: bash android/ci/gradle-retry.sh :shield-core:test :app:testDebugUnitTest :app:lintDebug :app:verifyManifestPolicyDebug :app:assembleDebug :app:assembleDebugAndroidTest :probe:assembleDebug :probe:assembleDebugAndroidTest
 
       - name: Upload the debug APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -122,6 +128,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+          cache: gradle
 
       - name: Install Deno
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
