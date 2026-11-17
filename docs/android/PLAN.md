@@ -478,7 +478,7 @@ Logs:
 - Triggers: `pull_request` and `push` to `main`, with paths `android/**`, `scripts/export-android-data.mjs`, `scripts/build-android-vectors.mjs`, `scripts/lib/android-*.mjs`, `test/fixtures/android/**`, `src/rules/**`, `src/threat/**`, `src/general/**`, `LICENSE`, `src/LICENSE-EasyList.txt`, `.github/workflows/android.yml`. Also `workflow_dispatch`.
 - Do not make it a required check while it has a paths filter.
 - `permissions: contents: read` at the top. No secret. No `pull_request_target`. `runs-on: ubuntu-24.04`. Values from contexts go into `env:` first.
-- No Gradle cache in M1 (simpler; no cache-poisoning question). Add it later if CI time is a problem.
+- Gradle cache: the built-in cache of `actions/setup-java` (`cache: gradle`), and `android/ci/gradle-retry.sh` repeats Gradle only on HTTP 429 from Maven Central. Owner decision OD-new-2 of 2026-11-17, after three HTTP 429 failures in CI. The first version of this plan had no Gradle cache in M1.
 
 Job `build` (outline):
 

@@ -79,8 +79,8 @@ The plan is `docs/android/PLAN.md`. All phone behaviour is UNVERIFIED.
 - [ ] Owner decision OD-3 (APK signing) before milestone 2. With the CI debug key, each update needs an uninstall.
 - [ ] Check on a phone: Android accepts the foreground service type `systemExempted` for the VPN with no alarm permission (lint finding, `HANDOFF.md`).
 - [ ] Check on a phone: the time from the shield start to "Lists: active" in the Self-test (0.4 to 3.0 s on the CI emulators).
-- [ ] Owner decision OD-new-2: accept the Gradle cache and the HTTP 429 retry in `android.yml` (a deviation from plan section 6.8; `HANDOFF.md`).
-- [ ] Owner decision OD-new-1: `specialUse` as a fallback service type (a sixth permission). Only if the phone refuses `systemExempted`.
+- [x] Owner decision OD-new-2 (2026-11-17): accepted. The Gradle cache and the HTTP 429 retry stay in `android.yml`.
+- [ ] Owner decision OD-new-1: `specialUse` as a fallback service type (a sixth permission). The owner waits for check O2 on the phone (decision of 2026-11-17). Decide it after O2: if Android refuses `systemExempted`, add `specialUse`.
 - [ ] Owner decisions OD-1 to OD-25 (plan section 9). Milestone 1 uses the recommendations of the plan under the owner's standing approval. Change any of them in the pull request review.
 - [ ] Later milestones: link and text gates (M2), list refresh on the phone (M3), signed list (M4). Optional: in-app browser (M6), stream helpers (M7).
 
