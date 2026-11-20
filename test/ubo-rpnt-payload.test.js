@@ -63,6 +63,7 @@ function run(payload, href, state = {}) {
     mutate(n) { for (let i = 0; i < n; i++) observerCb([]); },
     flush() { while (timers.length) timers.shift()(); },
     push(v) { Reflect.apply(win.Array.prototype.push, [], [v]); },
+    goTo(href) { location.href = href; location.search = new URL(href).search; },
   };
 }
 
@@ -140,6 +141,45 @@ Deno.test("rpnt payload: repeated wait replies after a reload use up one marker,
     const ua = r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent;
     assert(ua.includes("; yahi"), "only the first marker was used up: " + ua);
   }
+});
+
+Deno.test("rpnt payload: an empty marker list starts again on the next video (upstream keeps it empty)", () => {
+  // Live test 2026-11-20: all four markers failed on one video; upstream then
+  // made no recovery attempt for any later video in that tab.
+  const stuck = { reloadxhr: true, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
+  const useUp = (r) => {
+    for (let i = 0; i < 6; i++) { r.push(new Uint8Array(105)); r.mutate(1); r.flush(); }
+    assert(r.calls.loadVideoById === 3, "yahi, inline and oaeb each got one reload: " + r.calls.loadVideoById);
+    assert(!/; (channel|yahi|inline|oaeb)/.test(r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent), "list empty: UA marker cleared");
+  };
+  const up = run(upstream, "https://www.youtube.com/watch?v=abc", stuck);
+  useUp(up);
+  up.goTo("https://www.youtube.com/watch?v=def");
+  for (let i = 0; i < 3; i++) { up.push(new Uint8Array(105)); up.mutate(1); up.flush(); }
+  assert(up.calls.loadVideoById === 3, "upstream: no recovery on the next video: " + up.calls.loadVideoById);
+
+  const ours = run(shipped, "https://www.youtube.com/watch?v=abc", stuck);
+  useUp(ours);
+  // Same video, more page changes: the list stays empty (no reload loop on one video).
+  for (let i = 0; i < 3; i++) { ours.push(new Uint8Array(105)); ours.mutate(1); ours.flush(); }
+  assert(ours.calls.loadVideoById === 3, "same video: still given up: " + ours.calls.loadVideoById);
+  ours.goTo("https://www.youtube.com/watch?v=def");
+  ours.mutate(1); ours.flush();
+  ours.push(new Uint8Array(105)); ours.mutate(1); ours.flush();
+  assert(ours.calls.loadVideoById === 4, "next video: recovery runs again: " + ours.calls.loadVideoById);
+  assert(/; (channel|yahi)/.test(ours.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent), "a marker is in use again");
+});
+
+Deno.test("rpnt payload: a list that is not empty keeps its place on the next video", () => {
+  const stuck = { reloadxhr: true, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
+  const r = run(shipped, "https://www.youtube.com/watch?v=abc", stuck);
+  r.push(new Uint8Array(105)); r.mutate(1); r.flush();
+  assert(r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent.includes("; yahi"), "first video ends on yahi");
+  r.goTo("https://www.youtube.com/watch?v=def");
+  r.mutate(1); r.flush();
+  assert(r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent.includes("; yahi"), "next video keeps the working marker");
+  r.push(new Uint8Array(105)); r.mutate(1); r.flush();
+  assert(r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent.includes("; inline"), "and goes on from there, not from the start");
 });
 
 Deno.test("rpnt payload: no #masthead, or no logo-type attribute, does not throw", () => {

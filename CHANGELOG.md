@@ -12,6 +12,7 @@ Not released. Not tested in Chrome or on youtube.com.
 
 - YouTube: the uBlock Origin YouTube filters are synced to uAssets `900a2a3` (was `e140ffc`). uBlock Origin scriptlet code stays at tag 1.75.0.
 - YouTube: a possible cause of a long black screen at the start of a video is removed. In 0.3.6, uBlock Origin's start recovery could discard all its fallback steps after the first reload, and then wait with no second reload. uAssets `1fbf62c` (2026-11-17) guards this. `test/ubo-rpnt-payload.test.js` has a test that fails on the 0.3.6 payload. Not proven as the cause on a live page.
+- YouTube: uBlock Origin's start recovery starts its list of fallback steps again on the next video, when all steps failed on the video before. Upstream keeps the empty list; in a live test (2026-11-20) each later video in that tab then waited 5 to 14 s with no recovery attempt. This is a local change to the upstream code (`ARG_PATCHES` in `scripts/sync-ubo-youtube.mjs`). Not tested on youtube.com.
 - YouTube: the new upstream filters for embedded players do not add work to each `JSON.stringify` call. The local root-key guard now reads a dotted filter (`[?.a.b.c]`).
 
 ### Changed

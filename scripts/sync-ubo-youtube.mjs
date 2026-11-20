@@ -188,7 +188,16 @@ const ARG_PATCHES = [
     // `e,l` / `i`; uAssets 1fbf62c: list `n`, locals `e,i` / `l`); re-check
     // the names whenever this patch stops matching.
     "const e=()=>{let e,i,{player:l,",
-    "const e=()=>{if(!window.location.href.includes(\"/watch?\")&&!window.location.href.includes(\"/embed/\"))return void(n=t);let e,i,{player:l,",
+    // Also in this patch (adgecko, 2026-11-20): when the address names another
+    // video and the marker list is empty, the list starts again. Upstream keeps
+    // an empty list until the page is not a watch page; in a live test every
+    // later video in that tab then waited 5 to 14 s with no recovery attempt.
+    // `gkv` is declared by the next patch.
+    "const e=()=>{if(!window.location.href.includes(\"/watch?\")&&!window.location.href.includes(\"/embed/\"))return void(n=t);const gk=location.pathname+\"|\"+new URLSearchParams(location.search).get(\"v\");gk!==gkv&&(gkv=gk,0===n.length&&(n=t));let e,i,{player:l,",
+  ],
+  [
+    "let r=!1,n=t;const o=",
+    "let r=!1,n=t,gkv=\"\";const o=",
   ],
   [
     "e(),new MutationObserver((()=>{e()})).observe(document,",
