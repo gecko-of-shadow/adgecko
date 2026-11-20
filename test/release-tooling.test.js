@@ -58,7 +58,8 @@ Deno.test({ name: "release gate on a changed package copy: a changed kick.js, a 
   assert(/FAIL\s+frozen playback files/.test(r.text) && /src\/kick\.js/.test(line(r.text, /frozen pin|differs from its pin/)), "kick.js against the pin:\n" + r.text.slice(0, 4000));
   const sec2 = line(r.text, /privileged \/ permission fields/);
   assert(/FAIL/.test(sec2) && /update_url/.test(sec2) && /content_security_policy/.test(sec2), "manifest key allow-list:\n" + sec2);
-  assert(/FAIL\s+possible identity\/secret strings/.test(r.text) && /src\/x\.js/.test(r.text), "password= in src/x.js");
+  // rg prints the found path with the platform's separator: src\x.js on Windows.
+  assert(/FAIL\s+possible identity\/secret strings/.test(r.text) && /src[\\/]x\.js/.test(r.text), "password= in src/x.js");
 } });
 
 Deno.test("release gate: the manifest key allow-list is exactly the keys of the current manifest.json", async () => {
