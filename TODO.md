@@ -1,18 +1,23 @@
 # To do
 
-Last update: 2026-11-20. Version 0.3.7 is released (tag `v0.3.7` on commit `cc3e764`). The lines on 0.3.6 below are from before 0.3.7.
+Last update: 2026-11-20, after an A/B test of 0.3.6 against 0.3.7 on YouTube.
 
 ## Where it stands
 
-- **Last release:** [v0.3.6](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.6), published 2026-11-16 by the release workflow from commit `5cd4ab6`. Assets: `adgecko-0.3.6.zip` (2,508,034 bytes) and `adgecko-0.3.6.zip.sha256`.
-- **Checks on 0.3.6:** the release workflow passed the release gate on the checkout and on the zip. CI on `main` was green (tests with `--parallel`, privacy, release gate). The package has 64 files and 7,862,441 bytes; the cap is 8,000,000.
-- **UNVERIFIED:** all behaviour of 0.3.6 in Chrome. The release was published before a manual test, at the owner's request. No run on the owner's PC or on live sites was done.
+- **Last release:** [v0.3.7](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.7), from commit `cc3e764`. Assets: `adgecko-0.3.7.zip` and `adgecko-0.3.7.zip.sha256`. The release before: v0.3.6 (`5cd4ab6`).
+- **A/B test on 2026-11-20 (signed out, Chrome for Testing):** no YouTube regression of 0.3.7 against 0.3.6 was found. The numbers are in `HANDOFF.md`.
+- **UNVERIFIED:** the behaviour of 0.3.7 in the owner's signed-in Chrome.
 
 ## Next steps
 
-### 0. YouTube in 0.3.7
+### 0. Test 0.3.7 on YouTube, signed in (only the owner can do this)
 
-- [ ] The owner reports that YouTube is maybe worse in 0.3.7 than in 0.3.6 (2026-11-20). Do an A/B test on the owner's PC. The suspects and the test steps are in `HANDOFF.md`, section "Session of 2026-11-20".
+The automatic test was not signed in. The black screen of 6 to 21 s (`CHANGELOG.md`, section 0.3.7) was seen on a signed-in account; no click in the automatic chain test had it. The suspect that the automatic test could not reach (A) acts only after all recovery steps fail on one video.
+
+- [ ] In your own Chrome, signed in: open a video, then click 5 related videos one after the other in the same tab. For each click, write down the seconds of black screen.
+- [ ] Do this 4 times and change the version each time: 0.3.7, 0.3.6, 0.3.7, 0.3.6. For 0.3.6 load the `v036` folder in `adgecko-ab` (or `adgecko-0.3.6.zip`). Load only one Adgecko card at a time. Use the same Chrome profile. The stall rate of one profile changed a lot within one hour in the automatic test, so one block of 0.3.7 and then one block of 0.3.6 would measure the time, not the version.
+- [ ] If 0.3.7 is clearly longer: test the `noA` folder in `adgecko-ab` the same way. If noA is as fast as 0.3.6, suspect A is the cause. Record the result here.
+- [ ] Check that the "Experiencing interruptions?" popup does not show in 0.3.7, and that "Link copied to clipboard" still shows after Share, Copy link.
 
 ### 1. Test 0.3.6 by hand
 
