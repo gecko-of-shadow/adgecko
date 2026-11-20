@@ -2,6 +2,7 @@
 
 Analysis date: 2026-11-16
 Commit: 5cd4ab6 (version 0.3.6)
+Updated 2026-11-20 for version 0.3.7: only the uAssets YouTube filters row in the vendored-code table. All other rows describe commit 5cd4ab6.
 
 This document lists the languages, runtimes, browser APIs, tools and vendored code of Adgecko.
 UNVERIFIED: all behaviour in Chrome and on Windows. No script that downloads was run for this document.
@@ -108,7 +109,7 @@ Each script starts with a header that gives its purpose and its command line. Re
 | TwitchAdSolutions `video-swap-new` (MIT) | `src/vendor/video-swap-new.user.js` | Userscript 1.55, conflict version 23, upstream commit `cebf3d73f0743f99708812dfeb946be701f1a97f`, 51,556 bytes, SHA-256 `ef804d16e4d7623554aec59b1608097b5059ac7a337ee4e22120efb955c3b6f4` | `scripts/vendor-pins.json` and `scripts/frozen-pins.json`; `test/vendor-pin.test.js`, `test/release-tooling.test.js` |
 | `src/kick.js` (frozen project file) | `src/kick.js` | 28,148 bytes, SHA-256 `b0683dee5599c6f3f148f3e0d8e1240c93721756e9d0075cdee83d9a95a80a60` | `scripts/frozen-pins.json` |
 | uBlock Origin scriptlets (GPLv3) | `src/vendor/ubo-youtube.js`, `ubo-youtube-isolated.js` | Tag 1.75.0, commit `21f0e686506bb21b514b451c8c6cb9bf8c82d232` | `src/vendor/ubo-youtube-meta.json`; the default tag in `scripts/sync-ubo-youtube.mjs` |
-| uAssets YouTube filters (GPLv3) | The two files above, `src/vendor/ubo-youtube.css`, `src/rules/ubo-youtube-network.json` | uAssets commit `e140ffc75aee8c1af136f579126389d6defae5ed`, generated 2026-11-15 | `src/vendor/ubo-youtube-meta.json` |
+| uAssets YouTube filters (GPLv3) | The two files above, `src/vendor/ubo-youtube.css`, `src/rules/ubo-youtube-network.json` | uAssets commit `900a2a3517020c91fbf762cd58c962bf7db85a1c`, generated 2026-11-20 | `src/vendor/ubo-youtube-meta.json` |
 | Public Suffix List subset (MPL 2.0) | `src/threat/psl.js` | List version `2026-11-15_20-28-43_UTC`, commit `fd22c6c8b3fd7e854c1eff2194cfd4ebc9854b88`; 5,497 ICANN and 3,185 private suffixes; 120 hand-kept platform parents; 12 exact shared service hosts | Header of `src/threat/psl.js` |
 | Packed filter lists (data) | `src/rules/*.json` | Packed 2026-11-14T22:00:32Z; one SHA-256 for each of eight sources | `src/rules/meta.json`, `threat-meta.json`, `dnr-merge-meta.json` |
 

@@ -5,7 +5,7 @@
 <img src="icons/icon128-working.png" width="128" height="128" alt="Adgecko icon: a neon purple gecko head on a dark rounded square, its tongue snapping a cluster of pixel squares (an ad)">
 
 **A Chrome extension (Manifest V3) that blocks ads on Twitch, YouTube, Kick and other websites, blocks known malware sites, and stops pages from copying shell commands into your clipboard.**<br>
-Current version: 0.3.6. It runs inside Chrome (version 137 or newer): no separate program, no account.
+Current version: 0.3.7. It runs inside Chrome (version 137 or newer): no separate program, no account.
 
 [Features](#features) · [Install](#install) · [How to use](#how-to-use) · [Privacy and permissions](#privacy-and-permissions) · [Troubleshooting](#troubleshooting) · [Development](#development) · [License](#license-and-brand)
 

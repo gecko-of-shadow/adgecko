@@ -4,6 +4,23 @@ All notable changes to Adgecko, newest first. Each released version matches a Gi
 
 Dates in this file are the owner's local date (UTC-6). The dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.
 
+## 0.3.7 (2026-11-20)
+
+A YouTube update. Tested on 2026-11-20 in the owner's Chrome (signed in) and in Chrome for Testing 155 (not signed in), on youtube.com watch pages only. Known, not fixed: on a signed-in account YouTube can still hold a video on a black screen for 6 to 21 s when it refuses all fallback steps. Twitch, Kick and ordinary sites are unchanged from 0.3.6.
+
+### Fixes
+
+- YouTube: the uBlock Origin YouTube filters are synced to uAssets `900a2a3` (was `e140ffc`). uBlock Origin scriptlet code stays at tag 1.75.0.
+- YouTube: a possible cause of a long black screen at the start of a video is removed. In 0.3.6, uBlock Origin's start recovery could discard all its fallback steps after the first reload, and then wait with no second reload. uAssets `1fbf62c` (2026-11-17) guards this. `test/ubo-rpnt-payload.test.js` has a test that fails on the 0.3.6 payload. Seen on a live page on 2026-11-20: the 0.3.6 code skipped the `inline` step and gave up; the new code tries each step.
+- YouTube: uBlock Origin's start recovery starts its list of fallback steps again on the next video, when all steps failed on the video before. Upstream keeps the empty list; in a live test (2026-11-20) each later video in that tab then waited 5 to 14 s with no recovery attempt. This is a local change to the upstream code (`ARG_PATCHES` in `scripts/sync-ubo-youtube.mjs`). Seen to work on a live page; it does not remove the waits.
+- YouTube: the "Experiencing interruptions?" popup at the bottom left is hidden again. YouTube now shows it in a new element (`snackbar-container`) that the CSS rules did not match. The new element has the same markup as "Link copied to clipboard", so `src/youtube.js` reads the text and hides only that message; other messages stay. Limits: it works only when YouTube is in English, and it hides the message only, not the wait. Tested in Chrome for Testing 155 (not signed in): without the change the popup was visible in 3 of 3 sessions, with it in 0 of 5, and "Link copied to clipboard" still showed after it. The popup's markup was read in the owner's signed-in Chrome; the hide was not measured there.
+- YouTube: the new upstream filters for embedded players do not add work to each `JSON.stringify` call. The local root-key guard now reads a dotted filter (`[?.a.b.c]`).
+
+### Changed
+
+- YouTube: on a `www.youtube.com/embed/` page in its own tab, uBlock Origin's start recovery now runs (upstream change). Before, it stepped aside there.
+- `scripts/sync-ubo-youtube.mjs`: the first local payload patch follows the renamed upstream variables. The `#masthead` patch is removed, because upstream guards that read again.
+
 ## 0.3.6 (2026-11-16)
 
 A code review of 0.3.5 (2026-11-16) confirmed 64 findings. This release does the 25 work packages of that review (`docs/review-2026-11-16/PLAN.md`). Each code fix has a regression test that failed on 0.3.5. No item was tested on the owner's PC or on live sites, so all behavior below is UNVERIFIED until a run on the owner's PC proves it. The release also has the changes that were merged after 0.3.5 (PR #13).
