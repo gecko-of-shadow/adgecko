@@ -4,6 +4,21 @@ All notable changes to Adgecko, newest first. Each released version matches a Gi
 
 Dates in this file are the owner's local date (UTC-6). The dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.
 
+## Unreleased
+
+Five owner decisions of 2026-11-20. Not tested in real Chrome: the Kick and Twitch changes are UNVERIFIED until a run on the owner's PC proves them.
+
+### Changed
+
+- Kick: the corrections in `docs/proposals/kick-0.3.5-fixes.patch` are applied to `src/kick.js` (owner decision 1). The banner path does not collapse a box that holds the video player. A box that the banner path collapsed is shown again when its ad frame goes or when the Kick switch goes off. While a cover or a box is hidden, a removed node also starts a new pass. The pin of `src/kick.js` in `scripts/frozen-pins.json` is updated. Three Kick tests that were ignored now run.
+- Twitch: the ad host `ads.twitch.tv` and its subdomains are blocked by the extra tracker rule of the list merge. Two tests that were ignored now run.
+- Licence: for EasyList, the chosen option of its dual licence is now GPL-3.0-or-later (owner decision 5). The project `LICENSE` now ships in the zip as `src/LICENSE.txt` (owner decision 7).
+- Package: `src/rules/cosmetic-sample.json` (172,666 bytes, read by no code) is removed from the repository and the zip.
+
+### Tests
+
+- Owner decision 16: `src/rules/ubo-youtube-network.json` blocks `ads.youtube.com` on purpose. The stream-host oracle test now also checks that ruleset, with a named exception for this one host. A test fails if the exception goes stale.
+
 ## 0.3.7 (2026-11-20)
 
 A YouTube update. Tested on 2026-11-20 in the owner's Chrome (signed in) and in Chrome for Testing 155 (not signed in), on youtube.com watch pages only. Known, not fixed: on a signed-in account YouTube can still hold a video on a black screen for 6 to 21 s when it refuses all fallback steps. Twitch, Kick and ordinary sites are unchanged from 0.3.6.
