@@ -30,7 +30,7 @@ function run(payload, href, state = {}) {
     loadVideoById: () => { calls.loadVideoById++; },
     seekTo: () => { calls.seekTo++; },
   };
-  const location = { href, search: new URL(href).search };
+  const location = { href, search: new URL(href).search, pathname: new URL(href).pathname };
   const win = {
     location,
     ytInitialData: {},
@@ -63,7 +63,7 @@ function run(payload, href, state = {}) {
     mutate(n) { for (let i = 0; i < n; i++) observerCb([]); },
     flush() { while (timers.length) timers.shift()(); },
     push(v) { Reflect.apply(win.Array.prototype.push, [], [v]); },
-    goTo(href) { location.href = href; location.search = new URL(href).search; },
+    goTo(href) { const u = new URL(href); location.href = href; location.search = u.search; location.pathname = u.pathname; },
   };
 }
 
@@ -105,8 +105,13 @@ Deno.test("rpnt payload: push trap never reads .length on a non-Uint8Array", () 
   proto.constructor = { name: "HTMLCollection" };
   for (const payload of [upstream, shipped]) {
     const r = run(payload, "https://www.youtube.com/");
+    // The wait-reply handler polls the player (getStatsForNerds); upstream no
+    // longer logs, so the poll count is the sign that the trap took the value.
+    const before = r.calls.stats;
     r.push(proto);
-    assert(r.calls.logs === 0, "not a wait reply");
+    assert(r.calls.stats === before, "not a wait reply");
+    r.push(new Uint8Array(105));
+    assert(r.calls.stats === before + 1, "control: a real wait reply does poll the player");
   }
 });
 
@@ -118,9 +123,10 @@ Deno.test("rpnt payload: 105-byte wait reply reloads the same way", () => {
     r.push(new Uint8Array(new ArrayBuffer(200), 0, 105));
     r.mutate(1); r.flush();
     assert(r.calls.loadVideoById === 0, "no reload without a real wait reply");
+    const polls = r.calls.stats;
     r.push(new Uint8Array(105));
-    // uAssets 1fbf62c removed the console.log of the wait reply.
-    assert(r.calls.logs === 0, "wait reply is not logged");
+    // uAssets 1fbf62c removed the console.log of the wait reply; the player poll shows that the trap saw it.
+    assert(r.calls.stats === polls + 1 && r.calls.logs === 0, "wait reply seen once, not logged");
     r.mutate(5); r.flush();
     assert(r.calls.loadVideoById === 1, "one reload: " + r.calls.loadVideoById);
     assert(r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent.includes("; channel"), "UA hint");
@@ -202,4 +208,37 @@ Deno.test("rpnt payload: no #masthead, or no logo-type attribute, does not throw
   assert(r.calls.loadVideoById === 1, "recovery still reloads without a header: " + r.calls.loadVideoById);
   const premium = run(shipped, "https://www.youtube.com/watch?v=abc", { masthead: { attributes: { "logo-type": { value: "YOUTUBE_PREMIUM_LOGO" } } } });
   assert(premium.installed === false, "Premium header: the payload still steps aside");
+});
+
+Deno.test("rpnt payload: on an /embed/ page the embed marker list is used, and it starts again on the next embed", () => {
+  // An /embed/ address has no v parameter: the next video is seen through the path.
+  const marker = (r) => (r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent.match(/; (channel|yahi|inline|oaeb|eafg)/) || [])[1] || "";
+  const step = (r) => { r.push(new Uint8Array(105)); r.mutate(1); r.flush(); };
+  const useUp = (r, state) => {
+    step(r);
+    assert(marker(r) === "channel" && r.calls.loadVideoById === 1, "first stall: channel, got " + marker(r));
+    state.reloadxhr = true;
+    step(r);
+    assert(marker(r) === "eafg" && r.calls.loadVideoById === 2, "second marker of the embed list is eafg, got " + marker(r));
+    step(r);
+    assert(marker(r) === "" && r.calls.loadVideoById === 2, "embed list used up: marker cleared, no third reload");
+  };
+  const stuck = () => ({ reloadxhr: false, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true });
+
+  const upState = stuck();
+  const up = run(upstream, "https://www.youtube.com/embed/abc", upState);
+  useUp(up, upState);
+  up.goTo("https://www.youtube.com/embed/def");
+  step(up); step(up);
+  assert(up.calls.loadVideoById === 2, "upstream: no recovery on the next embed: " + up.calls.loadVideoById);
+
+  const state = stuck();
+  const ours = run(shipped, "https://www.youtube.com/embed/abc", state);
+  useUp(ours, state);
+  step(ours);
+  assert(ours.calls.loadVideoById === 2, "same embed: still given up");
+  ours.goTo("https://www.youtube.com/embed/def");
+  ours.mutate(1); ours.flush();
+  step(ours);
+  assert(ours.calls.loadVideoById === 3 && marker(ours) !== "", "next embed: recovery runs again with a marker: " + marker(ours));
 });

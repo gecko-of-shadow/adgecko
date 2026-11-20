@@ -68,6 +68,12 @@ out.originalUntouched = original.context.client.clientScreen === undefined && or
 let toJSONCalls = 0;
 s({ a: 1, toJSON() { toJSONCalls++; return { a: 1 }; } });
 out.toJSONCalls = toJSONCalls;
+// Almost every InnerTube request has `context`. The dotted root filter
+// "[?.context.thirdParty.embeddedPlayerContext]" must not clone such an object
+// unless the full path is there (a first-key-only guard would clone it).
+let contextToJSONCalls = 0;
+s({ context: { thirdParty: {} }, toJSON() { contextToJSONCalls++; return { context: { thirdParty: {} } }; } });
+out.contextToJSONCalls = contextToJSONCalls;
 
 const bound = Function.prototype.bind.call(function () {}, null);
 delays.length = 0;
