@@ -2,6 +2,7 @@
 
 Analysis date: 2026-11-16
 Commit: 5cd4ab6 (version 0.3.6)
+Updated 2026-11-20 for version 0.3.7: only the uAssets YouTube filters row in the vendored-code table. All other rows describe commit 5cd4ab6.
 
 This document lists the languages, runtimes, browser APIs, tools and vendored code of Adgecko.
 UNVERIFIED: all behaviour in Chrome and on Windows. No script that downloads was run for this document.
