@@ -34,6 +34,19 @@ Deno.test("shipped licence files: no false 'manual updates' or 'not shipped' cla
   assert(read("src/rules/LICENSES.md").includes("threat-network.json"), "LICENSES.md names threat-network.json");
 });
 
+// Owner decision 5 (review 2026-11-16): EasyList material is used under the
+// GPL-3.0-or-later option of its dual licence, not CC BY-SA.
+Deno.test("shipped licence files: EasyList is used under GPL-3.0-or-later", () => {
+  const licenses = read("src/rules/LICENSES.md");
+  assert(/## License choice for EasyList material\n\nRedistributed under \*\*GPL-3\.0-or-later\*\*/.test(licenses), "LICENSES.md chooses GPL-3.0-or-later");
+  assert(/Redistributed under \*\*GPL-3\.0-or-later\*\*/.test(read("scripts/pack-filter-lists.py")), "packer writer chooses GPL-3.0-or-later");
+  assert(/Chosen option: [^\n]*GNU GPL version 3 or later/.test(read("src/LICENSE-EasyList.txt")), "LICENSE-EasyList.txt names the chosen option");
+  assert(/Chosen option: [^\n]*GNU GPL-3\.0-or-later/.test(read("src/rules/CREDIT-EasyList.txt")), "CREDIT-EasyList.txt names the chosen option");
+  for (const f of [...SHIPPED_NOTICES, "scripts/pack-filter-lists.py"]) {
+    assert(!/(Redistributed under|Chosen option)[^\n]*(CC BY-SA|Creative Commons)/.test(read(f)), f + " still chooses CC BY-SA");
+  }
+});
+
 async function runPython(code) {
   const bins = Deno.build.os === "windows" ? [["py", "-3"], ["python"], ["python3"]] : [["python3"], ["python"]];
   const tried = [];
