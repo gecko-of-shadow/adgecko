@@ -37,10 +37,10 @@ function setup() {
   return { api, cover, frame, player, state };
 }
 
-// Known issue, not fixed in 0.3.5: src/kick.js is a frozen playback file
-// (scripts/release-gate.sh 1b) and Kick could not be tested live. The fix is
-// kept in docs/proposals/kick-0.3.5-fixes.patch for the owner to decide.
-Deno.test({ name: "kick banner collapse: a cover holding <video-player> is not hidden by the banner path", ignore: true, fn: () => {
+// Owner decision 2026-11-20: the correction in
+// docs/proposals/kick-0.3.5-fixes.patch is applied to src/kick.js. Kick was
+// not tested live (UNVERIFIED in Chrome).
+Deno.test({ name: "kick banner collapse: a cover holding <video-player> is not hidden by the banner path", fn: () => {
   const { api, cover } = setup();
   api.watchCovers(() => true);
   assert(
@@ -49,10 +49,10 @@ Deno.test({ name: "kick banner collapse: a cover holding <video-player> is not h
   );
 } });
 
-// Known issue, not fixed in 0.3.5: src/kick.js is a frozen playback file
-// (scripts/release-gate.sh 1b) and Kick could not be tested live. The fix is
-// kept in docs/proposals/kick-0.3.5-fixes.patch for the owner to decide.
-Deno.test({ name: "kick banner collapse: switching the kick switch off shows the collapsed box again", ignore: true, fn: () => {
+// Owner decision 2026-11-20: the correction in
+// docs/proposals/kick-0.3.5-fixes.patch is applied to src/kick.js. Kick was
+// not tested live (UNVERIFIED in Chrome).
+Deno.test({ name: "kick banner collapse: switching the kick switch off shows the collapsed box again", fn: () => {
   const { api, cover } = setup();
   api.watchCovers(() => true);
   api.coversSwitched(false);

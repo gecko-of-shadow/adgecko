@@ -107,7 +107,7 @@ Each script starts with a header that gives its purpose and its command line. Re
 | Dependency | Files | Version and pin | Pin record |
 |---|---|---|---|
 | TwitchAdSolutions `video-swap-new` (MIT) | `src/vendor/video-swap-new.user.js` | Userscript 1.55, conflict version 23, upstream commit `cebf3d73f0743f99708812dfeb946be701f1a97f`, 51,556 bytes, SHA-256 `ef804d16e4d7623554aec59b1608097b5059ac7a337ee4e22120efb955c3b6f4` | `scripts/vendor-pins.json` and `scripts/frozen-pins.json`; `test/vendor-pin.test.js`, `test/release-tooling.test.js` |
-| `src/kick.js` (frozen project file) | `src/kick.js` | 28,148 bytes, SHA-256 `b0683dee5599c6f3f148f3e0d8e1240c93721756e9d0075cdee83d9a95a80a60` | `scripts/frozen-pins.json` |
+| `src/kick.js` (frozen project file) | `src/kick.js` | 29,743 bytes, SHA-256 `b4230d325f4f4a3fda1aa73fe621d5b615c44fa6fa16e4e063896a198399d5fe` | `scripts/frozen-pins.json` |
 | uBlock Origin scriptlets (GPLv3) | `src/vendor/ubo-youtube.js`, `ubo-youtube-isolated.js` | Tag 1.75.0, commit `21f0e686506bb21b514b451c8c6cb9bf8c82d232` | `src/vendor/ubo-youtube-meta.json`; the default tag in `scripts/sync-ubo-youtube.mjs` |
 | uAssets YouTube filters (GPLv3) | The two files above, `src/vendor/ubo-youtube.css`, `src/rules/ubo-youtube-network.json` | uAssets commit `900a2a3517020c91fbf762cd58c962bf7db85a1c`, generated 2026-11-20 | `src/vendor/ubo-youtube-meta.json` |
 | Public Suffix List subset (MPL 2.0) | `src/threat/psl.js` | List version `2026-11-15_20-28-43_UTC`, commit `fd22c6c8b3fd7e854c1eff2194cfd4ebc9854b88`; 5,497 ICANN and 3,185 private suffixes; 120 hand-kept platform parents; 12 exact shared service hosts | Header of `src/threat/psl.js` |
