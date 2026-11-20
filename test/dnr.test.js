@@ -121,12 +121,54 @@ Deno.test("block rules never target protected stream hosts", () => {
 // Those lists do not have ext-twitch.tv, twitchcdn.com, kickusercontent.com
 // or kick-streamer.com. This test uses the live registry
 // (GeckoFeatures.isStreamHost, src/settings/features.js) as the oracle.
-// ubo-youtube-network.json is not checked here: its rule 1 blocks
-// ads.youtube.com on purpose (uBO filter), and that host is under
-// youtube.com. Whether to accept that rule is an owner decision.
-// The general ruleset may block ads.twitch.tv only in the extra tracker rule
-// (isApprovedStreamBlock). The threat ruleset has no exception.
-Deno.test("shipped general and threat block rules never target a STREAM_SITES host (live registry oracle)", async () => {
+//
+// Owner decision 16 (2026-11-20): ubo-youtube-network.json rule 1 blocks
+// ads.youtube.com. The uBO filter does this on purpose. The registry lists
+// the host because it is under youtube.com. The owner chose a named exception
+// and kept the registry. Each exception names one ruleset and one host.
+// scripts/sync-ubo-youtube.mjs makes that ruleset. Thus a test fails if a new
+// sync blocks a different stream host, or does not block this host any more
+// (a stale exception).
+//
+// Owner decision (2026-11-20): the general ruleset blocks ads.twitch.tv, but
+// only in the merger's extra tracker rule (ruleId pins the exception to that
+// rule). The threat ruleset has no exception.
+const STREAM_HOST_BLOCK_EXCEPTIONS = Object.freeze([
+  Object.freeze({
+    name: "ubo-youtube-ads-host",
+    ruleset: "ubo-youtube",
+    domain: "ads.youtube.com",
+    why: "uAssets filter ||ads.youtube.com^$domain=~ads.youtube.com (an ad host, not a video or page host); owner decision 16",
+  }),
+  Object.freeze({
+    name: "twitch-ads-host",
+    ruleset: "general",
+    ruleId: mergeMeta.extra_tracker_rule_id,
+    domain: APPROVED_STREAM_BLOCK,
+    why: "Twitch ad host, blocked by the extra tracker rule; owner decision 2026-11-20",
+  }),
+]);
+
+// Returns the block requestDomains of a ruleset that are stream hosts and that
+// no exception covers, and the names of the exceptions that it used.
+function streamHostBlocks(F, ruleset, set, exceptions) {
+  const violations = [];
+  const used = new Set();
+  let checked = 0;
+  for (const rule of set) {
+    if (rule.action?.type !== "block") continue;
+    for (const domain of rule.condition?.requestDomains || []) {
+      checked += 1;
+      if (!F.isStreamHost(domain)) continue;
+      const ex = exceptions.find((e) => e.ruleset === ruleset && e.domain === F.normalizeHost(domain) && (e.ruleId === undefined || e.ruleId === rule.id));
+      if (ex) used.add(ex.name);
+      else violations.push(`${ruleset} rule ${rule.id} blocks stream host ${domain}`);
+    }
+  }
+  return { violations, used, checked };
+}
+
+Deno.test("shipped block rules never target a STREAM_SITES host, except the named exceptions (live registry oracle)", async () => {
   await import("../src/settings/features.js");
   const F = globalThis.GeckoFeatures;
   assert(F && typeof F.isStreamHost === "function", "GeckoFeatures loaded");
@@ -134,18 +176,34 @@ Deno.test("shipped general and threat block rules never target a STREAM_SITES ho
     assert(F.isStreamHost(host), "oracle knows " + host);
   }
   const { default: threatRules } = await import("../src/rules/threat-network.json", { with: { type: "json" } });
-  for (const [name, set] of [["general", rules], ["threat", threatRules]]) {
-    let checked = 0;
-    for (const rule of set) {
-      if (rule.action?.type !== "block") continue;
-      for (const domain of rule.condition?.requestDomains || []) {
-        checked += 1;
-        if (name === "general" && isApprovedStreamBlock(rule, domain)) continue;
-        assert(!F.isStreamHost(domain), `${name} rule ${rule.id} blocks stream host ${domain}`);
-      }
-    }
-    assert(checked > 0, name + ": no block domain checked");
+  const { default: uboRules } = await import("../src/rules/ubo-youtube-network.json", { with: { type: "json" } });
+  const rulesets = [["general", rules], ["threat", threatRules], ["ubo-youtube", uboRules]];
+  const ids = manifest.declarative_net_request.rule_resources.map((r) => r.id);
+  for (const [name] of rulesets) assert(ids.includes(name), "manifest has no ruleset " + name + ": " + JSON.stringify(ids));
+  const used = new Set();
+  for (const [name, set] of rulesets) {
+    const r = streamHostBlocks(F, name, set, STREAM_HOST_BLOCK_EXCEPTIONS);
+    assert(r.checked > 0, name + ": no block domain checked");
+    assert(r.violations.length === 0, r.violations.join("; "));
+    for (const n of r.used) used.add(n);
   }
+  for (const ex of STREAM_HOST_BLOCK_EXCEPTIONS) {
+    assert(F.isStreamHost(ex.domain), `exception ${ex.name}: ${ex.domain} is not a stream host, remove the exception`);
+    assert(used.has(ex.name), `exception ${ex.name} is stale: no ${ex.ruleset} block rule names ${ex.domain}`);
+  }
+});
+
+Deno.test("stream-host block exceptions: ubo-youtube rule 1 fails without its exception; the exception covers one host in one ruleset", async () => {
+  await import("../src/settings/features.js");
+  const F = globalThis.GeckoFeatures;
+  const { default: uboRules } = await import("../src/rules/ubo-youtube-network.json", { with: { type: "json" } });
+  const none = streamHostBlocks(F, "ubo-youtube", uboRules, []);
+  assert(none.violations.some((v) => v.includes("ads.youtube.com")), "no violation without the exception: " + JSON.stringify(none.violations));
+  const block = (id, domain) => ({ id, action: { type: "block" }, condition: { requestDomains: [domain] } });
+  const other = streamHostBlocks(F, "ubo-youtube", [block(9, "www.youtube.com"), block(10, "rr1.googlevideo.com")], STREAM_HOST_BLOCK_EXCEPTIONS);
+  assert(other.violations.length === 2, "exception covers another stream host: " + JSON.stringify(other.violations));
+  const general = streamHostBlocks(F, "general", [block(11, "ads.youtube.com")], STREAM_HOST_BLOCK_EXCEPTIONS);
+  assert(general.violations.length === 1, "exception covers another ruleset: " + JSON.stringify(general.violations));
 });
 
 Deno.test("permissions stay DNR + storage + alarms; only list host_permissions", () => {

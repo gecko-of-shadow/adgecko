@@ -34,6 +34,7 @@ from pathlib import Path
 
 # Always packed when present in the tree (licences, credits, provenance).
 EXTRA_REQUIRED = [
+    "src/LICENSE.txt",
     "src/LICENSE-EasyList.txt",
     "src/rules/CREDIT-EasyList.txt",
     "src/rules/LICENSES.md",

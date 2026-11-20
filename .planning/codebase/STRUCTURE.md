@@ -38,6 +38,7 @@ The column "Context" uses these words: SW (service worker), CS-n (content script
 | `twitch-directory-ads.js` | CS-6 | Hides the Twitch directory banner and ad cards. |
 | `popup.html`, `popup.js`, `popup.css` | POPUP | The toolbar popup. It gets the feature registry from the worker with `siteInfo`. |
 | `settings.html`, `settings.js` | SETTINGS | Feature switches, per-site list, allow-domain box, feed status. The page has its own `<style>` block. |
+| `LICENSE.txt` | NONE | Byte copy of the root `LICENSE`, for the zip. After a change to `LICENSE`, copy it again (`test/license.test.js`). |
 | `LICENSE-EasyList.txt` | NONE | Licence note for the EasyList data. |
 
 ### `src/general/` (filter list engine)

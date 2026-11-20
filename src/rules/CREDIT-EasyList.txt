@@ -4,6 +4,7 @@ Filter lists shipped with this extension include trimmed material derived from:
   Copyright The EasyList authors
   Dual-licensed: GNU GPL-3.0-or-later OR Creative Commons Attribution-ShareAlike 3.0-or-later
   https://easylist.to/pages/licence.html
+  Chosen option: this package uses the material under GNU GPL-3.0-or-later.
 
 Required credit line: The EasyList authors
 
