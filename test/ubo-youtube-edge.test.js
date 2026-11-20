@@ -32,6 +32,9 @@ Deno.test("inboundEdit: attestation requests get uBO's markers; the caller's obj
   assert(shipped.originalUntouched, "edit works on a clone");
   const twice = JSON.parse(shipped.edits.twice).playbackContext.contentPlaybackContext.referer;
   assert(twice.split("#reloadxhr").length === 2, "referer marker added once on re-stringify: " + twice);
+  // The local root-key guard walks a dotted root filter; the edit must still happen.
+  assert(JSON.parse(shipped.edits.embed).playbackContext.contentPlaybackContext.referer.endsWith("/embed/x#reloadxhr"), "embedded player request gets the marker: " + shipped.edits.embed);
+  assert(JSON.parse(shipped.edits.embedNoPath).playbackContext.contentPlaybackContext.referer.endsWith("/embed/x"), "no embeddedPlayerContext: unchanged");
 });
 
 Deno.test("inboundEdit attestationRequest guard: everything else passes through as native JSON.stringify", () => {

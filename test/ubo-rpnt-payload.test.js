@@ -130,7 +130,7 @@ Deno.test("rpnt payload: repeated wait replies after a reload use up one marker,
   // Before uAssets 1fbf62c each wait reply dropped one more marker while the
   // response carried #reloadxhr. Four replies before the next check emptied the
   // list (channel, yahi, inline, oaeb), and the recovery then gave up with no
-  // second reload. The 250ms check interval (ARG_PATCHES) makes such a burst likely.
+  // second reload. The 250ms check interval (ARG_PATCHES) can widen the window for such a burst.
   const stuck = { reloadxhr: true, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
   for (const payload of [upstream, shipped]) {
     const r = run(payload, "https://www.youtube.com/watch?v=abc", stuck);

@@ -58,6 +58,9 @@ out.edits = {
   primitives: [undefined, null, "x", 5, true].map((v) => s(v)).join("|"),
   replacerSpace: s({ a: 1, b: 2 }, ["a"], 2),
   twice: s(JSON.parse(s(req("; channel")))),
+  // Dotted root filter "[?.context.thirdParty.embeddedPlayerContext]" (uAssets 1fbf62c).
+  embed: s({ context: { thirdParty: { embeddedPlayerContext: {} }, client: { clientName: "WEB_EMBEDDED_PLAYER", userAgent: "Mozilla/5.0 (Windows NT 10.0; channel)" } }, playbackContext: { contentPlaybackContext: { referer: "https://www.youtube.com/embed/x" } } }),
+  embedNoPath: s({ context: { thirdParty: {}, client: { clientName: "WEB_EMBEDDED_PLAYER", userAgent: "Mozilla/5.0 (Windows NT 10.0; channel)" } }, playbackContext: { contentPlaybackContext: { referer: "https://www.youtube.com/embed/x" } } }),
 };
 const original = req("; channel");
 s(original);
