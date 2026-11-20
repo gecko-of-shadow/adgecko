@@ -10,7 +10,8 @@ Last update: 2026-11-20.
 - 3 minutes of normal use: 69 blocks, 4 hosts (`googleads.g.doubleclick.net` 60, `ad.doubleclick.net` 5, `tpc.googlesyndication.com` 3, `app-measurement.com` 1), 0 errors. Private DNS: Automatic.
 - As expected (plan row 4), YouTube video ads in the YouTube app still play.
 - Not checked: the in-app Self-test text (O3), Recent blocks, Allow, Exclude and the tile (O5 to O7), the reboot behaviour, the battery use.
-- New launcher icon (owner's choice, from a Gemini image). A local build has another debug key than CI, so its install needs an uninstall first (OD-3).
+- New launcher icon (owner's choice, from a Gemini image), commit `5027b40`. PR CI passed (6 of 6). A local build has another debug key than CI, so its install needs an uninstall first (OD-3). With the owner's approval, the old app was uninstalled and the local build was installed ("Success"); the app opened.
+- Not checked after the reinstall: the icon on the home screen, and the blocks after the owner turns the Shield On again (the uninstall removed the VPN approval).
 - Local finding: `test/release-tooling.test.js` ("release gate on a changed package copy ...") fails on the owner's PC also without the icon change (`password= in src/x.js`). CI was green. Not investigated.
 
 ## State
@@ -18,7 +19,7 @@ Last update: 2026-11-20.
 - Version 0.3.6 is released: [v0.3.6](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.6), from commit `5cd4ab6`, published 2026-11-16 by the release workflow.
 - UNVERIFIED: all behaviour of 0.3.6 in Chrome. The owner asked for the release before the manual tests. The tests are the first item in `TODO.md`.
 - New: Android milestone 1, "Adgecko Shield", is built in `android/` (plan `docs/android/PLAN.md`, owner steps `docs/android/shield.md`). It is in a draft pull request from the branch `claude/android-shield-m1`. That branch starts from the docs branch of draft pull request 18 (not merged when the session started).
-- UNVERIFIED: all behaviour of the Shield on a phone. No run on the owner's phone was done.
+- The first run on the owner's phone is in the section above. Items that it did not check stay UNVERIFIED.
 - The next work and the open owner decisions are in `TODO.md`.
 
 ## Work done in the last session (2026-11-17, Android milestone 1 build)
