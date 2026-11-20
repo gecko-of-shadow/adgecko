@@ -38,6 +38,7 @@ The column "Context" uses these words: SW (service worker), CS-n (content script
 | `twitch-directory-ads.js` | CS-6 | Hides the Twitch directory banner and ad cards. |
 | `popup.html`, `popup.js`, `popup.css` | POPUP | The toolbar popup. It gets the feature registry from the worker with `siteInfo`. |
 | `settings.html`, `settings.js` | SETTINGS | Feature switches, per-site list, allow-domain box, feed status. The page has its own `<style>` block. |
+| `LICENSE.txt` | NONE | Byte copy of the root `LICENSE`, for the zip. After a change to `LICENSE`, copy it again (`test/license.test.js`). |
 | `LICENSE-EasyList.txt` | NONE | Licence note for the EasyList data. |
 
 ### `src/general/` (filter list engine)
@@ -128,7 +129,7 @@ The file list is derived, not kept by hand. `scripts/lib/package_files.py` adds 
 5. `EXTRA_REQUIRED`: the licence and credit files and `src/vendor/README.md`.
 6. `EXTRA_OPTIONAL`, if the file exists: `src/rules/README.md`, `meta.json`, `threat-meta.json`, `src/vendor/ubo-youtube-meta.json`.
 
-At this commit the list has 63 paths (7,695,447 bytes): `manifest.json`, 9 PNG icons and 53 `src/` files. The gate cap is 8,000,000 bytes.
+At this commit the list has 64 paths (7,732,410 bytes): `manifest.json`, 9 PNG icons and 54 `src/` files. The gate cap is 8,000,000 bytes.
 The only tracked `src/` file that is not in the list is `src/rules/never-block-captcha.json`.
 After the pack, the script makes sure that the zip holds exactly the derived list, with the same bytes as the checkout.
 The gate has a second, hand-kept control: the `REQUIRED` array and the `ALLOWED_RE` pattern. `test/packaging.test.js` compares them with the derived list.

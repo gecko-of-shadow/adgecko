@@ -44,7 +44,7 @@ Section 5 lists items that were checked and are not a concern now.
 
 ### H2. Package size is 3.8 % below the release gate cap
 
-- **What.** The gate fails when the package is larger than 8,000,000 bytes. On 2026-11-20 the derived package list has 63 files and 7,695,447 bytes. The headroom is 304,553 bytes. Before the removal of `cosmetic-sample.json`, the list had 64 files and 7,868,295 bytes.
+- **What.** The gate fails when the package is larger than 8,000,000 bytes. On 2026-11-20 the derived package list has 64 files and 7,732,410 bytes (with `src/LICENSE.txt`). The headroom is 267,590 bytes. Before the removal of `cosmetic-sample.json`, the list had 65 files and 7,905,076 bytes.
 - **Evidence.** `src/rules/general-network.json` is 5,168,730 bytes. `src/rules/threat-snapshot.json` (333,354 bytes) is used only when the feed is configured (M8). The gate comments record that the cap was increased two times.
 - **Impact.** The next list repack can make the gate fail. A cap that moves with each release does not catch a runaway pack.
 - **Action.** RESOLVED on 2026-11-20 (owner decision): `src/rules/cosmetic-sample.json` (172,666 bytes, no reader) is deleted. The packer does not write it, and it is not in the package list or in the gate. OPEN: make a decision about the snapshot. Then set the cap from the measured size plus a fixed margin.

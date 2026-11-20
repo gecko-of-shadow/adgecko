@@ -94,5 +94,6 @@ release gate and the tests.
 
 ## License choice for EasyList material
 
-Redistributed under **CC BY-SA 3.0-or-later** (EasyList dual-license option),
+Redistributed under **GPL-3.0-or-later** (EasyList dual-license option),
 with attribution to The EasyList authors. Modified (trimmed/converted) work.
+The rules mix EasyList material with GPL-3.0 lists, and the project code is GPL-3.0.
