@@ -1,6 +1,6 @@
 # To do
 
-Last update: 2026-11-16, after the release of version 0.3.6.
+Last update: 2026-11-20. Version 0.3.7 is released (tag `v0.3.7` on commit `cc3e764`). The lines on 0.3.6 below are from before 0.3.7.
 
 ## Where it stands
 
@@ -9,6 +9,10 @@ Last update: 2026-11-16, after the release of version 0.3.6.
 - **UNVERIFIED:** all behaviour of 0.3.6 in Chrome. The release was published before a manual test, at the owner's request. No run on the owner's PC or on live sites was done.
 
 ## Next steps
+
+### 0. YouTube in 0.3.7
+
+- [ ] The owner reports that YouTube is maybe worse in 0.3.7 than in 0.3.6 (2026-11-20). Do an A/B test on the owner's PC. The suspects and the test steps are in `HANDOFF.md`, section "Session of 2026-11-20".
 
 ### 1. Test 0.3.6 by hand
 
