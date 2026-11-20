@@ -15,7 +15,13 @@ function assertEquals(actual, expected, label) {
 // Stream page hosts and their video CDNs. These lists were in the dead module
 // src/general-exclude-hosts.js (removed in 0.3.6 with the owner's approval).
 // The packed high-priority allow rules (scripts/merge-dnr-rules.py) must still
-// cover them, and no block rule may target them.
+// cover them, and no block rule may target them. One exception: the Twitch ad
+// host ads.twitch.tv (owner decision 2026-11-20) is blocked, and only by the
+// merger's extra tracker rule (isApprovedStreamBlock).
+const APPROVED_STREAM_BLOCK = "ads.twitch.tv";
+function isApprovedStreamBlock(rule, domain) {
+  return rule.id === mergeMeta.extra_tracker_rule_id && domain === APPROVED_STREAM_BLOCK;
+}
 const SITE_DOMAINS = Object.freeze(["twitch.tv", "youtube.com", "youtu.be", "youtube-nocookie.com", "youtubekids.com", "kick.com"]);
 const VIDEO_CDN_DOMAINS = Object.freeze(["ttvnw.net", "jtvnw.net", "twitchcdn.net", "googlevideo.com", "ytimg.com", "ggpht.com", "live-video.net"]);
 const ALL_EXCLUDED = Object.freeze([...new Set(SITE_DOMAINS.concat(VIDEO_CDN_DOMAINS))]);
@@ -91,9 +97,14 @@ Deno.test("extra tracker hosts are blocked and are not stream allows", () => {
 
 Deno.test("block rules never target protected stream hosts", () => {
   const excluded = ALL_EXCLUDED;
+  let approved = 0;
   for (const rule of rules) {
     if (rule.action?.type !== "block") continue;
     for (const domain of rule.condition?.requestDomains || []) {
+      if (isApprovedStreamBlock(rule, domain)) {
+        approved += 1;
+        continue;
+      }
       assert(!isExcludedHost(domain), `must not block ${domain}`);
       for (const suf of excluded) {
         assert(domain !== suf && !domain.endsWith("." + suf), `block hit ${domain}`);
@@ -101,6 +112,8 @@ Deno.test("block rules never target protected stream hosts", () => {
       assert(domain !== "live-video.net" && !domain.endsWith(".live-video.net"), `live-video ${domain}`);
     }
   }
+  assertEquals(approved, 1, "the extra tracker rule blocks " + APPROVED_STREAM_BLOCK);
+  assert(mergeMeta.extra_tracker_domains.includes(APPROVED_STREAM_BLOCK), "merge meta names " + APPROVED_STREAM_BLOCK);
 });
 
 // Review 2026-11-16 WP-09 item 4: the check above uses the fixed lists at the
@@ -116,12 +129,23 @@ Deno.test("block rules never target protected stream hosts", () => {
 // scripts/sync-ubo-youtube.mjs makes that ruleset. Thus a test fails if a new
 // sync blocks a different stream host, or does not block this host any more
 // (a stale exception).
+//
+// Owner decision (2026-11-20): the general ruleset blocks ads.twitch.tv, but
+// only in the merger's extra tracker rule (ruleId pins the exception to that
+// rule). The threat ruleset has no exception.
 const STREAM_HOST_BLOCK_EXCEPTIONS = Object.freeze([
   Object.freeze({
     name: "ubo-youtube-ads-host",
     ruleset: "ubo-youtube",
     domain: "ads.youtube.com",
     why: "uAssets filter ||ads.youtube.com^$domain=~ads.youtube.com (an ad host, not a video or page host); owner decision 16",
+  }),
+  Object.freeze({
+    name: "twitch-ads-host",
+    ruleset: "general",
+    ruleId: mergeMeta.extra_tracker_rule_id,
+    domain: APPROVED_STREAM_BLOCK,
+    why: "Twitch ad host, blocked by the extra tracker rule; owner decision 2026-11-20",
   }),
 ]);
 
@@ -136,7 +160,7 @@ function streamHostBlocks(F, ruleset, set, exceptions) {
     for (const domain of rule.condition?.requestDomains || []) {
       checked += 1;
       if (!F.isStreamHost(domain)) continue;
-      const ex = exceptions.find((e) => e.ruleset === ruleset && e.domain === F.normalizeHost(domain));
+      const ex = exceptions.find((e) => e.ruleset === ruleset && e.domain === F.normalizeHost(domain) && (e.ruleId === undefined || e.ruleId === rule.id));
       if (ex) used.add(ex.name);
       else violations.push(`${ruleset} rule ${rule.id} blocks stream host ${domain}`);
     }

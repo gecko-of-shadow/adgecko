@@ -84,6 +84,7 @@ A higher priority has precedence. Use a new id range only after you read this ta
 | 3,000,000 | allow | List-download allow rule: initiator is the extension, target is a list host | 990001 | dynamic |
 
 - The three stream-site allow rules: `allowAllRequests` for YouTube and Kick frames, `allow` for `twitch.tv` without `ads.twitch.tv`, `allow` for seven player CDN hosts.
+- The extra tracker rule blocks `ads.twitch.tv` and its subdomains (owner decision 2026-11-20). It is the only block rule in `general` that names a stream host. UNVERIFIED in Chrome: the Twitch player with this host blocked.
 - A threat block is above the stream-site allow rules. Thus a threat host is blocked on stream pages also.
 - **Allow this site** (10,000) does not release a threat host. **Allow this domain** (2,000,020) does.
 - Threat rules list eight resource types. Stylesheet, image and font are not in the list.
@@ -262,6 +263,7 @@ Stream sites are Twitch, YouTube, Kick and their player and media hosts. The lis
 | The hide-rule parser keeps no rule for a stream host. | `src/general/cosmetic-parse.js` |
 | Static allow rules at 2,000,000, and dynamic copies after a list swap. | `scripts/merge-dnr-rules.py`, `src/general/update.js` |
 | Never-block hosts in the list tier (`NEVER_BLOCK_SUFFIXES`; one exception: `imasdk.googleapis.com`). | `src/general/update.js` |
+| One stream host is blocked: the extra tracker rule blocks the Twitch ad host `ads.twitch.tv`. The Twitch allow rule excludes it. | `scripts/merge-dnr-rules.py` (`EXTRA_TRACKER_DOMAINS`) |
 | No **Allow this site** rule and no allowed origin for a stream host. | `src/general-background.js`, `src/general-settings.js`, `src/settings/features.js` |
 | A threat rule can never name a stream host. | `src/threat/protected-hosts.js` |
 
