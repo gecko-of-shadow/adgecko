@@ -239,15 +239,18 @@ def drop_hcaptcha_filter_rules(blocks: list[dict]) -> tuple[list[dict], int]:
         out.append(rule)
     return out, dropped
 
-# Ordinary-site trackers that sit under a never-block parent (googleapis.com)
-# or that we keep even when a list drops them. Not stream hosts.
+# Ad and tracker hosts that sit under a never-block parent (googleapis.com,
+# twitch.tv) or that we keep even when a list drops them.
 EXTRA_TRACKER_DOMAINS = [
     "facebook.net",
     "fundingchoicesmessages.google.com",
     "imasdk.googleapis.com",
-    # Not ads.twitch.tv: test/dnr.test.js keeps every Twitch host off the block
-    # rules (blocking it could break the player; not tested live). Rule 2 only
-    # keeps it out of the force-allow. Owner decision pending (0.3.5 notes).
+    # The Twitch ad host (owner decision 2026-11-20). It is the only stream
+    # host on a block rule. The packer drops every *.twitch.tv list line, and
+    # the Twitch allow (rule 2) excludes ads.twitch.tv, so this rule blocks it.
+    # test/dnr.test.js permits it only in this rule. UNVERIFIED in Chrome: the
+    # Twitch player with this host blocked.
+    "ads.twitch.tv",
 ]
 
 

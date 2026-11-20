@@ -98,11 +98,10 @@ The worker model `loadWorker(opts)`:
 
 ## 5. Ignored tests
 
-Always ignored (`ignore: true`), 6 tests. Each one describes the correct behaviour. Remove `ignore: true` when the owner approves the related change.
+Always ignored (`ignore: true`), 4 tests. Each one describes the correct behaviour. Remove `ignore: true` when the owner approves the related change.
 
 | File | Tests | Reason |
 |---|---|---|
-| `nightly-manifest-scripts-1-the-ads-twitch-tv-carve-out-in-the-merge` | 2 | Owner decision: a block of the Twitch ad host `ads.twitch.tv` is held back. |
 | `nightly-manifest-scripts-2-every-exception-is-dropped-so-hosts-that` | 1 | Known issue: exceptions below a parent-domain block or with a type scope are not obeyed. |
 | `nightly-site-scripts-2-kick-a-hidden-post-roll-cover-is-never-s` | 1 | Known issue. `src/kick.js` is frozen. The correction is in `docs/proposals/kick-0.3.5-fixes.patch`. |
 | `nightly-site-scripts-4-kick-banner-collapse-can-permanently-hid` | 2 | Same reason. |
@@ -118,7 +117,7 @@ Ignored on a condition:
 | `release-tooling` | 1 | No Info-ZIP `zip`. |
 | `release-tooling` | 1 | The operating system is Windows. |
 
-A usual local run shows 9 ignored tests: the 6 above, the storage budget test and the 2 privacy tests.
+A usual local run shows 7 ignored tests: the 4 above, the storage budget test and the 2 privacy tests.
 
 ## 6. Tests that need tools, secrets or caches
 

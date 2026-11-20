@@ -12,6 +12,7 @@ Covers `twitch.tv` and subdomains.
 - **Ad breaks.** When a playlist contains the `stitched-ad` marker, the script requests backup playlists (player types `autoplay`, `picture-by-picture`, and `embed`) and prefers one without that marker. The last backup is still used if it has the marker. The player reloads back once the main playlist no longer has it. That backup ladder can be a lower resolution.
 - **Browse pages.** Browse-page ad slots are hidden separately by `src/twitch-directory-ads.js` (the browse banner, elements labeled Advertisement, and the card around an ad-feedback button).
 - **Every Twitch page.** The same Twitch script is injected on every Twitch page, including VODs and clips: it rewrites `PlaybackAccessToken` `playerType` to `popout`, and it reports the page as visible.
+- **Ad host.** The general network rules block Twitch's ad host `ads.twitch.tv` and its subdomains. They block no other Twitch host. UNVERIFIED in Chrome: the player with this host blocked.
 
 The extra requests this sends to Twitch are listed under [What it transmits](permissions-and-privacy.md#what-it-transmits).
 
@@ -40,7 +41,7 @@ Covers other http and https sites. The README and the popup call these "ordinary
 - `declarativeNetRequest` blocks domains from the packed lists, and `src/cosmetic.js` hides leftover ad boxes.
 - The packed snapshot in `src/rules/meta.json` is 195,069 whole-domain and 18,422 scoped entries in 2,851 list rules (lists downloaded 2026-11-14 22:00 UTC). The merged `general-network.json` has 2,856 rules. `src/rules/meta.json` always has the current totals (`domains_total`, `scoped_entries_total`, `dnr_rules_total` and `general_network_rules_total`); `test/docs-claims.test.js` checks that the numbers here agree with it.
 - A site is blocked from opening (Chrome shows "blocked by an extension") only when a list says so with an explicit `$document` filter or a plain `$all` filter, or when it is a known malware host (the threat tier). A whole-domain entry blocks the site's pieces inside other pages, not opening it. Filters that name only types to skip (`$~script`) never block opening the site. Twitch, YouTube, Kick and their player hosts, and a few affiliate redirectors people click on purpose, are never blocked from opening by the lists. To open such a page anyway: settings page -> **Allow this domain** ([Allow a site](allow-a-page.md#a-page-chrome-says-is-blocked)).
-- Twitch, YouTube (including `youtu.be`, nocookie, Kids, and the video CDNs), and Kick are excluded from this general pass.
+- Twitch, YouTube (including `youtu.be`, nocookie, Kids, and the video CDNs), and Kick are excluded from this general pass. One exception: the Twitch ad host `ads.twitch.tv` is blocked (see [Twitch](#twitch)).
 - Ordinary-site blocking starts **on**.
 
 How the lists are downloaded and refreshed: [What it transmits](permissions-and-privacy.md#what-it-transmits). To turn blocking off for one site: [Allow a site](allow-a-page.md).
