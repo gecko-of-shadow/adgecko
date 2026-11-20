@@ -13,6 +13,7 @@ Dates in this file are the owner's local date (UTC-6). The dates stored on packe
 - CI: new workflow `android.yml` (build job with the APK artifact `adgecko-shield-debug`, emulator job on API 33 and 36). It uses two more GitHub-owned actions: `actions/setup-java` and `actions/upload-artifact`.
 - Repository: new `.gitignore` and `.gitattributes` lines for Android build output and signing files. The extension, its permissions and its zip do not change.
 - New: `docs/android/shield.md`, the build, install and check steps.
+- New: the Shield launcher icon is a cloaked sentinel at a fire under a shimmering ward (an adaptive icon, art in `res/drawable-*dpi/launcher_art.png`). It replaces the white shield on a green disc.
 
 ### Docs
 

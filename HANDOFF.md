@@ -1,6 +1,17 @@
 # Handoff
 
-Last update: 2026-11-17.
+Last update: 2026-11-20.
+
+## First run on the owner's phone (2026-11-20)
+
+- Installed the CI APK of run 16 (`0.1.0-m1`) on the owner's Pixel 9a (Android 17) with `adb install -r`: "Success" (O1). The data loaded in 947 ms.
+- The owner turned the Shield On and accepted the VPN dialog (O2). `dumpsys` shows a foreground service and a VPN on `tun0` with routes only to the 3 Shield DNS addresses.
+- DNS from the `adb shell` user: `self-test.adgecko.test` blocked (layer SELF_TEST), `doubleclick.net` blocked (layer LIST), `example.org` resolved.
+- 3 minutes of normal use: 69 blocks, 4 hosts (`googleads.g.doubleclick.net` 60, `ad.doubleclick.net` 5, `tpc.googlesyndication.com` 3, `app-measurement.com` 1), 0 errors. Private DNS: Automatic.
+- As expected (plan row 4), YouTube video ads in the YouTube app still play.
+- Not checked: the in-app Self-test text (O3), Recent blocks, Allow, Exclude and the tile (O5 to O7), the reboot behaviour, the battery use.
+- New launcher icon (owner's choice, from a Gemini image). A local build has another debug key than CI, so its install needs an uninstall first (OD-3).
+- Local finding: `test/release-tooling.test.js` ("release gate on a changed package copy ...") fails on the owner's PC also without the icon change (`password= in src/x.js`). CI was green. Not investigated.
 
 ## State
 

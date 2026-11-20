@@ -1,14 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Launcher icon: a shield on a green disc. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="48dp"
-    android:height="48dp"
-    android:viewportWidth="48"
-    android:viewportHeight="48">
-    <path
-        android:fillColor="#FF2E7D32"
-        android:pathData="M24,2a22,22 0,1 1,0 44a22,22 0,1 1,0 -44z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M24,10L13,14v8c0,7.4 4.7,13.6 11,15c6.3,-1.4 11,-7.6 11,-15v-8L24,10z" />
-</vector>
+<!-- Launcher icon: a cloaked sentinel at a fire under a shimmering ward.
+     The art is 84 dp on the 108 dp layer, with blurred edges that fade to
+     black, so the launcher mask shows a soft edge. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@android:color/black" />
+    <foreground android:drawable="@drawable/launcher_art" />
+</adaptive-icon>
