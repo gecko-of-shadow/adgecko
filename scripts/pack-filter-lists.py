@@ -603,7 +603,6 @@ def keeps_whole_domain(opts: str) -> bool:
         return True
     res = convert_options(opts)
     return bool(res and res[0] == "" and not res[1])
-COSMETIC_RE = re.compile(r"^([^#\n]*?)(#@?#|#\$#)(.+)$")
 
 
 class ListRefused(Exception):
@@ -1008,29 +1007,6 @@ def extract_domains(text: str) -> list[str]:
     return extract_entries(text)[0]
 
 
-def extract_cosmetic_sample(text: str, limit: int = 2_000) -> list[dict]:
-    """Small sample of generic element-hide rules for the cosmetic agent."""
-    rows: list[dict] = []
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("!"):
-            continue
-        m = COSMETIC_RE.match(line)
-        if not m:
-            continue
-        domains, kind, body = m.group(1), m.group(2), m.group(3)
-        if kind != "##":
-            continue
-        if domains.strip():
-            continue  # generic only
-        if body.startswith("+js") or body.startswith("script:"):
-            continue
-        rows.append({"selector": body, "source_line": line[:200]})
-        if len(rows) >= limit:
-            break
-    return rows
-
-
 def merge_domains(buckets: dict[str, list[str]]) -> tuple[list[str], dict]:
     """Priority-stable unique domain list with never-block removed."""
     seen: set[str] = set()
@@ -1162,7 +1138,6 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
             "- At run time the extension downloads new copies of the lists and puts them in dynamic",
             "  DNR rules. See `docs/permissions-and-privacy.md`.",
             "- Hide rules (`##`) from " + ", ".join(BUNDLED_COSMETIC_LISTS) + " in `cosmetic-rules.json` (built by `scripts/pack-cosmetic.mjs`).",
-            "- Cosmetic sample (generic `##` only) in `cosmetic-sample.json` for the cosmetic agent - not applied by DNR.",
             "- Twitch / YouTube / Kick (and related player hosts) are stripped from block targets here;",
             "  the DNR agent still must add higher-priority allow rules for those sites.",
             "",
@@ -1218,7 +1193,6 @@ def main() -> int:
     digests: dict[str, str] = {}
     buckets: dict[str, list[str]] = {}
     scoped_buckets: dict[str, list[list[str]]] = {}
-    cosmetic_sample: list[dict] = []
     extracted: list = []
     extracted_by_name: OrderedDict = OrderedDict()
 
@@ -1239,8 +1213,6 @@ def main() -> int:
         extracted.append(entry)
         extracted_by_name[name] = entry
         buckets[name], scoped_buckets[name] = entry
-        if name in ("easylist", "easyprivacy") and not cosmetic_sample:
-            cosmetic_sample = extract_cosmetic_sample(text)
 
     # Rebuild buckets in priority order for merge_domains iteration.
     buckets = OrderedDict((n, buckets[n]) for n in ordered_names)
@@ -1350,20 +1322,6 @@ def main() -> int:
     if merged.returncode != 0:
         return merged.returncode
 
-    (OUT_DIR / "cosmetic-sample.json").write_text(
-        json.dumps(
-            {
-                "note": "Generic EasyList ## selectors only (sample). Cosmetic agent owns application; DNR does not use this file.",
-                "count": len(cosmetic_sample),
-                "rules": cosmetic_sample,
-            },
-            indent=2,
-            ensure_ascii=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
     (OUT_DIR / "LICENSES.md").write_text(
         write_licenses(digests, fetched_at), encoding="utf-8"
     )
@@ -1378,7 +1336,6 @@ def main() -> int:
                 "|------|---------|",
                 "| `general-network.json` | Static DNR block rules (`requestDomains` batches) |",
                 "| `meta.json` | Counts, source hashes, manifest hint for DNR agent |",
-                "| `cosmetic-sample.json` | Sample generic cosmetics for cosmetic agent |",
                 "| `LICENSES.md` | Attribution / license text |",
                 "",
                 "Do not edit Twitch/YouTube/Kick playback files when wiring these in.",
