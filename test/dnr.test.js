@@ -121,7 +121,7 @@ const STREAM_HOST_BLOCK_EXCEPTIONS = Object.freeze([
     name: "ubo-youtube-ads-host",
     ruleset: "ubo-youtube",
     domain: "ads.youtube.com",
-    why: "uAssets filter ||ads.youtube.com^ (an ad host, not a video or page host); owner decision 16",
+    why: "uAssets filter ||ads.youtube.com^$domain=~ads.youtube.com (an ad host, not a video or page host); owner decision 16",
   }),
 ]);
 
