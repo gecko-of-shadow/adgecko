@@ -98,11 +98,10 @@ The worker model `loadWorker(opts)`:
 
 ## 5. Ignored tests
 
-Always ignored (`ignore: true`), 3 tests. Each one describes the correct behaviour. Remove `ignore: true` when the owner approves the related change.
+Always ignored (`ignore: true`), 1 test. It describes the correct behaviour. Remove `ignore: true` when the owner approves the related change.
 
 | File | Tests | Reason |
 |---|---|---|
-| `nightly-manifest-scripts-1-the-ads-twitch-tv-carve-out-in-the-merge` | 2 | Owner decision: a block of the Twitch ad host `ads.twitch.tv` is held back. |
 | `nightly-manifest-scripts-2-every-exception-is-dropped-so-hosts-that` | 1 | Known issue: exceptions below a parent-domain block or with a type scope are not obeyed. |
 
 Ignored on a condition:
@@ -116,7 +115,7 @@ Ignored on a condition:
 | `release-tooling` | 1 | No Info-ZIP `zip`. |
 | `release-tooling` | 1 | The operating system is Windows. |
 
-A usual local run shows 6 ignored tests: the 3 above, the storage budget test and the 2 privacy tests.
+A usual local run shows 4 ignored tests: the 1 above, the storage budget test and the 2 privacy tests.
 
 ## 6. Tests that need tools, secrets or caches
 
@@ -138,11 +137,11 @@ These tests do not check runtime behaviour. They can fail after an edit of a doc
 
 | Test | What it reads |
 |---|---|
-| `license` | Root `LICENSE`. In `README.md`, the text from `## License and brand` to `## Links`: "GNU General Public License version 3", `[LICENSE](LICENSE)`, `"Adgecko" and the gecko icon are gecko-of-shadow's brand`, "not covered by the code licence", "one Curben list used (curbengh's urlhaus-filter: URLhaus data, CC0)". |
+| `license` | Root `LICENSE`. `src/LICENSE.txt` is a byte copy of it, and `scripts/lib/package_files.py` and the gate name it. In `README.md`, the text from `## License and brand` to `## Links`: "GNU General Public License version 3", `[LICENSE](LICENSE)`, `"Adgecko" and the gecko icon are gecko-of-shadow's brand`, "not covered by the code licence", "one Curben list used (curbengh's urlhaus-filter: URLhaus data, CC0)". |
 | `docs-claims` | `README.md`: "Read and change all your data on all websites", "fresh install downloads the lists at once", "YouTube videos embedded in other websites are not covered", and one line with "YouTube network rules", then "keep running", then `chrome://extensions`. Not permitted: "permissions are exactly", "exactly `storage`", "The whole extension is switched off". |
 | `docs-claims` | `docs/permissions-and-privacy.md`: the heading `### Site access`, the two first README sentences above. Not permitted: "5 to 30 minutes after install". |
 | `docs-claims` | `docs/how-it-works.md`: the four pack numbers of `src/rules/meta.json`, in the forms "<n> whole-domain", "<n> scoped entries", "<n> list rules" and "`general-network.json` has <n> rules"; "plain `$all` filter"; "Malware blocking only". |
-| `docs-claims` | `docs/STORE-REVIEW-NOTES.md`: "host permission justification". `src/settings.html`: "YouTube network rules ... also stay on". The shipped licence files. `src/rules/LICENSES.md` equals the packer output. |
+| `docs-claims` | `docs/STORE-REVIEW-NOTES.md`: "host permission justification". `src/settings.html`: "YouTube network rules ... also stay on". The shipped licence files. They name GPL-3.0-or-later as the chosen EasyList option and do not choose CC BY-SA. `src/rules/LICENSES.md` equals the packer output. |
 | `vendor-pin` | The vendored Twitch file equals the pin. The pin sites agree with the pin: `src/vendor/README.md`, `docs/credits.md` ("video-swap-new v1.55, MIT"), `docs/how-it-works.md` (") v1.55, copied unmodified"), `docs/STORE-REVIEW-NOTES.md` ("video-swap-new 1.55, vendored unchanged", "call that runs, at line 169", "`getWasmWorkerJs` (line 208)"), `test/hardening.test.js`, and the conflict version literal in the gate. |
 | `playlist` | `src/vendor/README.md` names the file and says "Do not edit it here". |
 | `release-tooling` | The frozen pins, the manifest key list of the gate, the zip byte check, the uBlock Origin commit pin, the drift workflow permissions, the packer refusals, `feed-sign`. |
@@ -188,7 +187,7 @@ What it scans: the diff between `BASE_SHA` and `HEAD_SHA`, the full content of e
 - No test loads the extension in Chrome or plays a real stream. YouTube, Twitch and Kick tests use synthetic payloads and DOM fakes. A change of the live sites does not make them fail.
 - The DNR matcher follows the documented precedence. It is not the Chrome code.
 - No test downloads a real filter list. The storage budget test reads a local cache, and CI ignores it.
-- The three tests in section 5 are known gaps.
+- The one test in section 5 is a known gap.
 - The signed feed is dormant. Its tests use keys made in memory.
 - The 0.3.6 corrections were checked in headless Chromium only in part. No run on the owner's PC or on live sites was done (`HANDOFF.md`).
 

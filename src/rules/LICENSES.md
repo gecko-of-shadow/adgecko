@@ -89,11 +89,11 @@ release gate and the tests.
 - At run time the extension downloads new copies of the lists and puts them in dynamic
   DNR rules. See `docs/permissions-and-privacy.md`.
 - Hide rules (`##`) from easylist, easyprivacy in `cosmetic-rules.json` (built by `scripts/pack-cosmetic.mjs`).
-- Cosmetic sample (generic `##` only) in `cosmetic-sample.json` for the cosmetic agent - not applied by DNR.
 - Twitch / YouTube / Kick (and related player hosts) are stripped from block targets here;
   the DNR agent still must add higher-priority allow rules for those sites.
 
 ## License choice for EasyList material
 
-Redistributed under **CC BY-SA 3.0-or-later** (EasyList dual-license option),
+Redistributed under **GPL-3.0-or-later** (EasyList dual-license option),
 with attribution to The EasyList authors. Modified (trimmed/converted) work.
+The rules mix EasyList material with GPL-3.0 lists, and the project code is GPL-3.0.

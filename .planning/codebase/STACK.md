@@ -114,7 +114,7 @@ Each script starts with a header that gives its purpose and its command line. Re
 | Packed filter lists (data) | `src/rules/*.json` | Packed 2026-11-14T22:00:32Z; one SHA-256 for each of eight sources | `src/rules/meta.json`, `threat-meta.json`, `dnr-merge-meta.json` |
 
 - The uBlock Origin port covers `www.youtube.com`, `m.youtube.com` and `youtube.com`. The meta file lists the ported filters, the skipped filters with a reason, and the local additions.
-- Licence files: `LICENSE`, `src/LICENSE-EasyList.txt`, `src/rules/CREDIT-EasyList.txt`, `src/rules/LICENSES.md`, `src/vendor/LICENSE-uBlock.md`, `src/vendor/LICENSE-uBlock-GPLv3.txt`, `src/vendor/LICENSE-TwitchAdSolutions`.
+- Licence files: `LICENSE` (the zip holds the copy `src/LICENSE.txt`), `src/LICENSE-EasyList.txt`, `src/rules/CREDIT-EasyList.txt`, `src/rules/LICENSES.md`, `src/vendor/LICENSE-uBlock.md`, `src/vendor/LICENSE-uBlock-GPLv3.txt`, `src/vendor/LICENSE-TwitchAdSolutions`.
 - Rules for these files: `CONVENTIONS.md` sections 8 and 9. Update procedures: `docs/UPDATING-DEPENDENCIES.md`.
 
 ## 8. Configuration files
