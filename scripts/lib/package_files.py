@@ -46,7 +46,6 @@ EXTRA_OPTIONAL = [
     "src/rules/README.md",
     "src/rules/meta.json",
     "src/rules/threat-meta.json",
-    "src/rules/cosmetic-sample.json",
     "src/vendor/ubo-youtube-meta.json",
 ]
 
