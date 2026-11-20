@@ -98,13 +98,11 @@ The worker model `loadWorker(opts)`:
 
 ## 5. Ignored tests
 
-Always ignored (`ignore: true`), 4 tests. Each one describes the correct behaviour. Remove `ignore: true` when the owner approves the related change.
+Always ignored (`ignore: true`), 1 test. It describes the correct behaviour. Remove `ignore: true` when the owner approves the related change.
 
 | File | Tests | Reason |
 |---|---|---|
 | `nightly-manifest-scripts-2-every-exception-is-dropped-so-hosts-that` | 1 | Known issue: exceptions below a parent-domain block or with a type scope are not obeyed. |
-| `nightly-site-scripts-2-kick-a-hidden-post-roll-cover-is-never-s` | 1 | Known issue. `src/kick.js` is frozen. The correction is in `docs/proposals/kick-0.3.5-fixes.patch`. |
-| `nightly-site-scripts-4-kick-banner-collapse-can-permanently-hid` | 2 | Same reason. |
 
 Ignored on a condition:
 
@@ -117,7 +115,7 @@ Ignored on a condition:
 | `release-tooling` | 1 | No Info-ZIP `zip`. |
 | `release-tooling` | 1 | The operating system is Windows. |
 
-A usual local run shows 7 ignored tests: the 4 above, the storage budget test and the 2 privacy tests.
+A usual local run shows 4 ignored tests: the 1 above, the storage budget test and the 2 privacy tests.
 
 ## 6. Tests that need tools, secrets or caches
 
@@ -189,7 +187,7 @@ What it scans: the diff between `BASE_SHA` and `HEAD_SHA`, the full content of e
 - No test loads the extension in Chrome or plays a real stream. YouTube, Twitch and Kick tests use synthetic payloads and DOM fakes. A change of the live sites does not make them fail.
 - The DNR matcher follows the documented precedence. It is not the Chrome code.
 - No test downloads a real filter list. The storage budget test reads a local cache, and CI ignores it.
-- The six tests in section 5 are known gaps.
+- The one test in section 5 is a known gap.
 - The signed feed is dormant. Its tests use keys made in memory.
 - The 0.3.6 corrections were checked in headless Chromium only in part. No run on the owner's PC or on live sites was done (`HANDOFF.md`).
 

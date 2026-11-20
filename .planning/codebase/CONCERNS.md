@@ -17,7 +17,7 @@ UNVERIFIED: all behaviour in Chrome. No statement here was proven on the owner's
 | H4 | YouTube response patching depends on upstream shapes | High |
 | H5 | 0.3.6 changes behaviour in many places, and no live test was done | High |
 | M1 | Stream-site host lists exist in many files | Medium |
-| M2 | Six tests are always ignored | Medium |
+| M2 | One test is always ignored | Medium |
 | M3 | Legacy storage mirrors and migrations stay in the code | Medium |
 | M4 | Storage key strings are repeated in several files | Medium |
 | M5 | Very large files and functions | Medium |
@@ -88,11 +88,11 @@ Section 5 lists items that were checked and are not a concern now.
 - The merger lists (6 site hosts and 7 CDN hosts) do not contain `twitchcdn.com`, `ext-twitch.tv`, `kick-streamer.com` and `kickusercontent.com`. `STREAM_SITES` contains them. The effect is UNVERIFIED.
 - **Action.** Make `scripts/merge-dnr-rules.py` read the hosts from one data file, as the captcha list does.
 
-### M2. Six tests are always ignored
+### M2. One test is always ignored
 
-- The six tests and their reasons are in `TESTING.md` section 5. Two known Kick defects stay in `src/kick.js`: a hidden cover can stay hidden, and a banner collapse can hide the player.
-- `docs/proposals/kick-0.3.5-fixes.patch` applies to `src/kick.js` at this commit (`git apply --check`). After a change of `src/kick.js` it is possible that it does not apply.
-- **Action.** Get the owner decisions. For each one, apply the change and remove `ignore: true`, or remove the patch and the tests and record the decision.
+- The test and its reason are in `TESTING.md` section 5: list exceptions below a parent-domain block or with a type scope are not obeyed.
+- The owner approved the Kick corrections and the `ads.twitch.tv` block on 2026-11-20. `docs/proposals/kick-0.3.5-fixes.patch` is applied to `src/kick.js`. The three Kick tests and the two `ads.twitch.tv` tests are not ignored. The patch stays in `docs/proposals/` as a record.
+- **Action.** Fix the exception handling and remove `ignore: true`, or record a decision that the gap stays.
 
 ### M3. Legacy storage mirrors and migrations stay in the code
 
@@ -117,7 +117,7 @@ Section 5 lists items that were checked and are not a concern now.
 | `src/general-background.js` | 1,248 | |
 | `src/guards/clipboard.js` | 1,024 | 0.3.6 added more than 300 lines |
 | `scripts/release-gate.sh` | 859 | Inline Python programs |
-| `src/kick.js` | 769 | One closure, frozen |
+| `src/kick.js` | 812 | One closure, frozen |
 
 - Duplicated logic in two languages: `convertOptions` (JavaScript) and `convert_options` (Python), with shared cases in `test/fixtures/filter-options-cases.json`.
 - **Action.** Do not refactor these files without a need. If a function must change, first add behaviour tests for that part. Many tests read source text.

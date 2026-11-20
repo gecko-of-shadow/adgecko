@@ -115,7 +115,7 @@ Do not read the large JSON files in full. `general-network.json` has 5,168,730 b
 | Current owner documents | `UPDATING-DEPENDENCIES.md`, `feed-setup.md`, `STORE-REVIEW-NOTES.md`, `youtube-expire-window.md` |
 | `design/` | `DESIGN-RULES.md`, `README.md`, images, `rejected/`, `screenshots/`. Tests refer to it. |
 | `review-2026-11-16/` | Record of the 0.3.6 code review: `PLAN.md`, `RESULTS.md`, `findings.json`, `repros/`. |
-| `proposals/` | `kick-0.3.5-fixes.patch`: Kick corrections that are not applied, because `src/kick.js` is frozen. |
+| `proposals/` | `kick-0.3.5-fixes.patch`: Kick corrections. The owner approved them on 2026-11-20, and they are applied to `src/kick.js`. The file stays as a record. |
 
 ## 5. What goes into the release zip
 
