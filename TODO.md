@@ -1,12 +1,13 @@
 # To do
 
-Last update: 2026-11-20, after an A/B test of 0.3.6 against 0.3.7 on YouTube.
+Last update: 2026-11-20, after PRs 22 to 26 (five owner decisions).
 
 ## Where it stands
 
 - **Last release:** [v0.3.7](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.7), from commit `cc3e764`. Assets: `adgecko-0.3.7.zip` and `adgecko-0.3.7.zip.sha256`. The release before: v0.3.6 (`5cd4ab6`).
-- **A/B test on 2026-11-20 (signed out, Chrome for Testing):** no YouTube regression of 0.3.7 against 0.3.6 was found. The numbers are in `HANDOFF.md`.
+- **A/B test on 2026-11-20 (signed out, Chrome for Testing):** no YouTube regression of 0.3.7 against 0.3.6 was found. The numbers are in `docs/youtube-ab-test-2026-11-20.md`.
 - **UNVERIFIED:** the behaviour of 0.3.7 in the owner's signed-in Chrome.
+- **Not released:** `main` has five changes after v0.3.7 (PRs 22 to 26). See `CHANGELOG.md`, section "Unreleased".
 
 ## Next steps
 
@@ -37,18 +38,18 @@ The numbers are the numbers in `docs/review-2026-11-16/RESULTS.md`, section "Own
 
 | No. | Decision | State |
 |---|---|---|
-| 1 | Apply the Kick corrections in `docs/proposals/kick-0.3.5-fixes.patch`? | Not applied. `src/kick.js` is frozen. Three tests are ignored. |
+| 1 | Apply the Kick corrections in `docs/proposals/kick-0.3.5-fixes.patch`? | Done on 2026-11-20 (PR 26). Test on kick.com in real Chrome. |
 | 2 | Accept the content pins in `scripts/frozen-pins.json`. | Done in 0.3.6. Confirm. |
 | 3 | Master switch: must it also stop the `ubo-youtube` ruleset? | The docs say what keeps running. A code change is open. |
 | 4 | YouTube players that are embedded in other websites. | Documented as not covered. |
-| 5, 7 | EasyList licence option (CC BY-SA 3.0 or GPL-3.0-or-later). The project `LICENSE` in the zip. | Not changed. Recommendation: GPL-3.0-or-later, and add the `LICENSE`. |
+| 5, 7 | EasyList licence option (CC BY-SA 3.0 or GPL-3.0-or-later). The project `LICENSE` in the zip. | Done on 2026-11-20 (PR 23): GPL-3.0-or-later; `LICENSE` ships as `src/LICENSE.txt`. |
 | 6 | Peter Lowe list terms ("non-commercial"). | Open since 0.3.4. |
 | 8 | Cross-list `@@` exceptions. | Recommendation: keep the same-host rule and add a note to the docs. |
 | 9, 19 | Cosmetic storage layout. Repack `cosmetic-rules.json` and measure the storage budget. | The budget was measured: see item 3 below. The repack is not committed. |
 | 10 | Pop-up guard for links, forms and child frames. | Not changed. Documented as out of scope. |
 | 11, 12 | Release gate tests in parallel. A reproducible zip with Windows `tar.exe`. | The gate stays serial. Only the Info-ZIP path is reproducible. |
 | 13, 14, 15 | Clipboard guard: plain-text copies on ordinary sites, the 500 ms timing limit, the two limits that stay. | In 0.3.6. Accept or change. |
-| 16 | `ubo-youtube-network.json` blocks `ads.youtube.com`, which the stream-host registry lists. | Add a named exception, or change the registry. |
+| 16 | `ubo-youtube-network.json` blocks `ads.youtube.com`, which the stream-host registry lists. | Done on 2026-11-20 (PR 22): a named exception in the test. |
 | 17, 22 | YouTube with the uBlock Origin layer: a toast with plain text is not hidden; CSS rules for more ad nodes. | Open. |
 | 18 | Feed: no serial reset when a kill is released. | Accept. |
 | 20 | The second, one-shot alarm `gecko-refresh-retry`. The 2026-11-02 decision named one alarm. | In 0.3.6. Confirm. |
@@ -59,18 +60,18 @@ The numbers are the numbers in `docs/review-2026-11-16/RESULTS.md`, section "Own
 
 Older decisions that are open:
 
-- [ ] Block the Twitch ad host `ads.twitch.tv`? Two tests are ignored until this decision.
+- [x] Block the Twitch ad host `ads.twitch.tv`. Done on 2026-11-20 (PR 24). Test Twitch in real Chrome.
 - [ ] The vendored Twitch script has an archived upstream: stay, move to a maintained fork, or own the code (`CONCERNS.md`, H3).
 - [ ] The signed threat feed: the feed host (D-1) and the signer (D-7), or a record that the feed stays off.
 - [ ] Ideas that are not built: **Allow this site** also allows third-party frames on that page; a default allow list for checkout and login helpers; path filters and generic URL filters.
-- [ ] Remove `src/rules/cosmetic-sample.json` (172,666 bytes, no reader) from the zip (`CONCERNS.md`, H2).
+- [x] Remove `src/rules/cosmetic-sample.json` (172,666 bytes, no reader) from the zip (`CONCERNS.md`, H2). Done on 2026-11-20 (PR 25).
 
 ### 3. Before the next list repack
 
 - [x] Storage budget measured on 2026-11-16 (lists downloaded at 20:28 UTC, scratch repack, not committed): peak 8,155,204 bytes. The test limit is 9,000,000 bytes (headroom 844,796) and the quota is 10,485,760 bytes (headroom 2,330,556). The test passed.
 - [ ] Before each later repack: run `python3 scripts/pack-filter-lists.py`, then run `test/final-storage-budget.test.js` with the full list cache, and record the peak here.
 - [ ] Refresh the public-suffix data with `scripts/build-psl-subset.mjs` (now: Public Suffix List of 2026-11-15).
-- [ ] Look at the package size after each repack. Now: 7,862,441 bytes (headroom 137,559). The scratch repack of 2026-11-16 gave 7,859,984 bytes (headroom 140,016).
+- [ ] Look at the package size after each repack. Now (2026-11-20, `main` at `40948cc`, after the removal of `cosmetic-sample.json`): 7,646,955 bytes (headroom 353,045).
 
 ### 4. Keep an eye on
 
