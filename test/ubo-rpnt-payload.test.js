@@ -16,18 +16,20 @@ const ARG_PATCHES = new Function("return " + patchSrc.slice(patchSrc.indexOf("["
 const upstream = ARG_PATCHES.reduceRight((s, [from, to]) => s.replace(to, from), shipped);
 
 function run(payload, href, state = {}) {
-  const calls = { stats: 0, loadVideoById: 0, seekTo: 0, logs: 0 };
+  const calls = { stats: 0, loadVideoById: 0, seekTo: 0, logs: 0, loaded: [] };
+  // The video the address names: ?v= on a watch page, the last path part on /embed/.
+  const videoOf = (loc) => new URLSearchParams(loc.search).get("v") || loc.pathname.split("/").pop();
   const timers = [];
   let observerCb = null;
   let ready = null;
   const progress = { duration: 100, loaded: 10, current: 0 };
   const player = {
     // state.reloadxhr: the response of a video that uBO's recovery already reloaded once.
-    getPlayerResponse: () => ({ videoDetails: { videoId: "abc" }, playabilityStatus: { status: "OK" }, playerConfig: {}, playbackTracking: state.reloadxhr ? { videostatsPlaybackUrl: { baseUrl: "https://s.youtube.com/api/stats/playback?referrer=x%23reloadxhr" } } : undefined }),
+    getPlayerResponse: () => ({ videoDetails: { videoId: state.playerVideo || videoOf(location) }, playabilityStatus: { status: "OK" }, playerConfig: {}, playbackTracking: state.reloadxhr ? { videostatsPlaybackUrl: { baseUrl: "https://s.youtube.com/api/stats/playback?referrer=x%23reloadxhr" } } : undefined }),
     getStatsForNerds: () => { calls.stats++; return state.stats ?? { debug_info: "", buffer_health_seconds: "1.00 s", resolution: "1920x1080" }; },
     getProgressState: () => progress,
     getPlayerStateObject: () => ({ isBuffering: !!state.buffering }),
-    loadVideoById: () => { calls.loadVideoById++; },
+    loadVideoById: (id) => { calls.loadVideoById++; calls.loaded.push(id); },
     seekTo: () => { calls.seekTo++; },
   };
   const location = { href, search: new URL(href).search, pathname: new URL(href).pathname };
@@ -173,6 +175,7 @@ Deno.test("rpnt payload: an empty marker list starts again on the next video (up
   ours.mutate(1); ours.flush();
   ours.push(new Uint8Array(105)); ours.mutate(1); ours.flush();
   assert(ours.calls.loadVideoById === 4, "next video: recovery runs again: " + ours.calls.loadVideoById);
+  assert(ours.calls.loaded.slice(0, 3).every((id) => id === "abc") && ours.calls.loaded[3] === "def", "reloads: abc x3, then def: " + ours.calls.loaded.join());
   assert(/; (channel|yahi)/.test(ours.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent), "a marker is in use again");
 });
 
@@ -241,4 +244,28 @@ Deno.test("rpnt payload: on an /embed/ page the embed marker list is used, and i
   ours.mutate(1); ours.flush();
   step(ours);
   assert(ours.calls.loadVideoById === 3 && marker(ours) !== "", "next embed: recovery runs again with a marker: " + marker(ours));
+  assert(ours.calls.loaded.join() === "abc,abc,def", "reloads: abc x2, then def: " + ours.calls.loaded.join());
+});
+
+Deno.test("rpnt payload: the address changes before the player does; the refilled list reloads nothing by itself", () => {
+  // During a click YouTube changes the address first and the player response a little later.
+  // The patch only refills the marker list; a reload still needs a wait reply and a stalled player.
+  const step = (r) => { r.push(new Uint8Array(105)); r.mutate(1); r.flush(); };
+  const state = { reloadxhr: true, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
+  const r = run(shipped, "https://www.youtube.com/watch?v=abc", state);
+  for (let i = 0; i < 6; i++) step(r);
+  assert(r.calls.loaded.join() === "abc,abc,abc", "first video: three reloads of abc, then the list is empty: " + r.calls.loaded.join());
+  // The address names def, the player still shows abc, and it has stopped stalling.
+  state.playerVideo = "abc";
+  state.stats = { debug_info: "", buffer_health_seconds: "1.00 s", resolution: "1920x1080" };
+  state.buffering = false;
+  r.goTo("https://www.youtube.com/watch?v=def");
+  for (let i = 0; i < 5; i++) { r.mutate(1); r.flush(); }
+  assert(r.calls.loadVideoById === 3, "no reload from the address change alone: " + r.calls.loaded.join());
+  // The player response follows, and def stalls with a wait reply: def is reloaded, never abc.
+  state.playerVideo = "";
+  state.stats = { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" };
+  state.buffering = true;
+  step(r);
+  assert(r.calls.loaded.join() === "abc,abc,abc,def", "the stall on the new video reloads def: " + r.calls.loaded.join());
 });
