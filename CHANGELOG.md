@@ -4,6 +4,21 @@ All notable changes to Adgecko, newest first. Each released version matches a Gi
 
 Dates in this file are the owner's local date (UTC-6). The dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.
 
+## Unreleased
+
+Not released. Not tested in Chrome or on youtube.com.
+
+### Fixes
+
+- YouTube: the uBlock Origin YouTube filters are synced to uAssets `900a2a3` (was `e140ffc`). uBlock Origin scriptlet code stays at tag 1.75.0.
+- YouTube: a possible cause of a long black screen at the start of a video is removed. In 0.3.6, uBlock Origin's start recovery could discard all its fallback steps after the first reload, and then wait with no second reload. uAssets `1fbf62c` (2026-11-17) guards this. `test/ubo-rpnt-payload.test.js` has a test that fails on the 0.3.6 payload. Not proven as the cause on a live page.
+- YouTube: the new upstream filters for embedded players do not add work to each `JSON.stringify` call. The local root-key guard now reads a dotted filter (`[?.a.b.c]`).
+
+### Changed
+
+- YouTube: on a `www.youtube.com/embed/` page in its own tab, uBlock Origin's start recovery now runs (upstream change). Before, it stepped aside there.
+- `scripts/sync-ubo-youtube.mjs`: the first local payload patch follows the renamed upstream variables. The `#masthead` patch is removed, because upstream guards that read again.
+
 ## 0.3.6 (2026-11-16)
 
 A code review of 0.3.5 (2026-11-16) confirmed 64 findings. This release does the 25 work packages of that review (`docs/review-2026-11-16/PLAN.md`). Each code fix has a regression test that failed on 0.3.5. No item was tested on the owner's PC or on live sites, so all behavior below is UNVERIFIED until a run on the owner's PC proves it. The release also has the changes that were merged after 0.3.5 (PR #13).

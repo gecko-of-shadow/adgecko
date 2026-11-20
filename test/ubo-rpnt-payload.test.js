@@ -22,7 +22,8 @@ function run(payload, href, state = {}) {
   let ready = null;
   const progress = { duration: 100, loaded: 10, current: 0 };
   const player = {
-    getPlayerResponse: () => ({ videoDetails: { videoId: "abc" }, playabilityStatus: { status: "OK" }, playerConfig: {} }),
+    // state.reloadxhr: the response of a video that uBO's recovery already reloaded once.
+    getPlayerResponse: () => ({ videoDetails: { videoId: "abc" }, playabilityStatus: { status: "OK" }, playerConfig: {}, playbackTracking: state.reloadxhr ? { videostatsPlaybackUrl: { baseUrl: "https://s.youtube.com/api/stats/playback?referrer=x%23reloadxhr" } } : undefined }),
     getStatsForNerds: () => { calls.stats++; return state.stats ?? { debug_info: "", buffer_health_seconds: "1.00 s", resolution: "1920x1080" }; },
     getProgressState: () => progress,
     getPlayerStateObject: () => ({ isBuffering: !!state.buffering }),
@@ -39,7 +40,7 @@ function run(payload, href, state = {}) {
     Promise: { prototype: { then: Promise.prototype.then } },
   };
   const doc = {
-    // uAssets c7e01d3 reads #masthead's logo-type without optional chaining.
+    // uAssets c7e01d3 read #masthead's logo-type without optional chaining; 1fbf62c guards it again.
     // state.masthead: undefined = a normal header, null = no header, or a stand-in element.
     getElementById: (id) => (id === "movie_player" ? player : id === "masthead" ? (state.masthead === undefined ? { attributes: { "logo-type": { value: "" } } } : state.masthead) : null),
     addEventListener: (type, fn) => { if (type === "DOMContentLoaded") ready = fn; },
@@ -53,7 +54,7 @@ function run(payload, href, state = {}) {
   const consoleFake = { log: () => { calls.logs++; } };
   new Function("window", "document", "location", "MutationObserver", "setTimeout", "console", "URLSearchParams",
     payload.replace(/\$1$/, ""))(win, doc, location, MO, setTimeoutFake, consoleFake, URLSearchParams);
-  // On an /embed/ URL the payload returns before it registers anything.
+  // With a Premium header the payload returns before it registers anything.
   if (ready) ready();
   return {
     installed: !!ready,
@@ -117,23 +118,41 @@ Deno.test("rpnt payload: 105-byte wait reply reloads the same way", () => {
     r.mutate(1); r.flush();
     assert(r.calls.loadVideoById === 0, "no reload without a real wait reply");
     r.push(new Uint8Array(105));
-    assert(r.calls.logs === 1, "wait reply logged once");
+    // uAssets 1fbf62c removed the console.log of the wait reply.
+    assert(r.calls.logs === 0, "wait reply is not logged");
     r.mutate(5); r.flush();
     assert(r.calls.loadVideoById === 1, "one reload: " + r.calls.loadVideoById);
     assert(r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent.includes("; channel"), "UA hint");
   }
 });
 
-Deno.test("rpnt payload: no #masthead, or no logo-type attribute, does not throw (upstream does)", () => {
+Deno.test("rpnt payload: repeated wait replies after a reload use up one marker, not all of them", () => {
+  // Before uAssets 1fbf62c each wait reply dropped one more marker while the
+  // response carried #reloadxhr. Four replies before the next check emptied the
+  // list (channel, yahi, inline, oaeb), and the recovery then gave up with no
+  // second reload. The 250ms check interval (ARG_PATCHES) makes such a burst likely.
+  const stuck = { reloadxhr: true, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
+  for (const payload of [upstream, shipped]) {
+    const r = run(payload, "https://www.youtube.com/watch?v=abc", stuck);
+    for (let i = 0; i < 4; i++) r.push(new Uint8Array(105));
+    r.mutate(5); r.flush();
+    assert(r.calls.loadVideoById === 1, "one reload after the burst: " + r.calls.loadVideoById);
+    const ua = r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent;
+    assert(ua.includes("; yahi"), "only the first marker was used up: " + ua);
+  }
+});
+
+Deno.test("rpnt payload: no #masthead, or no logo-type attribute, does not throw", () => {
   const threw = (fn) => { try { fn(); return ""; } catch (e) { return String(e && e.message); } };
   for (const masthead of [null, { attributes: {} }]) {
     for (const href of ["https://www.youtube.com/watch?v=abc", "https://www.youtube.com/", "https://www.youtube.com/embed/abc"]) {
       const label = (masthead ? "no logo-type" : "no #masthead") + " on " + href;
-      // Upstream reads the header first, so it throws even on the embed URL it would skip.
-      assert(/Cannot read properties of (null|undefined)/.test(threw(() => run(upstream, href, { masthead }))), "upstream throws: " + label);
-      let r;
-      assert(threw(() => { r = run(shipped, href, { masthead }); }) === "", "shipped does not throw: " + label);
-      assert(r.installed === !href.includes("/embed/"), "recovery installed except on embed: " + label);
+      for (const payload of [upstream, shipped]) {
+        let r;
+        assert(threw(() => { r = run(payload, href, { masthead }); }) === "", "does not throw: " + label);
+        // Since uAssets 1fbf62c the recovery is also installed on an /embed/ URL.
+        assert(r.installed === true, "recovery installed: " + label);
+      }
     }
   }
   const stuck = { masthead: null, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
