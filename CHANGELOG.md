@@ -19,6 +19,11 @@ Five owner decisions of 2026-11-20. Not tested in real Chrome: the Kick and Twit
 
 - Owner decision 16: `src/rules/ubo-youtube-network.json` blocks `ads.youtube.com` on purpose. The stream-host oracle test now also checks that ruleset, with a named exception for this one host. A test fails if the exception goes stale.
 
+### Docs
+
+- New: `docs/android/PLAN.md`, a plan to put the Adgecko jobs on an Android phone. Milestone 1 is "Adgecko Shield", a native app with a local DNS filter for all apps. Its data comes from `src/rules/` at build time. The plan also covers a link gate, a text check, list refresh on the phone and the browser for the web-only jobs. No Android code exists yet. All phone behaviour is UNVERIFIED.
+- New: `docs/android/research-2026-11-17.md`, the research record for the plan.
+
 ## 0.3.7 (2026-11-20)
 
 A YouTube update. Tested on 2026-11-20 in the owner's Chrome (signed in) and in Chrome for Testing 155 (not signed in), on youtube.com watch pages only. Known, not fixed: on a signed-in account YouTube can still hold a video on a black screen for 6 to 21 s when it refuses all fallback steps. Twitch, Kick and ordinary sites are unchanged from 0.3.6.

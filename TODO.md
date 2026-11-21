@@ -1,6 +1,6 @@
 # To do
 
-Last update: 2026-11-20, after PRs 22 to 26 (five owner decisions).
+Last update: 2026-11-20, after PRs 22 to 26 (five owner decisions). An Android plan was added.
 
 ## Where it stands
 
@@ -61,7 +61,7 @@ The numbers are the numbers in `docs/review-2026-11-16/RESULTS.md`, section "Own
 Older decisions that are open:
 
 - [x] Block the Twitch ad host `ads.twitch.tv`. Done on 2026-11-20 (PR 24). Test Twitch in real Chrome.
-- [ ] The vendored Twitch script has an archived upstream: stay, move to a maintained fork, or own the code (`CONCERNS.md`, H3).
+- [ ] The vendored Twitch script has an archived upstream: stay, move to a maintained fork, or own the code (`CONCERNS.md`, H3). Research of 2026-11-17: the upstream was archived on 2026-03-05; a maintained fork (`ryanbr/TwitchAdSolutions`, vaft v68.5.7) says that only the 360p backup stays clean during ad breaks (`docs/android/research-2026-11-17.md`, not checked on a live ad break).
 - [ ] The signed threat feed: the feed host (D-1) and the signer (D-7), or a record that the feed stays off.
 - [ ] Ideas that are not built: **Allow this site** also allows third-party frames on that page; a default allow list for checkout and login helpers; path filters and generic URL filters.
 - [x] Remove `src/rules/cosmetic-sample.json` (172,666 bytes, no reader) from the zip (`CONCERNS.md`, H2). Done on 2026-11-20 (PR 25).
@@ -77,6 +77,16 @@ Older decisions that are open:
 
 - [ ] The weekly uBlock Origin YouTube drift check (Mondays 06:00 UTC). A red run means that the upstream filters changed. Then follow `docs/UPDATING-DEPENDENCIES.md`.
 - [ ] Twitch ad changes. No upstream correction will come for the vendored script.
+
+### 6. Android ("Adgecko Shield")
+
+The plan is `docs/android/PLAN.md`. All phone behaviour is UNVERIFIED.
+
+- [ ] Owner, no code (plan section 5): give the phone facts (brand, model, Android version, daily browser, other VPN apps, Private DNS mode, country).
+- [ ] Owner, no code (plan section 5, track B0): load the unchanged extension in Vivaldi for Android (Load unpacked) and report what works.
+- [ ] Milestone 1 (DNS shield): a cloud build session does it in its own draft pull request. Then install the debug APK with adb and do the checks O1 to O7 (plan section 6.11).
+- [ ] Owner decisions OD-1 to OD-25 (plan section 9). Milestone 1 uses the recommendations of the plan under the owner's standing approval. Change any of them in the pull request review.
+- [ ] Later milestones: link and text gates (M2), list refresh on the phone (M3), signed list (M4). Optional: in-app browser (M6), stream helpers (M7).
 
 ### 5. Later
 
