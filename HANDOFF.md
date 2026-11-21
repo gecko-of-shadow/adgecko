@@ -16,6 +16,10 @@ Checked on the owner's PC (JDK 21, local Android SDK):
 
 - Gradle `:shield-core:test :app:testDebugUnitTest :app:lintDebug :app:verifyManifestPolicyDebug :app:assembleDebug --rerun-tasks`: BUILD SUCCESSFUL. `:shield-core` 61 tests (42 in `DohTest`) and `:app` 6 tests, 0 failures. The debug APK is 5,144,335 bytes.
 - `deno test` of the 4 Android tests: 25 passed. The full suite: 906 passed, 1 failed. The failure is `release-tooling` ("password= in src/x.js"). It fails on the base commit `bcdfb12` too (run on the owner's PC in this session).
+- `:app:assembleDebugAndroidTest :probe:assembleDebug :probe:assembleDebugAndroidTest`: BUILD SUCCESSFUL.
+- `scripts/release-gate.sh`: `VERDICT: FAIL`, 3 checks. The base commit `bcdfb12` fails the same 3 checks: `src/kick.js` differs from `origin/main` (the milestone 1 branch is older than main), and the `release-tooling` test above (counted twice). The DoH change adds no gate failure. The branch was pushed with this result: a deviation from the rule "VERDICT: CLEAN before each push", because the cause is in the base branch.
+- `scripts/privacy-check.py`: passed (the secret pattern set is not available locally). No profile ID is in the diff, the commit messages or the pull request text (searched).
+- The new APK has the same signing certificate (SHA-256 digest) as the local build that the owner installed on 2026-11-20. Thus `adb install -r` is an update, and it keeps the settings. The VPN approval should stay too (not checked).
 
 Not checked:
 
