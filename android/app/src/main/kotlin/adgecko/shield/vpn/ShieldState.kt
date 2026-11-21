@@ -2,6 +2,7 @@ package adgecko.shield.vpn
 
 import adgecko.shield.BuildConfig
 import adgecko.shield.core.DnsPolicy
+import adgecko.shield.core.DohStats
 import adgecko.shield.core.PolicyData
 import adgecko.shield.core.RecentBlocks
 import adgecko.shield.core.ShieldData
@@ -35,6 +36,13 @@ object ShieldState {
         private set
     @Volatile var upstreamCount: Int = 0
     @Volatile var aliasText: String = ""
+
+    /**
+     * The counts of the running Upstream when it has a DoH URL, else null.
+     * The service sets it with each new Upstream, so the counts of an old
+     * URL never mix with the counts of a new one. It holds no URL.
+     */
+    @Volatile var dohStats: DohStats? = null
 
     val policy = AtomicReference<DnsPolicy?>(null)
     val recent = RecentBlocks(200)

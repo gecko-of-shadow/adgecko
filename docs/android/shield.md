@@ -28,7 +28,8 @@ Adgecko Shield is a small Android app in the folder `android/` of this repositor
 | Allow list | Max 1,000 entries, the same format as the extension (`threatAllowDomains`). Export and import a JSON file. |
 | Exclude apps | The Shield does not filter the apps that you select. |
 | Self-test | Asks for `self-test.adgecko.test` (expected: "blocked") and `example.com` (expected: "resolved"). A third line tells if the lists are active, paused, off (Threat only), still loading or not active. Before the lists load, only the Self-test name is blocked. |
-| Private DNS warning | Shows when Private DNS uses a hostname. Then apps send DNS past the Shield. |
+| Private DNS warning | Shows when Private DNS uses a hostname. Then apps send DNS past the Shield. It also names the DoH setting (section 7). |
+| Upstream DNS (DoH) | An optional DoH URL. No URL saved: allowed queries go to the DNS servers of your network. With a saved URL: they go to that URL. The field never shows the saved URL: a line under it shows the host. Save and Clear. Section 7 has the steps. |
 | About | The GPL-3.0 notice, the source commit, the data date and all licence texts. |
 
 ## 3. Build (developer)
@@ -121,7 +122,43 @@ Exit rule for milestone 1: the owner reports O1 to O7, and no app that the owner
 
 - Host level only. The 18,422 scoped entries, the path rules and the hide rules stay in the browser extension.
 - The data is a snapshot of `src/rules/` at the commit that CI built. The phone does not download lists (milestone 3).
-- Private DNS with a hostname, apps with their own encrypted DNS, and a custom provider in Chrome's "Use secure DNS" bypass the Shield.
+- Private DNS with a hostname, apps with their own encrypted DNS, and a custom provider in Chrome's "Use secure DNS" bypass the Shield. To use a DoH provider with the Shield, use the DoH URL setting (section 7).
 - Do not turn on "Block connections without VPN": the Shield routes only DNS.
 - The debug key changes with each CI run. Each update thus needs an uninstall (owner decision OD-3).
 - The lint check `ForegroundServicePermission` is suppressed for the VPN service. The platform lists `SCHEDULE_EXACT_ALARM` or `USE_EXACT_ALARM` as "any of" permissions for the service type `systemExempted`. The AOSP policy for Android 14 to 16 also accepts the app op `OP_ACTIVATE_VPN`, which the VPN consent dialog sets (checked in AOSP source on 2026-11-17, not on a phone). If Android refuses the type on the phone, the app shows the notice "Android refused the foreground service type systemExempted" and stays off (plan risk 11).
+
+## 7. Use NextDNS or another DoH provider with the Shield
+
+All phone behaviour in this section is UNVERIFIED until a run on the owner's phone proves it.
+
+Why the Shield needs its own setting: Private DNS in hostname mode sends DNS from each app straight to the provider over TLS. The Shield sees no query then, and it blocks nothing. The Shield has a DoH upstream setting to avoid this. The Shield decides to block or to forward. It sends each forwarded query, encrypted, to the DoH URL of your provider. Blocked queries never leave the phone.
+
+Steps:
+
+1. Keep Private DNS on Automatic. Do not set a hostname. (The Android menu path differs by phone: Settings, then Network, then Private DNS.)
+2. Copy the DoH URL of your provider. For NextDNS, open the Setup page of your profile. The URL has the form `https://dns.nextdns.io/<profile ID>`. The profile ID is private. Do not share the URL.
+3. Open Adgecko Shield. Find the section "Upstream DNS (DoH)". Type the URL. Press Save. The app shows "Saved. Allowed queries go to <host> over DoH.", empties the field, and writes "Saved: DoH to <host>." under it. A text that is not an https URL gives "Not a valid https URL." An empty field gives "Type a DoH URL, or press Clear to stop DoH."
+4. Check the result:
+   - On the main screen, read the status line "Upstream: DoH <host>: A via DoH, P via network DNS". Open some pages. A goes up. P stays at 0, or close to 0 (see the list of reasons below).
+   - Open the query log of your provider. The log shows the allowed queries of the phone. It shows no blocked query, because a blocked query never leaves the phone.
+5. To stop using DoH, press Clear. The screen shows "Saved: none (network DNS)." The Shield then sends allowed queries to the DNS servers of your network again.
+
+What the Shield does:
+
+- It sends each allowed query as an HTTPS POST (RFC 8484, `application/dns-message`). Only an `https` URL is valid. The request has the fixed User-Agent `adgecko-shield`: it holds no version and no device data.
+- One DoH try has a total time limit of 2.5 s, or less when the query has less time left. The Shield keeps 1 s of the 5 s deadline of a query for the network DNS path.
+- A circuit breaker protects the query path. After 3 DoH failures in a row, the Shield uses the DNS servers of your network for 30 seconds. Then one query tries DoH again. If that query succeeds, DoH is on again. If it fails, the 30 s pause starts again. A DoH success resets the count of failures.
+- "P via network DNS" counts each query that did not use DoH, for any reason. The text ", last reason R" names the reason of the last such query: `DoH host name`, `paused after failures`, `too little time left`, `answer larger than client limit`, or the code of a DoH failure, for example `HTTP 404`, `timeout` or `content type`. While the breaker is open, each query sets the reason to `paused after failures`. Thus the text ", last DoH failure F" names the code of the last real DoH failure, for example `UnknownHostException`, `SSLHandshakeException` or `HTTP 404`. It stays on the screen until the Shield starts again.
+- The query for the DoH host itself, and a query with no usable name, always use the DNS servers of your network. The lookup of the DoH host thus never waits on DoH.
+- If a DoH answer is larger than the UDP size that the app accepts (or larger than 65,507 bytes), the Shield uses the network DNS path for that query. The network DNS servers answer within the UDP size of the app. This is not a DoH failure. It counts as a DoH success and sets the count of failures to 0.
+- The counts belong to the running Shield. A new URL, a network change or a restart of the Shield starts new counts. The status line shows the host of the saved URL also while the Shield is off, with the counts at 0.
+- The screen and the debug log show the host only, never the full URL. The URL field is always empty: it never shows the saved URL. The URL is in the private settings of the app (no backup).
+- A network with no DNS server can answer through DoH only when the host of the URL is an IP address. Else the Shield cannot look up the host of the URL without a DNS server.
+
+Known limits (UNVERIFIED):
+
+- The Shield must connect to the DoH host without its own filter. It opens each DoH connection with `Network.openConnection` of the real network, so the host lookup and the sockets do not use the Shield. The Shield has no `allowBypass()`. It is a premise that this works for the own package. If it does not, the count "via network DNS" goes up and the text "last DoH failure" shows the code of the failure.
+- The total time limit stops the connect, the request and the read. It cannot stop the host lookup inside `Network.openConnection`. A slow lookup can use more than the DoH time. The query waits for the lookup. If time is left when the lookup ends, the network DNS path answers. If not, the query gets SERVFAIL when the lookup ends, which can be after 5 s.
+- A kept connection that the server closed in the meantime can make one try fail. That try counts as a failure for the breaker.
+- Apps with their own encrypted DNS, and a custom provider in Chrome's "Use secure DNS", still bypass the Shield.
+- Only one DoH URL is possible. The Shield has no DoH list and no "DoH only" mode: after a failure it uses plain DNS, so your network can see those queries.

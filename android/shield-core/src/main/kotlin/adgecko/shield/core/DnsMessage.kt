@@ -51,6 +51,7 @@ object DnsMessage {
     const val RNAME = "hostmaster.adgecko.invalid"
     const val MAX_NAME = 255
     const val MAX_JUMPS = 32
+    const val MIN_UDP = 512
 
     class Name(val labels: List<ByteArray>, val end: Int)
 
@@ -123,6 +124,31 @@ object DnsMessage {
         val qtype = u16(b, off + name.end)
         val qclass = u16(b, off + name.end + 2)
         return DnsQuery(id, flags, name.labels, nameText(name.labels), qtype, qclass)
+    }
+
+    /**
+     * The UDP payload size that the client accepts: the CLASS field of the
+     * OPT record in the additional section of the [query] (RFC 6891), at
+     * least 512. A query with no OPT record, or a bad query, gives 512.
+     */
+    fun udpPayloadLimit(query: ByteArray): Int {
+        val len = query.size
+        if (len < HEADER || u16(query, 4) != 1) return MIN_UDP
+        val q = readName(query, 0, len, HEADER) ?: return MIN_UDP
+        var pos = q.end + 4
+        val records = u16(query, 6) + u16(query, 8) + u16(query, 10)
+        val additionalFrom = u16(query, 6) + u16(query, 8)
+        for (i in 0 until records) {
+            val n = readName(query, 0, len, pos) ?: return MIN_UDP
+            pos = n.end
+            if (pos + 10 > len) return MIN_UDP
+            val type = u16(query, pos)
+            val rdlen = u16(query, pos + 8)
+            if (i >= additionalFrom && type == TYPE_OPT) return maxOf(MIN_UDP, u16(query, pos + 2))
+            pos += 10 + rdlen
+            if (pos > len) return MIN_UDP
+        }
+        return MIN_UDP
     }
 
     private class Out {

@@ -215,7 +215,10 @@ class ShieldVpnService : VpnService() {
             null
         } ?: return null
         upstream?.close()
-        upstream = Upstream(this, network, ordered)
+        val doh = store.dohUrl
+        val up = Upstream(this, network, ordered, doh)
+        upstream = up
+        ShieldState.dohStats = up.dohStats
         ShieldState.upstreamCount = ordered.size
         ShieldState.aliasText = aliases.joinToString(", ") { InetAddress.getByAddress(it).hostAddress ?: "?" }
         handler = PacketHandler(aliases, { ShieldState.policy.get() }, { ShieldState.data?.serial ?: 1L }) { q, d ->
@@ -264,8 +267,16 @@ class ShieldVpnService : VpnService() {
                         h.servfailReply(out.ret, out.query)?.let { write(it) }
                     } else {
                         up.send(out.upstreamIndex, out.query) { answer ->
-                            if (answer != null) {
-                                write(h.forwardReply(out.ret, answer))
+                            // This runs on a pool thread. A fault while it builds the reply
+                            // (for example an answer that no UDP packet can hold) must not
+                            // kill the process: the client gets SERVFAIL instead.
+                            val reply = if (answer == null) null else try {
+                                h.forwardReply(out.ret, answer)
+                            } catch (e: RuntimeException) {
+                                null
+                            }
+                            if (reply != null) {
+                                write(reply)
                             } else {
                                 ShieldState.forwardErrors.incrementAndGet()
                                 h.servfailReply(out.ret, out.query)?.let { write(it) }
@@ -362,6 +373,7 @@ class ShieldVpnService : VpnService() {
         if (old != null) closeQuietly(old)
         upstream?.close()
         upstream = null
+        ShieldState.dohStats = null
         handler = null
         ShieldState.policy.set(null)
         ShieldState.setStatus(if (error == null) ShieldState.Status.OFF else ShieldState.Status.ERROR, error)

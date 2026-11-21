@@ -737,7 +737,7 @@ Headless Chromium (Playwright, in the container) runs the unchanged frozen scrip
 1. No change that weakens the phone or the PC. Rejected: a user CA, root, an Accessibility service, a notification listener, an IME, turning off Play Protect, opening firewall ports.
 2. Permissions: exactly the set of 6.3 in M1. Each new permission needs a milestone and an owner decision. `verifyManifestPolicy` and `test/android-static.test.js` enforce this.
 3. Exported components: only those of 6.3. Services are guarded by system permissions.
-4. Network: in M1 the only traffic is DNS forwarding to the DNS servers of the real network. No resolver address in code. No public IP literal in any file.
+4. Network: in M1 the only traffic is DNS forwarding to the DNS servers of the real network. No resolver address in code. No public IP literal in any file. Exception for version 0.1.1-doh: the user can type an optional https DoH URL. The code has no resolver URL. The app opens HTTPS connections to that host only, and only the host shows in logs and on screens.
 5. No account, no analytics, no crash reporter, no Google Play services.
 6. Data at rest: switches in `SharedPreferences`; the allow list and the excluded apps in `noBackupFilesDir`. `allowBackup="false"`. Data extraction rules exclude all data.
 7. Recent blocks show what the user visits. They stay in memory only. No host name goes to a file. Only debug builds write host names to logcat.

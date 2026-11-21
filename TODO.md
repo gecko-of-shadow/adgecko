@@ -1,6 +1,6 @@
 # To do
 
-Last update: 2026-11-20, after PRs 22 to 26 (five owner decisions). Android milestone 1 (Adgecko Shield) is built in a draft pull request.
+Last update: 2026-11-20, after PRs 22 to 26 (five owner decisions). Android milestone 1 (Adgecko Shield) is built in a draft pull request. The optional DoH upstream for the Shield is in a second draft pull request on top of it.
 
 ## Where it stands
 
@@ -86,6 +86,10 @@ The plan is `docs/android/PLAN.md`. All phone behaviour is UNVERIFIED.
 - [ ] Owner, no code (plan section 5, track B0): load the unchanged extension in Vivaldi for Android (Load unpacked) and report what works.
 - [x] Milestone 1 (DNS shield) is built: draft pull request 19 from `claude/android-shield-m1`. CI is green (build job, emulator API 33 and API 36). The build job makes the APK artifact `adgecko-shield-debug`.
 - [ ] Owner: install the debug APK with adb and do the checks O1 to O7 (`docs/android/shield.md`, sections 4 and 5). Report each result. Then remove the UNVERIFIED marks that the checks prove.
+- [x] Owner, on the phone (2026-11-20): the DoH upstream with NextDNS works on mobile data: 459 queries via DoH, 0 via network DNS (`HANDOFF.md`).
+- [ ] Owner, on the phone: read the NextDNS query log; check DoH on Wi-Fi and after a network change.
+- [ ] Owner decision: a "DoH only" mode. Today a DoH failure makes the Shield use plain network DNS (fail-open). "DoH only" would give SERVFAIL instead: more private, but no DNS when the DoH server is not reachable (for example a captive portal).
+- [ ] Merge order: the DoH pull request (base `claude/android-shield-m1`) after the milestone 1 pull request.
 - [ ] Owner decision OD-3 (APK signing) before milestone 2. With the CI debug key, each update needs an uninstall.
 - [ ] Check on a phone: Android accepts the foreground service type `systemExempted` for the VPN with no alarm permission (lint finding, `HANDOFF.md`).
 - [ ] Check on a phone: the time from the shield start to "Lists: active" in the Self-test (0.4 to 3.0 s on the CI emulators).
