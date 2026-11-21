@@ -166,6 +166,7 @@ When you add a shipped file, add its path to `REQUIRED` and to `ALLOWED_RE` in t
 | `src/rules/cosmetic-rules.json` | EasyList and EasyPrivacy in the packer cache, extras from `src/cosmetic-hide.css` | The packer runs `scripts/pack-cosmetic.mjs` |
 | `src/vendor/video-swap-new.user.js`, `scripts/vendor-pins.json` | Upstream userscript at a pinned commit | `scripts/update-twitch-vendor.mjs`. `--check` writes nothing. |
 | `icons/icon{16,48,128}{,-working,-off}.png` | `icons/source/*.svg` | `node scripts/build-icons.mjs` |
+| `android/app/src/main/res/drawable-xxxhdpi/launcher_eyes{,_mono}.png` | the owner's source art (not in the repository) | `python3 android/art/make_launcher_eyes.py SOURCE.jpg` |
 | `test/fixtures/android/vectors/*.json` | `scripts/lib/android-dns-policy.mjs` and the `src/threat/` modules | `deno run --no-lock --allow-read --allow-write=test/fixtures/android/vectors scripts/build-android-vectors.mjs`. `--check` writes nothing. |
 | Android Shield assets (`android/**/build/generated/`, never committed) | `src/rules/` and the `src/` modules | `scripts/export-android-data.mjs`, run by the Gradle task `ExportShieldData` |
 

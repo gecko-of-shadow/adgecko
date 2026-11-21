@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Launcher icon: two red, round, angry eyes on a round disc.
+<!-- Launcher icon: two red, round, angry eyes on an off-white (light) or black (dark)
+     background. The launcher mask sets the shape (a disc on a round mask).
      The eyes are about 80 percent of the disc width. They stay inside the 66 dp safe zone.
      The background is off-white in light mode and black in dark mode.
      It follows the system light or dark theme through values-night/colors.xml.
