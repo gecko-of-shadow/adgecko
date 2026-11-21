@@ -21,10 +21,18 @@ Checked on the owner's PC (JDK 21, local Android SDK):
 - `scripts/privacy-check.py`: passed (the secret pattern set is not available locally). No profile ID is in the diff, the commit messages or the pull request text (searched).
 - The new APK has the same signing certificate (SHA-256 digest) as the local build that the owner installed on 2026-11-20. Thus `adb install -r` is an update, and it keeps the settings. The VPN approval should stay too (not checked).
 
+Checked on the owner's Pixel 9a (Android 17, mobile data), 2026-11-20:
+
+- `adb install -r` of this build: "Success". Version `0.1.1-doh` (versionCode 2). The VPN approval stayed (`appops`: `ACTIVATE_VPN: allow`). Private DNS: `opportunistic` (Automatic).
+- The update stopped the Shield. `DebugStartActivity` started it again: `tun0` up, `doubleclick.net` blocked.
+- The owner saved the NextDNS DoH URL (the stored host is `dns.nextdns.io`; the path was not printed).
+- Status line some minutes later: "Upstream: DoH dns.nextdns.io: 459 via DoH, 0 via network DNS". Errors: policy 0, upstream 0. Queries 486, blocks 9. Thus the main premise holds on this phone: the own package resolves the DoH host and connects on the underlying network with `Network.openConnection`.
+
 Not checked:
 
-- UNVERIFIED: all phone behaviour. The main premise: the own package can resolve the DoH host and connect on the underlying network through `Network.openConnection` (the Shield has no `allowBypass()`). If it is wrong, "via network DNS" goes up and the last reason shows the failure.
-- UNVERIFIED: how often an answer is larger than the UDP size of the Android resolver.
+- The NextDNS query log (the owner can read it on the NextDNS site).
+- DoH on Wi-Fi, a network change, a DoH failure and the circuit breaker on the phone, battery use.
+- How often an answer is larger than the UDP size of the Android resolver: in the first 459 queries, never (0 via network DNS). A longer use can still show it.
 - The CI emulator jobs do not test DoH (no DoH server in CI). They test that the default path (no DoH URL) still works.
 
 Owner checks on the phone (after `adb install -r` of the local build; the same debug key as the current install, so the settings stay):

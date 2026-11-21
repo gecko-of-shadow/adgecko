@@ -76,7 +76,8 @@ The plan is `docs/android/PLAN.md`. All phone behaviour is UNVERIFIED.
 - [ ] Owner, no code (plan section 5, track B0): load the unchanged extension in Vivaldi for Android (Load unpacked) and report what works.
 - [x] Milestone 1 (DNS shield) is built: draft pull request 19 from `claude/android-shield-m1`. CI is green (build job, emulator API 33 and API 36). The build job makes the APK artifact `adgecko-shield-debug`.
 - [ ] Owner: install the debug APK with adb and do the checks O1 to O7 (`docs/android/shield.md`, sections 4 and 5). Report each result. Then remove the UNVERIFIED marks that the checks prove.
-- [ ] Owner, on the phone: check the DoH upstream with NextDNS (`HANDOFF.md`, section "DoH upstream for the Shield", checks 1 to 4).
+- [x] Owner, on the phone (2026-11-20): the DoH upstream with NextDNS works on mobile data: 459 queries via DoH, 0 via network DNS (`HANDOFF.md`).
+- [ ] Owner, on the phone: read the NextDNS query log; check DoH on Wi-Fi and after a network change.
 - [ ] Owner decision: a "DoH only" mode. Today a DoH failure makes the Shield use plain network DNS (fail-open). "DoH only" would give SERVFAIL instead: more private, but no DNS when the DoH server is not reachable (for example a captive portal).
 - [ ] Merge order: the DoH pull request (base `claude/android-shield-m1`) after the milestone 1 pull request.
 - [ ] Owner decision OD-3 (APK signing) before milestone 2. With the CI debug key, each update needs an uninstall.
