@@ -22,10 +22,12 @@ function fakeEl(tag, props, children) {
   return el;
 }
 
-function setup() {
+// frameOnly: the ad frame sits alone in a plain box (a banner slot), so the
+// banner path collapses the box itself, not only the frame.
+function setup(frameOnly = false) {
   const player = fakeEl("VIDEO-PLAYER", {}); // video not visible (not mounted / closed shadow root)
   const frame = fakeEl("IFRAME", { id: "google_ads_iframe_123" });
-  const cover = fakeEl("DIV", {}, [player, frame]);
+  const cover = fakeEl("DIV", {}, frameOnly ? [frame] : [player, frame]);
   const state = { framePresent: true, observerCb: null };
   const document = {
     documentElement: {},
@@ -37,10 +39,10 @@ function setup() {
   return { api, cover, frame, player, state };
 }
 
-// Known issue, not fixed in 0.3.5: src/kick.js is a frozen playback file
-// (scripts/release-gate.sh 1b) and Kick could not be tested live. The fix is
-// kept in docs/proposals/kick-0.3.5-fixes.patch for the owner to decide.
-Deno.test({ name: "kick banner collapse: a cover holding <video-player> is not hidden by the banner path", ignore: true, fn: () => {
+// Owner decision 2026-11-20: the correction in
+// docs/proposals/kick-0.3.5-fixes.patch is applied to src/kick.js. Kick was
+// not tested live (UNVERIFIED in Chrome).
+Deno.test({ name: "kick banner collapse: a cover holding <video-player> is not hidden by the banner path", fn: () => {
   const { api, cover } = setup();
   api.watchCovers(() => true);
   assert(
@@ -49,15 +51,30 @@ Deno.test({ name: "kick banner collapse: a cover holding <video-player> is not h
   );
 } });
 
-// Known issue, not fixed in 0.3.5: src/kick.js is a frozen playback file
-// (scripts/release-gate.sh 1b) and Kick could not be tested live. The fix is
-// kept in docs/proposals/kick-0.3.5-fixes.patch for the owner to decide.
-Deno.test({ name: "kick banner collapse: switching the kick switch off shows the collapsed box again", ignore: true, fn: () => {
-  const { api, cover } = setup();
+// Owner decision 2026-11-20: the correction in
+// docs/proposals/kick-0.3.5-fixes.patch is applied to src/kick.js. Kick was
+// not tested live (UNVERIFIED in Chrome).
+Deno.test({ name: "kick banner collapse: switching the kick switch off shows the collapsed box again", fn: () => {
+  // Player cover: the banner path hides only the frame.
+  const a = setup();
+  a.api.watchCovers(() => true);
+  assert(a.frame.style.getPropertyValue("display") === "none", "frame was not hidden by the banner path: " + JSON.stringify(a.frame.style.props));
+  a.api.coversSwitched(false);
+  assert(a.frame.style.getPropertyValue("display") !== "none", "frame is still display:none after the kick switch went off");
+  // Banner slot: the banner path collapses the whole box.
+  const b = setup(true);
+  b.api.watchCovers(() => true);
+  assert(b.cover.style.getPropertyValue("display") === "none", "banner box was not collapsed: " + JSON.stringify(b.cover.style.props));
+  b.api.coversSwitched(false);
+  assert(b.cover.style.getPropertyValue("display") !== "none", "box collapsed by the banner path is still display:none after the kick switch went off");
+} });
+
+// The ad frame leaves: the next pass shows the collapsed box again.
+Deno.test({ name: "kick banner collapse: a collapsed box is shown again when its ad frame is gone", fn: () => {
+  const { api, cover, state } = setup(true);
   api.watchCovers(() => true);
-  api.coversSwitched(false);
-  assert(
-    cover.style.getPropertyValue("display") !== "none",
-    "box collapsed by the banner path is still display:none after the kick switch went off: " + JSON.stringify(cover.style.props),
-  );
+  assert(cover.style.getPropertyValue("display") === "none", "banner box was not collapsed: " + JSON.stringify(cover.style.props));
+  state.framePresent = false;
+  api.coversSwitched(true);
+  assert(cover.style.getPropertyValue("display") !== "none", "box is still display:none after its ad frame left");
 } });

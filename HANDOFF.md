@@ -2,6 +2,16 @@
 
 Last update: 2026-11-20.
 
+## State
+
+- Last release: [v0.3.7](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.7), from commit `cc3e764`.
+- `main` has five changes after v0.3.7 (PRs 22 to 26, merged on 2026-11-20). They are not released. See `CHANGELOG.md`, section "Unreleased".
+- The local folder is on `main`. Untracked `_metadata/` is made by Chrome; do not commit it.
+- UNVERIFIED: the behaviour of 0.3.7 in the owner's signed-in Chrome, and the Kick and Twitch changes in any real Chrome.
+- New: Android milestone 1, "Adgecko Shield", is built in `android/` (plan `docs/android/PLAN.md`, owner steps `docs/android/shield.md`). It is in a draft pull request from the branch `claude/android-shield-m1`. That branch starts from the docs branch of draft pull request 18 (not merged when the session started).
+- The first run on the owner's phone is in the section below. Items that it did not check stay UNVERIFIED.
+- The next work and the open owner decisions are in `TODO.md`.
+
 ## DoH upstream for the Shield (2026-11-20, branch `claude/android-shield-doh`)
 
 The owner asked: "Can I have the protection of Adgecko Shield and NextDNS?" Private DNS in hostname mode sends app DNS past the Shield, so the two do not work side by side. The answer is a chain: the Shield decides block or forward, and it sends allowed queries to a DoH URL (NextDNS) instead of plain UDP to the network DNS servers.
@@ -15,9 +25,9 @@ The owner asked: "Can I have the protection of Adgecko Shield and NextDNS?" Priv
 Checked on the owner's PC (JDK 21, local Android SDK):
 
 - Gradle `:shield-core:test :app:testDebugUnitTest :app:lintDebug :app:verifyManifestPolicyDebug :app:assembleDebug --rerun-tasks`: BUILD SUCCESSFUL. `:shield-core` 61 tests (42 in `DohTest`) and `:app` 6 tests, 0 failures. The debug APK is 5,144,335 bytes.
-- `deno test` of the 4 Android tests: 25 passed. The full suite: 906 passed, 1 failed. The failure is `release-tooling` ("password= in src/x.js"). It fails on the base commit `bcdfb12` too (run on the owner's PC in this session).
+- `deno test` of the 4 Android tests: 25 passed. Before the merge of main, the full suite had 1 failure, `release-tooling` ("password= in src/x.js"); it failed on the base commit `bcdfb12` too.
 - `:app:assembleDebugAndroidTest :probe:assembleDebug :probe:assembleDebugAndroidTest`: BUILD SUCCESSFUL.
-- `scripts/release-gate.sh`: `VERDICT: FAIL`, 3 checks. The base commit `bcdfb12` fails the same 3 checks: `src/kick.js` differs from `origin/main` (the milestone 1 branch is older than main), and the `release-tooling` test above (counted twice). The DoH change adds no gate failure. The branch was pushed with this result: a deviation from the rule "VERDICT: CLEAN before each push", because the cause is in the base branch.
+- `scripts/release-gate.sh`: before the merge of main, `VERDICT: FAIL` with 3 checks, the same 3 as on the base commit (`src/kick.js` differed from `origin/main`, because the stack was older than main, and the `release-tooling` test). Fix (owner approval "Update the stack", 2026-11-20): main was merged into the plan branch, then into milestone 1, then into this branch, with normal merge commits. After that, on this branch: `VERDICT: CLEAN`, the full suite 931 passed, 0 failed.
 - `scripts/privacy-check.py`: passed (the secret pattern set is not available locally). No profile ID is in the diff, the commit messages or the pull request text (searched).
 - The new APK has the same signing certificate (SHA-256 digest) as the local build that the owner installed on 2026-11-20. Thus `adb install -r` is an update, and it keeps the settings. The VPN approval should stay too (not checked).
 
@@ -54,13 +64,35 @@ Owner checks on the phone (after `adb install -r` of the local build; the same d
 - Not checked after the reinstall: the icon on the home screen, and the blocks after the owner turns the Shield On again (the uninstall removed the VPN approval).
 - Local finding: `test/release-tooling.test.js` ("release gate on a changed package copy ...") fails on the owner's PC also without the icon change (`password= in src/x.js`). CI was green. Not investigated.
 
-## State
+## Last session (2026-11-20): five owner decisions built
 
-- Version 0.3.6 is released: [v0.3.6](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.6), from commit `5cd4ab6`, published 2026-11-16 by the release workflow.
-- UNVERIFIED: all behaviour of 0.3.6 in Chrome. The owner asked for the release before the manual tests. The tests are the first item in `TODO.md`.
-- New: Android milestone 1, "Adgecko Shield", is built in `android/` (plan `docs/android/PLAN.md`, owner steps `docs/android/shield.md`). It is in a draft pull request from the branch `claude/android-shield-m1`. That branch starts from the docs branch of draft pull request 18 (not merged when the session started).
-- The first run on the owner's phone is in the section above. Items that it did not check stay UNVERIFIED.
-- The next work and the open owner decisions are in `TODO.md`.
+The owner approved five items. Each one was built on its own branch, reviewed by an independent agent and by Greptile, and merged:
+
+| PR | Change |
+|---|---|
+| #22 | Owner decision 16: a named exception for `ads.youtube.com` in the stream-host oracle test. No runtime change. |
+| #23 | Owner decisions 5 and 7: EasyList under GPL-3.0-or-later. The project `LICENSE` ships in the zip as `src/LICENSE.txt`. |
+| #24 | `ads.twitch.tv` and its subdomains are blocked by the extra tracker rule. A second named exception in `test/dnr.test.js` allows only that rule. |
+| #25 | `src/rules/cosmetic-sample.json` is deleted (owner approved). |
+| #26 | Owner decision 1: `docs/proposals/kick-0.3.5-fixes.patch` is applied to the frozen `src/kick.js`. The pin is updated. The Kick switch-off test was made stricter after a Greptile comment. |
+
+The A/B test of 0.3.6 against 0.3.7 (earlier the same day) is in `docs/youtube-ab-test-2026-11-20.md`.
+
+## Checks
+
+Checked in this session:
+
+- Each branch: the full Deno suite (0 failed), the release gate and the privacy check, before the merge. CI on GitHub passed on each PR.
+- #26: the gate failed on the branch only in section 1b ("playback files must not change"). This is by design for an approved change of `src/kick.js` (`CONVENTIONS.md` section 9).
+- The new Kick tests fail on the old `kick.js` and pass on the new one. The Twitch exception is necessary: without it the oracle test fails on the extra tracker rule.
+- After the merges, on `main` (`40948cc`): the release gate on this PC gave `VERDICT: CLEAN` (907 passed, 0 failed, 5 ignored; package 7,646,955 bytes; storage budget peak 8,152,711 bytes). CI on `main` passed.
+
+Not checked:
+
+- Kick on kick.com and Twitch (live, VOD, clips) in real Chrome with the new changes.
+- A real release zip of these changes in Chrome.
+
+Found: `scripts/release-gate.sh` writes the Deno log to a fixed path, `/tmp/gate-deno.txt`. Two gate runs at the same time on one PC can mix their logs, and the gate can then report "deno reported failures" although the tests passed. This happened once in this session. Not fixed (the gate needs owner approval).
 
 ## Work done in the last session (2026-11-17, Android milestone 1 build)
 
@@ -110,7 +142,7 @@ The owner asked for real research for each step and a reason for each choice. Re
 
 5. Second review workflow (on the fixes since `07d91b9`; 89 agents; a completeness critic): 28 findings, 11 confirmed and fixed, 17 refuted. The critic checked plan A1, A2, A11 and A12 again (APK 5,000,734 bytes; assets equal the manifest; no change to the protected files). Fixed: the Self-test line 3 shows a pause and the mode Threat only; the notification "Pause 10 min" asks for the unlock (as the tile); an import result reaches the screen after a rotation; `adb` errors during the boot no longer stop the CI script; the workflow test has an allow list for `${{ }}` lines and reads more `run:` forms; the APK upload fails when the APK is missing; 5 document corrections.
 
-## Checks
+## Checks of the Android milestone 1 session
 
 Checked in this session (Linux container, no phone, no emulator):
 
@@ -157,19 +189,50 @@ Draft pull request 19, workflow `android.yml`:
 - Run 15 (`42c0a08`): emulator API 33 failed before any test: HTTP 429 from Maven Central on all 6 Gradle attempts (2 tasks x 3 attempts, about 7 minutes), for two files only: the POMs of `org.junit.platform:junit-platform-engine` and `junit-platform-launcher` 1.13.3. Root cause: the device-test runner (UTP, configuration `unified-test-platform-gradle-work-action`) is resolved only by the connected test tasks. The build job never resolves it, so the Gradle cache that the build job saves does not hold it, and each emulator job downloads it again. Fix: the task `resolveDeviceTestTools` (root `android/build.gradle.kts`, for `:app` and `:probe`), run in a new build-job step. It changes the build file, thus the cache key changes, and the build job saves a new cache with the runner (checked here: the task downloads 15 files for each module).
 - Run 16 (`26717e2`): all 3 jobs passed. The build job saved the new cache (key `...gradle-74e64ce1...`, about 434 MB). The emulator job API 33 restored that key and needed no retry and no download of the runner (no HTTP 429 in its log). Not chosen: more retries (6 attempts already failed); a Maven Central mirror (a new download host, an owner decision); `actions/cache` (an action that OD-4 did not approve).
 
+## Android plan session (2026-11-17)
+
+Research and documents only. No file in `src/`, `scripts/`, `test/`, `.github/` or `icons/` was changed, and not `manifest.json`.
+
+1. The owner asked: put all Adgecko jobs on an Android phone, and "think outside the extension".
+2. 12 research agents read the code and the web: browsers with extensions on Android, Android WebView, GeckoView, phone-wide DNS blocking, YouTube, Twitch and Kick on phones, native stream playback, link and text guards, and one list service for several devices.
+3. 3 designers proposed plans. 2 judges scored them. 1 agent merged the winner ("Adgecko Shield") with the best parts of the others. 1 agent checked the facts of the merged plan.
+4. New files:
+   - `docs/android/PLAN.md`: the plan. Milestone 1 is a native Android app with a local DNS filter for all apps, built from the data in `src/rules/`. The task list for the build session is in its section 13.
+   - `docs/android/research-2026-11-17.md`: the research record (a script made it from the agent results).
+5. A new cloud session started to build milestone 1.
+
+### Checks of that session
+
+Checked in that session (Linux container):
+
+- The research agents marked each fact "checked" or "not checked". The record keeps these marks.
+- Build tools in the container: JDK 21 and Gradle 8.14.3 are installed. The Android SDK manager lists packages from Google's server. GeckoView, Google Maven and Firefox downloads answer. The container has no KVM, thus no Android emulator.
+- YouTube, Twitch, Kick and the list hosts answer from the container.
+- `deno test`, `bash scripts/release-gate.sh` and `python3 -I scripts/privacy-check.py`: see the pull request of this session.
+
+Not checked:
+
+- UNVERIFIED: all behaviour on a phone. No Android code was built or run.
+- The phone model and the daily browser of the owner are not known. The plan assumes a modern Android phone (Android 13 to 16).
+
 ## Open questions for the owner
 
 1. OD-new-1: add `specialUse` as a fallback service type (a sixth permission, `FOREGROUND_SERVICE_SPECIAL_USE`)? Use: only if a phone refuses `systemExempted`. Owner decision of 2026-11-17: wait for the result of check O2 on the phone. No change until then.
 2. OD-new-2: DECIDED. The owner accepted the Gradle cache in `android.yml` (`cache: gradle` of `actions/setup-java`) and `android/ci/gradle-retry.sh` on 2026-11-17. Plan section 6.8 now records the decision.
 
-## Open from the last session
+## Open
 
-- The branch `docs/cleanup-2026-11-16` of the closed pull request 16 is not deleted. The owner can delete it on the GitHub Branches page.
+- Scratch items made by this session, outside the repository: the folder `adgecko-ab` and the two git worktrees in it (`v036`, `v037`), and the Chrome for Testing profiles `yt-bench-none`, `yt-bench-v036`, `yt-bench-v037`, `yt-bench-noA` in the user's temporary folder. Remove them only with the owner's approval: `git worktree remove` for each worktree, then the folders.
+- The old branch `docs/cleanup-2026-11-16` of the closed pull request 16 is not deleted.
+- The merged branches of PRs 21 to 26 are not deleted on GitHub. The five session worktrees in `.claude/worktrees/wf_15df4964-f50-*` and the docs worktree `adgecko-docs-wt` next to the repository folder are not removed. Remove them only with the owner's approval.
 
 ## Next steps
 
-1. Owner: review the draft pull request of the Android build. Then install the debug APK with adb and do the checks O1 to O7 (`docs/android/shield.md`, sections 4 and 5).
-2. Test 0.3.6 by hand on the owner's PC: `TODO.md`, section 1.
-3. Owner, no code: give the phone facts (OD-7), and try the unchanged extension in Vivaldi for Android (track B0).
-4. Owner decisions: OD-3 (signing) before milestone 2; the defaults OD-8 to OD-12 can change in the review.
-5. Merge order: pull request 18 (plan) first, then the Android build pull request.
+1. The owner: the signed-in YouTube test in `TODO.md`, section 0.
+2. The owner: test Kick and Twitch in real Chrome with `main` (`TODO.md`, section 1).
+3. Release 0.3.8 from `main` when the tests are done.
+4. The owner decisions that stay open: `TODO.md`, section 2, and `docs/android/PLAN.md`, section 9.
+5. Owner: review the draft pull request of the Android build. Then install the debug APK with adb and do the checks O1 to O7 (`docs/android/shield.md`, sections 4 and 5).
+6. Owner, no code: give the phone facts (OD-7), and try the unchanged extension in Vivaldi for Android (track B0).
+7. Owner decisions: OD-3 (signing) before milestone 2; the defaults OD-8 to OD-12 can change in the review.
+8. Merge order: pull request 18 (plan) first, then the Android build pull request.
