@@ -87,8 +87,9 @@ The plan is `docs/android/PLAN.md`. All phone behaviour is UNVERIFIED.
 - [x] Milestone 1 (DNS shield) is built: draft pull request 19 from `claude/android-shield-m1`. CI is green (build job, emulator API 33 and API 36). The build job makes the APK artifact `adgecko-shield-debug`.
 - [ ] Owner: install the debug APK with adb and do the checks O1 to O7 (`docs/android/shield.md`, sections 4 and 5). Report each result. Then remove the UNVERIFIED marks that the checks prove.
 - [x] Owner, on the phone (2026-11-20): the DoH upstream with NextDNS works on mobile data: 459 queries via DoH, 0 via network DNS (`HANDOFF.md`).
-- [ ] Owner, on the phone: read the NextDNS query log; check DoH on Wi-Fi and after a network change.
-- [ ] Owner decision: a "DoH only" mode. Today a DoH failure makes the Shield use plain network DNS (fail-open). "DoH only" would give SERVFAIL instead: more private, but no DNS when the DoH server is not reachable (for example a captive portal).
+- [x] Owner, on the phone (2026-11-20): the NextDNS query log shows the phone's queries.
+- [ ] Owner, on the phone: check DoH on Wi-Fi and after a network change.
+- [x] Owner decision (2026-11-20): keep the fallback to network DNS after DoH failures (no "DoH only" mode for now). "DoH only" would give SERVFAIL instead: more private, but no DNS when the DoH server is not reachable (for example a captive portal). The owner can change it later.
 - [ ] Merge order: the DoH pull request (base `claude/android-shield-m1`) after the milestone 1 pull request.
 - [ ] Owner decision OD-3 (APK signing) before milestone 2. With the CI debug key, each update needs an uninstall.
 - [ ] Check on a phone: Android accepts the foreground service type `systemExempted` for the VPN with no alarm permission (lint finding, `HANDOFF.md`).

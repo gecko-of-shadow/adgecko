@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Launcher icon: two red, round, angry eyes on an off-white (light) or black (dark)
-     background. The launcher mask sets the shape (a disc on a round mask).
-     The eyes are about 80 percent of the disc width. They stay inside the 66 dp safe zone.
-     The background is off-white in light mode and black in dark mode.
-     It follows the system light or dark theme through values-night/colors.xml.
-     The monochrome layer is for the themed icon. The launcher tints it.
-     UNVERIFIED: whether a launcher redraws the icon at once after a theme change. -->
+<!-- Launcher icon: two red, round, angry eyes on a black background. The
+     launcher mask sets the shape (a disc on a round mask). The eyes are about
+     80 percent of the disc width. They stay inside the 66 dp safe zone.
+     The background is black in light and dark mode: on the owner's Pixel the
+     launcher did not change a values-night background with the theme, and the
+     owner chose the black one (2026-11-20).
+     The monochrome layer is for the themed icon. The launcher tints it. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/launcher_background" />
     <foreground android:drawable="@drawable/launcher_eyes" />
