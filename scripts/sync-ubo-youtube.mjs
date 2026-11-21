@@ -165,8 +165,10 @@ const PATCHES = [[
     "    // carries that key, or an array with an element that does, so skip the",
     "    // full stringify/parse clone otherwise. On JSON.stringify this ran on",
     "    // every call (top CPU item on the homepage).",
-    "    const rootKey = /^\\[\\?\\.([A-Za-z_$][\\w$]*)\\]/.exec(jsonq);",
-    "    const hasRootKey = o => typeof o === 'object' && o !== null && o[rootKey[1]] !== undefined;",
+    "    // A dotted root filter \"[?.a.b.c]\" (uAssets 1fbf62c) is walked in full.",
+    "    const rootKey = /^\\[\\?\\.([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\]/.exec(jsonq);",
+    "    const rootPath = rootKey !== null ? rootKey[1].split('.') : [];",
+    "    const hasRootKey = o => { for ( const k of rootPath ) { if ( typeof o !== 'object' || o === null ) { return false; } o = o[k]; } return o !== undefined; };",
     "    const editObj = obj => {",
     "        if ( rootKey !== null && (Array.isArray(obj) ? obj.some(hasRootKey) : hasRootKey(obj)) === false ) { return; }",
     "        let clone;",
@@ -180,25 +182,30 @@ const PATCHES = [[
 // first keeps it from reading .length on DOM prototypes ("Illegal invocation").
 const ARG_PATCHES = [
   [
-    // `r` is the payload's working marker list and `t` its full list (the
-    // payload's own last branch is "else r=t"). uAssets c7e01d3 renamed these
-    // minified variables (before: list `o`, locals `e,s`); re-check the names
-    // whenever this patch stops matching.
-    "const e=()=>{let e,l,{player:i,",
-    "const e=()=>{if(!window.location.href.includes(\"/watch?\")&&!window.location.href.includes(\"/embed/\"))return void(r=t);let e,l,{player:i,",
+    // `n` is the payload's working marker list and `t` its full list (the
+    // payload's own last branch is "else n=t"). Upstream renames these
+    // minified variables from time to time (uAssets c7e01d3: list `r`, locals
+    // `e,l` / `i`; uAssets 1fbf62c: list `n`, locals `e,i` / `l`); re-check
+    // the names whenever this patch stops matching.
+    "const e=()=>{let e,i,{player:l,",
+    // Also in this patch (adgecko, 2026-11-20): when the address names another
+    // video and the marker list is empty, the list starts again. Upstream keeps
+    // an empty list until the page is not a watch page; in a live test every
+    // later video in that tab then waited 5 to 14 s with no recovery attempt.
+    // `gkv` is declared by the next patch.
+    "const e=()=>{if(!window.location.href.includes(\"/watch?\")&&!window.location.href.includes(\"/embed/\"))return void(n=t);const gk=location.pathname+\"|\"+new URLSearchParams(location.search).get(\"v\");gk!==gkv&&(gkv=gk,0===n.length&&(n=t));let e,i,{player:l,",
+  ],
+  [
+    "let r=!1,n=t;const o=",
+    "let r=!1,n=t,gkv=\"\";const o=",
   ],
   [
     "e(),new MutationObserver((()=>{e()})).observe(document,",
     "e();let q=0;new MutationObserver((()=>{q||(q=setTimeout((()=>{q=0,e()}),250))})).observe(document,",
   ],
-  // uAssets c7e01d3 dropped the optional chaining on the #masthead read. The
-  // payload runs at the top of a YouTube inline script; without #masthead (or
-  // its logo-type attribute) it throws there, before the embed-URL test and
-  // before the playback recovery is installed. Keep the earlier guarded form.
-  [
-    "document.getElementById(\"masthead\").attributes[\"logo-type\"].value",
-    "document.getElementById(\"masthead\")?.attributes?.[\"logo-type\"]?.value",
-  ],
+  // The guarded #masthead read (a third patch, added for uAssets c7e01d3) is
+  // upstream again since uAssets 1fbf62c; test/ubo-rpnt-payload.test.js still
+  // checks that the shipped payload does not throw without #masthead.
 ];
 const patchHits = new Set();
 const argPatchHits = new Set();

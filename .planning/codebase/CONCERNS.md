@@ -12,12 +12,12 @@ UNVERIFIED: all behaviour in Chrome. No statement here was proven on the owner's
 | ID | Concern | Impact |
 |---|---|---|
 | H1 | Storage quota headroom is small, and CI does not measure it | High |
-| H2 | Package size is 1.7 % below the release gate cap | High |
+| H2 | Package size is 3.8 % below the release gate cap | High |
 | H3 | The vendored Twitch script has an archived upstream and an `eval` call | High |
 | H4 | YouTube response patching depends on upstream shapes | High |
 | H5 | 0.3.6 changes behaviour in many places, and no live test was done | High |
 | M1 | Stream-site host lists exist in many files | Medium |
-| M2 | Six tests are always ignored | Medium |
+| M2 | One test is always ignored | Medium |
 | M3 | Legacy storage mirrors and migrations stay in the code | Medium |
 | M4 | Storage key strings are repeated in several files | Medium |
 | M5 | Very large files and functions | Medium |
@@ -42,12 +42,12 @@ Section 5 lists items that were checked and are not a concern now.
 - **Impact.** The upstream lists grow. If the peak goes above the quota, each refresh fails with a quota error and the lists become old. No automatic check finds the problem before a release.
 - **Action.** Run `scripts/pack-filter-lists.py`, then run the budget test with the full cache before each release, and record the peak in `TODO.md`. Do not add new stored list data before a decision about an IndexedDB store.
 
-### H2. Package size is 1.7 % below the release gate cap
+### H2. Package size is 3.8 % below the release gate cap
 
-- **What.** The gate fails when the package is larger than 8,000,000 bytes. The package has 64 files and 7,862,441 bytes. The headroom is 137,559 bytes. A scratch repack on 2026-11-16 gave 7,859,984 bytes (headroom 140,016).
-- **Evidence.** `src/rules/general-network.json` is 5,168,730 bytes. `src/rules/cosmetic-sample.json` (172,666 bytes) has no reader. `src/rules/threat-snapshot.json` (333,354 bytes) is used only when the feed is configured (M8). The gate comments record that the cap was increased two times.
+- **What.** The gate fails when the package is larger than 8,000,000 bytes. On 2026-11-20 the derived package list has 64 files and 7,732,410 bytes (with `src/LICENSE.txt`). The headroom is 267,590 bytes. Before the removal of `cosmetic-sample.json`, the list had 65 files and 7,905,076 bytes.
+- **Evidence.** `src/rules/general-network.json` is 5,168,730 bytes. `src/rules/threat-snapshot.json` (333,354 bytes) is used only when the feed is configured (M8). The gate comments record that the cap was increased two times.
 - **Impact.** The next list repack can make the gate fail. A cap that moves with each release does not catch a runaway pack.
-- **Action.** Remove `cosmetic-sample.json` from `EXTRA_OPTIONAL` in `scripts/lib/package_files.py` (owner decision). Make a decision about the snapshot. Then set the cap from the measured size plus a fixed margin.
+- **Action.** RESOLVED on 2026-11-20 (owner decision): `src/rules/cosmetic-sample.json` (172,666 bytes, no reader) is deleted. The packer does not write it, and it is not in the package list or in the gate. OPEN: make a decision about the snapshot. Then set the cap from the measured size plus a fixed margin.
 
 ### H3. The vendored Twitch script has an archived upstream and an `eval` call
 
@@ -88,11 +88,11 @@ Section 5 lists items that were checked and are not a concern now.
 - The merger lists (6 site hosts and 7 CDN hosts) do not contain `twitchcdn.com`, `ext-twitch.tv`, `kick-streamer.com` and `kickusercontent.com`. `STREAM_SITES` contains them. The effect is UNVERIFIED.
 - **Action.** Make `scripts/merge-dnr-rules.py` read the hosts from one data file, as the captcha list does.
 
-### M2. Six tests are always ignored
+### M2. One test is always ignored
 
-- The six tests and their reasons are in `TESTING.md` section 5. Two known Kick defects stay in `src/kick.js`: a hidden cover can stay hidden, and a banner collapse can hide the player.
-- `docs/proposals/kick-0.3.5-fixes.patch` applies to `src/kick.js` at this commit (`git apply --check`). After a change of `src/kick.js` it is possible that it does not apply.
-- **Action.** Get the owner decisions. For each one, apply the change and remove `ignore: true`, or remove the patch and the tests and record the decision.
+- The test and its reason are in `TESTING.md` section 5: list exceptions below a parent-domain block or with a type scope are not obeyed.
+- The owner approved the Kick corrections and the `ads.twitch.tv` block on 2026-11-20. `docs/proposals/kick-0.3.5-fixes.patch` is applied to `src/kick.js`. The three Kick tests and the two `ads.twitch.tv` tests are not ignored. The patch stays in `docs/proposals/` as a record.
+- **Action.** Fix the exception handling and remove `ignore: true`, or record a decision that the gap stays.
 
 ### M3. Legacy storage mirrors and migrations stay in the code
 
@@ -117,7 +117,7 @@ Section 5 lists items that were checked and are not a concern now.
 | `src/general-background.js` | 1,248 | |
 | `src/guards/clipboard.js` | 1,024 | 0.3.6 added more than 300 lines |
 | `scripts/release-gate.sh` | 859 | Inline Python programs |
-| `src/kick.js` | 769 | One closure, frozen |
+| `src/kick.js` | 812 | One closure, frozen |
 
 - Duplicated logic in two languages: `convertOptions` (JavaScript) and `convert_options` (Python), with shared cases in `test/fixtures/filter-options-cases.json`.
 - **Action.** Do not refactor these files without a need. If a function must change, first add behaviour tests for that part. Many tests read source text.

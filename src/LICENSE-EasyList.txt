@@ -4,6 +4,7 @@ Credit: The EasyList authors
 Homepage: https://easylist.to/
 License: GNU GPL version 3 or later, OR Creative Commons Attribution-ShareAlike 3.0 or later
 License page: https://easylist.to/pages/licence.html
+Chosen option: this package uses the material under GNU GPL version 3 or later.
 
 This package includes trimmed material from EasyList and EasyPrivacy in
 two forms:

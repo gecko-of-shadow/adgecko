@@ -919,6 +919,72 @@ function installYoutubeAdblock(target) {
   // Toast nodes this script hid, so a reused toast can be shown again.
   const hiddenToasts = new WeakSet();
 
+  // YouTube's newer popup: snackbar-container (a child of ytd-app). The
+  // interruptions message and "Link copied to clipboard" have the same markup
+  // there (live page, 2026-11-20: same elements, classes and attributes), so
+  // CSS cannot tell them apart and only the text can. English text only.
+  function isInterruptionsSnackbarText(text) {
+    return /^Experiencing interruptions\?/i.test(String(text || "").replace(/\s+/g, " ").trim());
+  }
+
+  // Hides the snackbar container while it holds the interruptions message and
+  // shows it again for any other message. allow === false only restores.
+  // Returns true while the container is hidden by this script.
+  function syncInterruptionsSnackbar(container, allow = true) {
+    if (!container || !container.style || typeof container.style.setProperty !== "function") return false;
+    if (allow !== false && isInterruptionsSnackbarText(container.textContent)) {
+      hiddenToasts.add(container);
+      // Not display:none. In Chrome for Testing 155 (2026-11-20) a container
+      // with display:none never showed the next message ("Link copied to
+      // clipboard"): YouTube's snackbar queue appears to wait for the close
+      // transition, which does not run on an element with no box.
+      container.style.setProperty("visibility", "hidden", "important");
+      container.style.setProperty("pointer-events", "none", "important");
+      return true;
+    }
+    if (hiddenToasts.has(container)) {
+      hiddenToasts.delete(container);
+      container.style.removeProperty("visibility");
+      container.style.removeProperty("pointer-events");
+    }
+    return false;
+  }
+
+  // Wires syncInterruptionsSnackbar to the page: one observer on ytd-app's
+  // direct children until snackbar-container exists, then one on that small
+  // element. No document-wide observer. Returns a function that tries to
+  // attach and reports whether ytd-app was found, or null when it cannot run.
+  function installSnackbarGuard(doc, Observer, isCosmeticOn, onError) {
+    if (typeof Observer !== "function" || !doc || typeof doc.querySelector !== "function") return null;
+    let box = null;
+    const sync = () => {
+      try {
+        syncInterruptionsSnackbar(box, isCosmeticOn() !== false);
+      } catch (error) {
+        if (typeof onError === "function") onError(error);
+      }
+    };
+    const attachBox = () => {
+      const el = doc.querySelector("snackbar-container");
+      if (!el || el === box) return;
+      box = el;
+      new Observer(sync).observe(el, { childList: true, subtree: true, characterData: true });
+      sync();
+    };
+    let appSeen = null;
+    function attachApp() {
+      attachBox();
+      const app = doc.querySelector("ytd-app");
+      if (!app || app === appSeen) return !!appSeen;
+      appSeen = app;
+      new Observer(attachBox).observe(app, { childList: true });
+      return true;
+    }
+    // For a switch change: apply it now, not only at the container's next change.
+    attachApp.sync = sync;
+    return attachApp;
+  }
+
   // restoreOnly: only undo our own earlier hides, never hide. It is the
   // default while the uBO layer is present: youtube.js has no DOM observer then,
   // so an inline hide would stay on a reused toast ("Saved", "Link copied")
@@ -1018,6 +1084,9 @@ function installYoutubeAdblock(target) {
     badGvHosts,
     isInterruptionsToast,
     removeInterruptionsToast,
+    isInterruptionsSnackbarText,
+    syncInterruptionsSnackbar,
+    installSnackbarGuard,
     shouldNudgeStart,
   });
 }
@@ -1086,6 +1155,8 @@ function startYoutubeAdblock() {
           try { homeCssEl.remove(); } catch { /* already gone */ }
           homeCssEl = null;
         }
+        // The newer interruptions popup follows the switch at once.
+        try { if (typeof snackbarResync === "function") snackbarResync(); } catch { /* guard not installed yet */ }
       });
       p.start();
     };
@@ -2190,6 +2261,19 @@ function startYoutubeAdblock() {
     const early = setInterval(() => { if (document.getElementById("movie_player")) { clearInterval(early); flashGuard.attach(); } }, 100);
     setTimeout(() => clearInterval(early), 15000);
   }
+
+  // Snackbar guard (see installSnackbarGuard). It also runs with the uBO
+  // layer, because no CSS rule can match this popup.
+  let snackbarResync = null;
+  (() => {
+    if (typeof MutationObserver !== "function" || typeof document === "undefined") return;
+    const attachApp = api.installSnackbarGuard(document, MutationObserver, () => !(typeof flagOn === "function" && !flagOn("youtubeCosmetic")), logFailOpen);
+    if (!attachApp) return;
+    snackbarResync = attachApp.sync;
+    if (attachApp()) return;
+    const early = setInterval(() => { if (attachApp()) clearInterval(early); }, 250);
+    setTimeout(() => clearInterval(early), 30000);
+  })();
 
   injectHomeFeedCss();
   document.addEventListener("yt-navigate-start", (event) => {

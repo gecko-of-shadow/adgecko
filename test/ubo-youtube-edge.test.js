@@ -32,6 +32,9 @@ Deno.test("inboundEdit: attestation requests get uBO's markers; the caller's obj
   assert(shipped.originalUntouched, "edit works on a clone");
   const twice = JSON.parse(shipped.edits.twice).playbackContext.contentPlaybackContext.referer;
   assert(twice.split("#reloadxhr").length === 2, "referer marker added once on re-stringify: " + twice);
+  // The local root-key guard walks a dotted root filter; the edit must still happen.
+  assert(JSON.parse(shipped.edits.embed).playbackContext.contentPlaybackContext.referer.endsWith("/embed/x#reloadxhr"), "embedded player request gets the marker: " + shipped.edits.embed);
+  assert(JSON.parse(shipped.edits.embedNoPath).playbackContext.contentPlaybackContext.referer.endsWith("/embed/x"), "no embeddedPlayerContext: unchanged");
 });
 
 Deno.test("inboundEdit attestationRequest guard: everything else passes through as native JSON.stringify", () => {
@@ -41,6 +44,8 @@ Deno.test("inboundEdit attestationRequest guard: everything else passes through 
   assert(shipped.edits.primitives === "undefined|null|\"x\"|5|true", "primitives " + shipped.edits.primitives);
   assert(shipped.edits.replacerSpace === '{\n  "a": 1\n}', "replacer/space kept");
   assert(shipped.toJSONCalls === 1, "unrelated object stringified once, no clone: " + shipped.toJSONCalls);
+  assert(shipped.contextToJSONCalls === 1, "context without embeddedPlayerContext: no clone: " + shipped.contextToJSONCalls);
+  assert(upstream.contextToJSONCalls > 1, "control: without the guard that object is cloned (" + upstream.contextToJSONCalls + ")");
   assert(upstream.toJSONCalls > 1, "control: without the guard every layer clones (" + upstream.toJSONCalls + ")");
 });
 
@@ -53,6 +58,7 @@ Deno.test("inboundEdit guard keeps uBO's exact output (incl. a top-level array o
 Deno.test("inboundEdit stacked twice (uBO Lite + ours): same output, still no clone", () => {
   for (const k of Object.keys(shipped.edits)) assert(double.edits[k] === shipped.edits[k], "double layer changed " + k + ": " + double.edits[k]);
   assert(double.toJSONCalls === 1, "guarded layers never clone: " + double.toJSONCalls);
+  assert(double.contextToJSONCalls === 1, "guarded layers never clone a context-only object: " + double.contextToJSONCalls);
 });
 
 Deno.test("nanoStb: only 17000ms timers with native-looking callbacks are cut to 17ms", () => {

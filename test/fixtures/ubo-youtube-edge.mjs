@@ -58,6 +58,9 @@ out.edits = {
   primitives: [undefined, null, "x", 5, true].map((v) => s(v)).join("|"),
   replacerSpace: s({ a: 1, b: 2 }, ["a"], 2),
   twice: s(JSON.parse(s(req("; channel")))),
+  // Dotted root filter "[?.context.thirdParty.embeddedPlayerContext]" (uAssets 1fbf62c).
+  embed: s({ context: { thirdParty: { embeddedPlayerContext: {} }, client: { clientName: "WEB_EMBEDDED_PLAYER", userAgent: "Mozilla/5.0 (Windows NT 10.0; channel)" } }, playbackContext: { contentPlaybackContext: { referer: "https://www.youtube.com/embed/x" } } }),
+  embedNoPath: s({ context: { thirdParty: {}, client: { clientName: "WEB_EMBEDDED_PLAYER", userAgent: "Mozilla/5.0 (Windows NT 10.0; channel)" } }, playbackContext: { contentPlaybackContext: { referer: "https://www.youtube.com/embed/x" } } }),
 };
 const original = req("; channel");
 s(original);
@@ -65,6 +68,12 @@ out.originalUntouched = original.context.client.clientScreen === undefined && or
 let toJSONCalls = 0;
 s({ a: 1, toJSON() { toJSONCalls++; return { a: 1 }; } });
 out.toJSONCalls = toJSONCalls;
+// Almost every InnerTube request has `context`. The dotted root filter
+// "[?.context.thirdParty.embeddedPlayerContext]" must not clone such an object
+// unless the full path is there (a first-key-only guard would clone it).
+let contextToJSONCalls = 0;
+s({ context: { thirdParty: {} }, toJSON() { contextToJSONCalls++; return { context: { thirdParty: {} } }; } });
+out.contextToJSONCalls = contextToJSONCalls;
 
 const bound = Function.prototype.bind.call(function () {}, null);
 delays.length = 0;
