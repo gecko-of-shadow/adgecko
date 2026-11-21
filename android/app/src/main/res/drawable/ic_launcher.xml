@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Launcher icon: a cloaked sentinel at a fire under a shimmering ward.
-     The art is 84 dp on the 108 dp layer, with blurred edges that fade to
-     black, so the launcher mask shows a soft edge. -->
+<!-- Launcher icon: two red, round, angry eyes on a round disc.
+     The eyes are about 80 percent of the disc width. They stay inside the 66 dp safe zone.
+     The background is off-white in light mode and black in dark mode.
+     It follows the system light or dark theme through values-night/colors.xml.
+     The monochrome layer is for the themed icon. The launcher tints it.
+     UNVERIFIED: whether a launcher redraws the icon at once after a theme change. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@android:color/black" />
-    <foreground android:drawable="@drawable/launcher_art" />
+    <background android:drawable="@color/launcher_background" />
+    <foreground android:drawable="@drawable/launcher_eyes" />
+    <monochrome android:drawable="@drawable/launcher_eyes_mono" />
 </adaptive-icon>
