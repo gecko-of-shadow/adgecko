@@ -18,6 +18,19 @@ Deno.test("root LICENSE: copyright line, the unmodified GPLv3 text from gnu.org,
   }
 });
 
+// Owner decision 7 (review 2026-11-16): the zip holds the project licence as
+// src/LICENSE.txt, a byte copy of the root LICENSE (the zip root takes only
+// manifest.json, src/ and icons/).
+Deno.test("src/LICENSE.txt is the root LICENSE and is in the package list", async () => {
+  const root = await Deno.readFile(new URL("../LICENSE", import.meta.url));
+  const copy = await Deno.readFile(new URL("../src/LICENSE.txt", import.meta.url));
+  assert(root.length === copy.length && root.every((b, i) => b === copy[i]), "src/LICENSE.txt differs from LICENSE: copy LICENSE to src/LICENSE.txt");
+  const pf = await Deno.readTextFile(new URL("../scripts/lib/package_files.py", import.meta.url));
+  assert(/EXTRA_REQUIRED = \[[^\]]*"src\/LICENSE\.txt"/.test(pf), "src/LICENSE.txt in EXTRA_REQUIRED");
+  const gate = await Deno.readTextFile(new URL("../scripts/release-gate.sh", import.meta.url));
+  assert(/^  src\/LICENSE\.txt$/m.test(gate) && gate.includes("|src/LICENSE\\.txt|"), "src/LICENSE.txt in the gate REQUIRED and ALLOWED_RE");
+});
+
 Deno.test("README: license and brand note; the manifest name is Adgecko", () => {
   const section = readme.slice(readme.indexOf("## License and brand"), readme.indexOf("## Links"));
   assert(/GNU General Public License version 3/.test(section) && /\[LICENSE\]\(LICENSE\)/.test(section), "licence");

@@ -6,6 +6,19 @@ Dates in this file are the owner's local date (UTC-6). The dates stored on packe
 
 ## Unreleased
 
+Five owner decisions of 2026-11-20. Not tested in real Chrome: the Kick and Twitch changes are UNVERIFIED until a run on the owner's PC proves them.
+
+### Changed
+
+- Kick: the corrections in `docs/proposals/kick-0.3.5-fixes.patch` are applied to `src/kick.js` (owner decision 1). The banner path does not collapse a box that holds the video player. A box that the banner path collapsed is shown again when its ad frame goes or when the Kick switch goes off. While a cover or a box is hidden, a removed node also starts a new pass. The pin of `src/kick.js` in `scripts/frozen-pins.json` is updated. Three Kick tests that were ignored now run.
+- Twitch: the ad host `ads.twitch.tv` and its subdomains are blocked by the extra tracker rule of the list merge. Two tests that were ignored now run.
+- Licence: for EasyList, the chosen option of its dual licence is now GPL-3.0-or-later (owner decision 5). The project `LICENSE` now ships in the zip as `src/LICENSE.txt` (owner decision 7).
+- Package: `src/rules/cosmetic-sample.json` (172,666 bytes, read by no code) is removed from the repository and the zip.
+
+### Tests
+
+- Owner decision 16: `src/rules/ubo-youtube-network.json` blocks `ads.youtube.com` on purpose. The stream-host oracle test now also checks that ruleset, with a named exception for this one host. A test fails if the exception goes stale.
+
 ### Android
 
 - New: "Adgecko Shield" milestone 1 in `android/` (`docs/android/PLAN.md`, section 6). A native app with a local DNS-only VPN filter for all apps. Its data comes from `src/rules/` at build time: 194,480 list hosts and 15,291 threat names, with the never-block rules of the extension. Controls: On/Off, "Ads + threat" or "Threat only", **Pause 10 min**, a Quick Settings tile, **Recent blocks** with **Allow this domain**, an allow list with export and import, **Exclude apps**, a Self-test, a Private DNS warning and an About screen with the licences. No AndroidX library, no account, no analytics. All phone behaviour is UNVERIFIED.
@@ -19,6 +32,23 @@ Dates in this file are the owner's local date (UTC-6). The dates stored on packe
 
 - New: `docs/android/PLAN.md`, a plan to put the Adgecko jobs on an Android phone. Milestone 1 is "Adgecko Shield", a native app with a local DNS filter for all apps. Its data comes from `src/rules/` at build time. The plan also covers a link gate, a text check, list refresh on the phone and the browser for the web-only jobs. Milestone 1 is in the Android section above. All phone behaviour is UNVERIFIED.
 - New: `docs/android/research-2026-11-17.md`, the research record for the plan.
+
+## 0.3.7 (2026-11-20)
+
+A YouTube update. Tested on 2026-11-20 in the owner's Chrome (signed in) and in Chrome for Testing 155 (not signed in), on youtube.com watch pages only. Known, not fixed: on a signed-in account YouTube can still hold a video on a black screen for 6 to 21 s when it refuses all fallback steps. Twitch, Kick and ordinary sites are unchanged from 0.3.6.
+
+### Fixes
+
+- YouTube: the uBlock Origin YouTube filters are synced to uAssets `900a2a3` (was `e140ffc`). uBlock Origin scriptlet code stays at tag 1.75.0.
+- YouTube: a possible cause of a long black screen at the start of a video is removed. In 0.3.6, uBlock Origin's start recovery could discard all its fallback steps after the first reload, and then wait with no second reload. uAssets `1fbf62c` (2026-11-17) guards this. `test/ubo-rpnt-payload.test.js` has a test that fails on the 0.3.6 payload. Seen on a live page on 2026-11-20: the 0.3.6 code skipped the `inline` step and gave up; the new code tries each step.
+- YouTube: uBlock Origin's start recovery starts its list of fallback steps again on the next video, when all steps failed on the video before. Upstream keeps the empty list; in a live test (2026-11-20) each later video in that tab then waited 5 to 14 s with no recovery attempt. This is a local change to the upstream code (`ARG_PATCHES` in `scripts/sync-ubo-youtube.mjs`). Seen to work on a live page; it does not remove the waits.
+- YouTube: the "Experiencing interruptions?" popup at the bottom left is hidden again. YouTube now shows it in a new element (`snackbar-container`) that the CSS rules did not match. The new element has the same markup as "Link copied to clipboard", so `src/youtube.js` reads the text and hides only that message; other messages stay. Limits: it works only when YouTube is in English, and it hides the message only, not the wait. Tested in Chrome for Testing 155 (not signed in): without the change the popup was visible in 3 of 3 sessions, with it in 0 of 5, and "Link copied to clipboard" still showed after it. The popup's markup was read in the owner's signed-in Chrome; the hide was not measured there.
+- YouTube: the new upstream filters for embedded players do not add work to each `JSON.stringify` call. The local root-key guard now reads a dotted filter (`[?.a.b.c]`).
+
+### Changed
+
+- YouTube: on a `www.youtube.com/embed/` page in its own tab, uBlock Origin's start recovery now runs (upstream change). Before, it stepped aside there.
+- `scripts/sync-ubo-youtube.mjs`: the first local payload patch follows the renamed upstream variables. The `#masthead` patch is removed, because upstream guards that read again.
 
 ## 0.3.6 (2026-11-16)
 
