@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "kind": "never-block",
+  "generator": "scripts/build-android-vectors.mjs",
+  "note": "neverBlockMatch(): a suffix or below one, and not an except entry or below one (same meaning as isNeverBlock())",
+  "inputs": {"suffixes":["stream.example","cdn.example","api.example.net","example.org"],"except":["ads.api.example.net","imasdk.example.org"]},
+  "cases": [
+    {"host":"stream.example","neverBlock":true},
+    {"host":"live.stream.example","neverBlock":true},
+    {"host":"a.b.stream.example","neverBlock":true},
+    {"host":"xstream.example","neverBlock":false},
+    {"host":"stream.example.test","neverBlock":false},
+    {"host":"cdn.example","neverBlock":true},
+    {"host":"img.cdn.example","neverBlock":true},
+    {"host":"api.example.net","neverBlock":true},
+    {"host":"v1.api.example.net","neverBlock":true},
+    {"host":"ads.api.example.net","neverBlock":false},
+    {"host":"x.ads.api.example.net","neverBlock":false},
+    {"host":"xads.api.example.net","neverBlock":true},
+    {"host":"example.net","neverBlock":false},
+    {"host":"other.example.net","neverBlock":false},
+    {"host":"example.org","neverBlock":true},
+    {"host":"www.example.org","neverBlock":true},
+    {"host":"imasdk.example.org","neverBlock":false},
+    {"host":"sdk.imasdk.example.org","neverBlock":false},
+    {"host":"ximasdk.example.org","neverBlock":true},
+    {"host":"unrelated.test","neverBlock":false},
+    {"host":"STREAM.EXAMPLE.","neverBlock":true},
+    {"host":"Imasdk.Example.Org","neverBlock":false}
+  ]
+}

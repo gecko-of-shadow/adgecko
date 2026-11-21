@@ -15,7 +15,7 @@ UNVERIFIED: the effect of these rules in a real Chrome page.
 - Logic that a test must run does not call `chrome.*`. The caller injects the dependencies.
 - Two playback files are frozen: `src/vendor/video-swap-new.user.js` and `src/kick.js` (section 9).
 - Do not edit a generated file by hand. Change the source and run the generator (section 8).
-- All text files use LF line ends and UTF-8.
+- All text files use LF line ends and UTF-8. One exception: `*.bat` files (the Gradle wrapper script `android/gradlew.bat`) use CRLF.
 - Do not write absolute paths, e-mail addresses, real IP addresses, tokens or names of persons in a file or a commit message. `scripts/privacy-check.py` rejects them.
 
 ## 2. Module patterns in `src/`
@@ -166,6 +166,8 @@ When you add a shipped file, add its path to `REQUIRED` and to `ALLOWED_RE` in t
 | `src/rules/cosmetic-rules.json` | EasyList and EasyPrivacy in the packer cache, extras from `src/cosmetic-hide.css` | The packer runs `scripts/pack-cosmetic.mjs` |
 | `src/vendor/video-swap-new.user.js`, `scripts/vendor-pins.json` | Upstream userscript at a pinned commit | `scripts/update-twitch-vendor.mjs`. `--check` writes nothing. |
 | `icons/icon{16,48,128}{,-working,-off}.png` | `icons/source/*.svg` | `node scripts/build-icons.mjs` |
+| `test/fixtures/android/vectors/*.json` | `scripts/lib/android-dns-policy.mjs` and the `src/threat/` modules | `deno run --no-lock --allow-read --allow-write=test/fixtures/android/vectors scripts/build-android-vectors.mjs`. `--check` writes nothing. |
+| Android Shield assets (`android/**/build/generated/`, never committed) | `src/rules/` and the `src/` modules | `scripts/export-android-data.mjs`, run by the Gradle task `ExportShieldData` |
 
 - A generated JS or CSS file names its generator in line 1. Generated metadata JSON has a UTC time field (`*_at_utc`). The vendored Twitch file is an upstream copy with no added header.
 - Tests compare generated files with the generator output (for example `test/hcaptcha-never-block.test.js`, `test/meta-counts.test.js`, `test/docs-claims.test.js` for `LICENSES.md`).
@@ -176,7 +178,7 @@ When you add a shipped file, add its path to `REQUIRED` and to `ALLOWED_RE` in t
 
 Line ends and encoding:
 
-- `.gitattributes` sets `* text=auto eol=lf`. Generated files are compared byte for byte, and a CRLF checkout on Windows failed that comparison.
+- `.gitattributes` sets `* text=auto eol=lf`. Generated files are compared byte for byte, and a CRLF checkout on Windows failed that comparison. `*.bat` files are `eol=crlf`; `*.jar` and key files are binary.
 - Each `.js`, `.css`, `.html` and `.json` file below `src/` must be valid UTF-8 (`test/final-chrome-utf8.test.js`).
 - Do not put a raw Unicode noncharacter (U+FDD0 to U+FDEF, U+xFFFE, U+xFFFF) or a lone surrogate in a file below `src/`. Write it as a `\uXXXX` escape. Chrome refused to load the extension because of one raw U+FFFF.
 
@@ -222,7 +224,7 @@ Limits that came from owner decisions and that code enforces: only the two alarm
 
 ## 12. GitHub Actions conventions
 
-- Each action is pinned to a full 40-character commit SHA, with the version in a comment. Only `actions/checkout` and `denoland/setup-deno` are used.
+- Each action is pinned to a full 40-character commit SHA, with the version in a comment. The actions in use: `actions/checkout`, `denoland/setup-deno`, and in `android.yml` only `actions/setup-java` and `actions/upload-artifact` (owner approval OD-4). `test/android-workflow.test.js` checks `android.yml`.
 - A new third-party action must be added to the permitted patterns of the repository before use (UNVERIFIED: repository settings, from a workflow comment).
 - Minimum token permissions: `contents: read`, or `contents: write` only on the release job. `persist-credentials: false` on each checkout.
 - The runner (`ubuntu-24.04`) and the Deno version (`v2.9.8`) are pinned.

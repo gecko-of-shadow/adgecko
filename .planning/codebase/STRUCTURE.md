@@ -14,7 +14,8 @@ This document tells you where each file is, what its function is, and where to a
 | `src/` | All extension code and packed data. | Yes (all files but one, see section 5) |
 | `icons/` | 9 PNG icons and 2 SVG sources. | PNG files only |
 | `scripts/` | Maintainer tools. See `STACK.md` section 6. | No |
-| `test/` | 133 Deno test files and 26 fixture files. See `TESTING.md`. | No |
+| `android/` | Adgecko Shield, the Android app (Gradle: `shield-core`, `app`, `probe`, `buildSrc`, `ci/`). See `ARCHITECTURE.md` section 18. Chrome also sees this folder when it loads the repository root, but the zip has no file from it. | No |
+| `test/` | 137 Deno test files and 31 fixture files (5 Android vector files in `test/fixtures/android/vectors/`). See `TESTING.md`. | No |
 | `docs/` | Documents, images and the review record. See section 4. | No |
 | `.github/workflows/` | GitHub Actions. See `INTEGRATIONS.md` section 8. | No |
 | `.planning/codebase/` | This codebase map. | No |
@@ -116,6 +117,7 @@ Do not read the large JSON files in full. `general-network.json` has 5,168,730 b
 | `design/` | `DESIGN-RULES.md`, `README.md`, images, `rejected/`, `screenshots/`. Tests refer to it. |
 | `review-2026-11-16/` | Record of the 0.3.6 code review: `PLAN.md`, `RESULTS.md`, `findings.json`, `repros/`. |
 | `proposals/` | `kick-0.3.5-fixes.patch`: Kick corrections. The owner approved them on 2026-11-20, and they are applied to `src/kick.js`. The file stays as a record. |
+| `android/` | `PLAN.md` (the Android plan), `research-2026-11-17.md` (its research record), `shield.md` (build, install and owner checks of Adgecko Shield). |
 
 ## 5. What goes into the release zip
 
@@ -174,6 +176,14 @@ UNVERIFIED: no change and test run proved these steps. They come from the struct
 3. Add the path to the `importScripts` call in `src/general-background.js`, after the files that it needs. Use a string literal.
 4. Add the path to `REQUIRED` and to `ALLOWED_RE` in `scripts/release-gate.sh`.
 5. If the settings page also needs the module, add a `<script>` tag to `src/settings.html` before `settings.js`.
+
+### A new Android file (Adgecko Shield)
+
+1. Pure logic that the JVM tests can run goes to `android/shield-core/src/main/kotlin/adgecko/shield/core/`. It has no Android classes.
+2. Screens, the VPN service, the tile and the store go to `android/app/src/main/kotlin/adgecko/shield/{ui,vpn,tile,store}/`. Debug-only code goes to `android/app/src/debug/`.
+3. Do not commit data from `src/rules/` below `android/`. The Gradle task `ExportShieldData` makes it at build time.
+4. A new permission or an exported component needs an owner decision. Then change `verifyManifestPolicy` in `android/app/build.gradle.kts` and `test/android-static.test.js`.
+5. A change of the DNS policy: change `scripts/lib/android-dns-policy.mjs` and the Kotlin port together, then run `scripts/build-android-vectors.mjs`.
 
 ### A new test
 

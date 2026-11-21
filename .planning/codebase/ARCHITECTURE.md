@@ -371,3 +371,15 @@ The page-world scripts write to the page console only when a debug option is on.
 - Add a stream host to `STREAM_SITES` and to the three `exclude_matches` lists together.
 - Change `settings` or `siteOverrides` only. Let the worker write the legacy mirrors.
 - Do not edit generated files or frozen files. The lists are in `CONVENTIONS.md`.
+
+## 18. Android Shield
+
+Source: `docs/android/PLAN.md` (milestone 1) and `docs/android/shield.md`. All phone behaviour is UNVERIFIED.
+
+- `android/` is a Gradle build with three modules. `:shield-core` is Kotlin/JVM with no Android classes: `HostName`, `Fnv64`, `HostSet` (sorted 64-bit hashes), `NeverBlock`, `PublicSuffix`, `DomainRules`, `DnsPolicy`, `MiniJson`, `ShieldData`, `RecentBlocks`, `VectorRunner`, `DnsMessage`, `IpPacket`, `PacketHandler`. `:app` (`adgecko.shield`) has the VPN service, the tile, the screens and the store. `:probe` is a test app for the CI emulator only.
+- Data path: Gradle task `ExportShieldData` (`android/buildSrc/`) runs `scripts/export-android-data.mjs` with Deno, read-only on the repository and with no network permission. The output is generated assets (`shield/`). `ShieldData` checks the SHA-256, the size and the line count of each file against `shield-manifest.json`.
+- List filter: whole-domain block rules of `general-network.json`, minus IP literals, minus `isNeverBlock()` hosts. Threat names: `threat-network.json` minus IP literals, minus `protectedReason()` hosts.
+- Policy layers (first match wins): Self-test marker `self-test.adgecko.test` (block), user allow list (forward), threat (block), never-block (forward), list (block in "Ads + threat" when not paused), none (forward). The JS reference is `dnsDecision()` in `scripts/lib/android-dns-policy.mjs`. Vectors and 32,730 real-data samples keep Kotlin equal to it.
+- VPN: TEST-NET /24 address, one alias for each real DNS server, routes only for the aliases. Block answer: NODATA with an SOA (MNAME `blocked.adgecko.invalid`, TTL 60). Forward: the unchanged query goes to the real server on a protected socket bound to the real network. TCP SYN to an alias on port 53 or 853 gets a RST. An internal policy error forwards the query (fail-open).
+- Manifest policy: `verifyManifestPolicy<Variant>` reads the merged manifest: exactly 5 permissions, the exported components of plan 6.3, no backup, no cleartext, system certificates only.
+- Differences from the extension: no frame context, so the YouTube and Kick frame allow of static rule 1 has no equivalent; DNS also blocks a navigation to a listed host.

@@ -6,3 +6,17 @@ scripts/.list-cache/
 __pycache__/
 *.pyc
 .playwright-mcp/
+# Android Shield (docs/android/PLAN.md section 4.2). Build output,
+# local SDK paths and signing material never go into the repository.
+android/**/build/
+android/**/.gradle/
+android/**/.kotlin/
+android/.idea/
+android/local.properties
+android/keystore.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+*.p12
+*.pem

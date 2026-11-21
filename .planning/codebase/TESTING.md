@@ -29,6 +29,7 @@ python3 -I scripts/privacy-check.py
 - There is no `deno.json`, no lock file and no package manifest. Four test files import `jsr:@std/assert@1`, which Deno downloads one time.
 - The privacy check compares `origin/main` with `HEAD`. Thus run it after the commit and before the push. `BASE_SHA` and `HEAD_SHA` change the range (section 9).
 - After a change that can have an effect on a site, load the unpacked extension in Chrome and test the site by hand. No automated test plays a real stream.
+- Android Shield: after a change below `android/`, in the Android scripts or vectors, or in `src/rules/`, also run the Gradle command of `CLAUDE.md` (JDK 21, Deno, Android SDK with `ANDROID_HOME`). The JVM tests read the export through the system properties `adgecko.vectors`, `adgecko.data` and `adgecko.samples`, which the Gradle test task sets. The device tests need an emulator: CI runs them (`android.yml`, job `emulator`).
 
 ## 2. How tests load source code
 
@@ -63,6 +64,7 @@ Style: most files define a local `function assert(c, l) { if (!c) throw new Erro
 | `stream-hosts.txt` | Hosts that Twitch, YouTube and Kick need. No threat rule can match them. |
 | `png-reader.js` | Minimal PNG reader for the icon tests. |
 | `threat-cache-mismatch/` | Three list files whose bytes differ from `src/rules/meta.json` on purpose. |
+| `android/vectors/*.json` (5 files) | Generated Android parity vectors (`scripts/build-android-vectors.mjs`): host match, never-block, DNS policy, public suffix, allow domain. Reserved names only. The Kotlin `VectorRunner` runs them on the JVM and on ART (closed set: a new file needs a Kotlin runner). |
 | `twitch-*.m3u8` (4 files), `youtube-*.json` (2 files) | Synthetic or redacted playlists and responses. |
 | `ubo-youtube-run.mjs`, `ubo-youtube-edge.mjs`, `youtube-layers-run.mjs`, `youtube-ubo-sweep-run.mjs`, `youtube-decoy-run.mjs`, `youtube-clock-run.mjs`, `youtube-sim.mjs` | Runners that load the YouTube scripts under a page shim or a virtual clock. |
 
@@ -75,7 +77,7 @@ The worker model `loadWorker(opts)`:
 
 ## 4. Test inventory
 
-`test/` has 133 test files, all in one directory, and 26 fixture files.
+`test/` has 137 test files, all in one directory, and 31 fixture files.
 
 | Subject | Test files (each name has the suffix `.test.js`) |
 |---|---|
@@ -94,6 +96,7 @@ The worker model `loadWorker(opts)`:
 | Hardening, design | `hardening`, `art-rules`, `contrast`, `icons` |
 | Package, licence, docs, tools | `packaging`, `license`, `final-chrome-utf8`, `docs-claims`, `release-tooling` |
 | Privacy checker and CI | `privacy-generic`, `privacy-mask` |
+| Android Shield | `android-data` (export, counts, never-block model, dnr-matcher cross-check), `android-vectors`, `android-static` (tracked files, deny list, IP literals, wrapper, package list), `android-workflow` |
 | One bug for each file (0.3.5 bug hunt, and two 0.3.6 files) | `nightly-<area>-<number>-<short title>` (40 files). Areas: `cosmetic`, `feed`, `guards`, `manifest-scripts`, `site-scripts`, `threat`, `ui`, `worker-refresh`. |
 
 ## 5. Ignored tests
@@ -128,6 +131,7 @@ A usual local run shows 4 ignored tests: the 1 above, the storage budget test an
 | Network, one time | The four files that import `jsr:@std/assert@1` |
 | `PRIVACY_PATTERNS` (secret) | Two tests in `privacy-generic`. CI gives the secret to the `tests` job only on a push to `main`. |
 | `scripts/.list-cache/` | `final-storage-budget` |
+| `git`, `python3` | `android-static` (`git ls-files`, `scripts/lib/package_files.py`) |
 
 No test needs a browser.
 
@@ -151,6 +155,8 @@ These tests do not check runtime behaviour. They can fail after an edit of a doc
 | `no-openphish`, `no-background-fetch`, `hardening` | Forbidden list sources, the fetch policy, page-world rules, by source scan. |
 | `icons`, `art-rules`, `contrast`, `popup-design` | Icon files, approved art, WCAG contrast from the CSS tokens, approved popup elements and wording. |
 | `privacy-generic`, `privacy-mask` | `scripts/privacy-check.py`, the text of `checks.yml` (secret use, SHA pins, runner version), the retired workflow file. |
+| `android-data`, `android-vectors` | The packed rule files and `meta.json` (counts are computed, not fixed), the committed vector files against the generator. A repack or a policy change can make them fail. |
+| `android-static`, `android-workflow` | The tracked files below `android/`, the Android manifest, `.gitignore`, `.gitattributes`, the wrapper jar SHA-256, and the text of `android.yml` (actions, SHAs, runner, permissions, artifact name). |
 
 Rule: after a change to `manifest.json`, the gate, a file in `src/rules/`, a vendor file, a CSS token, popup text, a workflow, `README.md` or a file in `docs/`, expect failures in this table.
 
@@ -189,6 +195,7 @@ What it scans: the diff between `BASE_SHA` and `HEAD_SHA`, the full content of e
 - No test downloads a real filter list. The storage budget test reads a local cache, and CI ignores it.
 - The one test in section 5 is a known gap.
 - The signed feed is dormant. Its tests use keys made in memory.
+- Android Shield: no test runs on a real phone. The JVM tests check the policy, the data and the packet code. The ART vector test and the VPN probe test run only on the CI emulator. All phone behaviour is UNVERIFIED.
 - The 0.3.6 corrections were checked in headless Chromium only in part. No run on the owner's PC or on live sites was done (`HANDOFF.md`).
 
 ## 11. How to add a test
@@ -201,6 +208,7 @@ What it scans: the diff between `BASE_SHA` and `HEAD_SHA`, the full content of e
 6. If the correction is not approved, keep the test with `ignore: true` and write the reason above the test.
 7. Put shared data and harness modules in `test/fixtures/`.
 8. Run the commands of section 1.
+9. Android: a Kotlin test for pure logic goes to `android/shield-core/src/test/`; for the store and import logic to `android/app/src/test/`; for ART or the VPN to `android/app/src/androidTest/` or `android/probe/src/androidTest/`. Use reserved names (`*.test`, `*.example`) and documentation IP ranges only.
 
 Cautions:
 

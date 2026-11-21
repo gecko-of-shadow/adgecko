@@ -5,3 +5,9 @@
 *.png binary
 *.ico binary
 *.zip binary
+# Android Shield (docs/android/PLAN.md section 4.2).
+*.bat text eol=crlf
+*.jar binary
+*.jks binary
+*.keystore binary
+*.webp binary

@@ -1,0 +1,163 @@
+name: android
+
+# Adgecko Shield, milestone 1 (docs/android/PLAN.md section 6.8). Owner
+# approval OD-4: two more GitHub-owned actions (actions/setup-java,
+# actions/upload-artifact) and an emulator job with no third-party action.
+# Not a required check: it has a paths filter.
+on:
+  pull_request:
+    paths:
+      - "android/**"
+      - "scripts/export-android-data.mjs"
+      - "scripts/build-android-vectors.mjs"
+      - "scripts/lib/android-*.mjs"
+      - "test/fixtures/android/**"
+      - "src/rules/**"
+      - "src/threat/**"
+      - "src/general/**"
+      - "LICENSE"
+      - "src/LICENSE-EasyList.txt"
+      - ".github/workflows/android.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "android/**"
+      - "scripts/export-android-data.mjs"
+      - "scripts/build-android-vectors.mjs"
+      - "scripts/lib/android-*.mjs"
+      - "test/fixtures/android/**"
+      - "src/rules/**"
+      - "src/threat/**"
+      - "src/general/**"
+      - "LICENSE"
+      - "src/LICENSE-EasyList.txt"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Actions are pinned to full commit SHAs (security review L-13). The two new
+# GitHub-owned actions were resolved with `git ls-remote` on 2026-11-17:
+#   actions/checkout v7.0.1 -> 3d3c42e5aac5ba805825da76410c181273ba90b1
+#   actions/setup-java v6.3.0 -> d1374f8ac74474200d16ef8ecee22c7ae7a51880
+#   denoland/setup-deno v2.0.5 -> 22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+#   actions/upload-artifact v7.0.2 -> cf430e030ddbb5b0abf93d22962f4752f3646cd9
+# No secret, no pull_request_target. Values from contexts go into env: first.
+# Gradle cache: the built-in cache of actions/setup-java (cache: gradle), no
+# other action. Reason: Maven Central answered HTTP 429 "Too Many Requests" in
+# runs 8 and 10 of 2026-11-17, because each job downloaded all dependencies
+# again (the plan had no cache in M1, "add it later"). The workflow has no
+# secret and contents: read only, so a poisoned cache can reach no secret.
+# Gradle runs through android/ci/gradle-retry.sh, which repeats only on 429.
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      # The source commit for the About screen. On a pull request GITHUB_SHA
+      # is a temporary merge commit, so use the head SHA.
+      ADGECKO_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install JDK 21
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Install Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.8
+
+      - name: Check the Gradle wrapper jar
+        run: echo "621008afc4f5d59357fcf06ffa644dd5aade5e091bdc363742710445f73cdaf8  android/gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
+
+      - name: Ensure Android platform 36 and build-tools 36.0.0
+        run: bash android/ci/sdk-packages.sh
+
+      - name: Build and test
+        run: bash android/ci/gradle-retry.sh :shield-core:test :app:testDebugUnitTest :app:lintDebug :app:verifyManifestPolicyDebug :app:assembleDebug :app:assembleDebugAndroidTest :probe:assembleDebug :probe:assembleDebugAndroidTest
+
+      # The emulator jobs restore the cache that this job saves. Without this
+      # step the cache has no device-test runner (UTP), and Maven Central can
+      # refuse its download with HTTP 429 (CI run 15).
+      - name: Put the device-test runner into the Gradle cache
+        run: bash android/ci/gradle-retry.sh :app:resolveDeviceTestTools :probe:resolveDeviceTestTools
+
+      - name: Upload the debug APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: adgecko-shield-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload the lint report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lint-report
+          path: android/app/build/reports/lint-results-debug.html
+          retention-days: 7
+          if-no-files-found: ignore
+
+  emulator:
+    name: emulator (API ${{ matrix.api }})
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [33, 36]
+    env:
+      API_LEVEL: ${{ matrix.api }}
+      ADGECKO_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install JDK 21
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Install Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.8
+
+      - name: Check the Gradle wrapper jar
+        run: echo "621008afc4f5d59357fcf06ffa644dd5aade5e091bdc363742710445f73cdaf8  android/gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
+
+      - name: Ensure Android platform 36 and build-tools 36.0.0
+        run: bash android/ci/sdk-packages.sh
+
+      - name: Run the device tests on the emulator
+        run: bash android/ci/emulator-run.sh "$API_LEVEL"
+
+      - name: Upload logcat and test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: emulator-api-${{ matrix.api }}
+          path: |
+            android/build/ci/
+            android/app/build/reports/androidTests/
+            android/probe/build/reports/androidTests/
+          retention-days: 7
+          if-no-files-found: ignore

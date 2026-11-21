@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon: a cloaked sentinel at a fire under a shimmering ward.
+     The art is 84 dp on the 108 dp layer, with blurred edges that fade to
+     black, so the launcher mask shows a soft edge. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@android:color/black" />
+    <foreground android:drawable="@drawable/launcher_art" />
+</adaptive-icon>

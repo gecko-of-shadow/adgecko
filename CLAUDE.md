@@ -14,6 +14,7 @@
 | Tools, scripts, Chrome APIs, vendored code | `STACK.md` |
 | Add or change a test, a check fails, edit a document | `TESTING.md` |
 | Select the next work | `CONCERNS.md` |
+| Android Shield (`android/`, `scripts/*android*`) | `ARCHITECTURE.md` section 18, `docs/android/PLAN.md`, `docs/android/shield.md` |
 
 If the code and the map disagree, the code is correct. Then correct the map in the same pull request.
 
@@ -41,6 +42,12 @@ bash scripts/release-gate.sh
 
 ```bash
 python3 -I scripts/privacy-check.py
+```
+
+After a change below `android/`, in `scripts/*android*`, in `test/fixtures/android/` or in `src/rules/`, also run the Android build (JDK 21, Deno and the Android SDK with `ANDROID_HOME`; details in `docs/android/shield.md`):
+
+```bash
+./android/gradlew -p android --no-daemon :shield-core:test :app:testDebugUnitTest :app:lintDebug :app:verifyManifestPolicyDebug :app:assembleDebug :app:assembleDebugAndroidTest :probe:assembleDebug :probe:assembleDebugAndroidTest
 ```
 
 The last line of the gate must be `VERDICT: CLEAN`. The privacy check compares `origin/main` with `HEAD`, thus run it after the commit. Details and necessary tools: `TESTING.md` section 1.

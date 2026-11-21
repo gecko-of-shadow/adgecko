@@ -15,6 +15,7 @@ UNVERIFIED: all behaviour in Chrome and on Windows. No script that downloads was
 - Third-party code is copied into the repository. Pin records and tests replace a lockfile (section 7).
 - The tools in `scripts/` use Deno, Python 3 (standard library only), Bash, ripgrep and zip. Two scripts use Node.js.
 - The tests in `test/` are Deno tests. GitHub Actions runs the tests, a privacy scan and the release gate.
+- Exception: the Android app in `android/` (Adgecko Shield) has a Gradle build: Kotlin, the Gradle wrapper 9.9.1, the Android Gradle Plugin 9.5.1, JDK 21 and the Android SDK. It is not part of the extension. See `ARCHITECTURE.md` section 18.
 
 ## 2. Languages
 
@@ -76,6 +77,10 @@ Web platform APIs: `fetch` in the worker (list downloads and reads of package fi
 | `git` | No pin | uBlock Origin sync, privacy scan, gate section 1b, reproducible zip time |
 | Node.js | 22 or later for `scripts/lib/chrome-shot.mjs` | `scripts/build-icons.mjs`, `scripts/bench-youtube.mjs` (not in CI) |
 | `gh` CLI | No pin | The release workflow |
+| JDK | 21 (`actions/setup-java`, Temurin) | The Android build only |
+| Gradle | 9.9.1, through `android/gradlew`. The wrapper jar SHA-256 is checked in CI and in `test/android-static.test.js`. | The Android build only |
+| Android Gradle Plugin, Kotlin | AGP 9.5.1 (built-in Kotlin for `:app` and `:probe`), Kotlin 2.4.21 (`android/gradle/libs.versions.toml`) | The Android build only |
+| Android SDK | platform 36, build-tools 36.0.0; `ANDROID_HOME` must be set. Not in the repository. | The Android build only |
 
 Remote module: four test files import `jsr:@std/assert@1`. Deno must download it one time. `--no-lock` means that no lockfile pins it.
 
@@ -97,8 +102,10 @@ Remote module: four test files import `jsr:@std/assert@1`. Deno must download it
 | `scripts/release-notes.py` | Python 3 | Prints the `CHANGELOG.md` section for one version. | No |
 | `scripts/build-icons.mjs` | Node.js | Renders `icons/*.png` from `icons/source/*.svg` with a local Chrome or with Playwright. | No |
 | `scripts/bench-youtube.mjs` | Node.js with Puppeteer | YouTube page-load benchmark for the unpacked extension. | Yes |
+| `scripts/export-android-data.mjs` | Deno, read-only | Exports the Adgecko Shield data (host files, never-block, PSL, licences, manifest) from `src/rules/` and the `src/` modules. A pure builder `buildShieldData()` and a CLI (`--out`, `--samples`). Gradle runs it. | No |
+| `scripts/build-android-vectors.mjs` | Deno | Writes the 5 Android parity vector files. `--check` writes nothing. | No |
 
-Libraries in `scripts/lib/`: `package_files.py` (the one derived list of package files; checks a zip), `curben_check.py` (list source rule), `feed-tools.mjs` (key and signature helpers), `twitch-vendor.mjs` (helpers and pin sites of the Twitch update), `ubo-commit-pin.mjs` (which uBlock Origin commit the sync can run), `youtube-local-patches.mjs` and `youtube-expire-window.mjs` (local YouTube changes that the sync applies), `chrome-shot.mjs` (HTML to PNG with a local Chrome).
+Libraries in `scripts/lib/`: `android-dns-policy.mjs` (the JS reference `dnsDecision()` of the Android DNS policy), `package_files.py` (the one derived list of package files; checks a zip), `curben_check.py` (list source rule), `feed-tools.mjs` (key and signature helpers), `twitch-vendor.mjs` (helpers and pin sites of the Twitch update), `ubo-commit-pin.mjs` (which uBlock Origin commit the sync can run), `youtube-local-patches.mjs` and `youtube-expire-window.mjs` (local YouTube changes that the sync applies), `chrome-shot.mjs` (HTML to PNG with a local Chrome).
 
 Each script starts with a header that gives its purpose and its command line. Read the header before you run a script.
 
@@ -122,8 +129,9 @@ Each script starts with a header that gives its purpose and its command line. Re
 | File | Content |
 |---|---|
 | `manifest.json` | The extension manifest. |
-| `.gitattributes` | `* text=auto eol=lf`. `*.png`, `*.ico` and `*.zip` are binary. |
-| `.gitignore` | `.DS_Store`, `Thumbs.db`, `*.zip`, the two packer caches, Python cache files, `.playwright-mcp/`. |
+| `.gitattributes` | `* text=auto eol=lf`. `*.png`, `*.ico`, `*.zip`, `*.jar`, `*.jks`, `*.keystore` and `*.webp` are binary. `*.bat` has CRLF. |
+| `.gitignore` | `.DS_Store`, `Thumbs.db`, `*.zip`, the two packer caches, Python cache files, `.playwright-mcp/`, the Android build folders, `android/local.properties`, `android/keystore.properties`, and APK, bundle, key and certificate files. |
+| `android/gradle/libs.versions.toml`, `android/gradle/wrapper/gradle-wrapper.properties` | Android library and plugin versions; the Gradle distribution with its SHA-256. |
 | `scripts/vendor-pins.json`, `scripts/frozen-pins.json` | Pin records (section 7). |
 | `src/rules/never-block-captcha.json` | Source list of captcha host suffixes. Not in the zip. |
 | `src/feed/config.js`, `src/feed/keys.js` | Feed origin and public keys. Both are empty. |
