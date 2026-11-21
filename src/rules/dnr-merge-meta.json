@@ -1,5 +1,5 @@
 {
-  "merged_at_utc": "2026-11-14T23:01:40Z",
+  "merged_at_utc": "2026-11-20T19:52:01Z",
   "ruleset_id": "general",
   "path": "src/rules/general-network.json",
   "allow_rules": 3,
@@ -30,6 +30,7 @@
   "extra_tracker_domains": [
     "facebook.net",
     "fundingchoicesmessages.google.com",
-    "imasdk.googleapis.com"
+    "imasdk.googleapis.com",
+    "ads.twitch.tv"
   ]
 }

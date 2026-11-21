@@ -16,20 +16,23 @@ const ARG_PATCHES = new Function("return " + patchSrc.slice(patchSrc.indexOf("["
 const upstream = ARG_PATCHES.reduceRight((s, [from, to]) => s.replace(to, from), shipped);
 
 function run(payload, href, state = {}) {
-  const calls = { stats: 0, loadVideoById: 0, seekTo: 0, logs: 0 };
+  const calls = { stats: 0, loadVideoById: 0, seekTo: 0, logs: 0, loaded: [] };
+  // The video the address names: ?v= on a watch page, the last path part on /embed/.
+  const videoOf = (loc) => new URLSearchParams(loc.search).get("v") || loc.pathname.split("/").pop();
   const timers = [];
   let observerCb = null;
   let ready = null;
   const progress = { duration: 100, loaded: 10, current: 0 };
   const player = {
-    getPlayerResponse: () => ({ videoDetails: { videoId: "abc" }, playabilityStatus: { status: "OK" }, playerConfig: {} }),
+    // state.reloadxhr: the response of a video that uBO's recovery already reloaded once.
+    getPlayerResponse: () => ({ videoDetails: { videoId: state.playerVideo || videoOf(location) }, playabilityStatus: { status: "OK" }, playerConfig: {}, playbackTracking: state.reloadxhr ? { videostatsPlaybackUrl: { baseUrl: "https://s.youtube.com/api/stats/playback?referrer=x%23reloadxhr" } } : undefined }),
     getStatsForNerds: () => { calls.stats++; return state.stats ?? { debug_info: "", buffer_health_seconds: "1.00 s", resolution: "1920x1080" }; },
     getProgressState: () => progress,
     getPlayerStateObject: () => ({ isBuffering: !!state.buffering }),
-    loadVideoById: () => { calls.loadVideoById++; },
+    loadVideoById: (id) => { calls.loadVideoById++; calls.loaded.push(id); },
     seekTo: () => { calls.seekTo++; },
   };
-  const location = { href, search: new URL(href).search };
+  const location = { href, search: new URL(href).search, pathname: new URL(href).pathname };
   const win = {
     location,
     ytInitialData: {},
@@ -39,7 +42,7 @@ function run(payload, href, state = {}) {
     Promise: { prototype: { then: Promise.prototype.then } },
   };
   const doc = {
-    // uAssets c7e01d3 reads #masthead's logo-type without optional chaining.
+    // uAssets c7e01d3 read #masthead's logo-type without optional chaining; 1fbf62c guards it again.
     // state.masthead: undefined = a normal header, null = no header, or a stand-in element.
     getElementById: (id) => (id === "movie_player" ? player : id === "masthead" ? (state.masthead === undefined ? { attributes: { "logo-type": { value: "" } } } : state.masthead) : null),
     addEventListener: (type, fn) => { if (type === "DOMContentLoaded") ready = fn; },
@@ -53,7 +56,7 @@ function run(payload, href, state = {}) {
   const consoleFake = { log: () => { calls.logs++; } };
   new Function("window", "document", "location", "MutationObserver", "setTimeout", "console", "URLSearchParams",
     payload.replace(/\$1$/, ""))(win, doc, location, MO, setTimeoutFake, consoleFake, URLSearchParams);
-  // On an /embed/ URL the payload returns before it registers anything.
+  // With a Premium header the payload returns before it registers anything.
   if (ready) ready();
   return {
     installed: !!ready,
@@ -62,6 +65,7 @@ function run(payload, href, state = {}) {
     mutate(n) { for (let i = 0; i < n; i++) observerCb([]); },
     flush() { while (timers.length) timers.shift()(); },
     push(v) { Reflect.apply(win.Array.prototype.push, [], [v]); },
+    goTo(href) { const u = new URL(href); location.href = href; location.search = u.search; location.pathname = u.pathname; },
   };
 }
 
@@ -103,8 +107,13 @@ Deno.test("rpnt payload: push trap never reads .length on a non-Uint8Array", () 
   proto.constructor = { name: "HTMLCollection" };
   for (const payload of [upstream, shipped]) {
     const r = run(payload, "https://www.youtube.com/");
+    // The wait-reply handler polls the player (getStatsForNerds); upstream no
+    // longer logs, so the poll count is the sign that the trap took the value.
+    const before = r.calls.stats;
     r.push(proto);
-    assert(r.calls.logs === 0, "not a wait reply");
+    assert(r.calls.stats === before, "not a wait reply");
+    r.push(new Uint8Array(105));
+    assert(r.calls.stats === before + 1, "control: a real wait reply does poll the player");
   }
 });
 
@@ -116,24 +125,83 @@ Deno.test("rpnt payload: 105-byte wait reply reloads the same way", () => {
     r.push(new Uint8Array(new ArrayBuffer(200), 0, 105));
     r.mutate(1); r.flush();
     assert(r.calls.loadVideoById === 0, "no reload without a real wait reply");
+    const polls = r.calls.stats;
     r.push(new Uint8Array(105));
-    assert(r.calls.logs === 1, "wait reply logged once");
+    // uAssets 1fbf62c removed the console.log of the wait reply; the player poll shows that the trap saw it.
+    assert(r.calls.stats === polls + 1 && r.calls.logs === 0, "wait reply seen once, not logged");
     r.mutate(5); r.flush();
     assert(r.calls.loadVideoById === 1, "one reload: " + r.calls.loadVideoById);
     assert(r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent.includes("; channel"), "UA hint");
   }
 });
 
-Deno.test("rpnt payload: no #masthead, or no logo-type attribute, does not throw (upstream does)", () => {
+Deno.test("rpnt payload: repeated wait replies after a reload use up one marker, not all of them", () => {
+  // Before uAssets 1fbf62c each wait reply dropped one more marker while the
+  // response carried #reloadxhr. Four replies before the next check emptied the
+  // list (channel, yahi, inline, oaeb), and the recovery then gave up with no
+  // second reload. The 250ms check interval (ARG_PATCHES) can widen the window for such a burst.
+  const stuck = { reloadxhr: true, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
+  for (const payload of [upstream, shipped]) {
+    const r = run(payload, "https://www.youtube.com/watch?v=abc", stuck);
+    for (let i = 0; i < 4; i++) r.push(new Uint8Array(105));
+    r.mutate(5); r.flush();
+    assert(r.calls.loadVideoById === 1, "one reload after the burst: " + r.calls.loadVideoById);
+    const ua = r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent;
+    assert(ua.includes("; yahi"), "only the first marker was used up: " + ua);
+  }
+});
+
+Deno.test("rpnt payload: an empty marker list starts again on the next video (upstream keeps it empty)", () => {
+  // Live test 2026-11-20: all four markers failed on one video; upstream then
+  // made no recovery attempt for any later video in that tab.
+  const stuck = { reloadxhr: true, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
+  const useUp = (r) => {
+    for (let i = 0; i < 6; i++) { r.push(new Uint8Array(105)); r.mutate(1); r.flush(); }
+    assert(r.calls.loadVideoById === 3, "yahi, inline and oaeb each got one reload: " + r.calls.loadVideoById);
+    assert(!/; (channel|yahi|inline|oaeb)/.test(r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent), "list empty: UA marker cleared");
+  };
+  const up = run(upstream, "https://www.youtube.com/watch?v=abc", stuck);
+  useUp(up);
+  up.goTo("https://www.youtube.com/watch?v=def");
+  for (let i = 0; i < 3; i++) { up.push(new Uint8Array(105)); up.mutate(1); up.flush(); }
+  assert(up.calls.loadVideoById === 3, "upstream: no recovery on the next video: " + up.calls.loadVideoById);
+
+  const ours = run(shipped, "https://www.youtube.com/watch?v=abc", stuck);
+  useUp(ours);
+  // Same video, more page changes: the list stays empty (no reload loop on one video).
+  for (let i = 0; i < 3; i++) { ours.push(new Uint8Array(105)); ours.mutate(1); ours.flush(); }
+  assert(ours.calls.loadVideoById === 3, "same video: still given up: " + ours.calls.loadVideoById);
+  ours.goTo("https://www.youtube.com/watch?v=def");
+  ours.mutate(1); ours.flush();
+  ours.push(new Uint8Array(105)); ours.mutate(1); ours.flush();
+  assert(ours.calls.loadVideoById === 4, "next video: recovery runs again: " + ours.calls.loadVideoById);
+  assert(ours.calls.loaded.slice(0, 3).every((id) => id === "abc") && ours.calls.loaded[3] === "def", "reloads: abc x3, then def: " + ours.calls.loaded.join());
+  assert(/; (channel|yahi)/.test(ours.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent), "a marker is in use again");
+});
+
+Deno.test("rpnt payload: a list that is not empty keeps its place on the next video", () => {
+  const stuck = { reloadxhr: true, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
+  const r = run(shipped, "https://www.youtube.com/watch?v=abc", stuck);
+  r.push(new Uint8Array(105)); r.mutate(1); r.flush();
+  assert(r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent.includes("; yahi"), "first video ends on yahi");
+  r.goTo("https://www.youtube.com/watch?v=def");
+  r.mutate(1); r.flush();
+  assert(r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent.includes("; yahi"), "next video keeps the working marker");
+  r.push(new Uint8Array(105)); r.mutate(1); r.flush();
+  assert(r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent.includes("; inline"), "and goes on from there, not from the start");
+});
+
+Deno.test("rpnt payload: no #masthead, or no logo-type attribute, does not throw", () => {
   const threw = (fn) => { try { fn(); return ""; } catch (e) { return String(e && e.message); } };
   for (const masthead of [null, { attributes: {} }]) {
     for (const href of ["https://www.youtube.com/watch?v=abc", "https://www.youtube.com/", "https://www.youtube.com/embed/abc"]) {
       const label = (masthead ? "no logo-type" : "no #masthead") + " on " + href;
-      // Upstream reads the header first, so it throws even on the embed URL it would skip.
-      assert(/Cannot read properties of (null|undefined)/.test(threw(() => run(upstream, href, { masthead }))), "upstream throws: " + label);
-      let r;
-      assert(threw(() => { r = run(shipped, href, { masthead }); }) === "", "shipped does not throw: " + label);
-      assert(r.installed === !href.includes("/embed/"), "recovery installed except on embed: " + label);
+      for (const payload of [upstream, shipped]) {
+        let r;
+        assert(threw(() => { r = run(payload, href, { masthead }); }) === "", "does not throw: " + label);
+        // Since uAssets 1fbf62c the recovery is also installed on an /embed/ URL.
+        assert(r.installed === true, "recovery installed: " + label);
+      }
     }
   }
   const stuck = { masthead: null, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
@@ -143,4 +211,61 @@ Deno.test("rpnt payload: no #masthead, or no logo-type attribute, does not throw
   assert(r.calls.loadVideoById === 1, "recovery still reloads without a header: " + r.calls.loadVideoById);
   const premium = run(shipped, "https://www.youtube.com/watch?v=abc", { masthead: { attributes: { "logo-type": { value: "YOUTUBE_PREMIUM_LOGO" } } } });
   assert(premium.installed === false, "Premium header: the payload still steps aside");
+});
+
+Deno.test("rpnt payload: on an /embed/ page the embed marker list is used, and it starts again on the next embed", () => {
+  // An /embed/ address has no v parameter: the next video is seen through the path.
+  const marker = (r) => (r.win.ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent.match(/; (channel|yahi|inline|oaeb|eafg)/) || [])[1] || "";
+  const step = (r) => { r.push(new Uint8Array(105)); r.mutate(1); r.flush(); };
+  const useUp = (r, state) => {
+    step(r);
+    assert(marker(r) === "channel" && r.calls.loadVideoById === 1, "first stall: channel, got " + marker(r));
+    state.reloadxhr = true;
+    step(r);
+    assert(marker(r) === "eafg" && r.calls.loadVideoById === 2, "second marker of the embed list is eafg, got " + marker(r));
+    step(r);
+    assert(marker(r) === "" && r.calls.loadVideoById === 2, "embed list used up: marker cleared, no third reload");
+  };
+  const stuck = () => ({ reloadxhr: false, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true });
+
+  const upState = stuck();
+  const up = run(upstream, "https://www.youtube.com/embed/abc", upState);
+  useUp(up, upState);
+  up.goTo("https://www.youtube.com/embed/def");
+  step(up); step(up);
+  assert(up.calls.loadVideoById === 2, "upstream: no recovery on the next embed: " + up.calls.loadVideoById);
+
+  const state = stuck();
+  const ours = run(shipped, "https://www.youtube.com/embed/abc", state);
+  useUp(ours, state);
+  step(ours);
+  assert(ours.calls.loadVideoById === 2, "same embed: still given up");
+  ours.goTo("https://www.youtube.com/embed/def");
+  ours.mutate(1); ours.flush();
+  step(ours);
+  assert(ours.calls.loadVideoById === 3 && marker(ours) !== "", "next embed: recovery runs again with a marker: " + marker(ours));
+  assert(ours.calls.loaded.join() === "abc,abc,def", "reloads: abc x2, then def: " + ours.calls.loaded.join());
+});
+
+Deno.test("rpnt payload: the address changes before the player does; the refilled list reloads nothing by itself", () => {
+  // During a click YouTube changes the address first and the player response a little later.
+  // The patch only refills the marker list; a reload still needs a wait reply and a stalled player.
+  const step = (r) => { r.push(new Uint8Array(105)); r.mutate(1); r.flush(); };
+  const state = { reloadxhr: true, stats: { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" }, buffering: true };
+  const r = run(shipped, "https://www.youtube.com/watch?v=abc", state);
+  for (let i = 0; i < 6; i++) step(r);
+  assert(r.calls.loaded.join() === "abc,abc,abc", "first video: three reloads of abc, then the list is empty: " + r.calls.loaded.join());
+  // The address names def, the player still shows abc, and it has stopped stalling.
+  state.playerVideo = "abc";
+  state.stats = { debug_info: "", buffer_health_seconds: "1.00 s", resolution: "1920x1080" };
+  state.buffering = false;
+  r.goTo("https://www.youtube.com/watch?v=def");
+  for (let i = 0; i < 5; i++) { r.mutate(1); r.flush(); }
+  assert(r.calls.loadVideoById === 3, "no reload from the address change alone: " + r.calls.loaded.join());
+  // The player response follows, and def stalls with a wait reply: def is reloaded, never abc.
+  state.playerVideo = "";
+  state.stats = { debug_info: "", buffer_health_seconds: "0.00 s", resolution: "0x0" };
+  state.buffering = true;
+  step(r);
+  assert(r.calls.loaded.join() === "abc,abc,abc,def", "the stall on the new video reloads def: " + r.calls.loaded.join());
 });

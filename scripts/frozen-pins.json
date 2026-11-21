@@ -2,8 +2,8 @@
   "_comment": "Content pins for the frozen playback files. scripts/release-gate.sh section 1b compares each file with its pin, in repo mode and in zip mode. A change to a pin is an owner decision. The Twitch entry must equal the twitch pin in scripts/vendor-pins.json (test/release-tooling.test.js).",
   "frozen": {
     "src/kick.js": {
-      "sha256": "b0683dee5599c6f3f148f3e0d8e1240c93721756e9d0075cdee83d9a95a80a60",
-      "bytes": 28148
+      "sha256": "b4230d325f4f4a3fda1aa73fe621d5b615c44fa6fa16e4e063896a198399d5fe",
+      "bytes": 29743
     },
     "src/vendor/video-swap-new.user.js": {
       "sha256": "ef804d16e4d7623554aec59b1608097b5059ac7a337ee4e22120efb955c3b6f4",

@@ -5,6 +5,7 @@
 - Language: ASD-STE100.
 - Status: plan. A research session made it on 2026-11-17 with 17 agents: 12 research agents (the evidence is in `docs/android/research-2026-11-17.md`), 3 designers, 2 judges, 1 merge agent and 1 fact checker.
 - Next step: a cloud build session does milestone 1 (section 6). The ordered task list is in section 13.
+- Records of the research session: `docs/android/session-2026-11-17.md` (course of the session, state at the archive, open items, lessons) and `docs/android/design-panel-2026-11-17.md` (the three designs, the judges, the fact check, the workflow scripts).
 - Rule for all phone claims: each phone behaviour in this plan is UNVERIFIED until a run on the owner's phone proves it.
 
 ---
