@@ -2,6 +2,34 @@
 
 Last update: 2026-11-20.
 
+## DoH upstream for the Shield (2026-11-20, branch `claude/android-shield-doh`)
+
+The owner asked: "Can I have the protection of Adgecko Shield and NextDNS?" Private DNS in hostname mode sends app DNS past the Shield, so the two do not work side by side. The answer is a chain: the Shield decides block or forward, and it sends allowed queries to a DoH URL (NextDNS) instead of plain UDP to the network DNS servers.
+
+- Built: `Doh.kt` in `:shield-core` (`DohUrl`, `DohClient` with one total time limit and a watchdog, `DohBreaker`, `DohStats`, `DohRoute`), the wiring in `Upstream`, `ShieldVpnService`, `ShieldState`, `ShieldStore`, the section "Upstream DNS (DoH)" on the main screen, `docs/android/shield.md` section 7, `CHANGELOG.md`. Version `0.1.1-doh` (versionCode 2).
+- Review: a first review (3 lenses, 1 skeptic for each finding) confirmed 5 findings: a crash on a DoH answer of more than 65,507 bytes, no total time limit for one DoH try, one slow query that stopped DoH for all apps, plaintext after the deadline, a test that did not check the URL path. All are fixed, with JVM tests. A second review of the fixes (2 lenses, 1 skeptic for each finding) confirmed 1 medium finding: while the breaker was open, the status line hid the DoH failure code. It and 6 low findings are fixed (`DohStats.lastFailure`, checks of the time limit after each step, one source for the host and the counts, no keyboard learning in the URL field, 2 doc sentences, `PLAN.md` privacy rule 4, a test of the 2.5 s limit).
+- Decision (lead, reversible): a DoH answer that is larger than the UDP size of the client goes to the network DNS path. Not chosen: a local reply with the truncation flag, because the client then retries over TCP and the Shield refuses TCP, so the lookup fails. The status line shows how often this happens ("last reason answer larger than client limit").
+- Decision (lead, reversible): after DoH failures, the Shield uses plain network DNS (fail-open). A "DoH only" mode is an owner decision (`TODO.md`).
+- Privacy: the URL path holds the private profile ID. The screen, the status line and the logs show the host only. The URL field never shows the saved URL. No profile ID is in the repository.
+
+Checked on the owner's PC (JDK 21, local Android SDK):
+
+- Gradle `:shield-core:test :app:testDebugUnitTest :app:lintDebug :app:verifyManifestPolicyDebug :app:assembleDebug --rerun-tasks`: BUILD SUCCESSFUL. `:shield-core` 61 tests (42 in `DohTest`) and `:app` 6 tests, 0 failures. The debug APK is 5,144,335 bytes.
+- `deno test` of the 4 Android tests: 25 passed. The full suite: 906 passed, 1 failed. The failure is `release-tooling` ("password= in src/x.js"). It fails on the base commit `bcdfb12` too (run on the owner's PC in this session).
+
+Not checked:
+
+- UNVERIFIED: all phone behaviour. The main premise: the own package can resolve the DoH host and connect on the underlying network through `Network.openConnection` (the Shield has no `allowBypass()`). If it is wrong, "via network DNS" goes up and the last reason shows the failure.
+- UNVERIFIED: how often an answer is larger than the UDP size of the Android resolver.
+- The CI emulator jobs do not test DoH (no DoH server in CI). They test that the default path (no DoH URL) still works.
+
+Owner checks on the phone (after `adb install -r` of the local build; the same debug key as the current install, so the settings stay):
+
+1. Turn the Shield on. Keep Private DNS on Automatic.
+2. Type the NextDNS DoH URL under "Upstream DNS (DoH)" and press Save.
+3. Use the phone for some minutes. The status line "Upstream: DoH <host>: A via DoH, P via network DNS" must show A going up and P at 0 or close to 0.
+4. The NextDNS query log must show the allowed queries of the phone, and no query that the Shield blocked.
+
 ## First run on the owner's phone (2026-11-20)
 
 - Installed the CI APK of run 16 (`0.1.0-m1`) on the owner's Pixel 9a (Android 17) with `adb install -r`: "Success" (O1). The data loaded in 947 ms.
