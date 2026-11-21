@@ -1,5 +1,6 @@
 package adgecko.shield.store
 
+import adgecko.shield.core.DohUrl
 import adgecko.shield.core.Mode
 import android.content.Context
 import java.io.File
@@ -35,6 +36,15 @@ class ShieldStore(context: Context) {
         get() = prefs.getBoolean(KEY_ASKED_NOTIFY, false)
         set(v) = prefs.edit().putBoolean(KEY_ASKED_NOTIFY, v).apply()
 
+    /**
+     * The DoH URL, or null for the plain upstream. A stored value that no
+     * longer parses reads as null. The path can hold a private profile ID:
+     * it stays in the private preferences (no backup) and is never logged.
+     */
+    var dohUrl: DohUrl?
+        get() = prefs.getString(KEY_DOH, null)?.let { DohUrl.parse(it) }
+        set(v) = prefs.edit().also { if (v == null) it.remove(KEY_DOH) else it.putString(KEY_DOH, v.text) }.apply()
+
     fun isPaused(now: Long = System.currentTimeMillis()): Boolean = pausedUntil > now
 
     @Synchronized
@@ -65,6 +75,7 @@ class ShieldStore(context: Context) {
         private const val KEY_MODE = "mode"
         private const val KEY_ON = "on"
         private const val KEY_PAUSE = "pausedUntil"
+        private const val KEY_DOH = "dohUrl"
         private const val KEY_ASKED_NOTIFY = "askedNotifications"
     }
 }

@@ -1,6 +1,7 @@
 package adgecko.shield.ui
 
 import adgecko.shield.ShieldApp
+import adgecko.shield.core.DohUrl
 import adgecko.shield.core.Mode
 import adgecko.shield.vpn.NetworkWatcher
 import adgecko.shield.vpn.ShieldState
@@ -12,6 +13,10 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.text.InputType
+import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.Switch
@@ -33,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var info: TextView
     private lateinit var privateDns: TextView
     private lateinit var selfTest: TextView
+    private lateinit var dohSaved: TextView
     private val main = Handler(Looper.getMainLooper())
     private val listener: () -> Unit = { refresh() }
     private val tick = object : Runnable {
@@ -90,6 +96,59 @@ class MainActivity : Activity() {
         privateDns = Ui.text(this)
         col.addView(privateDns)
 
+        col.addView(Ui.heading(this, "Upstream DNS (DoH)"))
+        col.addView(
+            Ui.text(
+                this,
+                "No URL saved: the Shield sends allowed queries to the DNS servers of your network. With a saved URL: " +
+                    "the Shield sends allowed queries encrypted (DNS over HTTPS) to that URL. Blocked queries never " +
+                    "leave the phone. After 3 DoH failures in a row, the Shield uses the network DNS servers for 30 " +
+                    "seconds, then tries DoH again. To stop DoH, press Clear.",
+            ),
+        )
+        col.addView(Ui.text(this, DOH_EXAMPLE))
+        // The field never shows the saved URL: its path holds a private profile ID. The id
+        // lets Android keep the typed text over a rotation. refresh() must not touch the text.
+        val dohInput = EditText(this).apply {
+            id = ID_DOH
+            setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            // A keyboard must not learn the profile ID in the path.
+            imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+            hint = "https://"
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+        }
+        col.addView(dohInput)
+        dohSaved = Ui.text(this, savedText())
+        col.addView(dohSaved)
+        val dohResult = Ui.text(this)
+        col.addView(
+            Ui.row(
+                this,
+                Ui.button(this, "Save") {
+                    val typed = dohInput.text.toString()
+                    if (typed.isBlank()) {
+                        dohResult.text = "Type a DoH URL, or press Clear to stop DoH."
+                        return@button
+                    }
+                    val url = DohUrl.parse(typed)
+                    if (url == null) {
+                        dohResult.text = "Not a valid https URL."
+                    } else {
+                        applyDoh(url)
+                        dohInput.setText("")
+                        dohResult.text = "Saved. Allowed queries go to ${url.host} over DoH."
+                    }
+                },
+                Ui.button(this, "Clear") {
+                    applyDoh(null)
+                    dohInput.setText("")
+                    dohResult.text = "Cleared. Allowed queries go to the network DNS servers."
+                },
+            ),
+        )
+        col.addView(dohResult)
+
         col.addView(Ui.heading(this, "Always-on VPN"))
         col.addView(
             Ui.text(
@@ -117,6 +176,22 @@ class MainActivity : Activity() {
         ShieldState.removeListener(listener)
         main.removeCallbacks(tick)
         super.onPause()
+    }
+
+    /**
+     * Stores the DoH URL (null clears it) and tells a running shield to build
+     * its upstream again. The new Upstream has its own counts.
+     */
+    private fun applyDoh(url: DohUrl?) {
+        store.dohUrl = url
+        dohSaved.text = savedText()
+        ShieldVpnService.command(this, ShieldVpnService.ACTION_REBUILD)
+    }
+
+    /** What is saved. It names the host only, never the URL. */
+    private fun savedText(): String {
+        val host = store.dohUrl?.host
+        return if (host != null) "Saved: DoH to $host." else "Saved: none (network DNS)."
     }
 
     private fun toggle(on: Boolean) {
@@ -164,7 +239,22 @@ class MainActivity : Activity() {
         info.text = buildString {
             append(dataLine).append('\n')
             append("Blocks today: ${ShieldState.blocksToday()}. Queries: ${ShieldState.queries.get()}.\n")
-            append("Upstream DNS servers: ${ShieldState.upstreamCount}. Shield addresses: ${ShieldState.aliasText.ifEmpty { "none" }}.\n")
+            val addresses = "Shield addresses: ${ShieldState.aliasText.ifEmpty { "none" }}."
+            // Host and counts come from the same DohStats, so they never mix two URLs. Without
+            // running stats the store gives the host (Shield off, or the rebuild after Save or Clear).
+            val stats = ShieldState.dohStats
+            val dohHost = store.dohUrl?.host
+            if (stats != null) {
+                append("Upstream: DoH ${stats.host}: ${stats.answers.get()} via DoH, ${stats.plain.get()} via network DNS")
+                stats.lastReason?.let { append(", last reason ").append(it) }
+                stats.lastFailure?.let { append(", last DoH failure ").append(it) }
+                append("\n")
+            } else if (dohHost != null) {
+                append("Upstream: DoH $dohHost: 0 via DoH, 0 via network DNS\n")
+            } else {
+                append("Upstream: network DNS servers\n")
+            }
+            append("Network DNS servers: ${ShieldState.upstreamCount}. $addresses\n")
             append("Errors: policy ${ShieldState.policyErrors}, upstream ${ShieldState.forwardErrors.get()}.\n")
             append("Allow list: ${store.allowDomains().size} entries. Excluded apps: ${store.excludedApps().size}.")
             ShieldState.lastError?.let { append("\nLast error: ").append(it) }
@@ -189,7 +279,8 @@ class MainActivity : Activity() {
         val sb = StringBuilder("Private DNS: $shown")
         if (lp?.isPrivateDnsActive == true) sb.append(" (active)")
         if (mode == "hostname" || serverName != null) {
-            sb.append("\nWarning: Private DNS uses a hostname. Apps send DNS past the Shield. Set Private DNS to Automatic or Off.")
+            sb.append("\nWarning: Private DNS uses a hostname. Apps send DNS past the Shield. Set Private DNS to Automatic or Off. " +
+                    "To use NextDNS or another DoH provider with the Shield, type its DoH URL under Upstream DNS (DoH).")
         }
         return sb.toString()
     }
@@ -197,5 +288,7 @@ class MainActivity : Activity() {
     companion object {
         private const val ID_ADS = 101
         private const val ID_THREAT = 102
+        private const val ID_DOH = 103
+        private const val DOH_EXAMPLE = "Example (NextDNS): https://dns.nextdns.io/<profile ID>"
     }
 }
