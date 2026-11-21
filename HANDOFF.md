@@ -25,9 +25,9 @@ The owner asked: "Can I have the protection of Adgecko Shield and NextDNS?" Priv
 Checked on the owner's PC (JDK 21, local Android SDK):
 
 - Gradle `:shield-core:test :app:testDebugUnitTest :app:lintDebug :app:verifyManifestPolicyDebug :app:assembleDebug --rerun-tasks`: BUILD SUCCESSFUL. `:shield-core` 61 tests (42 in `DohTest`) and `:app` 6 tests, 0 failures. The debug APK is 5,144,335 bytes.
-- `deno test` of the 4 Android tests: 25 passed. The full suite: 906 passed, 1 failed. The failure is `release-tooling` ("password= in src/x.js"). It fails on the base commit `bcdfb12` too (run on the owner's PC in this session).
+- `deno test` of the 4 Android tests: 25 passed. Before the merge of main, the full suite had 1 failure, `release-tooling` ("password= in src/x.js"); it failed on the base commit `bcdfb12` too.
 - `:app:assembleDebugAndroidTest :probe:assembleDebug :probe:assembleDebugAndroidTest`: BUILD SUCCESSFUL.
-- `scripts/release-gate.sh`: `VERDICT: FAIL`, 3 checks. The base commit `bcdfb12` fails the same 3 checks: `src/kick.js` differs from `origin/main` (the milestone 1 branch is older than main), and the `release-tooling` test above (counted twice). The DoH change adds no gate failure. The branch was pushed with this result: a deviation from the rule "VERDICT: CLEAN before each push", because the cause is in the base branch.
+- `scripts/release-gate.sh`: before the merge of main, `VERDICT: FAIL` with 3 checks, the same 3 as on the base commit (`src/kick.js` differed from `origin/main`, because the stack was older than main, and the `release-tooling` test). Fix (owner approval "Update the stack", 2026-11-20): main was merged into the plan branch, then into milestone 1, then into this branch, with normal merge commits. After that, on this branch: `VERDICT: CLEAN`, the full suite 931 passed, 0 failed.
 - `scripts/privacy-check.py`: passed (the secret pattern set is not available locally). No profile ID is in the diff, the commit messages or the pull request text (searched).
 - The new APK has the same signing certificate (SHA-256 digest) as the local build that the owner installed on 2026-11-20. Thus `adb install -r` is an update, and it keeps the settings. The VPN approval should stay too (not checked).
 
