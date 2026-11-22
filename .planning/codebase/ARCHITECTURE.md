@@ -206,7 +206,7 @@ All keys are in `chrome.storage.local`, but `tabSignals` is in `chrome.storage.s
 | `popupFix`, `popupWelcomed`, `uiTheme` | Pending **Fix this site** question (an entry with `lists: true` is the second test, **Test with the ad lists off**: an Allow of the host's own entry), welcome card, popup theme. | popup, settings page |
 | `tabSignals` (session) | The last guard event for each tab. | worker |
 
-- A file that uses a key of a different file repeats the string. Do not rename a key without a search of all files.
+- A file that uses a key of a different file repeats the string. Do not rename a key without a search of all files. `test/storage-keys.test.js` checks each key literal in `src/` against one known list (the keys of this table). Add a new key to that list and to this table.
 - `writeCosmetic()` writes the rule keys first, then `cosMeta`, then removes stale keys.
 - Each worker write goes through `localSet` or `localRemove`. A failure is recorded in `listState.lastError` and shown in the list status.
 - The quota of `chrome.storage.local` is 10,485,760 bytes. The manifest does not request `unlimitedStorage`. See `CONCERNS.md`, H1.

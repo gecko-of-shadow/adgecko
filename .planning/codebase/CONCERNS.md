@@ -114,6 +114,8 @@ Section 5 lists items that were checked and are not a concern now.
 - `settings` and `siteOverrides` are literals in six files. The feed keys, `threatAllowDomains`, `uiTheme` and the list status keys are literals in two or three files each. `src/popup.js` has its own `KEYS` object, because the gate lets `popup.html` load only `popup.js`.
 - **Impact.** A typing error in one file gives a silent read of `undefined`. The features then use their defaults, and no error shows.
 - **Action.** Add one test that reads the source files and makes sure that each key literal is in one known list.
+- **Done** (site-breakage job, Unreleased): `test/storage-keys.test.js` reads each `.js` file below `src/` (not `src/vendor/`). It finds the key literals in key constants (`*_KEY`, `*_KEYS`, `KEYS`, `KEY_*`, `*_PREFIX`, `PREFIX_*`), in `DEFAULTS` objects, in literal lists of `get`/`remove` calls, in literal objects of `set`/`save` calls and in `changes.<key>`. Each one must be in `KNOWN` or `KNOWN_PREFIXES` (20 keys, 4 prefixes, the keys of `ARCHITECTURE.md` section 9). Each known key must still be in use. A third test proves that the scanner finds a typing error in each form.
+- **Limit.** Property access on a stored copy (`stored.<key>`, `patch.<key> = ...`) is not checked: the same form also reads ordinary object fields (for example `patch.lastError` in `src/feed/client.js`).
 
 ### M5. Very large files and functions
 

@@ -23,6 +23,7 @@ Five owner decisions of 2026-11-20. Not tested in real Chrome: the Kick and Twit
 
 - Popup: `test/site-test-scope.test.js` proves the sentences of the second test against the real worker rules and the feature registry: the allow rule passes the page's own requests, a frame from another site and a malware host stay blocked, and the clipboard guard stays on. Three new tests in `test/popup-allow-page.test.js` cover the two steps, Yes, No, **Block again**, a stale and an expired test, and stream sites. Three older popup tests now expect the new note after **No**, and one expects the focus on the second test. The fake worker answer in `test/popup-allow-page.test.js` now gives each feature's `on` value, as the worker does.
 - Owner decision 16: `src/rules/ubo-youtube-network.json` blocks `ads.youtube.com` on purpose. The stream-host oracle test now also checks that ruleset, with a named exception for this one host. A test fails if the exception goes stale.
+- Storage keys: `test/storage-keys.test.js` reads the source files below `src/` and checks each storage key literal against one known list (20 keys, 4 prefixes). A typing error in a key, for example in the popup's own copy of the keys, now fails the test instead of a silent read of `undefined` (`CONCERNS.md` M4). Each known key must still be in use.
 
 ## 0.3.7 (2026-11-20)
 
