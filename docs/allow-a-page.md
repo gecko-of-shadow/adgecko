@@ -7,11 +7,22 @@ Some websites break or refuse to work when ads are blocked. Try **Fix this site*
 ## Fix this site first
 
 1. Open the website that broke and click the gecko icon in the toolbar.
-2. Under **Something broke?** click **Fix this site**. This turns off only the extra filters for this site: hidden ad boxes and the page guards. Ad lists keep blocking.
+2. Under **Something broke?** click **Fix this site**. This turns off only the extra filters for this site: hidden ad boxes and the page guards. Ad lists keep blocking. The window says this under the question.
 3. Click **Reload page** in the window and look at the page. The window asks **Did that fix it?** (for a day it still asks the next time you open it).
    - **Yes** keeps the fix.
-   - **No** turns those filters back on and suggests **Allow this site**.
+   - **No** turns those filters back on. On an ordinary site with the ad lists on, the window then offers **Test with the ad lists off** (see below). On YouTube and Twitch, or with the ad lists off, it suggests **Allow this site**.
 4. While a kept fix is in force, the line under the site says **Protected – some filters off here (Fix this site)**, and the window shows **Undo fix** in place of **Fix this site**. Click **Undo fix** to turn those filters back on, then click **Reload page**. The settings page lists the site as **Fixed** with the same **Undo fix** button.
+
+## Then test with the ad lists off
+
+Use this when you are not sure that Adgecko causes the problem.
+
+1. After **No**, click **Test with the ad lists off**. This allows the site (the same as **Allow this site** below) and asks **Did that fix it?** again.
+2. The window says what is off now: the ad lists, hidden ad boxes and the pop-up guard. It also says what stays on: malware blocking, the clipboard guard, and the ad lists in frames from other sites.
+3. Click **Reload page** and look at the page.
+   - **Yes** keeps the allow. The site then shows **Allowed – not blocking here**, and **Block again** undoes it.
+   - **No** blocks the site again. The window says that these filters are likely not the cause. Adgecko's page scripts stay in the page while it is on, also on an allowed site. To rule out Adgecko fully, turn it off in `chrome://extensions`, reload the page, and turn it on again after the test.
+4. A test that you do not answer stays an allow. The window shows **Allowed – not blocking here** and **Block again**, also after the question stops after one day.
 
 ## Allow a website
 

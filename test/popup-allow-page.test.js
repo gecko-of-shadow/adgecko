@@ -104,8 +104,10 @@ async function openPopup({ pageHref, scripted = true, stored = {}, answerLater =
     const stream = F.isStreamHost(host);
     // A stream-family host where none of our scripts runs: the worker lists the network tiers only.
     if (limited) return { ok: true, host, overrideHost: host, stream, limited: true, siteEnabled: true, enabled: true, features: [{ id: "threatTier", perSite: false, apply: "live", available: true, on: limited.threat }] };
+    // `on` like the worker: the resolved switch for this host.
+    const effective = F.resolve(storage.settings, storage.siteOverrides, host);
     const features = F.FEATURES.filter((f) => f.sites.includes("all") || (f.sites.includes("ordinary") ? !stream : f.sites.some((d) => host === d || host.endsWith("." + d))))
-      .map((f) => ({ id: f.id, perSite: f.perSite, apply: f.apply, available: f.id !== "guardMiners" }));
+      .map((f) => ({ id: f.id, perSite: f.perSite, apply: f.apply, available: f.id !== "guardMiners", on: effective[f.id] }));
     return { ok: true, host, overrideHost: host, stream, siteEnabled: !(o[host] && o[host].enabled === false), enabled: true, features };
   };
 
@@ -334,7 +336,10 @@ Deno.test("Fix this site turns off hide rules and page guards for this site only
   assertEquals(storage.siteOverrides["news.example.com"], { features: { guardPopups: true, network: false } }, "No restores exactly what Fix changed");
   assertEquals(storage.popupFix, undefined);
   assertEquals(r.el["fix-ask"].hidden, true);
+  // The ad lists are off on this site now (network: false), so the second
+  // test (ad lists off too) has nothing to test: the note points to Allow.
   assert(/use Allow this site/.test(r.el["fix-note"].textContent), "offers Allow this site");
+  assertEquals(r.el["fix-lists"].hidden, true, "no second test with the ad lists already off here");
 
   // Yes keeps the fix and forgets the question.
   await r.el["fix-site"].fire("click");
@@ -529,3 +534,124 @@ Deno.test("a YouTube-family site without our scripts shows its host and what rea
   const master = await openPopup({ pageHref: "https://music.youtube.com/", stored: { settings: { v: 1, enabled: false, features: {} } }, streamTop: true, limited: { threat: false } });
   assertEquals(master.status.textContent, "Off – turned off in settings", "the master switch still wins");
 });
+
+// Site-breakage job (whatbox.ca Apps panel, platform.claude.com sign-in): the
+// visitor suspected Adgecko and could not tell. "Fix this site" left the ad
+// lists on and the popup did not say so. "Something broke?" is now a test in
+// two steps; each step says what it turned off and what stays on. A "No" to
+// the second step never claims "not Adgecko": the guards stay installed and
+// some blocks stay (test/site-test-scope.test.js proves what stays on).
+const ON = () => ({ popupWelcomed: true, settings: { v: 1, enabled: true, features: {} } });
+
+Deno.test("Something broke?: the first test says the ad lists still block; No offers the second test, which turns them off with the same question", async () => {
+  const storage = ON();
+  const p = await openPopup({ pageHref: "https://news.example.com/a", storage });
+  assertEquals(p.el["fix-lists"].hidden, true, "no second test before the first one");
+  await p.el["fix-site"].fire("click");
+  assertEquals(p.el["fix-scope"].textContent, "Off here now: hidden ad boxes and the page guards. The ad lists still block.");
+  await p.el["fix-no"].fire("click");
+  assertEquals(p.el["fix-note"].textContent, "Turned back on. Still broken? Test with the ad lists off too.");
+  assertEquals(p.el["fix-lists"].hidden, false, "Test with the ad lists off shows");
+  assertEquals(p.el["fix-scope"].textContent, "", "no scope line without a question");
+
+  await p.el["fix-lists"].fire("click");
+  assertEquals(storage.siteOverrides, { "news.example.com": { enabled: false } }, "the same write as Allow this site, on the page's own host");
+  assertEquals(storage.popupFix.host, "news.example.com");
+  assertEquals([storage.popupFix.lists, storage.popupFix.prev], [true, {}], "marked as the second test");
+  assert(p.background.some((m) => m.type === "applyGeneralState"), "rules applied");
+  assertEquals(p.el["fix-ask"].hidden, false, "Did that fix it? asks again");
+  assertEquals(p.el["fix-lists"].hidden, true);
+  assertEquals(p.status.textContent, "Allowed – not blocking here", "the status line does not look normal during the test");
+  assertEquals(p.button.textContent, "Block again", "Block again ends the test");
+  const scope = p.el["fix-scope"].textContent;
+  assert(scope.startsWith("Off here now: the ad lists, hidden ad boxes and the pop-up guard."), "says what is off: " + scope);
+  for (const s of ["malware blocking", "the clipboard guard", "the ad lists in frames from other sites"]) assert(scope.includes(s), "says what stays on: " + s);
+
+  // The popup closed for the reload; the question is still there.
+  const q = await openPopup({ pageHref: "https://news.example.com/b", storage });
+  assertEquals(q.el["fix-ask"].hidden, false, "question survives closing the popup");
+  assertEquals(q.el["fix-scope"].textContent, scope);
+  await q.el["fix-no"].fire("click");
+  assertEquals(storage.siteOverrides, {}, "No takes the Allow off again");
+  assertEquals(storage.popupFix, undefined);
+  assertEquals(q.status.textContent, "✅ Protected");
+  const verdict = q.el["fix-note"].textContent;
+  assertEquals(verdict, "Blocking is back on. The problem stayed with these filters off, so they are likely not the cause. To rule out Adgecko fully, turn it off in chrome://extensions and reload the page.");
+  assert(!/is not the cause|not Adgecko/i.test(verdict), "no claim that Adgecko is cleared");
+  assertEquals(q.el["reload-page"].hidden, false, "Reload page offered: blocking is back on");
+  assertEquals(q.el["fix-lists"].hidden, true, "the ladder ends there");
+});
+
+Deno.test("the second test: Yes keeps the Allow, Block again ends it, and an old unanswered test stays visible as Allowed", async () => {
+  const storage = ON();
+  const p = await openPopup({ pageHref: "https://news.example.com/", storage });
+  await p.el["fix-site"].fire("click");
+  await p.el["fix-no"].fire("click");
+  await p.el["fix-lists"].fire("click");
+  await p.el["fix-yes"].fire("click");
+  assertEquals(storage.popupFix, undefined, "answered");
+  assertEquals(storage.siteOverrides, { "news.example.com": { enabled: false } }, "Yes keeps the Allow");
+  const kept = await openPopup({ pageHref: "https://news.example.com/", storage });
+  assertEquals([kept.status.textContent, kept.button.textContent, kept.el["fix-ask"].hidden], ["Allowed – not blocking here", "Block again", true]);
+
+  // Block again during an open test ends it: no question left behind.
+  const s2 = ON();
+  s2.siteOverrides = { "news.example.com": { enabled: false } };
+  s2.popupFix = { host: "news.example.com", at: Date.now(), prev: {}, lists: true };
+  const b = await openPopup({ pageHref: "https://news.example.com/", storage: s2 });
+  assertEquals(b.el["fix-ask"].hidden, false, "the open test asks");
+  await b.button.fire("click");
+  assertEquals(s2.siteOverrides, {}, "blocking again");
+  assertEquals(s2.popupFix, undefined, "the test record is gone");
+  assertEquals(b.el["fix-ask"].hidden, true);
+
+  // Blocked again on the settings page: the record is stale, no question.
+  const s3 = ON();
+  s3.popupFix = { host: "news.example.com", at: Date.now(), prev: {}, lists: true };
+  const c = await openPopup({ pageHref: "https://news.example.com/", storage: s3 });
+  assertEquals([c.el["fix-ask"].hidden, c.status.textContent], [true, "✅ Protected"], "stale test asks nothing");
+
+  // Older than a day and never answered: no more question, but the popup
+  // says Allowed and offers Block again (the lists are not off in silence).
+  const s4 = ON();
+  s4.siteOverrides = { "news.example.com": { enabled: false } };
+  s4.popupFix = { host: "news.example.com", at: Date.now() - 25 * 60 * 60 * 1000, prev: {}, lists: true };
+  const d = await openPopup({ pageHref: "https://news.example.com/", storage: s4 });
+  assertEquals([d.el["fix-ask"].hidden, d.status.textContent, d.button.textContent], [true, "Allowed – not blocking here", "Block again"]);
+});
+
+Deno.test("the second test applies only where the ad lists act: not on stream sites, not with the lists off; its record survives a Fix on another site", async () => {
+  const yt = ON();
+  const y = await openPopup({ pageHref: "https://www.youtube.com/watch?v=x", storage: yt, streamTop: true });
+  await y.el["fix-site"].fire("click");
+  assertEquals(y.el["fix-scope"].textContent, "Off here now: Adgecko's hiding helpers. The built-in ad blocking still runs.");
+  await y.el["fix-no"].fire("click");
+  assertEquals(y.el["fix-lists"].hidden, true, "the ad lists never act on YouTube");
+  assertEquals(y.el["fix-note"].textContent, "Turned back on. If the site still breaks, use Allow this site.");
+
+  const off = { popupWelcomed: true, generalEnabled: false, settings: { v: 1, enabled: true, features: { network: false } } };
+  const o = await openPopup({ pageHref: "https://news.example.com/", storage: off });
+  await o.el["fix-site"].fire("click");
+  await o.el["fix-no"].fire("click");
+  assertEquals(o.el["fix-lists"].hidden, true, "the ad lists are off");
+  await o.el["fix-lists"].fire("click"); // a stale click writes nothing
+  assertEquals(off.siteOverrides, {}, "nothing allowed");
+
+  // A second test on one site, then a Fix on another: both questions stay.
+  const storage = ON();
+  const a = await openPopup({ pageHref: "https://news.example.com/", storage });
+  await a.el["fix-site"].fire("click");
+  await a.el["fix-no"].fire("click");
+  await a.el["fix-lists"].fire("click");
+  const other = await openPopup({ pageHref: "https://shop.example.org/", storage });
+  await other.el["fix-site"].fire("click");
+  assertEquals(storage.popupFix.host, "shop.example.org");
+  assertEquals(storage.popupFix.others["news.example.com"].lists, true, "the second test keeps its mark under others");
+  const back = await openPopup({ pageHref: "https://news.example.com/", storage });
+  assertEquals(back.el["fix-ask"].hidden, false);
+  assert(back.el["fix-scope"].textContent.startsWith("Off here now: the ad lists"), "still the second test");
+  await back.el["fix-no"].fire("click");
+  assertEquals(storage.siteOverrides["news.example.com"], undefined, "No ends the right test");
+  assertEquals(storage.popupFix.host, "shop.example.org", "the other site's question stays");
+});
+

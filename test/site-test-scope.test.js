@@ -1,0 +1,73 @@
+// Site-breakage job (whatbox.ca Apps panel, platform.claude.com sign-in): the
+// popup's second test ("Test with the ad lists off") is an Allow of the page's
+// own host with a question. Its scope line says what is off and what stays on,
+// and a "No" says only "likely not the cause" and points to
+// chrome://extensions. This file proves those sentences against the real
+// worker rules and the real feature registry, so the popup cannot promise
+// more than the rules do:
+//   - off: the ad lists for requests that the page itself makes, hidden ad
+//     boxes, the pop-up guard;
+//   - still on: the malware list (priority above the Allow), the ad lists for
+//     requests made inside frames from other sites (the Allow matches by
+//     initiator), the clipboard guard (keepOnAllow);
+//   - the page guards stay installed: they read their flag at use time, so no
+//     switch removes them (only chrome://extensions does).
+import "../src/settings/features.js";
+import general from "../src/rules/general-network.json" with { type: "json" };
+import threat from "../src/rules/threat-network.json" with { type: "json" };
+import popupSource from "../src/popup.js" with { type: "text" };
+import clipboardSource from "../src/guards/clipboard.js" with { type: "text" };
+import popupsSource from "../src/guards/popups.js" with { type: "text" };
+import { evaluate } from "./fixtures/dnr-matcher.js";
+import { loadWorker, settle } from "./fixtures/fake-chrome-worker.js";
+
+function assert(c, l) { if (!c) throw new Error(l); }
+
+const F = globalThis.GeckoFeatures;
+const SITE = "news.example";
+const FRAME = "widget.example.org";
+
+// A plain list rule of the packed set: block, priority 1, request domains only.
+const LIST_RULE = general.find((r) => r.action.type === "block" && r.priority === 1 && r.condition.requestDomains &&
+  Object.keys(r.condition).every((k) => k === "requestDomains" || (k === "resourceTypes" && r.condition.resourceTypes.includes("script"))));
+const AD_HOST = LIST_RULE.condition.requestDomains[0];
+const BAD_HOST = threat[0].condition.requestDomains[0];
+
+async function rulesWithAllow() {
+  const w = loadWorker({ store: { settings: { v: 1, enabled: true, features: {} }, siteOverrides: { [SITE]: { enabled: false } } } });
+  await settle(150);
+  await w.send({ source: "adgecko-general", type: "applyGeneralState" });
+  await settle(150);
+  const allow = w.dnr.dynamic.filter((r) => r.action.type === "allow" && r.priority === 10000);
+  return { allow, rules: (w.dnr.staticOn ? general : []).concat(threat, w.dnr.dynamic) };
+}
+
+const SCOPE = (popupSource.match(/const SCOPE_LISTS = "([^"]+)";/) || [])[1] || "";
+const VERDICT = (popupSource.match(/const NOTE_LISTS_NO = "([^"]+)";/) || [])[1] || "";
+
+Deno.test("second test: the Allow turns off the ad lists only for what the page itself loads", async () => {
+  assert(AD_HOST && BAD_HOST, "fixtures found");
+  const { allow, rules } = await rulesWithAllow();
+  assert(allow.length === 1 && allow[0].condition.initiatorDomains.join() === SITE, "one Allow rule for the site: " + JSON.stringify(allow));
+  const v = (frames, host) => evaluate(rules, { url: "https://" + host + "/x.js", type: "script", frames }).action;
+  assert(v(["other.example"], AD_HOST) === "block", "the ad host is blocked on other sites");
+  assert(v([SITE], AD_HOST) === "allow", "off: the ad lists for the page's own requests");
+  assert(v([SITE, FRAME], AD_HOST) === "block", "still on: the ad lists inside a frame from another site");
+  assert(v([SITE], BAD_HOST) === "block", "still on: malware blocking");
+  assert(SCOPE.includes("Off here now: the ad lists") && SCOPE.includes("malware blocking") && SCOPE.includes("the ad lists in frames from other sites"), "the popup says so: " + SCOPE);
+});
+
+Deno.test("second test: hiding and the pop-up guard are off, the clipboard guard stays on, and the popup says so", () => {
+  const r = F.resolve({ v: 1, enabled: true, features: { guardPopups: true } }, { [SITE]: { enabled: false } }, SITE);
+  assert(r.network === false && r.cosmetic === false && r.guardPopups === false, "off: " + JSON.stringify(r));
+  assert(r.guardClipboard === true, "still on: the clipboard guard (keepOnAllow)");
+  assert(SCOPE.includes("hidden ad boxes and the pop-up guard") && SCOPE.includes("the clipboard guard"), "the popup says so: " + SCOPE);
+});
+
+Deno.test("second test: the page guards stay installed whatever the switches say, so the last step is chrome://extensions", () => {
+  for (const [name, src] of [["clipboard", clipboardSource], ["popups", popupsSource]]) {
+    assert(/read at use time/.test(src), name + ": the guard reads its flag at use time (its header says so)");
+  }
+  assert(VERDICT.includes("likely not the cause") && VERDICT.includes("chrome://extensions"), "the verdict hedges and names the last step: " + VERDICT);
+  assert(!/is not the cause|not Adgecko/i.test(VERDICT), "no claim that Adgecko is cleared");
+});

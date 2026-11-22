@@ -18,7 +18,7 @@ Adgecko is a Chrome Manifest V3 extension with no build step. Chrome loads the f
 | Session DNR rules | Written by `src/feed/client.js` through the worker | Rules of the signed threat feed. The feed is dormant. |
 | Content scripts | See section 2 | Hide rules, feature flags, site handlers, page guards. |
 | Service worker | `src/general-background.js` and its modules | All DNR writes, list refresh, settings sync, feed, toolbar icon, messages. |
-| Popup | `src/popup.html`, `popup.js`, `popup.css` | Site status, **Allow this site**, **Fix this site**. |
+| Popup | `src/popup.html`, `popup.js`, `popup.css` | Site status, **Allow this site**, **Fix this site** and its second test (**Test with the ad lists off**, section 13). |
 | Settings page | `src/settings.html`, `settings.js` (loads `settings/features.js`, `threat/psl.js`, `threat/compile.js`) | All switches, the per-site list, list update and revert, **Allow this domain**. |
 
 Permissions and hosts: `STACK.md` and `INTEGRATIONS.md`.
@@ -203,7 +203,7 @@ All keys are in `chrome.storage.local`, but `tabSignals` is in `chrome.storage.s
 | `cosMeta` | Small gate record. All frames read it. A change starts the cosmetic script again. | worker |
 | `cosKeys` | Index of all hide-rule keys. Only the worker reads it. | worker |
 | `feedState`, `feedCache`, `feedPaused` | Feed status, two verified feed files, the derived pause switch. | worker |
-| `popupFix`, `popupWelcomed`, `uiTheme` | Pending **Fix this site** question, welcome card, popup theme. | popup, settings page |
+| `popupFix`, `popupWelcomed`, `uiTheme` | Pending **Fix this site** question (an entry with `lists: true` is the second test, **Test with the ad lists off**: an Allow of the host's own entry), welcome card, popup theme. | popup, settings page |
 | `tabSignals` (session) | The last guard event for each tab. | worker |
 
 - A file that uses a key of a different file repeats the string. Do not rename a key without a search of all files.
@@ -298,6 +298,13 @@ The manifest has no `tabs` permission, thus the popup gets no `tab.url` on a nor
 
 `popup.html` loads only `popup.js`. The popup cannot read the feature registry directly.
 A page with no content script gives no reply. The popup then shows its "open a normal page" text.
+
+"Something broke?" is a test in two steps. The popup cannot see which requests the rules blocked (that needs `activeTab` or `declarativeNetRequestFeedback`), so it gives a test, not a count.
+
+1. **Fix this site** turns off the `FIXABLE` features on the host's own entry. The line `fix-scope` says that the ad lists still block.
+2. After **No**, on an ordinary site where `network` is on, **Test with the ad lists off** writes `enabled: false` on the host's own entry (the same write as **Allow this site**) and a `popupFix` entry with `lists: true`. **Yes** keeps the Allow. **No** removes it again.
+3. The scope line of step 2 names what stays on: threat rules (priority above the Allow rule), list rules for requests from frames of other sites (the Allow rule matches by `initiatorDomains`) and the clipboard guard (`keepOnAllow`). The MAIN-world guards stay installed whatever the flags say, so the last "No" says "likely not the cause" and points to `chrome://extensions`. `test/site-test-scope.test.js` proves these sentences.
+4. An unanswered step 2 stays an Allow. The popup shows "Allowed – not blocking here" and **Block again**. **Block again** removes the `lists` entry.
 
 ## 14. Threat tier and protected hosts
 

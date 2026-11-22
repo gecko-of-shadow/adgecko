@@ -14,9 +14,11 @@
     listStatus: "generalListStatus",
     settings: "settings",
     overrides: "siteOverrides",
-    // { host, at, prev: { <feature id>: true | false | null }, others?: { <host>: { at, prev } } }
+    // { host, at, prev: { <feature id>: true | false | null }, lists?: true, others?: { <host>: { at, prev, lists? } } }
     // The newest unanswered Fix at the top level; earlier ones (other sites)
     // under `others`, so a Fix on a second site does not drop the first question.
+    // `lists: true` marks the second test ("Test with the ad lists off"): it
+    // wrote enabled:false on the host's own entry, and prev is empty.
     fix: "popupFix",
     welcomed: "popupWelcomed",
     theme: "uiTheme", // "auto" | "purple" | "contrast" (settings page)
@@ -28,6 +30,18 @@
     generalListStatus: "Packed lists (checked every 3 hours).",
   };
   const FIX_TTL_MS = 24 * 60 * 60 * 1000;
+  // "Something broke?" is a test in two steps. Each step says what it turned
+  // off and what stays on, so a "No" is not read as "not Adgecko". Step 2 is
+  // an Allow with a question: list blocks in frames of other sites, the
+  // malware list and the clipboard guard (keepOnAllow) stay. The page-world
+  // guards stay installed whatever the switches say (they read their flag at
+  // use time), so only chrome://extensions gives a page with no Adgecko at all.
+  const SCOPE_FIX = "Off here now: hidden ad boxes and the page guards. The ad lists still block.";
+  const SCOPE_FIX_STREAM = "Off here now: Adgecko's hiding helpers. The built-in ad blocking still runs.";
+  const SCOPE_LISTS = "Off here now: the ad lists, hidden ad boxes and the pop-up guard. Still on: malware blocking, the clipboard guard, and the ad lists in frames from other sites.";
+  const NOTE_FIX_NO = "Turned back on. If the site still breaks, use Allow this site.";
+  const NOTE_FIX_NO_NEXT = "Turned back on. Still broken? Test with the ad lists off too.";
+  const NOTE_LISTS_NO = "Blocking is back on. The problem stayed with these filters off, so they are likely not the cause. To rule out Adgecko fully, turn it off in chrome://extensions and reload the page.";
   const FEED_STATE_KEY = "feedState";
   const FEED_PAUSE_KEY = "feedPaused";
 
@@ -70,6 +84,8 @@
   const undoFixButton = el("undo-fix");
   const reloadPage = el("reload-page");
   const openAllowDomain = el("open-allow-domain");
+  const fixScope = el("fix-scope");
+  const fixLists = el("fix-lists");
 
   let activeTab = null;
   let pageChecked = false;
@@ -82,6 +98,9 @@
   // popup: then the Reload page button shows. Nothing reloads by itself (a
   // reload can lose what was typed into a form).
   let offerReload = false;
+  // Set only by a "No" to the first test in this popup: then "Test with the
+  // ad lists off" shows (render() checks that it still applies).
+  let offerLists = false;
 
   function packagedVersion() {
     try {
@@ -155,6 +174,26 @@
     return !!(host && info && info.host === host && info.stream === true);
   }
 
+  // The second test applies where the ad lists act and are on: an ordinary
+  // site (the lists never act on stream sites), not allowed, lists switch on.
+  function listsTestable(origin, host) {
+    if (!origin || !host || !info || info.host !== host || info.limited === true) return false;
+    if (!extensionOn() || siteOff(origin) || streamHere(host) || all[KEYS.enabled] === false) return false;
+    const list = Array.isArray(info.features) ? info.features : [];
+    return list.some((f) => f.id === "network" && f.on !== false);
+  }
+
+  // Ends the second test: takes its Allow off the host's own entry. Returns
+  // true when the entry changed.
+  function undoListsTest(o, host) {
+    if (!host || !o[host] || o[host].enabled !== false) return false;
+    const entry = Object.assign({}, o[host]);
+    delete entry.enabled;
+    if (Object.keys(entry).length) o[host] = entry;
+    else delete o[host];
+    return true;
+  }
+
   // Allow this site cannot stop the always-on vendored parts (owner decision
   // D-3): the uBO scriptlets and network rules on YouTube, the stream swap on
   // Twitch (README "How to use"). Returns the site name, or "".
@@ -177,7 +216,10 @@
     const add = (host, e) => {
       if (typeof host !== "string" || !host || !e || typeof e !== "object") return;
       if (typeof e.at !== "number" || Date.now() - e.at > FIX_TTL_MS) return;
-      if (!out[host] || out[host].at < e.at) out[host] = { at: e.at, prev: e.prev && typeof e.prev === "object" ? e.prev : {} };
+      if (!out[host] || out[host].at < e.at) {
+        out[host] = { at: e.at, prev: e.prev && typeof e.prev === "object" ? e.prev : {} };
+        if (e.lists === true) out[host].lists = true;
+      }
     };
     if (f.others && typeof f.others === "object") for (const [h, e] of Object.entries(f.others)) add(h, e);
     add(f.host, f);
@@ -191,6 +233,7 @@
     if (!hosts.length) return [patch, [KEYS.fix]];
     const [top, ...rest] = hosts;
     const value = { host: top, at: map[top].at, prev: map[top].prev };
+    if (map[top].lists === true) value.lists = true;
     if (rest.length) {
       value.others = {};
       for (const h of rest) value.others[h] = map[h];
@@ -230,10 +273,13 @@
   // The unanswered Fix for this page, or null. A Fix that was undone in the
   // meantime (settings page Undo fix or Reset: none of its switches is still
   // off in that entry) is stale: no question, Fix this site shows again.
+  // The second test is live while its Allow is still on the host's own entry
+  // (Block again on the popup or the settings page ends it).
   function fixIsLive(key, fixes) {
     if (!key || !fixes[key]) return false;
     const o = all[KEYS.overrides];
     const entry = o && typeof o === "object" ? o[key] : null;
+    if (fixes[key].lists === true) return !!entry && entry.enabled === false;
     const features = entry && entry.features && typeof entry.features === "object" ? entry.features : {};
     return Object.keys(fixes[key].prev).some((id) => features[id] === false);
   }
@@ -345,6 +391,11 @@
       undoFixButton.disabled = busy;
     }
     fixAsk.hidden = !pending;
+    if (fixScope) fixScope.textContent = !pending ? "" : pending.lists ? SCOPE_LISTS : streamHere(host) ? SCOPE_FIX_STREAM : SCOPE_FIX;
+    if (fixLists) {
+      fixLists.hidden = !(offerLists && !pending && listsTestable(origin, host));
+      fixLists.disabled = busy;
+    }
     fixNote.textContent = note;
 
     if (listsStatus) listsStatus.textContent = listText();
@@ -518,6 +569,9 @@
       if (fixIsLive(host, fixes)) undoFix(o, host, fixes[host].prev);
       delete fixes[host];
     }
+    // Block again during the second test ends the test: no question is left.
+    if (off && fixes[key] && fixes[key].lists === true) delete fixes[key];
+    offerLists = false;
     const entry = Object.assign({}, o[key]);
     if (off) delete entry.enabled;
     else entry.enabled = false;
@@ -579,23 +633,51 @@
     }
   });
 
-  // "No": put back exactly the switches Fix changed (a change made on the
-  // settings page in between is kept), then point to Allow this site.
+  // "No" to the first test: put back exactly the switches Fix changed (a
+  // change made on the settings page in between is kept), then offer the
+  // second test where the ad lists act, else point to Allow this site.
+  // "No" to the second test: take its Allow off again and say what that
+  // shows, and what it does not show.
   fixNo.addEventListener("click", guarded(async () => {
     const fixes = fixMap();
     const host = fixKey(pageHost(), fixes);
     const o = overridesCopy();
-    const changed = host ? undoFix(o, host, fixes[host].prev) : false;
+    const lists = !!(host && fixes[host].lists === true);
+    const changed = !host ? false : lists ? undoListsTest(o, host) : undoFix(o, host, fixes[host].prev);
     delete fixes[host];
     const saved = await save(...fixWrite(fixes, { [KEYS.overrides]: o }));
-    note = saved && changed ? "Turned back on. If the site still breaks, use Allow this site." : "";
     // The filters are back on: the page needs another reload to show it.
     if (saved && changed) offerReload = true;
     await refreshInfo();
+    const origin = currentOrigin();
+    offerLists = saved && !lists && listsTestable(origin, pageHost());
+    if (lists) note = saved && changed ? NOTE_LISTS_NO : "";
+    else note = saved && changed ? (offerLists ? NOTE_FIX_NO_NEXT : NOTE_FIX_NO) : "";
     render();
     applyRules();
-    return allowSite;
+    if (offerLists) return fixLists;
+    return lists && saved && changed ? reloadPage : allowSite;
   }));
+
+  // The second test: an Allow of this page's own host, with the same
+  // question. Yes keeps the Allow; No takes it off again.
+  if (fixLists) {
+    fixLists.addEventListener("click", guarded(async () => {
+      const origin = currentOrigin();
+      const host = origin ? hostOfOrigin(origin) : "";
+      if (!listsTestable(origin, host)) return null;
+      const o = overridesCopy();
+      o[host] = Object.assign({}, o[host], { enabled: false });
+      const fixes = fixMap();
+      fixes[host] = { at: Date.now(), prev: {}, lists: true };
+      note = "";
+      if (await save(...fixWrite(fixes, { [KEYS.overrides]: o }))) offerLists = false;
+      await refreshInfo();
+      render();
+      applyRules();
+      return fixYes;
+    }));
+  }
 
   // "Undo fix": turns back on the extra filters a kept Fix switched off on
   // this host (its own entry only; an Allow on the entry stays).

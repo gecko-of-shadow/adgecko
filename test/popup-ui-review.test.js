@@ -111,7 +111,8 @@ Deno.test("WP-23.1: No works while the worker is still applying the Fix", async 
   await settle();
   assertEquals(storage.siteOverrides, {}, "No did not turn the filters back on while the worker was busy");
   assertEquals(storage.popupFix, undefined, "the Fix question stays");
-  assertEquals(p.el["fix-note"].textContent, "Turned back on. If the site still breaks, use Allow this site.");
+  // Site-breakage job: on an ordinary site the note points to the second test.
+  assertEquals(p.el["fix-note"].textContent, "Turned back on. Still broken? Test with the ad lists off too.");
   // Allow, then Block again at once: the second click is not lost.
   await p.el["allow-site"].click();
   await settle();
@@ -149,7 +150,10 @@ Deno.test("WP-23.2: after Fix, focus is on Yes before the slow worker answers", 
   await done;
 });
 
-Deno.test("WP-23.2: after No, focus is on Allow this site", async () => {
+// Site-breakage job: after No the next step is the second test (ad lists off
+// too), so focus goes there. Where that test does not apply (the ad lists
+// are off), focus stays on Allow this site as before.
+Deno.test("WP-23.2: after No, focus is on the next step: the second test, or Allow this site", async () => {
   const storage = structuredClone(BASE);
   const p = await openPopup(storage, "https://news.example.com/");
   await p.el["fix-site"].click();
@@ -157,7 +161,17 @@ Deno.test("WP-23.2: after No, focus is on Allow this site", async () => {
   p.el["fix-no"].focus();
   await p.el["fix-no"].click();
   await settle();
-  assertEquals(p.doc.activeElement && p.doc.activeElement.id, "allow-site", "focus is on Allow this site");
+  assertEquals(p.doc.activeElement && p.doc.activeElement.id, "fix-lists", "focus is on Test with the ad lists off");
+
+  const off = Object.assign(structuredClone(BASE), { generalEnabled: false, settings: { v: 1, enabled: true, features: { network: false } } });
+  const q = await openPopup(off, "https://news.example.com/");
+  await q.el["fix-site"].click();
+  await settle();
+  q.el["fix-no"].focus();
+  await q.el["fix-no"].click();
+  await settle();
+  assertEquals(q.el["fix-lists"].hidden, true, "no second test with the ad lists off");
+  assertEquals(q.doc.activeElement && q.doc.activeElement.id, "allow-site", "focus is on Allow this site");
 });
 
 // Item 4: the status line said Protected with the filter lists off.

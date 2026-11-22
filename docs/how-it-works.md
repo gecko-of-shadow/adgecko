@@ -57,7 +57,7 @@ Both get their on/off switch from the extension over a private channel the page 
 
 ## The popup
 
-The popup shows the site, one status line (**✅ Protected** or **Allowed – not blocking here**), a **Fix this site** button (turns off hide rules and the page guards for that site only, then asks whether that helped; **No** puts back exactly what it changed), **Allow this site** / **Block again**, and a folded **Show more** with the list and feed status and the version. The gear opens the settings page, which has every other switch, the per-site list, list updates and the popup theme. A small magenta dot on the toolbar icon means a page guard blocked something on that tab; opening the popup says what and clears it.
+The popup shows the site, one status line (**✅ Protected** or **Allowed – not blocking here**), a **Fix this site** button (turns off hide rules and the page guards for that site only, says that the ad lists still block, then asks whether that helped; **No** puts back exactly what it changed and, on an ordinary site with the ad lists on, offers **Test with the ad lists off**: an Allow of the page's own host with the same question, which says what stays on and which **No** takes back again), **Allow this site** / **Block again**, and a folded **Show more** with the list and feed status and the version. The gear opens the settings page, which has every other switch, the per-site list, list updates and the popup theme. A small magenta dot on the toolbar icon means a page guard blocked something on that tab; opening the popup says what and clears it.
 
 ### How the popup finds the page
 
