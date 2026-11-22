@@ -96,10 +96,18 @@ Section 5 lists items that were checked and are not a concern now.
 
 ### M3. Legacy storage mirrors and migrations stay in the code
 
-- The keys `generalEnabled` and `generalAllowedOrigins` are derived mirrors of `settings` and `siteOverrides`. The DNR code and the popup read them. Since 0.3.6, `src/cosmetic.js` reads them only before the migration.
+- The keys `generalEnabled` and `generalAllowedOrigins` are derived mirrors of `settings` and `siteOverrides`. Up to 0.3.7, the DNR code and the popup read them. Since 0.3.6, `src/cosmetic.js` reads them only before the migration.
 - Migrations that run at each worker start: `migrateLegacy`, the old key `generalListRefresh`, `cosMeta.keys` to `cosKeys`. Each change of `PARSER_VERSION` forces a full download for all users. `RETIRED_LISTS` and `dropRetiredCosmetic` clean data of older builds.
 - **Impact.** Two sources hold the same settings. A missed mirror write gives a state where the popup and the rules disagree.
 - **Action.** Make the DNR code read `settings` and `siteOverrides` through `GeckoFeatures.resolve`, then remove the mirrors. Write next to each migration the version after which it can be deleted.
+- **Done** (site-breakage job, Unreleased):
+  - The DNR code (`applyGeneralState()`, the list refresh, the toolbar icon at start) reads `settings` and `siteOverrides` through `readListsState()` in `src/general-background.js`. It uses `legacyMirror()`, not `resolve()`: `resolve()` is for one host and cannot give the allow list.
+  - The popup reads the lists switch from `settings` (`listsOn()`).
+  - When `settings` exists, no code reads the mirror values. A stale mirror changes no rule and no popup text (`test/settings.test.js`, `test/popup-allow-page.test.js`). The impact above is gone.
+  - Each migration names the version that added it and the condition for its deletion: `migrateSettings`/`migrateLegacy`, `migrateListStorage` (`generalListRefresh`) and `RETIRED_LISTS` from 0.3.0; `cosMeta.keys` to `cosKeys` and `dropRetiredCosmetic` from 0.3.5. `PARSER_VERSION` is marked as not a one-time migration. A test checks the comments.
+- **Open:**
+  - The worker still writes the mirrors. Their storage change is the signal that starts `applyGeneralState()`. Their removal needs a new trigger, and `test/general-race.test.js` and `test/dnr-queue.test.js` pin the present one. Do it after the live test (H5).
+  - The cut-off version for each migration is a support policy: an owner decision.
 
 ### M4. Storage key strings are repeated in several files
 

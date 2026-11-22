@@ -163,6 +163,9 @@
   // One-time migration from the old keys (idempotent: a stored `settings`
   // wins). generalEnabled -> features.network; each generalAllowedOrigins host
   // -> a site override with the site switched off (what "Allow this page" did).
+  // Migration, added in 0.3.0: delete the old-key part when upgrades from
+  // 0.2.21 or older are no longer supported. With no `settings` key it also
+  // gives the default settings of a fresh install; that part stays.
   function migrateLegacy(stored) {
     const s = stored || {};
     if (s.settings && typeof s.settings === "object") return null;

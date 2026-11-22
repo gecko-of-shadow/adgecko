@@ -80,11 +80,23 @@ function dnrExclusive(op) {
   }));
 }
 
-function getSettings() {
+// What the lists switch and the per-site allow rules follow: `settings` and
+// `siteOverrides`, through legacyMirror (the same derivation that writes the
+// generalEnabled / generalAllowedOrigins mirrors). The mirrors are not read:
+// they are only the change signal (storage.onChanged), so a missed mirror
+// write cannot make the rules differ from the settings (CONCERNS M3). Before
+// the first migration (no `settings` key) the old keys decide, as before.
+function readListsState() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(Object.keys(GS.DEFAULTS), (stored) => {
+    chrome.storage.local.get(["settings", "siteOverrides", KEYS.enabled, KEYS.allowedOrigins], (got) => {
       void chrome.runtime.lastError;
-      resolve(GS.withDefaults(stored));
+      const s = got || {};
+      if (s.settings && typeof s.settings === "object") {
+        const m = self.GeckoFeatures.legacyMirror(s.settings, s.siteOverrides);
+        resolve({ enabled: m.generalEnabled, allowedOrigins: m.generalAllowedOrigins });
+        return;
+      }
+      resolve({ enabled: s[KEYS.enabled] !== false, allowedOrigins: Array.isArray(s[KEYS.allowedOrigins]) ? s[KEYS.allowedOrigins] : [] });
     });
   });
 }
@@ -263,11 +275,15 @@ function syncThreatAllowRulesNow() {
 // ---- feature switches (src/settings/features.js) ----
 // `settings` / `siteOverrides` are the source of truth (popup, settings page).
 // The worker migrates the old keys once and keeps generalEnabled /
-// generalAllowedOrigins as derived mirrors (the DNR list code and older
-// content scripts read those), the `threat` ruleset on/off, and feedPaused.
+// generalAllowedOrigins as derived mirrors (their change starts
+// applyGeneralState, which reads the settings: readListsState), the `threat`
+// ruleset on/off, and feedPaused.
 const FEAT = self.GeckoFeatures;
 let threatOn = null; // unknown until the first sync at worker start
 
+// Migration, added in 0.3.0: delete the old-key part when upgrades from
+// 0.2.21 or older are no longer supported. The write of default settings on
+// a fresh install (no `settings` key) stays.
 async function migrateSettings() {
   const stored = await localGet(["settings", "siteOverrides", "generalEnabled", "generalAllowedOrigins"]).catch(() => ({}));
   const migrated = FEAT.migrateLegacy(stored);
@@ -441,8 +457,8 @@ function applyGeneralState() {
 
 async function applyGeneralStateNow() {
   await ensureListAllowRule();
-  const settings = await getSettings();
-  const enabled = settings.generalEnabled !== false;
+  const lists = await readListsState();
+  const enabled = lists.enabled;
   currentEnabled = enabled;
   setIcon(enabled);
   let ruleset;
@@ -452,7 +468,7 @@ async function applyGeneralStateNow() {
     ruleset = await enableRuleset(enabled);
   }
   const allows = enabled
-    ? await syncAllowRules(settings.generalAllowedOrigins)
+    ? await syncAllowRules(lists.allowedOrigins)
     : await syncAllowRules([]);
   return { ok: true, enabled, ruleset, allows };
 }
@@ -528,6 +544,8 @@ function recordWriteError(e, keys) {
 // write the list's payload key, read it back and check it, then drop that
 // list's arrays from the old blob. Resumable after a crash at any point; the
 // old key is removed only once the new state key reads back.
+// Migration, added in 0.3.0: delete when upgrades from 0.2.21 or older are
+// no longer supported.
 async function migrateListStorage() {
   const s = await localGet([OLD_LIST_STATE_KEY]);
   const old = s[OLD_LIST_STATE_KEY];
@@ -685,6 +703,8 @@ function readCosmeticState() {
 
 // Every stored cosmetic key: cosKeys, plus cosMeta.keys from an install
 // before 0.3.5 (or after a downgrade and upgrade, when both exist).
+// Migration, added in 0.3.5 (the cosMeta.keys part): delete when upgrades
+// from 0.3.4 or older are no longer supported.
 function cosmeticIndexOf(state) {
   const out = new Set(Array.isArray(state[CP.KEY_INDEX]) ? state[CP.KEY_INDEX] : []);
   const meta = state[CP.KEY_META];
@@ -744,6 +764,8 @@ async function ensureCosmeticNow() {
     let metaDirty = false;
     // Upgrade from 0.3.4: move the key list out of cosMeta (every frame reads
     // cosMeta). Two writes, no rule key is rewritten.
+    // Migration, added in 0.3.5: delete when upgrades from 0.3.4 or older are
+    // no longer supported.
     if (meta && Array.isArray(meta.keys)) {
       await localSet({ [CP.KEY_INDEX]: cosmeticIndexOf(state) });
       meta = Object.assign({}, meta);
@@ -832,8 +854,7 @@ async function refreshLists(manual, opts) {
     // cannot overwrite a newer value. The refresh checks it again right
     // before its swap.
     await dnrExclusive(async () => {
-      const settings = await getSettings();
-      currentEnabled = settings.generalEnabled !== false;
+      currentEnabled = (await readListsState()).enabled;
     });
     let result;
     try {
@@ -1003,7 +1024,7 @@ storageReady();
 applyCachedFeed();
 // Disable and enable fire neither onStartup nor onInstalled, and Chrome puts the
 // manifest icon back. Repaint from storage only: no DNR call, no queue.
-getSettings().then((s) => setIcon(s.generalEnabled !== false));
+readListsState().then((s) => setIcon(s.enabled));
 
 chrome.runtime.onInstalled.addListener((details) => {
   ensureCosmetic();

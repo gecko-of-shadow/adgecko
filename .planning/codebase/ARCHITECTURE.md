@@ -190,7 +190,7 @@ All keys are in `chrome.storage.local`, but `tabSignals` is in `chrome.storage.s
 |---|---|---|
 | `settings` | `{ v: 1, enabled, features: { id: bool } }`. Source of truth. | settings page, worker migration |
 | `siteOverrides` | `{ host: { enabled?: false, features?: { id: bool } } }`. Source of truth. | popup, settings page |
-| `generalEnabled`, `generalAllowedOrigins` | Legacy mirrors (section 10). | worker |
+| `generalEnabled`, `generalAllowedOrigins` | Legacy mirrors (section 10). Their change starts `applyGeneralState()`. When `settings` exists, no code reads their values. | worker |
 | `threatAllowDomains` | The **Allow this domain** list. | settings page |
 | `listState` | Small run metadata: lists, times, counts, errors, threat state. | worker |
 | `listData:<list>` | Parsed payload of one list. | worker |
@@ -248,7 +248,9 @@ Legacy mirrors:
 - `syncFromSettings()` writes the mirrors from `legacyMirror()`. `generalEnabled` is true when the master switch and `network` are on. `generalAllowedOrigins` holds the origins of each host with the site off or `network` off. `feedPaused` is true unless the master switch and `threatFeed` are on.
 - The same function enables the static `threat` ruleset when the master switch and `threatTier` are on.
 - The mirror write changes storage. That change starts `applyGeneralState()`.
-- The DNR code reads the mirrors. `src/cosmetic.js` reads them only before the migration. When `settings` exists, only `resolve(...).cosmetic` decides.
+- The mirrors are only this change signal. `applyGeneralState()`, the list refresh and the toolbar icon read `settings` and `siteOverrides` through `readListsState()` (`legacyMirror()`). The popup reads the lists switch from `settings` (`listsOn()`). A stale mirror changes no rule and no popup text. `legacyMirror()` and not `resolve()`: `resolve()` is for one host and cannot give the allow list.
+- Only before the migration (no `settings` key) do the worker, the popup and `src/cosmetic.js` read the mirror values. When `settings` exists, only `resolve(...).cosmetic` decides in `src/cosmetic.js`.
+- Each migration has a comment with the version that added it and the condition for its deletion. A test checks it (`test/settings.test.js`).
 - Change `settings` or `siteOverrides` only. Let the worker write the mirrors.
 
 ## 11. Stream-site exclusion

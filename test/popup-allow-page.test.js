@@ -282,6 +282,25 @@ Deno.test("the header icon and glow follow list blocking, like the toolbar icon"
   assertEquals(icon(await openPopup({ pageHref, stored: { settings: { v: 1, enabled: false, features: {} }, generalEnabled: false } })), OFF, "master off");
 });
 
+// CONCERNS M3: with `settings` stored, the popup reads the lists switch from
+// settings (the master switch and the network feature), as the worker does.
+// A stale generalEnabled mirror (a missed write) changes neither the icon,
+// the status line nor the offer of the second test.
+Deno.test("the lists switch comes from settings; a stale generalEnabled mirror changes nothing", async () => {
+  const seen = (p) => [p.status.textContent, p.el["brand-icon"].dataset.glow];
+  const pageHref = "https://news.example.com/";
+  const off = await openPopup({ pageHref, stored: { popupWelcomed: true, settings: { v: 1, enabled: true, features: { network: false } }, generalEnabled: true } });
+  assertEquals(seen(off), ["Ad lists off – turned off in settings", "off"], "settings say off");
+  const on = await openPopup({ pageHref, stored: { popupWelcomed: true, settings: { v: 1, enabled: true, features: {} }, generalEnabled: false } });
+  assertEquals(seen(on), ["✅ Protected", "on"], "settings say on");
+  await on.el["fix-site"].fire("click");
+  await on.el["fix-no"].fire("click");
+  assertEquals(on.el["fix-lists"].hidden, false, "the second test is offered: the lists are on");
+  // Before the worker's first migration (no settings key), the old key decides.
+  const legacy = await openPopup({ pageHref, stored: { popupWelcomed: true, generalEnabled: false } });
+  assertEquals(seen(legacy), ["Ad lists off – turned off in settings", "off"], "no settings yet");
+});
+
 Deno.test("a page with no content script stays greyed out and says why", async () => {
   const p = await openPopup({ pageHref: "https://news.example.com/", scripted: false });
   assertEquals(p.button.disabled, true);

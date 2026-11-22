@@ -57,10 +57,6 @@
     return isHardExcludedHost(hostOfOrigin(origin));
   }
 
-  function withDefaults(stored) {
-    return Object.assign({}, DEFAULTS, stored || {});
-  }
-
   root.GeneralSettings = {
     STORAGE_KEYS,
     DEFAULTS,
@@ -70,6 +66,5 @@
     hostOfOrigin,
     isHardExcludedHost,
     isHardExcludedOrigin,
-    withDefaults,
   };
 })(typeof self !== "undefined" ? self : globalThis);

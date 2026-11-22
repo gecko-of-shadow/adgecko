@@ -19,6 +19,12 @@ async function popupWrite(w, patch) {
   await new Promise((r) => w.chrome.storage.local.set(patch, r));
   return w.send(MSG);
 }
+// The lists switch and "Allow this site" as the popup and the settings page
+// write them (`settings`, `siteOverrides`). The worker reads these keys; the
+// generalEnabled / generalAllowedOrigins mirrors are only its change signal
+// (CONCERNS M3).
+const LISTS_OFF = { settings: { v: 1, enabled: true, features: { network: false } } };
+const LISTS_ON = { settings: { v: 1, enabled: true, features: {} } };
 
 Deno.test("lists off then on keeps the refreshed rule set (no duplicate-id rebuild)", async () => {
   const w = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [], generalListRefresh: refreshedState(U.SOURCES) } });
@@ -26,10 +32,10 @@ Deno.test("lists off then on keeps the refreshed rule set (no duplicate-id rebui
   await settle();
   const before = listRules(w);
   assert(before > 0 && w.dnr.staticOn, "precondition: refreshed lists active, got " + before);
-  await popupWrite(w, { generalEnabled: false });
+  await popupWrite(w, LISTS_OFF);
   await settle();
   assert(listRules(w) === 0 && !w.dnr.staticOn, "off removes every list rule");
-  await popupWrite(w, { generalEnabled: true });
+  await popupWrite(w, LISTS_ON);
   await settle(800);
   // Seeded in the old one-key layout; the worker migrates it to listState + listData:*.
   const st = w.store.listState;
@@ -39,16 +45,19 @@ Deno.test("lists off then on keeps the refreshed rule set (no duplicate-id rebui
 });
 
 Deno.test("allow then quick undo leaves the allow rules matching the setting", async () => {
-  const w = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [] } });
+  // Migrated already (settings stored): the worker's first-start migration
+  // writes siteOverrides and would race the click below.
+  const w = loadWorker({ store: { generalEnabled: true, generalAllowedOrigins: [], settings: LISTS_ON.settings, siteOverrides: {} } });
   // The undo click lands while the allow click's runs are still reading DNR.
   const dnr = w.chrome.declarativeNetRequest;
   const realGet = dnr.getDynamicRules;
   let undo = null;
   dnr.getDynamicRules = (cb) => {
-    if (!undo && w.store.generalAllowedOrigins.length) undo = popupWrite(w, { generalAllowedOrigins: [] });
+    if (!undo && Object.keys(w.store.siteOverrides || {}).length) undo = popupWrite(w, { siteOverrides: {} });
     return realGet(cb);
   };
-  await popupWrite(w, { generalAllowedOrigins: ["https://news.example"] });
+  await popupWrite(w, { siteOverrides: { "news.example": { enabled: false } } });
+  assert(undo, "precondition: the undo click landed during the allow click's runs");
   await undo;
   await settle(300);
   assert(w.dnr.errors.length === 0, "DNR errors: " + w.dnr.errors.join("; "));
@@ -82,7 +91,7 @@ Deno.test("switching lists off while a list refresh swaps rules in leaves lists 
     // outside the queue would let them finish first and then write its stale
     // list rules with the switch off: the trailing apply removes them again,
     // so that window is caught by counting list-rule writes after the click.
-    off = popupWrite(w, { generalEnabled: false });
+    off = popupWrite(w, LISTS_OFF);
     off.then(() => { offDone = true; });
     return realGet((rules) => Promise.race([off, new Promise((r) => setTimeout(r, 300))]).then(() => cb(rules)));
   };

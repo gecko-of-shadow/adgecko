@@ -140,6 +140,15 @@
     return !(s && typeof s === "object" && s.enabled === false);
   }
 
+  // The lists switch: the master switch and the "network" feature, read from
+  // `settings` as the worker reads them (the generalEnabled mirror is only
+  // its change signal). Before the worker migrated (no settings), the old key.
+  function listsOn() {
+    const s = all[KEYS.settings];
+    if (s && typeof s === "object") return s.enabled !== false && !(s.features && s.features.network === false);
+    return all[KEYS.enabled] !== false;
+  }
+
   // The site switch: this host's override says enabled:false. Before the
   // worker migrated, the legacy allowed-origins list still counts.
   function siteOff(origin) {
@@ -178,7 +187,7 @@
   // site (the lists never act on stream sites), not allowed, lists switch on.
   function listsTestable(origin, host) {
     if (!origin || !host || !info || info.host !== host || info.limited === true) return false;
-    if (!extensionOn() || siteOff(origin) || streamHere(host) || all[KEYS.enabled] === false) return false;
+    if (!extensionOn() || siteOff(origin) || streamHere(host) || !listsOn()) return false;
     const list = Array.isArray(info.features) ? info.features : [];
     return list.some((f) => f.id === "network" && f.on !== false);
   }
@@ -347,7 +356,7 @@
     const fixed = !!origin && on && !allowed && !limited && !pending && fixedHere(host);
     if (brandIcon) {
       // Same trigger as the toolbar icon: the master switch and list blocking.
-      const blocking = on && all[KEYS.enabled] !== false;
+      const blocking = on && listsOn();
       brandIcon.dataset.glow = blocking ? "on" : "off";
       brandIcon.src = blocking ? "../icons/icon48-working.png" : "../icons/icon48-off.png";
     }
@@ -358,10 +367,10 @@
     else if (!on) siteStatus.textContent = "Off – turned off in settings";
     else if (limited) siteStatus.textContent = threatHere() ? "Malware blocking only – ad scripts don't run on this site" : "Nothing runs on this site";
     else if (allowed) siteStatus.textContent = builtInBlocker(host) ? "Allowed – built-in " + builtInBlocker(host) + " ad blocking still runs" : "Allowed – not blocking here";
-    // The "Block ads and trackers (filter lists)" switch is off: the worker
-    // mirrors it to generalEnabled (same test as the icon above).
+    // The "Block ads and trackers (filter lists)" switch is off (listsOn, the
+    // same test as the icon above).
     // The lists never act on stream sites, so the line is for ordinary sites.
-    else if (all[KEYS.enabled] === false && !streamHere(host)) siteStatus.textContent = "Ad lists off – turned off in settings";
+    else if (!listsOn() && !streamHere(host)) siteStatus.textContent = "Ad lists off – turned off in settings";
     else if (fixed) siteStatus.textContent = "Protected – some filters off here (Fix this site)";
     else siteStatus.textContent = "✅ Protected";
 

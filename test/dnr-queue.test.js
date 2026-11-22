@@ -21,6 +21,10 @@ const listRules = (w) => w.dnr.dynamic.filter((r) => U.isOurRule(r.id) && r.id <
 const threatRules = (w) => w.dnr.dynamic.filter((r) => U.isThreatRule(r.id));
 const threatAllowHosts = (w) => w.dnr.dynamic.filter((r) => r.id >= 950000 && r.id < 951000).map((r) => r.condition.requestDomains[0]).sort();
 const set = (w, items) => new Promise((r) => w.chrome.storage.local.set(items, r));
+// The lists switch as the popup and the settings page write it. The worker
+// reads `settings`; the generalEnabled mirror is only its change signal
+// (CONCERNS M3).
+const LISTS_OFF = { settings: { v: 1, enabled: true, features: { network: false } } };
 // Waits until the queue is idle: an apply run queues behind everything
 // already queued; the settles let storage.onChanged runs start first.
 async function drain(w) {
@@ -130,7 +134,7 @@ Deno.test("L-5: the queue is not held while lists download (a click during a ref
   let w = null;
   const listFetch = async (url) => {
     if (!clickResult && U.isListUrl(url)) {
-      const click = set(w, { generalEnabled: false }).then(() => w.send(APPLY));
+      const click = set(w, LISTS_OFF).then(() => w.send(APPLY));
       clickResult = await within(click, 3000);
     }
     return listResponse(url);
@@ -176,7 +180,7 @@ Deno.test("L-5: a lists switch that lands after the refresh's own check is honou
       triggered = true;
       slowNextGet = true;
       realSet({ threatAllowDomains: ["a.example.com"] }, () => {});
-      realSet({ generalEnabled: false }, () => {});
+      realSet(LISTS_OFF, () => {});
       setTimeout(() => realSet(items, cb), 20);
       return;
     }
