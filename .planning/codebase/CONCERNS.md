@@ -59,9 +59,9 @@ Section 5 lists items that were checked and are not a concern now.
 ### H4. YouTube response patching depends on upstream shapes
 
 - **What.** Two layers change YouTube data in the page world: the generated uBlock Origin layer and `src/youtube.js`, which replaces `fetch`, XHR methods and `JSON.parse` of the page.
-- **Evidence.** The local patches in `scripts/sync-ubo-youtube.mjs` are text replacements. A patch that matches nothing gives only a warning, and the script exits with code 0. The weekly drift job only becomes red. It opens no issue. `CHANGELOG.md` records that one uAssets change already made a new local patch necessary.
+- **Evidence.** The local patches in `scripts/sync-ubo-youtube.mjs` are text replacements. The weekly drift job only becomes red. It opens no issue. `CHANGELOG.md` records that one uAssets change already made a new local patch necessary.
 - **Impact.** A YouTube change or an upstream filter change can break playback or let ads through, and a person must see the red job.
-- **Action.** Make the sync exit with a non-zero code when a patch matches nothing. Do a manual YouTube test before each release. Split `src/youtube.js` only together with tests, because many tests read its source text.
+- **Action.** DONE (site-breakage job, Unreleased): a patch that matches nothing now stops the sync with an error before it writes a file (`unmatchedPatchErrors`, test in `test/ubo-youtube.test.js`). OPEN: do a manual YouTube test before each release. Split `src/youtube.js` only together with tests, because many tests read its source text.
 
 ### H5. 0.3.6 changes behaviour in many places, and no live test was done
 
@@ -180,7 +180,7 @@ The packer writes `src/rules/README.md` with four files. The folder has 14 files
 ### L5. Small duplicates and one wrong workflow comment
 
 - Two default texts for the list status: "auto refresh after startup" (`src/general-settings.js`) and "checked every 3 hours" (`src/popup.js`).
-- The header of `.github/workflows/ubo-youtube-drift.yml` says that the sync "exits non-zero when a local patch no longer finds its upstream shape". The script gives only a warning (H4).
+- DONE (with H4): the header of `.github/workflows/ubo-youtube-drift.yml` says that the sync "exits non-zero when a local patch no longer finds its upstream shape". The script now does that also for the text patches.
 - `src/vendor/LICENSE-uBlock.md` still shows `deno run -A` for the sync. It ships in the zip, thus it was not changed.
 
 ## 5. Checked and not a concern now

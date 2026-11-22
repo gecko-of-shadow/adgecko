@@ -29,6 +29,21 @@ export function ensurePlayerAdsPruned(source) {
   return { source: out, patched };
 }
 
+// The text patches PATCHES and ARG_PATCHES in scripts/sync-ubo-youtube.mjs
+// (CONCERNS H4): each patch that matched nothing gives one message. The sync
+// throws with these messages before it writes a file, so it exits non-zero
+// and the weekly drift job fails at the sync step with the reason.
+// groups: [{ name, count, hits: Set of matched indexes, why }]
+export function unmatchedPatchErrors(groups) {
+  const out = [];
+  for (const { name, count, hits, why } of groups || []) {
+    for (let i = 0; i < count; i++) {
+      if (!hits || !hits.has(i)) out.push(name + "[" + i + "] matched nothing; " + why + ", review it");
+    }
+  }
+  return out;
+}
+
 // The uBO *_ad_ media rule is a substring match. A made-up hCaptcha URL that
 // contains _ad_ would match it. DNR excludedRequestDomains also covers subdomains.
 // The ONE captcha list (src/rules/never-block-captcha.json); the packer, the

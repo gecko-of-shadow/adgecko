@@ -255,6 +255,28 @@ Deno.test("expire window post-processing: an unrecognised rule shape stops the g
   assert(call > 0 && write > call, "generator post-processes before it writes the rule file");
 });
 
+// CONCERNS H4: a PATCHES or ARG_PATCHES text patch that matched nothing gave
+// only a warning, and the sync wrote files without the patch and exited 0.
+// Now the sync throws (exit code 1) before its first write.
+Deno.test("sync: a local text patch that matches nothing stops the sync before it writes a file", async () => {
+  const { unmatchedPatchErrors } = await import("../scripts/lib/youtube-local-patches.mjs");
+  const groups = (hitsA, hitsB) => [
+    { name: "PATCHES", count: 1, hits: new Set(hitsA), why: "upstream scriptlet changed" },
+    { name: "ARG_PATCHES", count: 3, hits: new Set(hitsB), why: "upstream payload changed" },
+  ];
+  assert(unmatchedPatchErrors(groups([0], [0, 1, 2])).length === 0, "all patches matched: no error");
+  const errs = unmatchedPatchErrors(groups([], [0, 2]));
+  assert(errs.length === 2, "one message for each missed patch: " + JSON.stringify(errs));
+  assert(errs[0] === "PATCHES[0] matched nothing; upstream scriptlet changed, review it", errs[0]);
+  assert(errs[1] === "ARG_PATCHES[1] matched nothing; upstream payload changed, review it", errs[1]);
+  const gen = await Deno.readTextFile(new URL("../scripts/sync-ubo-youtube.mjs", import.meta.url));
+  assert(!/console\.warn\([^)]*matched nothing/.test(gen), "no warning-only path left");
+  const stop = gen.indexOf("if (unmatched.length) throw new Error(");
+  const firstWrite = gen.indexOf("Deno.writeTextFile(");
+  assert(stop > 0 && firstWrite > stop, "the sync throws before its first write");
+  assert(/count: PATCHES\.length, hits: patchHits/.test(gen) && /count: ARG_PATCHES\.length, hits: argPatchHits/.test(gen), "both patch lists are checked");
+});
+
 // Early warning (fix prompt, Block 2): fails from 180 days before the first
 // normal link the shipped expire rule would block, read from the rule itself,
 // so there is half a year to re-sync / widen and ship before videos break.

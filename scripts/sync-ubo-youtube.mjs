@@ -17,7 +17,7 @@
 //   src/vendor/ubo-youtube-meta.json     commits used, ported and skipped filters
 // uBlock Origin and uAssets are GPLv3; see src/vendor/LICENSE-uBlock.md.
 import { widenYoutubeExpireWindow } from "./lib/youtube-expire-window.mjs";
-import { ensurePlayerAdsPruned, excludeCaptchaFromAdMediaRule } from "./lib/youtube-local-patches.mjs";
+import { ensurePlayerAdsPruned, excludeCaptchaFromAdMediaRule, unmatchedPatchErrors } from "./lib/youtube-local-patches.mjs";
 import { expectedUboCommit, verifyUboClone } from "./lib/ubo-commit-pin.mjs";
 const ROOT = decodeURIComponent(new URL("..", import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, "$1");
 const arg = (k, d) => { const i = Deno.args.indexOf(k); return i >= 0 ? Deno.args[i + 1] : d; };
@@ -263,12 +263,13 @@ for (const h of HOSTS) {
   hostCalls[h] = calls.map((c) => c.code);
 }
 }
-for (let i = 0; i < PATCHES.length; i++) {
-  if (!patchHits.has(i)) console.warn("PATCHES[" + i + "] matched nothing; upstream scriptlet changed, review it");
-}
-for (let i = 0; i < ARG_PATCHES.length; i++) {
-  if (!argPatchHits.has(i)) console.warn("ARG_PATCHES[" + i + "] matched nothing; upstream payload changed, review it");
-}
+// A local patch that matched nothing stops the sync here, before any file is
+// written (CONCERNS H4; the drift workflow header relies on this).
+const unmatched = unmatchedPatchErrors([
+  { name: "PATCHES", count: PATCHES.length, hits: patchHits, why: "upstream scriptlet changed" },
+  { name: "ARG_PATCHES", count: ARG_PATCHES.length, hits: argPatchHits, why: "upstream payload changed" },
+]);
+if (unmatched.length) throw new Error(unmatched.join("\n"));
 for (const world of WORLDS) {
 const fnCode = fnCodeBy[world];
 const hostCalls = hostCallsBy[world];
