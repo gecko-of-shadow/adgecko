@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Merge stream-exclusion allows + list-pack block rules into general-network.json.
 
-test/dnr.test.js checks the merged allow rules against its own copy of these
-domain lists (they were in src/general-exclude-hosts.js, removed in 0.3.6).
-Renumbers list-pack block ids so they never collide with exclusion ids 1–2.
-Does not edit playback files.
+The stream hosts of the allow rules (SITE_DOMAINS, VIDEO_CDN_DOMAINS) are
+checked against the one stream-host list, STREAM_SITES in
+src/settings/features.js (check_stream_hosts, CONCERNS M1, L-6): each host
+must be there, and each host there must be in an allow rule or in
+STREAM_SITES_NOT_ALLOWED. main() stops before it writes when they differ.
+test/dnr.test.js reads the lists from src/rules/dnr-merge-meta.json and runs
+the same check. Renumbers list-pack block ids so they never collide with
+exclusion ids 1–2. Does not edit playback files.
 """
 from __future__ import annotations
 
@@ -27,7 +31,9 @@ LIST_BLOCKS = (
     else ROOT / "scripts" / ".dnr-cache" / "general-network.blocks.json"
 )
 
-# Keep in sync with SITE_DOMAINS and VIDEO_CDN_DOMAINS in test/dnr.test.js
+# Each host here must be in STREAM_SITES (src/settings/features.js); see
+# check_stream_hosts. Page hosts: allowAllRequests for their frames (Twitch:
+# a plain allow without ads.twitch.tv). Media hosts: a plain allow.
 SITE_DOMAINS = [
     "twitch.tv",
     "youtube.com",
@@ -45,6 +51,47 @@ VIDEO_CDN_DOMAINS = [
     "ggpht.com",
     "live-video.net",
 ]
+# STREAM_SITES hosts that no static allow rule names (as shipped since 0.3.6).
+# The never-block suffixes still keep list rules from naming them. Whether the
+# allow rules should cover them is open: the effect on Twitch extensions and
+# Kick media is UNVERIFIED (CONCERNS M1). A move into SITE_DOMAINS or
+# VIDEO_CDN_DOMAINS changes the shipped rules.
+STREAM_SITES_NOT_ALLOWED = [
+    "twitchcdn.com",
+    "ext-twitch.tv",
+    "kickusercontent.com",
+    "kick-streamer.com",
+]
+FEATURES_JS = ROOT / "src" / "settings" / "features.js"
+
+
+def read_stream_sites(text: str | None = None) -> list[str]:
+    """STREAM_SITES from src/settings/features.js, in source order."""
+    src = FEATURES_JS.read_text(encoding="utf-8") if text is None else text
+    m = re.search(r"const STREAM_SITES = Object\.freeze\(\[([^\]]*)\]\)", src)
+    if not m:
+        raise ValueError("STREAM_SITES not found in src/settings/features.js")
+    hosts = re.findall(r'"([^"]+)"', m.group(1))
+    if not hosts:
+        raise ValueError("STREAM_SITES in src/settings/features.js is empty")
+    return hosts
+
+
+def check_stream_hosts(stream_sites: list[str] | None = None) -> None:
+    """Raise ValueError when the allow-rule hosts and STREAM_SITES differ."""
+    sites = set(read_stream_sites() if stream_sites is None else stream_sites)
+    allowed = set(SITE_DOMAINS) | set(VIDEO_CDN_DOMAINS)
+    named = allowed | set(STREAM_SITES_NOT_ALLOWED)
+    problems = []
+    if allowed & set(STREAM_SITES_NOT_ALLOWED):
+        problems.append("in an allow rule and in STREAM_SITES_NOT_ALLOWED: " + ", ".join(sorted(allowed & set(STREAM_SITES_NOT_ALLOWED))))
+    if named - sites:
+        problems.append("not in STREAM_SITES: " + ", ".join(sorted(named - sites)))
+    if sites - named:
+        problems.append("STREAM_SITES host with no decision here: " + ", ".join(sorted(sites - named)))
+    if problems:
+        raise ValueError("merge-dnr-rules.py stream hosts differ from src/settings/features.js: " + "; ".join(problems))
+
 
 EXCLUSION_ID_START = 1
 EXCLUSION_PRIORITY = 2_000_000
@@ -269,6 +316,11 @@ def build_youtube_ad_block_rules() -> list[dict]:
 
 
 def main() -> int:
+    try:
+        check_stream_hosts()
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 2
     if not LIST_BLOCKS.is_file():
         print(f"missing block rules: {LIST_BLOCKS}", file=sys.stderr)
         return 2

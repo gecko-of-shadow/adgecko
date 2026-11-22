@@ -261,13 +261,13 @@ Stream sites are Twitch, YouTube, Kick and their player and media hosts. The lis
 | 34 `exclude_matches` patterns on CS-7, CS-10 and CS-11. They must equal `streamExcludeMatches()`. A test compares them. | `manifest.json` |
 | Second guard: the cosmetic script stops on a stream host. With no registry, it hides nothing. | `src/cosmetic.js` |
 | The hide-rule parser keeps no rule for a stream host. | `src/general/cosmetic-parse.js` |
-| Static allow rules at 2,000,000, and dynamic copies after a list swap. | `scripts/merge-dnr-rules.py`, `src/general/update.js` |
+| Static allow rules at 2,000,000, and dynamic copies after a list swap. The merger checks its host lists against `STREAM_SITES` (`check_stream_hosts`); four stream hosts have no static allow (`STREAM_SITES_NOT_ALLOWED`). | `scripts/merge-dnr-rules.py`, `src/general/update.js` |
 | Never-block hosts in the list tier (`NEVER_BLOCK_SUFFIXES`; one exception: `imasdk.googleapis.com`). | `src/general/update.js` |
 | One stream host is blocked: the extra tracker rule blocks the Twitch ad host `ads.twitch.tv`. The Twitch allow rule excludes it. | `scripts/merge-dnr-rules.py` (`EXTRA_TRACKER_DOMAINS`) |
 | No **Allow this site** rule and no allowed origin for a stream host. | `src/general-background.js`, `src/general-settings.js`, `src/settings/features.js` |
 | A threat rule can never name a stream host. | `src/threat/protected-hosts.js` |
 
-Add a stream host to `STREAM_SITES` and to the three `exclude_matches` lists together. More copies of the host list: `CONCERNS.md`, M4.
+Add a stream host to `STREAM_SITES` and to the three `exclude_matches` lists together. Then give it a place in `scripts/merge-dnr-rules.py` (an allow list or `STREAM_SITES_NOT_ALLOWED`), or the merger and `test/dnr.test.js` fail. More copies of the host list: `CONCERNS.md`, M1.
 
 ## 12. Private flag channel
 
@@ -375,6 +375,6 @@ The page-world scripts write to the page console only when a debug option is on.
 
 - Put each new DNR write in a `dnrExclusive` section. Do not nest sections. Do not download in a section.
 - Use a new rule id range only after a check of section 4.
-- Add a stream host to `STREAM_SITES` and to the three `exclude_matches` lists together.
+- Add a stream host to `STREAM_SITES` and to the three `exclude_matches` lists together, and give it a place in `scripts/merge-dnr-rules.py`.
 - Change `settings` or `siteOverrides` only. Let the worker write the legacy mirrors.
 - Do not edit generated files or frozen files. The lists are in `CONVENTIONS.md`.

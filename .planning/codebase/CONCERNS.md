@@ -81,12 +81,12 @@ Section 5 lists items that were checked and are not a concern now.
 | Three `exclude_matches` blocks in `manifest.json` (kept by hand, no generator) | `test/settings.test.js`, `test/guards.test.js` |
 | `NEVER_BLOCK_SUFFIXES` in `src/general/update.js` and in `scripts/pack-filter-lists.py` | `test/settings.test.js` |
 | `SUFFIX` and `EXACT` in `src/threat/protected-hosts.js` | `test/settings.test.js` |
-| `SITE_DOMAINS` and `VIDEO_CDN_DOMAINS` in `scripts/merge-dnr-rules.py` | `test/dnr.test.js` (its own copy of the lists) |
+| `SITE_DOMAINS`, `VIDEO_CDN_DOMAINS` and `STREAM_SITES_NOT_ALLOWED` in `scripts/merge-dnr-rules.py` | The merger reads `STREAM_SITES` from `src/settings/features.js` and stops before it writes when a host is missing on either side (`check_stream_hosts`). `test/dnr.test.js` runs the same check and reads the merger lists from `dnr-merge-meta.json` (no own copy). |
 | Host fragments for the URL scan in `scripts/release-gate.sh` | None |
 | `test/fixtures/stream-hosts.txt` | Read by two tests |
 
-- The merger lists (6 site hosts and 7 CDN hosts) do not contain `twitchcdn.com`, `ext-twitch.tv`, `kick-streamer.com` and `kickusercontent.com`. `STREAM_SITES` contains them. The effect is UNVERIFIED.
-- **Action.** Make `scripts/merge-dnr-rules.py` read the hosts from one data file, as the captcha list does.
+- The merger lists (6 site hosts and 7 CDN hosts) do not contain `twitchcdn.com`, `ext-twitch.tv`, `kick-streamer.com` and `kickusercontent.com`. `STREAM_SITES` contains them. The merger now names them in `STREAM_SITES_NOT_ALLOWED`. The effect is UNVERIFIED. A move into an allow list changes the shipped rules: it is a decision, not a cleanup.
+- **Action.** DONE (site-breakage job, Unreleased): the merger checks its lists against the one list, so a new stream host stops the packer until somebody gives it a place. OPEN: the gate URL scan (gate: owner approval) and the place of the four hosts above.
 
 ### M2. One test is always ignored
 
