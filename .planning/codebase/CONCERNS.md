@@ -189,6 +189,8 @@ DONE (site-breakage job, Unreleased): the comments now hold the facts. The navig
 
 The packer writes `src/rules/README.md` with four files. The folder has 14 files. `manifest_hint` in `src/rules/meta.json` gives the ruleset id `general_network`. The manifest uses `general`. Correct the text in the packer, not in the generated files. These files ship in the zip, thus the correction belongs to a release.
 
+DONE in the packer (site-breakage job, Unreleased): `RULES_README_ROWS` and `rules_readme()` give one row for each of the 13 files in `src/rules/` (file, purpose, writer). `MANIFEST_HINT` has the id `general`. `test/packer-options.test.js` compares the rows with the folder and the hint with `manifest.json`. OPEN: the shipped `src/rules/README.md` and `meta.json` keep the old text until the next repack.
+
 ### L5. Small duplicates and one wrong workflow comment
 
 - Two default texts for the list status: "auto refresh after startup" (`src/general-settings.js`) and "checked every 3 hours" (`src/popup.js`).

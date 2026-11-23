@@ -1152,6 +1152,56 @@ def write_licenses(digests: dict[str, str], fetched_at: str) -> str:
     return "\n".join(lines)
 
 
+# The manifest entry for general-network.json, as in manifest.json (ruleset
+# id `general`). Written to meta.json. test/packer-options.test.js compares
+# it with the manifest (CONCERNS L4).
+MANIFEST_HINT = {
+    "permissions": ["declarativeNetRequest"],
+    "declarative_net_request": {
+        "rule_resources": [
+            {
+                "id": "general",
+                "enabled": True,
+                "path": "src/rules/general-network.json",
+            }
+        ]
+    },
+}
+
+# src/rules/README.md: one row for each file in src/rules/ (file, purpose,
+# writer). test/packer-options.test.js compares the rows with the folder
+# (CONCERNS L4).
+RULES_README_ROWS = [
+    ("general-network.json", "Static rules of the `general` ruleset: the list block rules and the stream-site allow rules.", "this packer, with `scripts/merge-dnr-rules.py`"),
+    ("dnr-merge-meta.json", "Rule counts, id ranges and host lists of the merge.", "`scripts/merge-dnr-rules.py`"),
+    ("meta.json", "Source URLs, hashes and counts of the list pack.", "this packer"),
+    ("packed-cross.json", "Cross-list exception and cancel data of each packed list. The list refresh uses a list's part while it has no current copy of that list.", "this packer"),
+    ("LICENSES.md", "Licence and terms of each list.", "this packer"),
+    ("README.md", "This table.", "this packer"),
+    ("cosmetic-rules.json", "Bundled hide rules.", "`scripts/pack-cosmetic.mjs` (run by this packer)"),
+    ("threat-network.json", "Static rules of the `threat` ruleset.", "`scripts/build-threat-rules.mjs` (run by this packer)"),
+    ("threat-snapshot.json", "Threat host snapshot in feed format. Used only when the feed is set up.", "`scripts/build-threat-rules.mjs`"),
+    ("threat-meta.json", "Source URLs, hashes and counts of the threat build.", "`scripts/build-threat-rules.mjs`"),
+    ("ubo-youtube-network.json", "Static rules of the `ubo-youtube` ruleset (uBlock Origin YouTube filters).", "`scripts/sync-ubo-youtube.mjs`"),
+    ("never-block-captcha.json", "The one list of captcha host suffixes. Not in the zip.", "by hand"),
+    ("CREDIT-EasyList.txt", "Credit for the EasyList data.", "by hand"),
+]
+
+
+def rules_readme() -> str:
+    lines = [
+        "# Packed rules and data",
+        "",
+        "Written by `scripts/pack-filter-lists.py`. Do not edit the generated files by hand: change the source and run the writer.",
+        "",
+        "| File | Purpose | Written by |",
+        "|------|---------|------------|",
+    ]
+    lines += [f"| `{name}` | {purpose} | {writer} |" for name, purpose, writer in RULES_README_ROWS]
+    lines += [""]
+    return "\n".join(lines)
+
+
 # Lists whose `##` hide rules go into the bundled sheet, in the runtime's order
 # (the `cosmetic: true` SOURCES of src/general/update.js; COSMETIC_LISTS in
 # scripts/pack-cosmetic.mjs). test/wave2-lists-cosmetic-pack.test.js checks all three agree.
@@ -1296,18 +1346,7 @@ def main() -> int:
         # here too, so the packed metadata matches every host the packer skips.
         "never_block_suffixes": list(NEVER_BLOCK_SUFFIXES) + list(NEVER_BLOCK_CAPTCHA),
         "sentinel_sources": sentinel_sources,
-        "manifest_hint": {
-            "permissions": ["declarativeNetRequest"],
-            "declarative_net_request": {
-                "rule_resources": [
-                    {
-                        "id": "general_network",
-                        "enabled": True,
-                        "path": "src/rules/general-network.json",
-                    }
-                ]
-            },
-        },
+        "manifest_hint": MANIFEST_HINT,
     }
     (OUT_DIR / "meta.json").write_text(
         json.dumps(meta, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
@@ -1325,25 +1364,7 @@ def main() -> int:
     (OUT_DIR / "LICENSES.md").write_text(
         write_licenses(digests, fetched_at), encoding="utf-8"
     )
-    (OUT_DIR / "README.md").write_text(
-        "\n".join(
-            [
-                "# General adblock list artifacts (MV3)",
-                "",
-                "Built by `scripts/pack-filter-lists.py`.",
-                "",
-                "| File | Purpose |",
-                "|------|---------|",
-                "| `general-network.json` | Static DNR block rules (`requestDomains` batches) |",
-                "| `meta.json` | Counts, source hashes, manifest hint for DNR agent |",
-                "| `LICENSES.md` | Attribution / license text |",
-                "",
-                "Do not edit Twitch/YouTube/Kick playback files when wiring these in.",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
+    (OUT_DIR / "README.md").write_text(rules_readme(), encoding="utf-8")
 
     # Keep cache out of git if present
     gitignore = ROOT / "scripts" / ".list-cache" / ".gitignore"
