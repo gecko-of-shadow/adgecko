@@ -48,11 +48,15 @@
     ["guardClipboard", "the clipboard guard"],
     ["guardPopups", "the pop-up guard"],
   ];
-  const SCOPE_FRAMES = "Frames from other addresses keep their own filters.";
+  // A frame under the tested host (login.example.com under example.com)
+  // follows the page: the allow rule's initiatorDomains and overrideFor both
+  // cover subdomains. Only frames from addresses outside the host keep their
+  // own filters, so the line names the host.
+  const SCOPE_FRAMES = "Frames from addresses outside {host} keep their own filters.";
   const SCOPE_FIX_STREAM = "Off here now: Adgecko's hiding helpers. The built-in ad blocking still runs.";
   const NOTE_FIX_NO = "Turned back on. If the site still breaks, use Allow this site.";
   const NOTE_FIX_NO_NEXT = "Turned back on. Still broken? Test with the ad lists off too.";
-  const NOTE_LISTS_NO = "Blocking is back on. The problem stayed with these filters off on this page, so they are likely not the cause. Frames from other addresses kept their own filters. To rule out Adgecko fully, turn it off in chrome://extensions and reload the page.";
+  const NOTE_LISTS_NO = "Blocking is back on. The problem stayed with these filters off on this page, so they are likely not the cause. Frames from addresses outside {host} kept their own filters. To rule out Adgecko fully, turn it off in chrome://extensions and reload the page.";
   const FEED_STATE_KEY = "feedState";
   const FEED_PAUSE_KEY = "feedPaused";
 
@@ -211,7 +215,7 @@
     const parts = [];
     if (off.length) parts.push("Off here now: " + joinNames(off) + ".");
     if (still.length) parts.push("Still on: " + joinNames(still) + ".");
-    parts.push(SCOPE_FRAMES);
+    parts.push(SCOPE_FRAMES.replace("{host}", host));
     return parts.join(" ");
   }
 
@@ -497,10 +501,11 @@
   async function refreshInfo() {
     const res = await notifyBackground("siteInfo", { origin: currentOrigin() || "" });
     info = res && res.ok ? res : null;
-    // The worker ended an unanswered "Test with the ad lists off" (24 hours,
-    // owner decision): read storage again, so the popup shows the site as
-    // protected and asks nothing.
-    if (info && info.listTestExpired === true) await load();
+    // The worker may have ended an unanswered "Test with the ad lists off"
+    // (24 hours, owner decision) since the popup read storage: on this
+    // siteInfo, at worker start or on its alarm. Read storage again every
+    // time, so a later popup write never puts the ended Allow back.
+    await load();
   }
 
   function queryActiveTab() {
@@ -696,7 +701,7 @@
     await refreshInfo();
     const origin = currentOrigin();
     offerLists = saved && !lists && listsTestable(origin, pageHost());
-    if (lists) note = saved && changed ? NOTE_LISTS_NO : "";
+    if (lists) note = saved && changed ? NOTE_LISTS_NO.replace("{host}", host) : "";
     else note = saved && changed ? (offerLists ? NOTE_FIX_NO_NEXT : NOTE_FIX_NO) : "";
     render();
     applyRules();

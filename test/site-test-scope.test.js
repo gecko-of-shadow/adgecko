@@ -29,6 +29,7 @@ const F = globalThis.GeckoFeatures;
 const SITE = "www.news.example";
 const FRAME = "widget.example.org";
 const SIBLING = "login.news.example";
+const CHILD = "login.www.news.example";
 
 // A plain list rule of the packed set: block, priority 1, request domains only.
 const LIST_RULE = general.find((r) => r.action.type === "block" && r.priority === 1 && r.condition.requestDomains &&
@@ -59,8 +60,9 @@ Deno.test("second test: the Allow turns off the ad lists only for what the page 
   assert(v([SITE, FRAME], AD_HOST) === "block", "still on: the ad lists inside a frame from another site");
   assert(v([SITE, SIBLING], AD_HOST) === "block", "still on: the ad lists inside a frame from a sibling subdomain");
   assert(v([SITE], BAD_HOST) === "block", "still on: malware blocking");
-  assert(FRAMES_LINE === "Frames from other addresses keep their own filters.", "the popup says so: " + FRAMES_LINE);
-  assert(VERDICT.includes("Frames from other addresses kept their own filters."), "the verdict says so: " + VERDICT);
+  assert(v([SITE, CHILD], AD_HOST) === "allow", "a frame under the tested host follows the page (initiatorDomains covers subdomains)");
+  assert(FRAMES_LINE === "Frames from addresses outside {host} keep their own filters.", "the popup names the host: " + FRAMES_LINE);
+  assert(VERDICT.includes("Frames from addresses outside {host} kept their own filters."), "the verdict names the host: " + VERDICT);
 });
 
 Deno.test("second test: on the page hiding and the pop-up guard are off and the clipboard guard stays; in other frames all stay on", () => {
@@ -72,6 +74,8 @@ Deno.test("second test: on the page hiding and the pop-up guard are off and the 
     const f = F.resolve(settings, { [SITE]: { enabled: false } }, host);
     assert(f.network && f.cosmetic && f.guardPopups && f.guardClipboard, "a frame from " + host + " keeps its filters: " + JSON.stringify(f));
   }
+  const child = F.resolve(settings, { [SITE]: { enabled: false } }, CHILD);
+  assert(!child.network && !child.cosmetic && !child.guardPopups, "a frame under the tested host follows the page, so the line says outside: " + JSON.stringify(child));
   // The scope line names each of these switches from siteInfo, so it reports
   // their real state (test/popup-allow-page.test.js checks the sentences).
   for (const id of ["network", "threatTier", "cosmetic", "guardClipboard", "guardPopups"]) assert(NAMED.includes(id), "the scope line names " + id + ": " + NAMED.join());

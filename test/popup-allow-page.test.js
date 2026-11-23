@@ -578,7 +578,7 @@ Deno.test("Something broke?: the first test says what is off and that the ad lis
   const p = await openPopup({ pageHref: "https://news.example.com/a", storage });
   assertEquals(p.el["fix-lists"].hidden, true, "no second test before the first one");
   await p.el["fix-site"].fire("click");
-  assertEquals(p.el["fix-scope"].textContent, "Off here now: ad box hiding, the clipboard guard and the pop-up guard. Still on: the ad lists and malware blocking. Frames from other addresses keep their own filters.");
+  assertEquals(p.el["fix-scope"].textContent, "Off here now: ad box hiding, the clipboard guard and the pop-up guard. Still on: the ad lists and malware blocking. Frames from addresses outside news.example.com keep their own filters.");
   await p.el["fix-no"].fire("click");
   assertEquals(p.el["fix-note"].textContent, "Turned back on. Still broken? Test with the ad lists off too.");
   assertEquals(p.el["fix-lists"].hidden, false, "Test with the ad lists off shows");
@@ -594,7 +594,7 @@ Deno.test("Something broke?: the first test says what is off and that the ad lis
   assertEquals(p.status.textContent, "Allowed – not blocking here", "the status line does not look normal during the test");
   assertEquals(p.button.textContent, "Block again", "Block again ends the test");
   const scope = p.el["fix-scope"].textContent;
-  assertEquals(scope, "Off here now: the ad lists, ad box hiding and the pop-up guard. Still on: malware blocking and the clipboard guard. Frames from other addresses keep their own filters.");
+  assertEquals(scope, "Off here now: the ad lists, ad box hiding and the pop-up guard. Still on: malware blocking and the clipboard guard. Frames from addresses outside news.example.com keep their own filters.");
 
   // The popup closed for the reload; the question is still there.
   const q = await openPopup({ pageHref: "https://news.example.com/b", storage });
@@ -605,7 +605,7 @@ Deno.test("Something broke?: the first test says what is off and that the ad lis
   assertEquals(storage.popupFix, undefined);
   assertEquals(q.status.textContent, "✅ Protected");
   const verdict = q.el["fix-note"].textContent;
-  assertEquals(verdict, "Blocking is back on. The problem stayed with these filters off on this page, so they are likely not the cause. Frames from other addresses kept their own filters. To rule out Adgecko fully, turn it off in chrome://extensions and reload the page.");
+  assertEquals(verdict, "Blocking is back on. The problem stayed with these filters off on this page, so they are likely not the cause. Frames from addresses outside news.example.com kept their own filters. To rule out Adgecko fully, turn it off in chrome://extensions and reload the page.");
   assert(!/is not the cause|not Adgecko/i.test(verdict), "no claim that Adgecko is cleared");
   assertEquals(q.el["reload-page"].hidden, false, "Reload page offered: blocking is back on");
   assertEquals(q.el["fix-lists"].hidden, true, "the ladder ends there");
@@ -693,7 +693,7 @@ Deno.test("the scope line follows the switches: no claim that a filter is on whe
   const a = await openPopup({ pageHref: "https://news.example.com/", storage: listsOff });
   await a.el["fix-site"].fire("click");
   const first = a.el["fix-scope"].textContent;
-  assertEquals(first, "Off here now: the ad lists, ad box hiding, the clipboard guard and the pop-up guard. Still on: malware blocking. Frames from other addresses keep their own filters.");
+  assertEquals(first, "Off here now: the ad lists, ad box hiding, the clipboard guard and the pop-up guard. Still on: malware blocking. Frames from addresses outside news.example.com keep their own filters.");
   assert(!/Still on:[^.]*the ad lists/.test(first), "the ad lists are not claimed to block: " + first);
 
   const fewOn = { popupWelcomed: true, settings: { v: 1, enabled: true, features: { threatTier: false, guardClipboard: false } } };
@@ -702,6 +702,6 @@ Deno.test("the scope line follows the switches: no claim that a filter is on whe
   await b.el["fix-no"].fire("click");
   await b.el["fix-lists"].fire("click");
   const second = b.el["fix-scope"].textContent;
-  assertEquals(second, "Off here now: the ad lists, malware blocking, ad box hiding, the clipboard guard and the pop-up guard. Frames from other addresses keep their own filters.");
+  assertEquals(second, "Off here now: the ad lists, malware blocking, ad box hiding, the clipboard guard and the pop-up guard. Frames from addresses outside news.example.com keep their own filters.");
   assert(!second.includes("Still on"), "nothing is claimed to stay on: " + second);
 });
