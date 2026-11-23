@@ -103,7 +103,8 @@ Section 5 lists items that were checked and are not a concern now.
 - **Done** (site-breakage job, Unreleased):
   - The DNR code (`applyGeneralState()`, the list refresh, the toolbar icon at start) reads `settings` and `siteOverrides` through `readListsState()` in `src/general-background.js`. It uses `legacyMirror()`, not `resolve()`: `resolve()` is for one host and cannot give the allow list.
   - The popup reads the lists switch from `settings` (`listsOn()`).
-  - When `settings` exists, no code reads the mirror values. A stale mirror changes no rule and no popup text (`test/settings.test.js`, `test/popup-allow-page.test.js`). The impact above is gone.
+  - When `settings` exists, no code reads the mirror values. A stale mirror changes no rule and no popup text (`test/settings.test.js`, `test/popup-allow-page.test.js`). Thus the popup and the rules can no longer disagree because of a mirror value.
+  - The rule update still starts from the mirror write (`storage.onChanged`). A failed mirror write in `syncFromSettings()` gives no change event, so the rules keep the old state until the next apply (a popup click, a browser start). The settings page sends no apply message. This part of the impact stays.
   - Each migration names the version that added it and the condition for its deletion: `migrateSettings`/`migrateLegacy`, `migrateListStorage` (`generalListRefresh`) and `RETIRED_LISTS` from 0.3.0; `cosMeta.keys` to `cosKeys` and `dropRetiredCosmetic` from 0.3.5. `PARSER_VERSION` is marked as not a one-time migration. A test checks the comments.
 - **Open:**
   - The worker still writes the mirrors. Their storage change is the signal that starts `applyGeneralState()`. Their removal needs a new trigger, and `test/general-race.test.js` and `test/dnr-queue.test.js` pin the present one. Do it after the live test (H5).

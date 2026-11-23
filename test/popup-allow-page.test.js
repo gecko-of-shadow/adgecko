@@ -284,8 +284,8 @@ Deno.test("the header icon and glow follow list blocking, like the toolbar icon"
 
 // CONCERNS M3: with `settings` stored, the popup reads the lists switch from
 // settings (the master switch and the network feature), as the worker does.
-// A stale generalEnabled mirror (a missed write) changes neither the icon,
-// the status line nor the offer of the second test.
+// A stale generalEnabled mirror value changes neither the icon, the status
+// line nor the offer of the second test.
 Deno.test("the lists switch comes from settings; a stale generalEnabled mirror changes nothing", async () => {
   const seen = (p) => [p.status.textContent, p.el["brand-icon"].dataset.glow];
   const pageHref = "https://news.example.com/";

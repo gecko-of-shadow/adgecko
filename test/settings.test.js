@@ -180,8 +180,8 @@ Deno.test("worker: migrates the old keys at start and derives the old keys back 
 
 // CONCERNS M3: the lists switch and the per-site allows follow `settings` and
 // `siteOverrides` (legacyMirror). The generalEnabled / generalAllowedOrigins
-// mirrors stay only as the change signal: a stale mirror (a missed write)
-// changes no rule.
+// mirrors stay only as the change signal: a stale mirror value changes no
+// rule. (A failed mirror write still delays the update: not tested here.)
 Deno.test("worker: a stale mirror changes no rule; the rules follow settings and siteOverrides", async () => {
   const APPLY = { source: "adgecko-general", type: "applyGeneralState" };
   const set = (w, patch) => new Promise((r) => w.chrome.storage.local.set(patch, r));

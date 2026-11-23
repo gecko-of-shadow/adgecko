@@ -82,10 +82,12 @@ function dnrExclusive(op) {
 
 // What the lists switch and the per-site allow rules follow: `settings` and
 // `siteOverrides`, through legacyMirror (the same derivation that writes the
-// generalEnabled / generalAllowedOrigins mirrors). The mirrors are not read:
-// they are only the change signal (storage.onChanged), so a missed mirror
-// write cannot make the rules differ from the settings (CONCERNS M3). Before
-// the first migration (no `settings` key) the old keys decide, as before.
+// generalEnabled / generalAllowedOrigins mirrors). The mirror values are not
+// read, so a stale mirror cannot give wrong rules (CONCERNS M3). The rule
+// update still starts from the mirror write (storage.onChanged): a failed
+// mirror write delays it until the next apply (a popup click, a browser
+// start). Before the first migration (no `settings` key) the old keys
+// decide, as before.
 function readListsState() {
   return new Promise((resolve) => {
     chrome.storage.local.get(["settings", "siteOverrides", KEYS.enabled, KEYS.allowedOrigins], (got) => {
