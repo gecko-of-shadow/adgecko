@@ -30,18 +30,29 @@
     generalListStatus: "Packed lists (checked every 3 hours).",
   };
   const FIX_TTL_MS = 24 * 60 * 60 * 1000;
-  // "Something broke?" is a test in two steps. Each step says what it turned
-  // off and what stays on, so a "No" is not read as "not Adgecko". Step 2 is
-  // an Allow with a question: list blocks in frames of other sites, the
-  // malware list and the clipboard guard (keepOnAllow) stay. The page-world
-  // guards stay installed whatever the switches say (they read their flag at
-  // use time), so only chrome://extensions gives a page with no Adgecko at all.
-  const SCOPE_FIX = "Off here now: hidden ad boxes and the page guards. The ad lists still block.";
+  // "Something broke?" is a test in two steps. Each step says what is off and
+  // what stays on, so a "No" is not read as "not Adgecko". The line comes
+  // from the worker's siteInfo for this page (features[].on), never from a
+  // fixed text: a switch turned off before the test (the ad lists, the
+  // malware list, a guard) is not claimed to be on. Both steps match the
+  // page's own host only. Each frame resolves its own address (the worker's
+  // allow rule matches the request's initiator; cosmetic.js and the guard
+  // flags read the frame's hostname), so a frame from another address keeps
+  // its own filters, and the line says so. The page-world guards stay
+  // installed whatever the switches say (they read their flag at use time),
+  // so only chrome://extensions gives a page with no Adgecko at all.
+  const SCOPE_NAMES = [
+    ["network", "the ad lists"],
+    ["threatTier", "malware blocking"],
+    ["cosmetic", "ad box hiding"],
+    ["guardClipboard", "the clipboard guard"],
+    ["guardPopups", "the pop-up guard"],
+  ];
+  const SCOPE_FRAMES = "Frames from other addresses keep their own filters.";
   const SCOPE_FIX_STREAM = "Off here now: Adgecko's hiding helpers. The built-in ad blocking still runs.";
-  const SCOPE_LISTS = "Off here now: the ad lists, hidden ad boxes and the pop-up guard. Still on: malware blocking, the clipboard guard, and the ad lists in frames from other sites.";
   const NOTE_FIX_NO = "Turned back on. If the site still breaks, use Allow this site.";
   const NOTE_FIX_NO_NEXT = "Turned back on. Still broken? Test with the ad lists off too.";
-  const NOTE_LISTS_NO = "Blocking is back on. The problem stayed with these filters off, so they are likely not the cause. To rule out Adgecko fully, turn it off in chrome://extensions and reload the page.";
+  const NOTE_LISTS_NO = "Blocking is back on. The problem stayed with these filters off on this page, so they are likely not the cause. Frames from other addresses kept their own filters. To rule out Adgecko fully, turn it off in chrome://extensions and reload the page.";
   const FEED_STATE_KEY = "feedState";
   const FEED_PAUSE_KEY = "feedPaused";
 
@@ -181,6 +192,27 @@
 
   function streamHere(host) {
     return !!(host && info && info.host === host && info.stream === true);
+  }
+
+  function joinNames(names) {
+    return names.length < 2 ? names.join("") : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  }
+
+  // The scope line under "Did that fix it?": what is off on this page now,
+  // what is still on, and that frames from other addresses keep their own
+  // filters. Built from siteInfo, so it follows every switch.
+  function scopeLine(host) {
+    if (streamHere(host)) return SCOPE_FIX_STREAM;
+    const list = info && info.host === host && Array.isArray(info.features) ? info.features : [];
+    const on = new Map(list.map((f) => [f.id, f.on === true]));
+    const named = SCOPE_NAMES.filter(([id]) => on.has(id));
+    const off = named.filter(([id]) => !on.get(id)).map(([, name]) => name);
+    const still = named.filter(([id]) => on.get(id)).map(([, name]) => name);
+    const parts = [];
+    if (off.length) parts.push("Off here now: " + joinNames(off) + ".");
+    if (still.length) parts.push("Still on: " + joinNames(still) + ".");
+    parts.push(SCOPE_FRAMES);
+    return parts.join(" ");
   }
 
   // The second test applies where the ad lists act and are on: an ordinary
@@ -400,7 +432,7 @@
       undoFixButton.disabled = busy;
     }
     fixAsk.hidden = !pending;
-    if (fixScope) fixScope.textContent = !pending ? "" : pending.lists ? SCOPE_LISTS : streamHere(host) ? SCOPE_FIX_STREAM : SCOPE_FIX;
+    if (fixScope) fixScope.textContent = pending ? scopeLine(host) : "";
     if (fixLists) {
       fixLists.hidden = !(offerLists && !pending && listsTestable(origin, host));
       fixLists.disabled = busy;

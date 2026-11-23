@@ -303,9 +303,9 @@ A page with no content script gives no reply. The popup then shows its "open a n
 
 "Something broke?" is a test in two steps. The popup cannot see which requests the rules blocked (that needs `activeTab` or `declarativeNetRequestFeedback`), so it gives a test, not a count.
 
-1. **Fix this site** turns off the `FIXABLE` features on the host's own entry. The line `fix-scope` says that the ad lists still block.
+1. **Fix this site** turns off the `FIXABLE` features on the host's own entry. The line `fix-scope` (`scopeLine` in `src/popup.js`) is built from `siteInfo` `features[].on` for the page: what is off, what is still on (from `SCOPE_NAMES`), and `SCOPE_FRAMES`. It never names a filter as on that a switch turned off.
 2. After **No**, on an ordinary site where `network` is on, **Test with the ad lists off** writes `enabled: false` on the host's own entry (the same write as **Allow this site**) and a `popupFix` entry with `lists: true`. **Yes** keeps the Allow. **No** removes it again.
-3. The scope line of step 2 names what stays on: threat rules (priority above the Allow rule), list rules for requests from frames of other sites (the Allow rule matches by `initiatorDomains`) and the clipboard guard (`keepOnAllow`). The MAIN-world guards stay installed whatever the flags say, so the last "No" says "likely not the cause" and points to `chrome://extensions`. `test/site-test-scope.test.js` proves these sentences.
+3. The scope line of step 2 comes from the same `scopeLine`. On the page, threat rules (priority above the Allow rule) and the clipboard guard (`keepOnAllow`) normally stay on. Each frame resolves its own address: the Allow rule matches by `initiatorDomains`, and `cosmetic.js` and the guard flags read the frame's hostname. So a frame from another address, also a sibling subdomain, keeps the ad lists, hiding and the guards, and `SCOPE_FRAMES` and the last "No" say so. The MAIN-world guards stay installed whatever the flags say, so the last "No" says "likely not the cause" and points to `chrome://extensions`. `test/site-test-scope.test.js` proves these sentences.
 4. An unanswered step 2 stays an Allow. The popup shows "Allowed – not blocking here" and **Block again**. **Block again** removes the `lists` entry.
 
 ## 14. Threat tier and protected hosts
