@@ -98,6 +98,17 @@ async function openPopup({ pageHref, scripted = true, stored = {}, answerLater =
   const background = [];
   let pending = null;
   const siteInfo = (origin) => {
+    // Like the worker: an unanswered list test older than 24 hours ends first.
+    const ended = F.expireListTests(storage.popupFix, storage.siteOverrides, Date.now());
+    if (ended) {
+      storage.siteOverrides = ended.overrides;
+      if (ended.fix) storage.popupFix = ended.fix;
+      else delete storage.popupFix;
+    }
+    const r = siteInfoNow(origin);
+    return ended && r.ok ? Object.assign({}, r, { listTestExpired: true }) : r;
+  };
+  const siteInfoNow = (origin) => {
     let host = "";
     try { host = new URL(origin).hostname; } catch { return { ok: true, host: "", features: [] }; }
     const o = storage.siteOverrides || {};
@@ -600,7 +611,7 @@ Deno.test("Something broke?: the first test says what is off and that the ad lis
   assertEquals(q.el["fix-lists"].hidden, true, "the ladder ends there");
 });
 
-Deno.test("the second test: Yes keeps the Allow, Block again ends it, and an old unanswered test stays visible as Allowed", async () => {
+Deno.test("the second test: Yes keeps the Allow, Block again ends it, and an unanswered test ends after 24 hours", async () => {
   const storage = ON();
   const p = await openPopup({ pageHref: "https://news.example.com/", storage });
   await p.el["fix-site"].fire("click");
@@ -629,13 +640,14 @@ Deno.test("the second test: Yes keeps the Allow, Block again ends it, and an old
   const c = await openPopup({ pageHref: "https://news.example.com/", storage: s3 });
   assertEquals([c.el["fix-ask"].hidden, c.status.textContent], [true, "✅ Protected"], "stale test asks nothing");
 
-  // Older than a day and never answered: no more question, but the popup
-  // says Allowed and offers Block again (the lists are not off in silence).
+  // Older than a day and never answered (owner decision 2026-11-22): the
+  // test ends. Its Allow is off, the record is gone, the site is protected.
   const s4 = ON();
   s4.siteOverrides = { "news.example.com": { enabled: false } };
   s4.popupFix = { host: "news.example.com", at: Date.now() - 25 * 60 * 60 * 1000, prev: {}, lists: true };
   const d = await openPopup({ pageHref: "https://news.example.com/", storage: s4 });
-  assertEquals([d.el["fix-ask"].hidden, d.status.textContent, d.button.textContent], [true, "Allowed – not blocking here", "Block again"]);
+  assertEquals([d.el["fix-ask"].hidden, d.status.textContent, d.button.textContent], [true, "✅ Protected", "Allow this site"]);
+  assertEquals([s4.siteOverrides, s4.popupFix], [{}, undefined], "the test's Allow and record are gone");
 });
 
 Deno.test("the second test applies only where the ad lists act: not on stream sites, not with the lists off; its record survives a Fix on another site", async () => {

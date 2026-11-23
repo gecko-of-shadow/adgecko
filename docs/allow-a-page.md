@@ -22,7 +22,7 @@ Use this when you are not sure that Adgecko causes the problem.
 3. Click **Reload page** and look at the page.
    - **Yes** keeps the allow. The site then shows **Allowed – not blocking here**, and **Block again** undoes it.
    - **No** blocks the site again. The window says that these filters are likely not the cause on the page itself, and that frames from other addresses kept their filters. Adgecko's page scripts stay in the page while it is on, also on an allowed site. To rule out Adgecko fully, turn it off in `chrome://extensions`, reload the page, and turn it on again after the test.
-4. A test that you do not answer stays an allow. The window shows **Allowed – not blocking here** and **Block again**, also after the question stops after one day.
+4. A test that you do not answer ends after 24 hours: Adgecko blocks the site again. Until then the window shows **Allowed – not blocking here** and **Block again**. Adgecko checks at browser start, every 3 hours and when you open the window, so the end can come up to about 3 hours late if you do not open the window. If you want to keep the site allowed, answer **Yes**, or use **Allow this site**.
 
 ## Allow a website
 

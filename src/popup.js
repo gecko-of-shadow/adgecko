@@ -497,6 +497,10 @@
   async function refreshInfo() {
     const res = await notifyBackground("siteInfo", { origin: currentOrigin() || "" });
     info = res && res.ok ? res : null;
+    // The worker ended an unanswered "Test with the ad lists off" (24 hours,
+    // owner decision): read storage again, so the popup shows the site as
+    // protected and asks nothing.
+    if (info && info.listTestExpired === true) await load();
   }
 
   function queryActiveTab() {

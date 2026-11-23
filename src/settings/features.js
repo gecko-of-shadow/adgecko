@@ -201,8 +201,51 @@
     return { generalEnabled: s.enabled && s.features.network, generalAllowedOrigins: origins };
   }
 
+  // The popup's "Test with the ad lists off" is an Allow with a question: a
+  // popupFix entry with lists:true and enabled:false on the host's own
+  // siteOverrides entry. Owner decision (2026-11-22): a test that nobody
+  // answers ends after LIST_TEST_TTL_MS, so the site does not stay allowed by
+  // accident. Pure: returns null when nothing expired, else { fix, overrides }
+  // (fix null = remove the popupFix key). Only the Allow that the test wrote
+  // is taken off: other fields of the entry (per-site switches) stay.
+  const LIST_TEST_TTL_MS = 24 * 60 * 60 * 1000;
+  function expireListTests(fix, overrides, now, ttlMs) {
+    if (!fix || typeof fix !== "object") return null;
+    const ttl = typeof ttlMs === "number" ? ttlMs : LIST_TEST_TTL_MS;
+    const entries = [];
+    if (typeof fix.host === "string" && fix.host) entries.push([fix.host, fix]);
+    if (fix.others && typeof fix.others === "object") {
+      for (const [h, e] of Object.entries(fix.others)) if (h && e && typeof e === "object") entries.push([h, e]);
+    }
+    const gone = new Set(entries.filter(([, e]) => e.lists === true && typeof e.at === "number" && now - e.at > ttl).map(([h]) => h));
+    if (!gone.size) return null;
+    const o = JSON.parse(JSON.stringify(overrides && typeof overrides === "object" ? overrides : {}));
+    for (const h of gone) {
+      if (!o[h] || o[h].enabled !== false) continue;
+      const entry = Object.assign({}, o[h]);
+      delete entry.enabled;
+      if (Object.keys(entry).length) o[h] = entry;
+      else delete o[h];
+    }
+    const keep = entries.filter(([h]) => !gone.has(h)).sort((a, b) => (b[1].at || 0) - (a[1].at || 0));
+    if (!keep.length) return { fix: null, overrides: o };
+    const copy = (e) => {
+      const c = { at: e.at, prev: e.prev && typeof e.prev === "object" ? e.prev : {} };
+      if (e.lists === true) c.lists = true;
+      return c;
+    };
+    const [[topHost, topEntry], ...rest] = keep;
+    const out = Object.assign({ host: topHost }, copy(topEntry));
+    if (rest.length) {
+      out.others = {};
+      for (const [h, e] of rest) out.others[h] = copy(e);
+    }
+    return { fix: out, overrides: o };
+  }
+
   root.GeckoFeatures = Object.freeze({
     STREAM_SITES, FEATURES, IDS, byId, normalizeHost, isStreamHost, streamExcludeMatches,
     defaultSettings, normalizeSettings, normalizeOverrides, overrideFor, resolve, migrateLegacy, legacyMirror,
+    LIST_TEST_TTL_MS, expireListTests,
   });
 })(typeof self !== "undefined" ? self : globalThis);

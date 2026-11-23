@@ -1010,14 +1010,35 @@ if (chrome.alarms && chrome.alarms.onAlarm) {
   });
 }
 
+// An unanswered "Test with the ad lists off" ends after 24 hours (owner
+// decision 2026-11-22; FEAT.expireListTests). Checked at worker start, at
+// browser start, on each 3-hour refresh alarm and on each siteInfo (the popup
+// asks it when it opens), so it ends at most about 3 hours late, and at once
+// when the popup opens. The siteOverrides write starts syncFromSettings, which
+// updates the rules. Returns true when a test ended.
+async function expireListTestsNow() {
+  try {
+    const s = await localGet(["popupFix", "siteOverrides"]);
+    const r = FEAT.expireListTests(s.popupFix, s.siteOverrides, Date.now());
+    if (!r) return false;
+    await localSet(r.fix ? { siteOverrides: r.overrides, popupFix: r.fix } : { siteOverrides: r.overrides });
+    if (!r.fix) await new Promise((resolve) => chrome.storage.local.remove("popupFix", () => { void chrome.runtime.lastError; resolve(); }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Top level, so a worker woken by the alarm has the listener in place.
 if (chrome.alarms && chrome.alarms.onAlarm) {
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (!alarm || alarm.name !== REFRESH_ALARM) return;
     refreshLists(false);
     checkFeedNow();
+    expireListTestsNow();
   });
 }
+expireListTestsNow();
 
 ensureRefreshAlarm();
 storageReady();
@@ -1048,6 +1069,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  expireListTestsNow();
   applyGeneralState();
   syncThreatAllowRules();
 });
@@ -1265,7 +1287,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === "siteInfo") {
-    siteInfo(typeof message.origin === "string" ? message.origin : "").then(sendResponse, (e) => sendResponse({ ok: false, error: String(e && e.message || e) }));
+    expireListTestsNow()
+      .then((expired) => siteInfo(typeof message.origin === "string" ? message.origin : "").then((r) => (expired ? Object.assign({}, r, { listTestExpired: true }) : r)))
+      .then(sendResponse, (e) => sendResponse({ ok: false, error: String(e && e.message || e) }));
     return true;
   }
 });
