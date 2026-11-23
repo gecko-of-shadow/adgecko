@@ -64,6 +64,22 @@ Deno.test("playback files stay untouched by general UI APIs", () => {
   }
 });
 
+// CONCERNS L5: the default list-status text (shown before the worker writes a
+// status) was different in three files. popup.html may load only popup.js,
+// so the text stays in three places, and this test keeps them equal. The
+// refresh alarm runs every 3 hours (GU.ALARM_PERIOD_MINUTES).
+Deno.test("one default list-status text in the popup, the settings page and the shared settings module", () => {
+  const pageSource = Deno.readTextFileSync(new URL("../src/settings.js", import.meta.url));
+  const texts = [
+    /generalListStatus: "([^"]+)"/.exec(popupSource),
+    /generalListStatus: "([^"]+)"/.exec(settingsSource),
+    /stored\.generalListStatus \|\| "([^"]+)"/.exec(pageSource),
+  ].map((m) => m && m[1]);
+  assertEquals(texts, ["Packed lists (checked every 3 hours).", "Packed lists (checked every 3 hours).", "Packed lists (checked every 3 hours)."], "default list status");
+  const update = Deno.readTextFileSync(new URL("../src/general/update.js", import.meta.url));
+  assert(/ALARM_PERIOD_MINUTES = 180\b/.test(update), "the refresh alarm runs every 3 hours");
+});
+
 Deno.test("storage key contract matches settings module", () => {
   assert(settingsSource.includes('enabled: "generalEnabled"'), "enabled key");
   assert(settingsSource.includes('allowedOrigins: "generalAllowedOrigins"'), "allow key");

@@ -193,9 +193,9 @@ DONE in the packer (site-breakage job, Unreleased): `RULES_README_ROWS` and `rul
 
 ### L5. Small duplicates and one wrong workflow comment
 
-- Two default texts for the list status: "auto refresh after startup" (`src/general-settings.js`) and "checked every 3 hours" (`src/popup.js`).
+- Two default texts for the list status: "auto refresh after startup" (`src/general-settings.js`) and "checked every 3 hours" (`src/popup.js`). DONE (site-breakage job, Unreleased): the popup, the settings page (`src/settings.js` had a third text, "Packed lists.") and `src/general-settings.js` now have the one text "Packed lists (checked every 3 hours)." `test/popup-general.test.js` keeps the three equal.
 - DONE (with H4): the header of `.github/workflows/ubo-youtube-drift.yml` says that the sync "exits non-zero when a local patch no longer finds its upstream shape". The script now does that also for the text patches.
-- `src/vendor/LICENSE-uBlock.md` still shows `deno run -A` for the sync. It ships in the zip, thus it was not changed.
+- `src/vendor/LICENSE-uBlock.md` still shows `deno run -A` for the sync. It ships in the zip, thus it was not changed (owner decision 25 in `TODO.md`).
 
 ## 5. Checked and not a concern now
 
