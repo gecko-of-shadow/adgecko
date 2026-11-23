@@ -1,6 +1,6 @@
 // Which list rules may block opening a page (main_frame), checked with the DNR
 // matcher that follows Chrome (test/fixtures/dnr-matcher.js; Chrome for Testing
-// 155 probe 2026-11-03, BUILD-PROGRESS "NEXT BUILD 2").
+// 155 probe 2026-11-03, results in the header of that file).
 // Bug 2: negated-only types (`$~script`, `$~stylesheet,third-party`) used to
 // become rules with only excludedResourceTypes, which Chrome also matches for
 // main_frame, so following a link to e.g. prime.rambler.ru or (third-party)

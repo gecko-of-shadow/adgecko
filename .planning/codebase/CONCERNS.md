@@ -181,7 +181,9 @@ The owner approved the deletion on 2026-11-16. 95 old files (approximately 30 MB
 
 ### L3. References to a file that is not in the repository
 
-The name `BUILD-PROGRESS` is in `src/general/filter-options.js`, `scripts/lib/package_files.py`, `test/navigation-scope.test.js`, `test/no-openphish.test.js` and `test/fixtures/dnr-matcher.js`. No tracked file has that name. Move the necessary facts into the comments.
+The name `BUILD-PROGRESS` was in `src/general/filter-options.js`, `scripts/lib/package_files.py`, `test/navigation-scope.test.js`, `test/no-openphish.test.js` and `test/fixtures/dnr-matcher.js`. No tracked file has that name. Move the necessary facts into the comments.
+
+DONE (site-breakage job, Unreleased): the comments now hold the facts. The navigation exemptions name their evidence (from the commits that added them). The probe results stay in the header of `test/fixtures/dnr-matcher.js`. The Peter Lowe note points to owner decision 6 in `TODO.md`. The packaging docstring no longer names the dead modules (removed in 0.3.6). A test in `test/docs-claims.test.js` fails if a file in `src/`, `scripts/`, `test/` or `.github/` names the missing file again.
 
 ### L4. Generated `src/rules/README.md` and `meta.json` hints are old
 

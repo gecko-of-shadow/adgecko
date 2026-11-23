@@ -194,7 +194,7 @@ Deno.test("licence record: each list's line names concrete upstream terms", () =
   assert(/GPL-3\.0/.test(line("hagezi_pro_mini")) && /GPL-3\.0/.test(line("ublock_badware")) && /GPL-3\.0/.test(line("adguard_base")), "GPL-3.0 lists");
   assert(/Dandelicence v1\.4/.test(line("dandelion_antimalware")) && /adfilt\/blob\/master\/LICENSE\.md/.test(line("dandelion_antimalware")), "Dandelicence + link");
   assert(/GPL-3\.0-or-later OR CC BY-SA 3\.0/.test(line("easylist")), "EasyList dual licence");
-  // Peter Lowe: wording kept as it was; the owner decides (NEEDS OWNER in BUILD-PROGRESS.md).
+  // Peter Lowe: wording kept as it was; the owner decides (TODO.md, owner decision 6: the list terms).
   assert(/Peter Lowe's list/.test(line("peter_lowe")), "Peter Lowe line present");
 });
 

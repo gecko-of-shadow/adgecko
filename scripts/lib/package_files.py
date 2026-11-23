@@ -12,8 +12,9 @@ zip by accident (security review H-2):
   * package-local paths named as string literals in packaged JS (files the
     worker or a page fetches with chrome.runtime.getURL, icon paths), followed
     to closure;
-  * EXTRA below: licence / credit / provenance files, and the modules that
-    are packed although nothing loads them (NEEDS OWNER, see BUILD-PROGRESS).
+  * EXTRA below: licence / credit / provenance files (EXTRA_REQUIRED) and
+    metadata files (EXTRA_OPTIONAL). The modules that were packed although
+    nothing loaded them were removed in 0.3.6.
 
 Usage:
   python3 scripts/lib/package_files.py --root DIR             print the list

@@ -63,9 +63,13 @@
   // Hosts people open on purpose (an affiliate link in an article, a shop
   // deal): never a navigation (main_frame) block from the ordinary lists, even
   // when a list asks for `$document`. Their other rules stay. One entry per
-  // registrable host (subdomains included), each with a one-word reason;
-  // evidence in BUILD-PROGRESS "NEXT BUILD 2" BLOCK 5. The threat tier does not
-  // read this. The packer reads the JSON between the markers.
+  // registrable host (subdomains included), each with a one-word reason.
+  // Evidence: redirectingat.com (Skimlinks), ojrq.net (impact.com), invol.co
+  // (Involve Asia) and adtraction.com (Adtraction) are affiliate-link
+  // redirectors. linksprf.com is the redirect that deal sites send a deal
+  // click through; AdGuard Base has an exception for its redirect path. The
+  // threat tier does not read this. The packer reads the JSON between the
+  // markers.
   const NAV_EXEMPT = /*NAV-EXEMPT-START*/{
     "version": 1,
     "hosts": {
