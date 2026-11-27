@@ -50,7 +50,7 @@ Extension APIs in use:
 
 The gate limits the `chrome.*` namespaces of each file: `CONVENTIONS.md` section 7.
 
-Web platform APIs: `fetch` in the worker (list downloads and reads of package files), `importScripts`, WebCrypto Ed25519 (`src/feed/verify.js`), `MessageChannel` between the worlds, streams and `TextDecoder` for a body read with a size limit, constructed style sheets in `document.adoptedStyleSheets` (`src/cosmetic.js`).
+Web platform APIs: `fetch` in the worker (list downloads and reads of package files), `importScripts`, WebCrypto Ed25519 (`src/feed/verify.js`), `MessageChannel` between the worlds, streams and `TextDecoder` for a body read with a size limit, constructed style sheets in `document.adoptedStyleSheets` (`src/cosmetic.js`; the stored-rules sheet has up to 50 selectors per rule, and `fillSheet` splits a rule that Chrome drops for an unknown selector).
 
 ## 4. Permissions
 

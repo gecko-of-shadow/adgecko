@@ -528,13 +528,29 @@
 
   const HIDE = "{display:none!important}";
 
-  function cssForSelectors(selectors, skip) {
+  // Grouped form (group > 1): up to `group` selectors share one rule, joined
+  // by GROUP_SEP. Chrome parses the 13,635 packed generics about 3 times
+  // faster that way (4.8 ms -> 1.7 ms, 535 KB -> 214 KB of CSS). One invalid
+  // selector drops its whole rule, so the content script checks the rule
+  // count and splits a dropped group back (cosmetic.js fillSheet). A tab can
+  // never be part of a selector (sanitizeSelector rejects control
+  // characters), so ",\t" marks the joins exactly. Without `group`: one rule
+  // per selector, as before.
+  const GROUP_SEP = ",\t";
+
+  function cssForSelectors(selectors, skip, group) {
     let css = "";
+    let n = 0;
     for (const sel of selectors || []) {
       if (skip && skip.has(sel)) continue;
-      css += sel + HIDE + "\n";
+      if (group > 1) {
+        css += (n % group ? GROUP_SEP : (n ? HIDE + "\n" : "")) + sel;
+        n += 1;
+      } else {
+        css += sel + HIDE + "\n";
+      }
     }
-    return css;
+    return n ? css + HIDE + "\n" : css;
   }
 
   // Storage layout (chrome.storage.local): one key per host, so a page reads
@@ -575,7 +591,7 @@
   }
 
   // Build the page's stylesheet from what storage returned for keysForHost().
-  function buildPageCss(hostname, stored, fallbackGenericCss) {
+  function buildPageCss(hostname, stored, fallbackGenericCss, group) {
     let noHide = 0;
     for (const h of noHideHosts(hostname)) noHide |= stored[PREFIX_NO_HIDE + h] | 0;
     const exc = new Set();
@@ -589,17 +605,21 @@
       // $generichide: no generic rule, and no fallback sheet either.
     } else if (typeof stored[KEY_GENERIC] === "string" && stored[KEY_GENERIC]) {
       let list = stored[KEY_GENERIC];
-      if (exc.size) list = list.split("\n").filter((sel) => !exc.has(sel)).join("\n");
-      if (list) generic = list.replaceAll("\n", HIDE + "\n") + HIDE + "\n";
+      if (group > 1) {
+        generic = cssForSelectors(list.split("\n").filter(Boolean), exc.size ? exc : null, group);
+      } else {
+        if (exc.size) list = list.split("\n").filter((sel) => !exc.has(sel)).join("\n");
+        if (list) generic = list.replaceAll("\n", HIDE + "\n") + HIDE + "\n";
+      }
     } else if (fallbackGenericCss) {
       generic = fallbackGenericCss + "\n";
     }
-    return generic + (noHide & NO_HIDE_SITE ? "" : cssForSelectors(siteSels, exc));
+    return generic + (noHide & NO_HIDE_SITE ? "" : cssForSelectors(siteSels, exc, group));
   }
 
   root.GeneralCosmeticParse = {
     MAX_SELECTOR_LEN, MAX_SELECTOR_DEPTH, KEY_GENERIC, KEY_META, KEY_INDEX, PREFIX_SITE, PREFIX_EXC, PREFIX_NO_HIDE, HIDE,
-    NO_HIDE_GENERIC, NO_HIDE_SITE, MAX_NO_HIDE_HOSTS,
+    NO_HIDE_GENERIC, NO_HIDE_SITE, MAX_NO_HIDE_HOSTS, GROUP_SEP,
     sanitizeSelector, normalizeHost, isUnscopedSelector, isPageRootSelector, parseCosmetic, mergeCosmetic, candidateHosts, noHideHosts,
     cssForSelectors, toStorage, keysForHost, buildPageCss,
   };

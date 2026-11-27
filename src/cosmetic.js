@@ -7,6 +7,7 @@ function installCosmeticHide(api) {
   const STORAGE_KEY = "generalEnabled";
   const ALLOWED_ORIGINS_KEY = "generalAllowedOrigins";
   const CSS_PATH = "src/cosmetic-hide.css";
+  const SHEET_GROUP = 50; // selectors per rule in the stored-rules sheet
   const SETTINGS_KEY = "settings";
   const OVERRIDES_KEY = "siteOverrides";
 
@@ -166,12 +167,40 @@ function installCosmeticHide(api) {
     }
   }
 
-  function injectSheet(text) {
+  // Grouped sheet text (cosmetic-parse.js buildPageCss with a group size):
+  // one rule per line. A selector Chrome does not know drops its whole line,
+  // so when rules are missing, put the lines in one by one and split each
+  // dropped line back into single-selector rules.
+  function fillSheet(target, text, P) {
+    target.replaceSync(text);
+    let lines = 0;
+    for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) lines += 1;
+    const rules = target.cssRules;
+    if (!rules || rules.length >= lines) return;
+    target.replaceSync("");
+    for (const line of text.split("\n")) {
+      if (!line) continue;
+      try {
+        target.insertRule(line, target.cssRules.length);
+      } catch {
+        for (const one of line.slice(0, line.length - P.HIDE.length).split(P.GROUP_SEP)) {
+          try {
+            target.insertRule(one + P.HIDE, target.cssRules.length);
+          } catch {
+            // this selector only
+          }
+        }
+      }
+    }
+  }
+
+  function injectSheet(text, P) {
     if (sheetFailed || typeof CSSStyleSheet === "undefined" || !document.adoptedStyleSheets) return false;
     try {
       if (!sheet) sheet = new CSSStyleSheet();
       if (!sheetOn || !sameSheetText(text)) {
-        sheet.replaceSync(text);
+        if (P) fillSheet(sheet, text, P);
+        else sheet.replaceSync(text);
         sheetText = text;
         sheetKey = null;
         forgetSheetTextWhenIdle();
@@ -210,9 +239,12 @@ function installCosmeticHide(api) {
     }
   }
 
-  function injectStyle(text) {
+  // P: the text is grouped (see fillSheet). The <style> fallback gets one
+  // rule per selector again.
+  function injectStyle(text, P) {
     if (typeof document === "undefined") return;
-    if (injectSheet(text)) return;
+    if (injectSheet(text, P)) return;
+    if (P) text = text.split(P.GROUP_SEP).join(P.HIDE + "\n");
     if (!styleEl || !styleEl.isConnected) {
       styleEl = document.createElement("style");
       styleEl.id = STYLE_ID;
@@ -310,7 +342,8 @@ function installCosmeticHide(api) {
       try {
         const top = api.isTop != null ? api.isTop : (typeof window !== "undefined" && window.top === window);
         const view = top ? stored : Object.assign({}, stored, { [P.KEY_GENERIC]: "" });
-        injectStyle(P.buildPageCss(hostname, view));
+        const grouped = !!P.GROUP_SEP;
+        injectStyle(P.buildPageCss(hostname, view, "", grouped ? SHEET_GROUP : 0), grouped ? P : null);
         return Promise.resolve(true);
       } catch {
         // fall back to the bundled sheet below
