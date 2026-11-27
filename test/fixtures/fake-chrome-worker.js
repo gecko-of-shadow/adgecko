@@ -12,7 +12,7 @@ export function loadWorker(opts = {}) {
   let onMessage = null;
   let lastError;
   const later = (fn, ms = 1) => setTimeout(fn, opts.jitter ? Math.floor(Math.random() * opts.jitter) : ms);
-  const dnr = { dynamic: [], session: [], staticOn: true, threatOn: true, updates: 0, errors: [] , gets: 0};
+  const dnr = { dynamic: [], session: [], staticOn: true, threatOn: true, uboYoutubeOn: true, rulesetCalls: [], updates: 0, errors: [] , gets: 0};
   const fetched = [];
   const iconCalls = [];
   let bytesRead = 0;
@@ -22,9 +22,10 @@ export function loadWorker(opts = {}) {
     getURL: (p) => "chrome-extension://" + EXT + "/" + p,
     getManifest: () => JSON.parse(Deno.readTextFileSync(new URL("../../manifest.json", import.meta.url))),
     onMessage: { addListener(f) { onMessage = f; } },
-    onInstalled: { addListener(f) { installListeners.push(f); } }, onStartup: { addListener() {} },
+    onInstalled: { addListener(f) { installListeners.push(f); } }, onStartup: { addListener(f) { startupListeners.push(f); } },
   };
   const installListeners = [];
+  const startupListeners = [];
   const withErr = (err, cb, ...args) => { lastError = err; try { cb && cb(...args); } finally { lastError = undefined; } };
   // Storage size like Chrome counts it (key + JSON value). opts.quotaBytes makes a
   // set that would exceed it fail with Chrome's quota message; opts.setError(items)
@@ -86,7 +87,14 @@ export function loadWorker(opts = {}) {
         dnr.session = dnr.session.filter((r) => !rm.has(r.id)).concat(structuredClone(o.addRules || []));
         later(() => withErr(undefined, cb));
       },
+      // opts.rulesetError(o) may return a message: the call then fails with
+      // lastError and changes nothing (like Chrome). dnr.rulesetCalls logs each call.
       updateEnabledRulesets(o, cb) {
+        dnr.rulesetCalls.push(structuredClone(o));
+        const failMsg = opts.rulesetError ? opts.rulesetError(o) : null;
+        if (failMsg) { later(() => withErr({ message: failMsg }, cb)); return; }
+        if ((o.enableRulesetIds || []).includes("ubo-youtube")) dnr.uboYoutubeOn = true;
+        if ((o.disableRulesetIds || []).includes("ubo-youtube")) dnr.uboYoutubeOn = false;
         if ((o.enableRulesetIds || []).includes("general")) dnr.staticOn = true;
         if ((o.disableRulesetIds || []).includes("general")) dnr.staticOn = false;
         if ((o.enableRulesetIds || []).includes("threat")) dnr.threatOn = true;
@@ -145,8 +153,9 @@ export function loadWorker(opts = {}) {
   });
   const fireAlarm = (name) => { for (const f of alarmListeners) f({ name, scheduledTime: Date.now() }); };
   const install = (details = { reason: "update" }) => { for (const f of installListeners) f(details); };
+  const startup = () => { for (const f of startupListeners) f(); };
   return {
-    chrome, store, dnr, send, iconCalls, alarms, alarmCreates, fireAlarm, install, fetched, warnings,
+    chrome, store, dnr, send, iconCalls, alarms, alarmCreates, fireAlarm, install, startup, fetched, warnings,
     get alarmListenerCount() { return alarmListeners.length; },
     get bytesRead() { return bytesRead; }, resetBytes() { bytesRead = 0; },
     get peakBytes() { return peakBytes; }, totalBytes,

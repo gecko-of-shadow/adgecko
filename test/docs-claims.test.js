@@ -111,6 +111,14 @@ Deno.test("README: 'Off' and the not-covered list match the manifest and the mas
     assert(!/The whole extension is switched off/.test(readme), "README says 'Off' switches the whole extension off");
     assert(/YouTube network rules[^\n]*keep running[^\n]*chrome:\/\/extensions/.test(readme), "README 'Off' names what keeps running");
     assert(/YouTube network rules[^<]*also stay on/.test(read("src/settings.html")), "settings note names the YouTube network rules");
+  } else {
+    // Option A (owner decision 3, 2026-11-27): the master switch also stops the ruleset.
+    assert(!/The whole extension is switched off/.test(readme), "README says 'Off' switches the whole extension off");
+    assert(/stops the YouTube network rules[^\n]*keep running[^\n]*chrome:\/\/extensions/.test(readme), "README 'Off' says the master switch stops the YouTube network rules and names what keeps running");
+    assert(!/YouTube network rules[^\n.]*keep running/.test(readme), "README still says the YouTube network rules keep running");
+    const note = read("src/settings.html");
+    assert(/master switch stops the uBlock Origin YouTube network rules/.test(note), "settings note says the master switch stops the YouTube network rules");
+    assert(!/YouTube network rules[^<.]*also stay on/.test(note), "settings note still says the YouTube network rules stay on");
   }
   const yt = manifest.content_scripts.filter((c) => (c.js || []).some((j) => /ubo-youtube|src\/youtube\.js/.test(j)));
   assert(yt.length > 0, "code fact: YouTube ad scripts in the manifest");

@@ -13,7 +13,7 @@ Adgecko is a Chrome Manifest V3 extension with no build step. Chrome loads the f
 
 | Part | Files | Function |
 |---|---|---|
-| Static DNR rulesets | `src/rules/general-network.json`, `ubo-youtube-network.json`, `threat-network.json` | Packed rules. All three are enabled in the manifest. |
+| Static DNR rulesets | `src/rules/general-network.json`, `ubo-youtube-network.json`, `threat-network.json` | Packed rules. All three are enabled in the manifest. The worker disables `threat` and `ubo-youtube` when the master switch is off. |
 | Dynamic DNR rules | Written by the worker and `src/general/update.js` | Refreshed list and threat rules, user allow rules, the list-download allow rule. |
 | Session DNR rules | Written by `src/feed/client.js` through the worker | Rules of the signed threat feed. The feed is dormant. |
 | Content scripts | See section 2 | Hide rules, feature flags, site handlers, page guards. |
@@ -247,6 +247,7 @@ Legacy mirrors:
 - `migrateLegacy()` runs at each worker start. It does nothing if `settings` exists.
 - `syncFromSettings()` writes the mirrors from `legacyMirror()`. `generalEnabled` is true when the master switch and `network` are on. `generalAllowedOrigins` holds the origins of each host with the site off or `network` off. `feedPaused` is true unless the master switch and `threatFeed` are on.
 - The same function enables the static `threat` ruleset when the master switch and `threatTier` are on.
+- The same function enables the static `ubo-youtube` ruleset when the master switch is on, and disables it when the master switch is off (owner decision 3, Option A). The lists switch and a per-site Allow do not change it. `onInstalled` and `onStartup` write it again, because Chrome can reset a static ruleset to the manifest default on an update. A failed write logs a warning, and the next sync tries again.
 - The mirror write changes storage. That change starts `applyGeneralState()`.
 - The mirrors are only this change signal. `applyGeneralState()`, the list refresh and the toolbar icon read `settings` and `siteOverrides` through `readListsState()` (`legacyMirror()`). The popup reads the lists switch from `settings` (`listsOn()`). A stale mirror changes no rule and no popup text. `legacyMirror()` and not `resolve()`: `resolve()` is for one host and cannot give the allow list.
 - Only before the migration (no `settings` key) do the worker, the popup and `src/cosmetic.js` read the mirror values. When `settings` exists, only `resolve(...).cosmetic` decides in `src/cosmetic.js`.
@@ -346,7 +347,7 @@ The signed feed design, limits and switches are in `INTEGRATIONS.md`, section 4.
   - It does not inject its own feed CSS and does not start its DOM sweep.
   - The start watchdog uses the "gentle" mode with longer wait times.
 - The watchdog does not reload pages that cannot play (premieres, sign-in or age-check pages).
-- The static `ubo-youtube` ruleset and the two CSS files are part of the same layer.
+- The static `ubo-youtube` ruleset and the two CSS files are part of the same layer. The master switch disables the ruleset. The scriptlets and the CSS files keep running.
 
 The Twitch script `src/vendor/video-swap-new.user.js` is a byte-for-byte upstream copy. It has no flag port and no connection to other extension code.
 
