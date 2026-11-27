@@ -27,6 +27,7 @@ Get it: download `adgecko-0.3.7.zip` from the newest release, [Adgecko 0.3.7](ht
 - ❌ On Twitch, the picture can drop to lower quality for a moment during an ad break, and an ad can still show when no ad-free copy of the stream is available.
 - ❌ On Kick, some ads still play. Adgecko skips an ad only when it can do that safely.
 - ❌ YouTube Music and YouTube Kids are not covered.
+- ⏳ On YouTube, a video can show a loading spinner for 4 to 12 seconds before it plays. YouTube sets this wait when the ad is removed. [Details](docs/youtube-slow-start.md)
 - ❌ YouTube videos embedded in other websites are not covered: the YouTube ad scripts run only on the YouTube site itself. On those players, only the network block rules apply.
 
 ## Install
