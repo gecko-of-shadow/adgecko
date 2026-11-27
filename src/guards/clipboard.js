@@ -976,7 +976,7 @@ function clipboardGuardNotice(doc, showPopover = showPopoverFn) {
       const box = doc.createElement("div");
       box.setAttribute("role", "alert");
       box.style.cssText = "position:fixed;z-index:2147483647;right:16px;bottom:16px;max-width:360px;padding:12px 14px;border-radius:8px;background:#18181b;color:#efeff1;font:13px/1.4 sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.4);border:1px solid #f0a33a";
-      box.textContent = "Blocked: this page tried to put a command into your clipboard. If a page asks you to paste something into Run, PowerShell or a terminal to \"verify\" you, don't. If you meant to copy it yourself, select the text and press Ctrl+C.";
+      box.textContent = "Blocked: this page tried to put a command into your clipboard. If a page asks you to paste something into Run, PowerShell or a terminal to \"verify\" you, don't. If you meant to copy it yourself, select the text and press Ctrl+C (Cmd+C on a Mac).";
       root.appendChild(box);
       if (typeof showPopover === "function") {
         host.setAttribute("popover", "manual");

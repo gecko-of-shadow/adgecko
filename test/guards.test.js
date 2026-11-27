@@ -641,6 +641,7 @@ Deno.test("clipboard notice: opened as a manual popover in the top layer, plain 
   assert(top.shown.length === 1 && top.shown[0] === top.host, "showPopover called on the host");
   assert(/inset:auto/.test(top.host.style.cssText) && /border:0/.test(top.host.style.cssText), "popover UA box styles reset");
   assert(top.host.children[0].attrs.role === "alert", "alert box inside");
+  assert(/Ctrl\+C \(Cmd\+C on a Mac\)/.test(top.host.children[0].textContent), "names the Mac shortcut too: " + top.host.children[0].textContent);
   const plain = notice(false);
   assert(plain.host && !("popover" in plain.host.attrs) && plain.shown.length === 0, "no popover without showPopover");
 });
