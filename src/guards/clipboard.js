@@ -123,6 +123,16 @@ function installClipboardGuard(target) {
     { id: "shell-c-base64", re: /\b(?:ba|z|da)?sh\s+-c\s+["']?\$\([^)]{0,300}\bbase64\s+(?:-d|--decode|-D)\b/i },
     // Windows: finger user@host | cmd (the reply is run as commands).
     { id: "finger-pipe-cmd", re: /\bfinger(?:\.exe)?\b[^\n|]{0,100}\|\s*cmd\b/i },
+    // The DNS form (2026): the TXT/Name reply of nslookup is piped into a
+    // shell or written to a %TEMP% script that runs next.
+    { id: "nslookup-exec", re: /\bnslookup(?:\.exe)?\b[^\n]{0,300}(?:\|\s*(?:cmd|powershell|pwsh|iex)\b|>\s*["']?(?:%te?mp%|\$env:te?mp))/i },
+    // Pipe to python, perl or ruby with no script argument (the download is
+    // the script). "| python3 -m json.tool" does not match.
+    { id: "curl-pipe-interpreter", re: /\b(?:curl|wget)\b[^\n|]{0,300}\|\s*(?:sudo\s+)?(?:[^\s|]{0,100}\/)?(?:python[23]?(?:\.\d{1,2})?|perl|ruby)(?:\s+-)?\s*(?:$|[;&|)"'])/im },
+    // Download into %TEMP% / %APPDATA% (or $env:...) and start it on the
+    // same line after "&" or ";": curl -o %TEMP%\a.exe URL && %TEMP%\a.exe, or
+    // ...; Start-Process. A "&" inside a URL query starts no command, so no match.
+    { id: "download-temp-run", re: /\b(?:curl|wget|iwr|invoke-webrequest)(?:\.exe)?\b[^\n]{0,300}\s(?:-o|--output|-outfile|-out)\s+["']?(?:%(?:te?mp|appdata|localappdata|public)%|\$env:(?:te?mp|appdata|localappdata|public))[^\n]{0,300}[;&]\s*(?:start(?:-process)?\s|["']?(?:%(?:te?mp|appdata|localappdata|public)%|\$env:(?:te?mp|appdata|localappdata|public)))/i },
     // A WebDAV path pasted into Run: \\host@SSL\..., \\host@80\..., DavWWWRoot.
     // A plain \\server\share path does not match.
     { id: "webdav-unc", re: /\\\\[^\\\s]{1,255}@(?:ssl|\d{1,5})(?:@\d{1,5})?\\|\bdavwwwroot\b/i },

