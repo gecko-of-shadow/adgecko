@@ -6,7 +6,8 @@ Last update: 2026-11-27 (second session of the day).
 
 - Last release: [v0.3.7](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.7), from commit `cc3e764`.
 - `main` has the changes of PRs 22 to 26 after v0.3.7 (merged on 2026-11-20). They are not released. See `CHANGELOG.md`, section "Unreleased".
-- Four pull requests wait for the owner's merge (see "Last session"). Merge order: #31, #30, #33, then #32 and this handoff PR in any order.
+- Five pull requests wait for the owner's merge: #30 to #34. Merge order: #31, #30, #33, #32, #34. A trial merge of all five on `origin/main` in that order had no conflict, and the Deno suite on it gave 936 passed, 0 failed.
+- #33 has the base `api-job/site-breakage` and #34 has the base `docs/youtube-slow-start`. Before you merge them, change their base to `main` (or merge their base first and let GitHub retarget). Else they merge into the old branch, not into `main`.
 - UNVERIFIED: the behaviour of 0.3.7 in the owner's signed-in Chrome, and the Kick, Twitch, PR 30 and PR 33 changes in any real Chrome.
 
 ## Last session (2026-11-27, afternoon): three owner decisions built
@@ -27,7 +28,7 @@ Not checked: any of these changes in real Chrome; the `ubo-youtube` state after 
 
 Known gap in #33: when the write of the ruleset fails, no timer retries it. The next sync (worker start, a settings change, install, update or browser start) tries again.
 
-One flaky run: the first full Deno run on #33 had 3 failures from an uncaught timer error in `test/race.test.js`. That file passes alone, and the rerun passed.
+Flaky runs, seen under load (other Deno runs were active on the PC): one full Deno run on #33 and one on this handoff branch each had 3 failures. On #33 the build agent traced them to an uncaught timer error in `test/race.test.js`; the names of the second run's failures were not read. Each rerun passed. The 6 ignored tests depend on the environment (list cache, zip tool, gate tools, Windows).
 
 ## Session before (2026-11-27, morning): YouTube slow start, documented
 
