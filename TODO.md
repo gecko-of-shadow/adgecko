@@ -1,6 +1,6 @@
 # To do
 
-Last update: 2026-11-27, YouTube slow start documented.
+Last update: 2026-11-27, owner decisions 3 and PR 30 built; youtube.js comment corrected.
 
 ## Where it stands
 
@@ -9,6 +9,7 @@ Last update: 2026-11-27, YouTube slow start documented.
 - **UNVERIFIED:** the behaviour of 0.3.7 in the owner's signed-in Chrome.
 - **YouTube spinner of 4 to 12 s before play:** accepted by the owner on 2026-11-27. It is YouTube's server-side wait. See `docs/youtube-slow-start.md`.
 - **Not released:** `main` has five changes after v0.3.7 (PRs 22 to 26). See `CHANGELOG.md`, section "Unreleased".
+- **Waiting for the owner's merge:** PRs 30 and 33 (PRs 31 and 32 merged on 2026-11-27). PR 30 (the **Something broke?** test) needs the cnn.com popup check first: the owner saw the popup not open on cnn.com on 2026-11-23. PR 33 is stacked on PR 30.
 
 ## Next steps
 
@@ -41,7 +42,7 @@ The numbers are the numbers in `docs/review-2026-11-16/RESULTS.md`, section "Own
 |---|---|---|
 | 1 | Apply the Kick corrections in `docs/proposals/kick-0.3.5-fixes.patch`? | Done on 2026-11-20 (PR 26). Test on kick.com in real Chrome. |
 | 2 | Accept the content pins in `scripts/frozen-pins.json`. | Done in 0.3.6. Confirm. |
-| 3 | Master switch: must it also stop the `ubo-youtube` ruleset? | The docs say what keeps running. A code change is open. |
+| 3 | Master switch: must it also stop the `ubo-youtube` ruleset? | Yes (Option A), on 2026-11-27. Built in PR 33, stacked on PR 30. Test in real Chrome. |
 | 4 | YouTube players that are embedded in other websites. | Documented as not covered. |
 | 5, 7 | EasyList licence option (CC BY-SA 3.0 or GPL-3.0-or-later). The project `LICENSE` in the zip. | Done on 2026-11-20 (PR 23): GPL-3.0-or-later; `LICENSE` ships as `src/LICENSE.txt`. |
 | 6 | Peter Lowe list terms ("non-commercial"). | Open since 0.3.4. |
@@ -83,5 +84,6 @@ Older decisions that are open:
 
 - [ ] **Chrome Web Store:** nothing was submitted. Read [docs/STORE-REVIEW-NOTES.md](docs/STORE-REVIEW-NOTES.md) first.
 - [ ] Not covered today: YouTube Music, YouTube Kids, YouTube players in other websites, and ads that are part of the video.
-- [ ] Owner approval needed: correct the header comment of `src/youtube.js` (lines 4 to 8). It says the SABR waits are cleared, but that code is off when the uBO layer runs. The file is a gated playback file.
+- [x] Correct the header comment of `src/youtube.js` (lines 4 to 8). The owner let the agent decide on 2026-11-27. Done in PR 32 (comment only).
+- [ ] Owner approval needed: apply `docs/proposals/gate-deno-log.patch`. It gives each gate run its own Deno log file, so two runs at the same time do not mix their logs.
 - [ ] Work through `.planning/codebase/CONCERNS.md`. It is sorted by impact.
