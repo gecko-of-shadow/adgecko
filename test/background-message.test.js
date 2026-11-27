@@ -9,6 +9,7 @@ const EXT = "abcdefghijklmnopabcdefghijklmnop";
 function loadWorker(rec = { badges: [], session: {} }) {
   const store = {};
   const listener = () => ({ addListener() {} });
+  const later = (f) => (rec.async ? setTimeout(f, 2) : f());
   let onMessage = null;
   const chrome = {
     runtime: {
@@ -24,8 +25,9 @@ function loadWorker(rec = { badges: [], session: {} }) {
         remove(_k, cb) { if (cb) cb(); },
       },
       session: {
-        get(k, cb) { const out = { listRefreshStarted: true }; for (const key of [].concat(k || [])) if (key in rec.session) out[key] = structuredClone(rec.session[key]); cb(out); },
-        set(o, cb) { Object.assign(rec.session, structuredClone(o)); if (cb) cb(); },
+        // rec.async: answer later, like Chrome, so overlapping reads show.
+        get(k, cb) { const out = { listRefreshStarted: true }; for (const key of [].concat(k || [])) if (key in rec.session) out[key] = structuredClone(rec.session[key]); later(() => cb(out)); },
+        set(o, cb) { later(() => { Object.assign(rec.session, structuredClone(o)); if (cb) cb(); }); },
       },
       onChanged: listener(),
     },
@@ -156,4 +158,25 @@ Deno.test("background messages: bursts are per page, so a block right after navi
   rec.shown[7] = ""; // navigated
   await send(onMessage, ping, guard("doc-2"));
   assert(dots() === 2 && rec.shown[7] === " ", "new page, same tab: dot again");
+});
+
+// Blocks in several tabs at the same moment: each event is a read-modify-write
+// of one storage.session map. Overlapping, the last write kept only its own
+// tab (Chrome for Testing 155: 6 tabs, 1 to 3 events left), and the popup of
+// the other tabs showed a dot with no message.
+Deno.test("background messages: blocks in several tabs at once each keep their event", async () => {
+  const rec = { badges: [], session: {}, async: true };
+  const onMessage = loadWorker(rec);
+  for (let tab = 1; tab <= 6; tab++) onMessage(ping, { id: EXT, tab: { id: tab }, frameId: 0, documentId: "doc-" + tab, url: "https://news.example/" }, () => {});
+  await new Promise((r) => setTimeout(r, 120));
+  const kept = Object.keys(rec.session.tabSignals || {}).sort();
+  assert(kept.join() === "1,2,3,4,5,6", "events kept: " + kept.join());
+  // The popup of tab 3 takes its event while tab 7 blocks: both land.
+  const taken = send(onMessage, { source: "adgecko-general", type: "tabSignal", tabId: 3 }, popupSender);
+  onMessage(ping, { id: EXT, tab: { id: 7 }, frameId: 0, documentId: "doc-7", url: "https://news.example/" }, () => {});
+  const r = await taken;
+  await new Promise((r) => setTimeout(r, 60));
+  assert(r.response && r.response.signal && r.response.signal.kind === "clipboard", "tab 3 got its event: " + JSON.stringify(r.response));
+  const after = Object.keys(rec.session.tabSignals).sort().join();
+  assert(after === "1,2,4,5,6,7", "after take: " + after);
 });

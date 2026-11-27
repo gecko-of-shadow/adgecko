@@ -150,7 +150,7 @@ A sender with a tab can send only `cosmeticCss` and `guardEvent`, unless its URL
 | `revertLists` | settings page | The result of `GU.revertLists`. |
 | `pageOrigin` | popup, with `chrome.tabs.sendMessage` to frame 0 | `{ origin }` from the top-frame content script. This message has no `source` field. |
 
-The dot data is in `chrome.storage.session` under `tabSignals`, for 50 tabs maximum.
+The dot data is in `chrome.storage.session` under `tabSignals`, for 50 tabs maximum. The worker changes this map one event at a time (`editSignals`), so blocks in several tabs at once all keep their event.
 
 ## 8. List refresh
 

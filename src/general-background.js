@@ -1127,6 +1127,41 @@ function sessionArea() {
   return chrome.storage && chrome.storage.session ? chrome.storage.session : null;
 }
 
+// Read-modify-write of the stored events, one at a time: blocks in several
+// tabs at once each read the map before any wrote it, and the last write kept
+// only its own tab (Chrome for Testing 155: 6 tabs blocked together, 1 to 3
+// events left). edit(signals) changes the copy and returns true to save it.
+let signalQueue = Promise.resolve();
+function editSignals(area, edit) {
+  const run = signalQueue.then(() => new Promise((resolve) => {
+    try {
+      area.get(SIGNAL_KEY, (got) => {
+        void chrome.runtime.lastError;
+        const signals = Object.assign({}, got && got[SIGNAL_KEY]);
+        let save = false;
+        try {
+          save = edit(signals);
+        } catch {
+          save = false;
+        }
+        if (!save) return resolve();
+        try {
+          area.set({ [SIGNAL_KEY]: signals }, () => {
+            void chrome.runtime.lastError;
+            resolve();
+          });
+        } catch {
+          resolve();
+        }
+      });
+    } catch {
+      resolve();
+    }
+  }));
+  signalQueue = run;
+  return run;
+}
+
 function guardEvent(tabId, kind, documentId) {
   const now = Date.now();
   const burst = documentId || tabId; // a new page in the tab is a new burst
@@ -1141,21 +1176,16 @@ function guardEvent(tabId, kind, documentId) {
   }
   const area = sessionArea();
   if (!area) return;
-  try {
-    area.get(SIGNAL_KEY, (got) => {
-      void chrome.runtime.lastError;
-      const signals = Object.assign({}, got && got[SIGNAL_KEY]);
-      signals[tabId] = { kind, at: now };
-      const ids = Object.keys(signals);
-      if (ids.length > SIGNAL_TABS_MAX) {
-        ids.sort((a, b) => signals[a].at - signals[b].at);
-        for (const id of ids.slice(0, ids.length - SIGNAL_TABS_MAX)) delete signals[id];
-      }
-      area.set({ [SIGNAL_KEY]: signals }, () => void chrome.runtime.lastError);
-    });
-  } catch {
-    // the dot is still shown
-  }
+  // On failure the dot is still shown.
+  editSignals(area, (signals) => {
+    signals[tabId] = { kind, at: now };
+    const ids = Object.keys(signals);
+    if (ids.length > SIGNAL_TABS_MAX) {
+      ids.sort((a, b) => signals[a].at - signals[b].at);
+      for (const id of ids.slice(0, ids.length - SIGNAL_TABS_MAX)) delete signals[id];
+    }
+    return true;
+  });
 }
 
 // Popup: what was blocked on this tab, then clear the dot. The stored event is
@@ -1170,20 +1200,13 @@ function takeTabSignal(tabId) {
       }
       const area = sessionArea();
       if (!area) return resolve({ ok: true, signal: null });
-      try {
-        area.get(SIGNAL_KEY, (got) => {
-          void chrome.runtime.lastError;
-          const signals = Object.assign({}, got && got[SIGNAL_KEY]);
-          const signal = signals[tabId] || null;
-          if (signal) {
-            delete signals[tabId];
-            area.set({ [SIGNAL_KEY]: signals }, () => void chrome.runtime.lastError);
-          }
-          resolve({ ok: true, signal: dotShown ? signal : null });
-        });
-      } catch {
-        resolve({ ok: true, signal: null });
-      }
+      let signal = null;
+      editSignals(area, (signals) => {
+        signal = signals[tabId] || null;
+        if (!signal) return false;
+        delete signals[tabId];
+        return true;
+      }).then(() => resolve({ ok: true, signal: dotShown ? signal : null }));
     };
     try {
       chrome.action.getBadgeText({ tabId }, (text) => {
