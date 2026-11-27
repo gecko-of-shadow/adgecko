@@ -76,7 +76,7 @@ The worker model `loadWorker(opts)`:
 
 ## 4. Test inventory
 
-`test/` has 133 test files, all in one directory, and 26 fixture files.
+`test/` has 138 test files, all in one directory, and 26 fixture files.
 
 | Subject | Test files (each name has the suffix `.test.js`) |
 |---|---|

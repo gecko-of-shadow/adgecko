@@ -14,7 +14,7 @@ This document tells you where each file is, what its function is, and where to a
 | `src/` | All extension code and packed data. | Yes (all files but one, see section 5) |
 | `icons/` | 9 PNG icons and 2 SVG sources. | PNG files only |
 | `scripts/` | Maintainer tools. See `STACK.md` section 6. | No |
-| `test/` | 133 Deno test files and 26 fixture files. See `TESTING.md`. | No |
+| `test/` | 138 Deno test files and 26 fixture files. See `TESTING.md`. | No |
 | `docs/` | Documents, images and the review record. See section 4. | No |
 | `.github/workflows/` | GitHub Actions. See `INTEGRATIONS.md` section 8. | No |
 | `.planning/codebase/` | This codebase map. | No |
