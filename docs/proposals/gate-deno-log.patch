@@ -1,0 +1,33 @@
+diff --git a/scripts/release-gate.sh b/scripts/release-gate.sh
+index 6633fda..d87fea6 100755
+--- a/scripts/release-gate.sh
++++ b/scripts/release-gate.sh
+@@ -788,22 +788,25 @@ PY
+ 
+ section "5. Deno bug / logic / memory / race / youtube"
+ if [[ -n "${TEST_ROOT}" && -d "${TEST_ROOT}/test" ]]; then
++  # One log file for each run: two gate runs at the same time must not mix logs.
++  DENO_LOG="$(mktemp /tmp/gate-deno.XXXXXX.txt)"
+   set +e
+   # NO_COLOR: plain summary line (no escape codes in the PASS line or CI log).
+-  (cd "$TEST_ROOT" && NO_COLOR=1 deno test --no-lock --allow-read --allow-run --allow-env test/) 2>&1 | tee /tmp/gate-deno.txt
++  (cd "$TEST_ROOT" && NO_COLOR=1 deno test --no-lock --allow-read --allow-run --allow-env test/) 2>&1 | tee "$DENO_LOG"
+   DENO_RC=${PIPESTATUS[0]}
+   set -e
+   if [[ "$DENO_RC" -eq 0 ]]; then
+-    SUMMARY="$(rg 'passed|failed' /tmp/gate-deno.txt | tail -1 || true)"
++    SUMMARY="$(rg 'passed|failed' "$DENO_LOG" | tail -1 || true)"
+     pass "deno test ($SUMMARY)"
+   else
+     fail "deno test failed (exit $DENO_RC)"
+   fi
+   # A failing test prints "... FAILED"; the summary "N failed" with N >= 1.
+   # ("0 failed (3m)" must not match: with no ignored tests it ends that way.)
+-  if rg -q '\bFAILED\b|[1-9][0-9]* failed' /tmp/gate-deno.txt; then
++  if rg -q '\bFAILED\b|[1-9][0-9]* failed' "$DENO_LOG"; then
+     fail "deno reported failures"
+   fi
++  rm -f "$DENO_LOG"
+ else
+   echo "SKIP  deno tests (no test/ next to package — use --dir on the repo)"
+ fi
