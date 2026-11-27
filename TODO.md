@@ -9,7 +9,7 @@ Last update: 2026-11-27, owner decisions 3 and PR 30 built; youtube.js comment c
 - **UNVERIFIED:** the behaviour of 0.3.7 in the owner's signed-in Chrome.
 - **YouTube spinner of 4 to 12 s before play:** accepted by the owner on 2026-11-27. It is YouTube's server-side wait. See `docs/youtube-slow-start.md`.
 - **Not released:** `main` has five changes after v0.3.7 (PRs 22 to 26). See `CHANGELOG.md`, section "Unreleased".
-- **Waiting for the owner's merge:** PRs 30, 31, 32 and 33. PR 30 (the **Something broke?** test) needs the cnn.com popup check first: the owner saw the popup not open on cnn.com on 2026-11-23. PR 33 is stacked on PR 30.
+- **Waiting for the owner's merge:** PRs 30 and 33 (PRs 31 and 32 merged on 2026-11-27). PR 30 (the **Something broke?** test) needs the cnn.com popup check first: the owner saw the popup not open on cnn.com on 2026-11-23. PR 33 is stacked on PR 30.
 
 ## Next steps
 
