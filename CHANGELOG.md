@@ -18,6 +18,7 @@ Five owner decisions of 2026-11-20. Not tested in real Chrome: the Kick and Twit
 ### Fixed
 
 - Repository: `.gitignore` now has `_metadata/`. Chrome writes this folder (indexed rule sets) into the repository root when it loads the unpacked extension, and `git status` showed it as a new folder.
+- Settings page: Enter in the Allow this domain box now adds the domain, the same as the button. Before, Enter did nothing (proven in Chrome for Testing 155). Enter during IME composition does not add.
 
 ### Documentation
 

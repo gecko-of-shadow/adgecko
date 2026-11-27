@@ -27,7 +27,7 @@ function fakeElement(tag, doc) {
     appendChild(c) { this.children.push(c); return c; },
     removeChild(c) { this.children.splice(this.children.indexOf(c), 1); return c; },
     addEventListener(t, fn) { (listeners[t] = listeners[t] || []).push(fn); },
-    async fire(t) { for (const fn of listeners[t] || []) await fn({ type: t }); for (let i = 0; i < 6; i++) await settle(); },
+    async fire(t, extra) { for (const fn of listeners[t] || []) await fn(Object.assign({ type: t }, extra)); for (let i = 0; i < 6; i++) await settle(); },
     focus() { doc.activeElement = this; },
     scrollIntoView() { this.scrolled++; },
     querySelectorAll(sel) {
@@ -95,6 +95,18 @@ Deno.test("a pasted full address is stored as its domain", async () => {
   await p.el["allow-add"].fire("click");
   assertEquals(p.storage.threatAllowDomains, ["example.com"]);
   assert(/placeholder="example\.com or paste the address"/.test(settingsHtml), "placeholder says an address can be pasted");
+});
+
+Deno.test("Enter in the Allow this domain box adds the domain; other keys and IME composition do not", async () => {
+  const p = await openSettings({ settings: { v: 1, enabled: true, features: {} } });
+  p.el["allow-domain"].value = "example.org";
+  await p.el["allow-domain"].fire("keydown", { key: "a" });
+  assertEquals(p.storage.threatAllowDomains, undefined, "a letter key added the domain");
+  await p.el["allow-domain"].fire("keydown", { key: "Enter", isComposing: true });
+  assertEquals(p.storage.threatAllowDomains, undefined, "Enter during IME composition added the domain");
+  await p.el["allow-domain"].fire("keydown", { key: "Enter" });
+  assertEquals(p.storage.threatAllowDomains, ["example.org"]);
+  assertEquals(p.el["allow-domain"].value, "", "box emptied after the add");
 });
 
 Deno.test("per-site list: plain words and the right button for each row", async () => {
