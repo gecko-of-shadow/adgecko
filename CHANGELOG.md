@@ -15,6 +15,10 @@ Five owner decisions of 2026-11-20. Not tested in real Chrome: the Kick and Twit
 - Licence: for EasyList, the chosen option of its dual licence is now GPL-3.0-or-later (owner decision 5). The project `LICENSE` now ships in the zip as `src/LICENSE.txt` (owner decision 7).
 - Package: `src/rules/cosmetic-sample.json` (172,666 bytes, read by no code) is removed from the repository and the zip.
 
+### Fixed
+
+- Repository: `.gitignore` now has `_metadata/`. Chrome writes this folder (indexed rule sets) into the repository root when it loads the unpacked extension, and `git status` showed it as a new folder.
+
 ### Documentation
 
 - YouTube: the 4 to 12 s spinner before a video plays is documented in `docs/youtube-slow-start.md` and in the README limits. YouTube's server sets this wait when the ad is removed. The owner accepted it on 2026-11-27; no code changed.

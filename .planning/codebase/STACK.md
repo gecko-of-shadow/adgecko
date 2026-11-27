@@ -123,7 +123,7 @@ Each script starts with a header that gives its purpose and its command line. Re
 |---|---|
 | `manifest.json` | The extension manifest. |
 | `.gitattributes` | `* text=auto eol=lf`. `*.png`, `*.ico` and `*.zip` are binary. |
-| `.gitignore` | `.DS_Store`, `Thumbs.db`, `*.zip`, the two packer caches, Python cache files, `.playwright-mcp/`. |
+| `.gitignore` | `.DS_Store`, `Thumbs.db`, `*.zip`, the two packer caches, Python cache files, `.playwright-mcp/`, `_metadata/` (Chrome writes it when it loads the unpacked folder). |
 | `scripts/vendor-pins.json`, `scripts/frozen-pins.json` | Pin records (section 7). |
 | `src/rules/never-block-captcha.json` | Source list of captcha host suffixes. Not in the zip. |
 | `src/feed/config.js`, `src/feed/keys.js` | Feed origin and public keys. Both are empty. |

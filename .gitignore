@@ -6,3 +6,5 @@ scripts/.list-cache/
 __pycache__/
 *.pyc
 .playwright-mcp/
+# Chrome writes this folder into an unpacked extension (indexed rule sets).
+_metadata/
