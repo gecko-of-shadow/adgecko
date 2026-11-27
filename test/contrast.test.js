@@ -94,7 +94,7 @@ Deno.test("settings page: every text and UI pair meets AA in each theme, hover, 
 
 // The tokens above only count if the rules use them.
 Deno.test("the checked tokens are the ones the rules use", () => {
-  assert(/button\.primary:hover\s*\{[^}]*background:\s*var\(--accent-hover\)/.test(popup), "popup hover uses the token");
+  assert(/button\.primary:hover(?::not\(:disabled\))?\s*\{[^}]*background:\s*var\(--accent-hover\)/.test(popup), "popup hover uses the token");
   assert(/button:hover\s*\{[^}]*background:\s*var\(--accent-hover\)/.test(settingsCss), "settings hover uses the token");
   assert(!/button:hover\s*\{[^}]*filter:/.test(settingsCss), "a brightness filter would skip this check");
   assert(/input\[type="text"\],\s*select\s*\{[^}]*border:\s*1px solid var\(--field-line\)/.test(settingsCss), "field edge uses the token");
