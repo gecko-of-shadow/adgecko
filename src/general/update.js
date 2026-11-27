@@ -506,60 +506,42 @@ function installGeneralAdblockUpdate(target) {
     return out;
   }
 
-  // Whole-domain batches first, then one batch series per scope key.
+  // Whole-domain batches first, then one batch series per scope key. The
+  // exception allow rules (exceptionAllows) follow the blocks, in the same
+  // layout.
   function buildListRules(domains, scoped, allows) {
     const FO = filterOptions();
     const rules = [];
-    // Stored payloads may predate the host checks in looksLikeDomain.
-    domains = (domains || []).filter((d) => looksLikeDomain(d));
-    scoped = (scoped || []).filter((e) => looksLikeDomain(e[0]));
-    const push = (chunk, extra) => {
-      rules.push({
-        id: LIST_RULE_ID_BASE + rules.length,
-        priority: 1,
-        action: { type: "block" },
-        condition: Object.assign({ requestDomains: chunk }, extra),
-      });
-    };
-    for (let i = 0; i < domains.length && rules.length < MAX_LIST_RULES; i += DOMAINS_PER_RULE) {
-      push(domains.slice(i, i + DOMAINS_PER_RULE), {});
-    }
-    if (scoped && scoped.length && FO) {
-      const groups = new Map();
-      for (const [d, key] of scoped) {
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(d);
+    const series = (type, whole, entries) => {
+      const push = (chunk, extra) => {
+        rules.push({
+          id: LIST_RULE_ID_BASE + rules.length,
+          priority: 1,
+          action: { type },
+          condition: Object.assign({ requestDomains: chunk }, extra),
+        });
+      };
+      for (let i = 0; i < whole.length && rules.length < MAX_LIST_RULES; i += DOMAINS_PER_RULE) {
+        push(whole.slice(i, i + DOMAINS_PER_RULE), {});
       }
-      for (const key of Array.from(groups.keys()).sort()) {
-        const list = groups.get(key);
-        const extra = FO.keyToCondition(key);
-        for (let i = 0; i < list.length && rules.length < MAX_LIST_RULES; i += DOMAINS_PER_RULE) {
-          push(list.slice(i, i + DOMAINS_PER_RULE), extra);
+      if (entries.length && FO) {
+        const groups = new Map();
+        for (const [d, key] of entries) {
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(d);
+        }
+        for (const key of Array.from(groups.keys()).sort()) {
+          const list = groups.get(key);
+          const extra = FO.keyToCondition(key);
+          for (let i = 0; i < list.length && rules.length < MAX_LIST_RULES; i += DOMAINS_PER_RULE) {
+            push(list.slice(i, i + DOMAINS_PER_RULE), extra);
+          }
         }
       }
-    }
-    // Exception allow rules (exceptionAllows), after the blocks.
-    const pushAllow = (chunk, extra) => {
-      rules.push({
-        id: LIST_RULE_ID_BASE + rules.length,
-        priority: 1,
-        action: { type: "allow" },
-        condition: Object.assign({ requestDomains: chunk }, extra),
-      });
     };
-    if (allows) {
-      const whole = allows.whole || [];
-      for (let i = 0; i < whole.length && rules.length < MAX_LIST_RULES; i += DOMAINS_PER_RULE) pushAllow(whole.slice(i, i + DOMAINS_PER_RULE), {});
-      const groups = new Map();
-      for (const [d, key] of allows.scoped || []) {
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(d);
-      }
-      for (const key of Array.from(groups.keys()).sort()) {
-        const list = groups.get(key);
-        for (let i = 0; i < list.length && rules.length < MAX_LIST_RULES && FO; i += DOMAINS_PER_RULE) pushAllow(list.slice(i, i + DOMAINS_PER_RULE), FO.keyToCondition(key));
-      }
-    }
+    // Stored payloads may predate the host checks in looksLikeDomain.
+    series("block", (domains || []).filter((d) => looksLikeDomain(d)), (scoped || []).filter((e) => looksLikeDomain(e[0])));
+    if (allows) series("allow", allows.whole || [], allows.scoped || []);
     return rules;
   }
 
