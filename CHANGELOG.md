@@ -20,6 +20,7 @@ Five owner decisions of 2026-11-20. Not tested in real Chrome: the Kick and Twit
 - Repository: `.gitignore` now has `_metadata/`. Chrome writes this folder (indexed rule sets) into the repository root when it loads the unpacked extension, and `git status` showed it as a new folder.
 - Settings page: Enter in the Allow this domain box now adds the domain, the same as the button. Before, Enter did nothing (proven in Chrome for Testing 155). Enter during IME composition does not add.
 - Popup and settings page: the list status names each failed host once. Lists that share a host (EasyList and EasyPrivacy and their mirrors) repeated the same "host: reason" text. Offline in Chrome for Testing 155: 14 parts and 852 characters before, 8 parts and 509 characters after.
+- Hide sheet memory: the content script kept the whole page sheet text (about 535,000 characters) only to skip an equal rewrite. When the frame is idle it now keeps a fingerprint (length and two 32-bit hashes) instead. Chrome for Testing 155, top frame of an ordinary page, after garbage collection: 2,097 KB script heap before, 1,085 KB after (no extension: 631 KB). An equal sheet is still not written again.
 
 ### Documentation
 

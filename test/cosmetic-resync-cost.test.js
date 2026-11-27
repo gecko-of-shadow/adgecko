@@ -70,6 +70,29 @@ Deno.test("resync cost: a second applyState with the same CSS does not write aga
   }
 });
 
+// The sheet text is swapped for a fingerprint when the frame is idle (it held
+// about 1 MB per top frame). The same-CSS check must still work after that.
+Deno.test("resync cost: after the idle swap to a fingerprint, the same CSS is still not written again and a change still is", async () => {
+  const doc = fakeDoc();
+  CountSheet.writes = 0;
+  await withGlobals(doc, CountSheet, async () => {
+    const api = { hostname: "news.example", href: "https://news.example/", isTop: true, parse: P };
+    install(api);
+    await api.applyState({ stored });
+    await tick(); await tick();
+    await api.applyState({ stored });
+    assert(CountSheet.writes === 1, "same CSS after the idle swap was written " + CountSheet.writes + " times");
+    await api.applyState({ stored: Object.assign({}, stored, { cosG: ".other" }) });
+    assert(CountSheet.writes === 2, "a changed CSS after the idle swap was not written");
+    await tick(); await tick();
+    await api.applyState({ stored: Object.assign({}, stored, { cosG: ".other" }) });
+    assert(CountSheet.writes === 2, "same CSS after a second idle swap was written again");
+    // Same length, other text.
+    await api.applyState({ stored: Object.assign({}, stored, { cosG: ".othes" }) });
+    assert(CountSheet.writes === 3, "a same-length change was not written");
+  });
+});
+
 Deno.test("resync cost: a site switch on another site does not re-read storage in this frame", async () => {
   const doc = fakeDoc();
   await withGlobals(doc, CountSheet, async () => {

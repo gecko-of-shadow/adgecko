@@ -57,10 +57,14 @@ function installCosmeticHide(api) {
   let sheet = null;
   let sheetOn = false; // our sheet should be adopted now
   let sheetFailed = false;
-  // The CSS text now in our sheet or <style> node (null = none). An equal
-  // text is not written again: a write re-parses the whole sheet (about
-  // 500 KB) and restyles the page, in every frame of every tab.
+  // The CSS text now in our sheet (null = none). An equal text is not
+  // written again: a write re-parses the whole sheet (about 500 KB) and
+  // restyles the page, in every frame of every tab. When the frame is idle
+  // the text is swapped for its fingerprint (sheetKey): the text held about
+  // 1 MB of script memory in each top frame for the life of the page.
   let sheetText = null;
+  let sheetKey = null;
+  let keyTimer = false;
   let watchers = false;
   let styleObserver = null;
 
@@ -96,6 +100,7 @@ function installCosmeticHide(api) {
   function removeStyle() {
     sheetOn = false;
     sheetText = null;
+    sheetKey = null;
     if (sheet) {
       try {
         if (adoptedHas(sheet)) document.adoptedStyleSheets = Array.from(document.adoptedStyleSheets).filter((s) => s !== sheet);
@@ -127,12 +132,50 @@ function installCosmeticHide(api) {
     }
   }
 
+  // Length plus two 32-bit hashes (FNV-1a and djb2) of the UTF-16 code units.
+  function textKey(text) {
+    let a = 0x811c9dc5;
+    let b = 5381;
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      a = Math.imul(a ^ c, 0x01000193);
+      b = (Math.imul(b, 33) + c) | 0;
+    }
+    return text.length + ":" + (a >>> 0) + ":" + (b >>> 0);
+  }
+
+  function sameSheetText(text) {
+    if (sheetText !== null) return sheetText === text;
+    return sheetKey !== null && sheetKey === textKey(text);
+  }
+
+  function forgetSheetTextWhenIdle() {
+    if (keyTimer) return;
+    keyTimer = true;
+    const run = () => {
+      keyTimer = false;
+      if (sheetText === null) return;
+      sheetKey = textKey(sheetText);
+      sheetText = null;
+    };
+    try {
+      if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 10000 });
+      else setTimeout(run, 0);
+    } catch {
+      keyTimer = false;
+    }
+  }
+
   function injectSheet(text) {
     if (sheetFailed || typeof CSSStyleSheet === "undefined" || !document.adoptedStyleSheets) return false;
     try {
       if (!sheet) sheet = new CSSStyleSheet();
-      if (sheetText !== text || !sheetOn) sheet.replaceSync(text);
-      sheetText = text;
+      if (!sheetOn || !sameSheetText(text)) {
+        sheet.replaceSync(text);
+        sheetText = text;
+        sheetKey = null;
+        forgetSheetTextWhenIdle();
+      }
       sheetOn = true;
       adoptSheet();
       watchAdopted();
@@ -141,6 +184,7 @@ function installCosmeticHide(api) {
       sheetFailed = true;
       sheetOn = false;
       sheetText = null;
+      sheetKey = null;
       sheet = null;
       return false;
     }
