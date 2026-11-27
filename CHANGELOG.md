@@ -4,7 +4,9 @@ All notable changes to Adgecko, newest first. Each released version matches a Gi
 
 Dates in this file are the owner's local date (UTC-6). The dates stored on packed files and filter lists (`src/rules/meta.json`, `threat-meta.json`, the list `! Expires` headers) are UTC.
 
-## Unreleased
+## 0.3.8 (2026-11-27)
+
+Version number set in `manifest.json` only, as a local commit: no tag, no GitHub release and no zip yet. The README still names 0.3.7, the newest published release.
 
 Five owner decisions of 2026-11-20. Not tested in real Chrome: the Kick and Twitch changes are UNVERIFIED until a run on the owner's PC proves them.
 
