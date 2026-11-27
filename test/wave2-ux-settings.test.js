@@ -109,6 +109,18 @@ Deno.test("Enter in the Allow this domain box adds the domain; other keys and IM
   assertEquals(p.el["allow-domain"].value, "", "box emptied after the add");
 });
 
+Deno.test("Allow this domain names the domain it saved, and says so when it is already allowed (no write)", async () => {
+  const p = await openSettings({ settings: { v: 1, enabled: true, features: {} } });
+  p.el["allow-domain"].value = "https://shop.example.com/cart";
+  await p.el["allow-add"].fire("click");
+  assertEquals(p.el.status.textContent, "Allowed shop.example.com. Reload the blocked page.");
+  const before = JSON.stringify(p.storage);
+  p.el["allow-domain"].value = "shop.example.com";
+  await p.el["allow-add"].fire("click");
+  assertEquals(p.el.status.textContent, "shop.example.com is already allowed.");
+  assertEquals(JSON.stringify(p.storage), before, "a duplicate wrote to storage");
+});
+
 Deno.test("per-site list: plain words and the right button for each row", async () => {
   const p = await openSettings({
     settings: { v: 1, enabled: true, features: {} },

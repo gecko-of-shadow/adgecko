@@ -320,8 +320,12 @@
     $("allow-domain").value = "";
     await queued(async () => {
       const list = Array.isArray(stored.threatAllowDomains) ? stored.threatAllowDomains.slice() : [];
-      if (!list.includes(d)) list.push(d);
-      await set({ threatAllowDomains: list });
+      if (list.includes(d)) {
+        $("status").textContent = d + " is already allowed.";
+        return;
+      }
+      list.push(d);
+      if (await set({ threatAllowDomains: list })) $("status").textContent = "Allowed " + d + ". Reload the blocked page.";
     });
   }
   $("allow-add").addEventListener("click", allowDomain);
