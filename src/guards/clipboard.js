@@ -91,13 +91,19 @@ const wmHas = WeakMap.prototype.has;
 function installClipboardGuard(target) {
   // Commands people are tricked into running (patterns are case-insensitive).
   const PATTERNS = [
-    { id: "powershell-encoded", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s-(?:e|ec|en|enc|enco|encod|encode|encoded|encodedcommand)\s+[A-Za-z0-9+/=]{16,}/i },
+    // powershell.exe takes a switch after "/", "-", "--" or a Unicode dash
+    // (en dash, em dash, horizontal bar), and any prefix of its name
+    // (PowerShell CommandLineParameterParser: GetSwitchKey, MatchSwitch).
+    { id: "powershell-encoded", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s(?:\/|[-\u2013-\u2015]{1,2})(?:ec|e(?:n(?:c(?:o(?:d(?:e(?:d(?:c(?:o(?:m(?:m(?:a(?:n(?:d)?)?)?)?)?)?)?)?)?)?)?)?)?)\s+[A-Za-z0-9+/=]{16,}/i },
     { id: "powershell-download", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,400}(?:\biex\b|invoke-expression|downloadstring|downloadfile|invoke-webrequest|\biwr\b|\birm\b|invoke-restmethod|net\.webclient|start-bitstransfer|frombase64string)/i },
-    { id: "powershell-hidden", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s-(?:w|win|window|windowstyle)\s+(?:h|hid|hidden)\b/i },
+    // WindowStyle 1 is Hidden.
+    { id: "powershell-hidden", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s(?:\/|[-\u2013-\u2015]{1,2})w(?:i(?:n(?:d(?:o(?:w(?:s(?:t(?:y(?:l(?:e)?)?)?)?)?)?)?)?)?)?\s+(?:h|hi|hid|hidd|hidde|hidden|1)\b/i },
     // Pipeline form "irm URL | iex" (curl/wget are PowerShell aliases too).
     { id: "download-pipe-iex", re: /\b(?:iwr|irm|invoke-webrequest|invoke-restmethod|curl|wget)\b[^\n|]{0,300}\|\s*(?:iex|invoke-expression)\b/i },
     { id: "iex-download", re: /\b(?:iex|invoke-expression)\b[^\n]{0,40}\(?\s*(?:iwr|irm|invoke-webrequest|invoke-restmethod|new-object\s+net\.webclient)/i },
-    { id: "cmd-chain", re: /\bcmd(?:\.exe)?\s+\/[ck]\b[^\n]{0,300}(?:mshta|curl|wget|bitsadmin|certutil|powershell|pwsh|rundll32|regsvr32|msiexec|start\s+\/min)/i },
+    // Other switches can come before /c (cmd /q /c, cmd.exe /v:on /c), and
+    // cmd/c needs no space.
+    { id: "cmd-chain", re: /\bcmd(?:\.exe)?(?:\s*\/[a-bd-jl-z](?::[a-z]{1,3})?){0,4}\s*\/[ck]\b[^\n]{0,300}(?:mshta|curl|wget|bitsadmin|certutil|powershell|pwsh|rundll32|regsvr32|msiexec|start\s+\/min)/i },
     { id: "mshta", re: /\bmshta(?:\.exe)?\s+["']?(?:https?:|vbscript:|javascript:|\\\\)/i },
     { id: "bitsadmin", re: /\bbitsadmin(?:\.exe)?\s+\/transfer\b/i },
     { id: "certutil", re: /\bcertutil(?:\.exe)?\s+[^\n]{0,80}-urlcache\b/i },
@@ -105,7 +111,7 @@ function installClipboardGuard(target) {
     // Remote files also come from a UNC path (\\host\share, WebDAV).
     { id: "regsvr32", re: /\bregsvr32(?:\.exe)?\s+[^\n]{0,40}\/i:\s*(?:https?:|\\\\)/i },
     { id: "msiexec-remote", re: /\bmsiexec(?:\.exe)?\s+[^\n]{0,40}\/(?:i|package)\s+["']?(?:https?:|\\\\)/i },
-    { id: "powershell-unc-file", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s-(?:f|fi|fil|file)\s+["']?\\\\/i },
+    { id: "powershell-unc-file", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s(?:\/|[-\u2013-\u2015]{1,2})(?:f|fi|fil|file)\s+["']?\\\\/i },
     // Pipe to a shell, also by path (/bin/bash) and after sudo / nohup / env
     // (with up to three flags each). Every gap is bounded (linear matching).
     { id: "curl-pipe-shell", re: /\b(?:curl|wget)\b[^\n|]{0,300}\|\s*(?:(?:[^\s|]{0,100}\/)?(?:sudo|nohup|env)\s+(?:-[\w-]{1,20}\s+){0,3}){0,3}(?:[^\s|]{0,100}\/)?(?:ba|z|da|k)?sh\b/i },
