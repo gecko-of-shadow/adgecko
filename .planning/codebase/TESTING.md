@@ -5,7 +5,7 @@ Commit: 5cd4ab6 (version 0.3.6)
 
 This document tells you how to run the checks, how the tests operate, and how to add a test.
 Checked in the session of the analysis date (Linux container, Deno 2.9.8): 884 tests passed, 0 failed, 9 ignored.
-UNVERIFIED: no test loads the extension in Chrome. The fake models are approximations.
+UNVERIFIED: no CI test loads the extension in Chrome. The fake models are approximations. `scripts/chrome-smoke.mjs` (section 1) loads it in Chrome for Testing by hand, offline.
 
 ## 1. Commands
 
@@ -29,6 +29,7 @@ python3 -I scripts/privacy-check.py
 - There is no `deno.json`, no lock file and no package manifest. Four test files import `jsr:@std/assert@1`, which Deno downloads one time.
 - The privacy check compares `origin/main` with `HEAD`. Thus run it after the commit and before the push. `BASE_SHA` and `HEAD_SHA` change the range (section 9).
 - After a change that can have an effect on a site, load the unpacked extension in Chrome and test the site by hand. No automated test plays a real stream.
+- Optional, not in CI: `CHROME_PATH=<Chrome for Testing> node scripts/chrome-smoke.mjs [--shots DIR]` (Node 22 or later). It loads the repository root as an unpacked extension in headless Chrome for Testing, sends every host name to a local server, and checks six things: the service worker starts, the packed hide rules are installed, 4 ad and tracker scripts are blocked and 2 ordinary scripts load, 2 ad boxes are hidden, the toolbar popup names the page and offers Fix this site and Allow this site, and the clipboard guard refuses a PowerShell command on a real click and lets plain text through. No request leaves the machine. Google Chrome 137 and later ignores `--load-extension`; then the first check fails with that reason. About 11 s.
 
 ## 2. How tests load source code
 

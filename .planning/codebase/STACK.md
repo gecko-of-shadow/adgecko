@@ -74,7 +74,7 @@ Web platform APIs: `fetch` in the worker (list downloads and reads of package fi
 | ripgrep (`rg`) | No pin. CI installs it only if it is absent. | The gate stops if `deno`, `python3` or `rg` is absent. Two tests are ignored without `rg`. |
 | `zip` (Info-ZIP), `unzip` | No pin | Packaging, the gate with `--zip`. Windows `tar.exe` is the fallback for `zip`. |
 | `git` | No pin | uBlock Origin sync, privacy scan, gate section 1b, reproducible zip time |
-| Node.js | 22 or later for `scripts/lib/chrome-shot.mjs` | `scripts/build-icons.mjs`, `scripts/bench-youtube.mjs` (not in CI) |
+| Node.js | 22 or later for `scripts/lib/chrome-shot.mjs` | `scripts/build-icons.mjs`, `scripts/bench-youtube.mjs`, `scripts/chrome-smoke.mjs` (not in CI) |
 | `gh` CLI | No pin | The release workflow |
 
 Remote module: four test files import `jsr:@std/assert@1`. Deno must download it one time. `--no-lock` means that no lockfile pins it.
