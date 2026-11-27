@@ -25,6 +25,7 @@ Five owner decisions of 2026-11-20. Not tested in real Chrome: the Kick and Twit
 - Settings page: after Allow this domain, the status line names the domain ("Allowed shop.example.com. Reload the blocked page.") instead of "Saved.", and a domain that is already on the list gives "… is already allowed." with no storage write.
 - Clipboard guard: the "Blocked: this page tried to put a command into your clipboard" notice opens in the browser's top layer (a manual popover), so a page covered by a modal dialog or its own popover, the usual fake "verify you are human" screen, can no longer hide it. Before, the notice sat under the dialog and was not visible.
 - Settings page: list rows no longer split ordinary words at narrow widths. `word-break: break-all` broke "boxes" into "box" and "es" and "site" into "s" and "ite" at 360 px; `overflow-wrap: anywhere` wraps at spaces and still breaks a long domain name where it would overflow (Chrome for Testing 155, 360 px: 1 split word in the empty lists and 2 in two site rows before, 0 after; no horizontal scroll either way).
+- Settings page: on narrow screens the Allow this domain button wraps below the box instead of squeezing it, so the placeholder "example.com or paste the address" is no longer cut off (Chrome for Testing 155: box content 84 / 124 / 184 px at 320 / 360 / 420 px wide before, 240 / 280 / 340 px after; the placeholder needs 227 px; 1280 px unchanged).
 
 ### Documentation
 
