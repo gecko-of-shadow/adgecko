@@ -578,3 +578,37 @@ Deno.test({
     }
   },
 });
+
+// The block notice must stay visible over a page's modal <dialog> or popover
+// (a fake "verify you are human" screen), so it goes into the top layer.
+Deno.test("clipboard notice: opened as a manual popover in the top layer, plain fixed box without showPopover", () => {
+  const notice = (show) => {
+    const made = [];
+    const el = () => {
+      const e = { attrs: {}, style: { cssText: "" }, children: [], setAttribute(k, v) { this.attrs[k] = v; }, appendChild(c) { this.children.push(c); }, remove() {}, attachShadow() { return this; } };
+      made.push(e);
+      return e;
+    };
+    const body = el();
+    const doc = { createElement: el, body, documentElement: body };
+    const shown = [];
+    const fn = new Function(`${unwrapMain(clipboardSource)}\nreturn clipboardGuardNotice;`)();
+    const realSetTimeout = globalThis.setTimeout;
+    let host;
+    try {
+      globalThis.setTimeout = () => 0;
+      fn(doc, show ? function () { shown.push(this); } : null)({});
+      host = body.children[0];
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+    return { host, shown };
+  };
+  const top = notice(true);
+  assert(top.host && top.host.attrs.popover === "manual", "host is a manual popover");
+  assert(top.shown.length === 1 && top.shown[0] === top.host, "showPopover called on the host");
+  assert(/inset:auto/.test(top.host.style.cssText) && /border:0/.test(top.host.style.cssText), "popover UA box styles reset");
+  assert(top.host.children[0].attrs.role === "alert", "alert box inside");
+  const plain = notice(false);
+  assert(plain.host && !("popover" in plain.host.attrs) && plain.shown.length === 0, "no popover without showPopover");
+});

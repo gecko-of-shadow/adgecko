@@ -947,7 +947,14 @@ function installClipboardGuard(target) {
 }
 
 // A small notice in the page (closed shadow root, removed after 12 s).
-function clipboardGuardNotice(doc) {
+// The notice goes into the top layer as a manual popover, so a page that
+// covers itself with a modal <dialog> or its own popover (a fake "verify you
+// are human" screen) cannot hide it. showPopover is captured before page
+// scripts run; without it the notice is a plain fixed box.
+const showPopoverFn = typeof HTMLElement === "function" && HTMLElement.prototype
+  ? HTMLElement.prototype.showPopover
+  : undefined;
+function clipboardGuardNotice(doc, showPopover = showPopoverFn) {
   let shown = 0;
   return () => {
     try {
@@ -961,7 +968,14 @@ function clipboardGuardNotice(doc) {
       box.style.cssText = "position:fixed;z-index:2147483647;right:16px;bottom:16px;max-width:360px;padding:12px 14px;border-radius:8px;background:#18181b;color:#efeff1;font:13px/1.4 sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.4);border:1px solid #f0a33a";
       box.textContent = "Blocked: this page tried to put a command into your clipboard. If a page asks you to paste something into Run, PowerShell or a terminal to \"verify\" you, don't. If you meant to copy it yourself, select the text and press Ctrl+C.";
       root.appendChild(box);
+      if (typeof showPopover === "function") {
+        host.setAttribute("popover", "manual");
+        host.style.cssText = "position:fixed;inset:auto;margin:0;padding:0;border:0;background:transparent;overflow:visible;width:0;height:0";
+      }
       (doc.body || doc.documentElement).appendChild(host);
+      if (typeof showPopover === "function") {
+        try { apply(showPopover, host, []); } catch { /* stays a plain fixed box */ }
+      }
       setTimeout(() => {
         try { host.remove(); } catch { /* gone */ }
       }, 12000);
