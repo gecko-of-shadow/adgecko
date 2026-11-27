@@ -142,7 +142,10 @@ function installGeneralAdblockUpdate(target) {
   // 5 (0.3.6): the hide-rule part also keeps the $generichide / $specifichide
   // / $elemhide page exceptions (cosmetic-parse.js parseNoHide), so every
   // stored copy is parsed again and the hide sheet gets them.
-  const PARSER_VERSION = 5;
+  // 6 (0.3.8): a type-only exception (`@@||host^$xmlhttprequest`) is kept as
+  // payload.allowScoped, so every stored copy is parsed again (see
+  // exceptionAllows).
+  const PARSER_VERSION = 6;
 
   // Shared with the packer: general/filter-options.js (loaded before this file).
   function filterOptions() {
@@ -218,6 +221,7 @@ function installGeneralAdblockUpdate(target) {
     const scoped = [];
     const popup = [];
     const allow = [];
+    const allowScoped = [];
     const limit = new Set();
     const important = [];
     const allDoc = [];
@@ -232,6 +236,10 @@ function installGeneralAdblockUpdate(target) {
         const em = DOMAIN_RE.exec(line.slice(2));
         if (em && !em[2] && looksLikeDomain(em[1].toLowerCase())) allow.push(em[1].toLowerCase());
         else if (FO && FO.exceptionHost) {
+          // Only resource types (and party): kept for an allow rule.
+          const typed = em && looksLikeDomain(em[1].toLowerCase()) ? FO.convertOptions(em[2]) : null;
+          const parts = typed && !typed.cancel && typed.key ? FO.parseKey(typed.key) : null;
+          if (parts && parts.t && Object.entries(parts).every(([k, v]) => k === "p" || k === "t" || !v)) allowScoped.push([em[1].toLowerCase(), typed.key]);
           // A path / option exception: its host limits $domain= filters
           // (out.limit, applied across lists in crossListRules).
           const h = FO.exceptionHost(line.slice(2));
@@ -286,6 +294,7 @@ function installGeneralAdblockUpdate(target) {
     if (popup.length) out.popup = popup;
     if (cancelled.size) out.cancel = Array.from(cancelled);
     if (allow.length) out.allow = allow;
+    if (allowScoped.length) out.allowScoped = allowScoped;
     if (limit.size) out.limit = Array.from(limit).sort();
     if (important.length) out.important = important;
     // Only hosts whose page entry comes from `$all` alone: an explicit
@@ -301,6 +310,7 @@ function installGeneralAdblockUpdate(target) {
     const out = parseEntriesFull(text);
     delete out.cancel;
     delete out.allow;
+    delete out.allowScoped;
     delete out.limit;
     delete out.important;
     delete out.alldoc;
@@ -336,6 +346,7 @@ function installGeneralAdblockUpdate(target) {
     const allDoc = new Set();
     const docExplicit = new Set();
     const limit = new Set();
+    const allowScoped = new Map();
     const sources = Object.values(payloads || {});
     const packedSrc = packedCross || (FO && FO.PACKED_CROSS) || null;
     const packedLists = (packedSrc && packedSrc.lists) || {};
@@ -347,6 +358,7 @@ function installGeneralAdblockUpdate(target) {
       if (!p) continue;
       for (const c of Array.isArray(p.cancel) ? p.cancel : []) cancel.add(String(c));
       for (const a of Array.isArray(p.allow) ? p.allow : []) allow.add(String(a));
+      for (const e of Array.isArray(p.allowScoped) ? p.allowScoped : []) if (Array.isArray(e)) allowScoped.set(e[0] + "\n" + e[1], [String(e[0]), String(e[1])]);
       for (const h of Array.isArray(p.limit) ? p.limit : []) limit.add(String(h));
       for (const i of Array.isArray(p.important) ? p.important : []) important.add(String(i));
       const own = new Set(Array.isArray(p.alldoc) ? p.alldoc.map(String) : []);
@@ -385,7 +397,35 @@ function installGeneralAdblockUpdate(target) {
       keepWhole: (d) => !cancel.has(d + "\n") && !allow.has(d),
       keepScoped: (d, k) => scopeOf(d, k) !== null,
       scopeOf,
+      allow,
+      allowScoped: Array.from(allowScoped.values()),
+      important,
     };
+  }
+
+  // List `@@` exceptions as DNR allow rules (priority 1, so they beat the
+  // priority-1 list blocks, dynamic and packed, and nothing above them: the
+  // threat tier, hand-written rules and user blocks keep winning).
+  // keepWhole only drops a block of the SAME host. A subdomain of a blocked
+  // parent (`@@||alllaw.112.2o7.net^` under `||2o7.net^`) and a type-only
+  // exception (`@@||chart-embed.service.newrelic.com^$subdocument,xmlhttprequest`)
+  // need an allow rule, as uBO applies them. Only for hosts that some block
+  // covers (the host or a parent), and never under a `$important` block.
+  function exceptionAllows(cross, blockedHosts) {
+    const covered = (h, set) => {
+      for (let d = h; d;) {
+        if (set.has(d)) return true;
+        const i = d.indexOf(".");
+        if (i < 0) return false;
+        d = d.slice(i + 1);
+      }
+      return false;
+    };
+    const important = (cross && cross.important) || new Set();
+    const usable = (h) => looksLikeDomain(h) && covered(h, blockedHosts) && !covered(h, important);
+    const whole = Array.from((cross && cross.allow) || []).filter(usable).sort();
+    const scoped = ((cross && cross.allowScoped) || []).filter(([h]) => usable(h)).sort((a, b) => (a[1] + a[0] < b[1] + b[0] ? -1 : 1));
+    return { whole, scoped };
   }
 
   // Scoped entries of one list after the cross-list step (crossListRules):
@@ -467,7 +507,7 @@ function installGeneralAdblockUpdate(target) {
   }
 
   // Whole-domain batches first, then one batch series per scope key.
-  function buildListRules(domains, scoped) {
+  function buildListRules(domains, scoped, allows) {
     const FO = filterOptions();
     const rules = [];
     // Stored payloads may predate the host checks in looksLikeDomain.
@@ -496,6 +536,28 @@ function installGeneralAdblockUpdate(target) {
         for (let i = 0; i < list.length && rules.length < MAX_LIST_RULES; i += DOMAINS_PER_RULE) {
           push(list.slice(i, i + DOMAINS_PER_RULE), extra);
         }
+      }
+    }
+    // Exception allow rules (exceptionAllows), after the blocks.
+    const pushAllow = (chunk, extra) => {
+      rules.push({
+        id: LIST_RULE_ID_BASE + rules.length,
+        priority: 1,
+        action: { type: "allow" },
+        condition: Object.assign({ requestDomains: chunk }, extra),
+      });
+    };
+    if (allows) {
+      const whole = allows.whole || [];
+      for (let i = 0; i < whole.length && rules.length < MAX_LIST_RULES; i += DOMAINS_PER_RULE) pushAllow(whole.slice(i, i + DOMAINS_PER_RULE), {});
+      const groups = new Map();
+      for (const [d, key] of allows.scoped || []) {
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(d);
+      }
+      for (const key of Array.from(groups.keys()).sort()) {
+        const list = groups.get(key);
+        for (let i = 0; i < list.length && rules.length < MAX_LIST_RULES && FO; i += DOMAINS_PER_RULE) pushAllow(list.slice(i, i + DOMAINS_PER_RULE), FO.keyToCondition(key));
       }
     }
     return rules;
@@ -940,7 +1002,7 @@ function installGeneralAdblockUpdate(target) {
           if (total < floor) throw new Error("parsed too few domains (" + total + " < " + floor + ")");
           const payload = { domains: parsed.domains, scoped: parsed.scoped, parser: PARSER_VERSION };
           if (parsed.popup) payload.popup = parsed.popup;
-          for (const k of ["cancel", "allow", "limit", "important", "alldoc"]) if (parsed[k]) payload[k] = parsed[k];
+          for (const k of ["cancel", "allow", "allowScoped", "limit", "important", "alldoc"]) if (parsed[k]) payload[k] = parsed[k];
           const sitesOnly = src.cosmetic === "sites";
           if (src.cosmetic && CP) payload.cosmetic = CP.parseCosmetic(text, sitesOnly ? { sitesOnly: true } : undefined);
           const hits = protectedHits(parsed);
@@ -1203,7 +1265,12 @@ function installGeneralAdblockUpdate(target) {
     const total = domains.length + scoped.length;
     // Sanity: a refreshed set much smaller than the bundle is a bad download.
     if (total < bundledDomains * 0.5) throw new Error("refreshed list too small");
-    const addRules = buildListRules(domains, scoped).concat(keptBundledRules(bundled.rules, bundled.extraIds));
+    // Hosts with a block anywhere (refreshed or packed: the packed ruleset
+    // stays on next to these rules) for the exception allow rules.
+    const blockedHosts = new Set(domains.concat(packed));
+    for (const e of scoped) blockedHosts.add(e[0]);
+    for (const e of packedScoped) blockedHosts.add(e[0]);
+    const addRules = buildListRules(domains, scoped, exceptionAllows(cross, blockedHosts)).concat(keptBundledRules(bundled.rules, bundled.extraIds));
     const existing = (await deps.getDynamicRules()) || [];
     const removeRuleIds = existing.filter((r) => isOurRule(r.id)).map((r) => r.id);
     await deps.updateDynamicRules({ removeRuleIds, addRules });
@@ -1355,7 +1422,7 @@ function installGeneralAdblockUpdate(target) {
 
   Object.assign(target, {
     POLICY, REFRESH_ALARM, RETRY_ALARM, RETRY_DELAY_MINUTES, CLOCK_SKEW_MS, ALARM_PERIOD_MINUTES, FETCH_TIMEOUT_MS, MAX_LIST_BYTES, readListText, RETRY_MIN_MS, MIN_INTERVAL_MS, DOMAINS_PER_RULE, MAX_LIST_RULES, listMeta,
-    RETIRED_LISTS, dropRetiredLists, dropRetiredCosmetic, PARSER_VERSION, parseEntries, parseEntriesFull, crossListRules, crossScoped, mergeScoped, staleParserLists,
+    RETIRED_LISTS, dropRetiredLists, dropRetiredCosmetic, PARSER_VERSION, parseEntries, parseEntriesFull, crossListRules, crossScoped, exceptionAllows, mergeScoped, staleParserLists,
     THREAT_RULE_ID_BASE, THREAT_RULE_ID_END, DYNAMIC_RULE_LIMIT, isThreatRule, isOurRule, applyThreatRules,
     MAX_CHANGE_RATIO, PROTECTED_HITS_MAX, PROTECTED_HITS_SEED_BY_LIST, PROTECTED_HITS_MARGIN, PROTECTED_HITS_SPIKE, protectedHitsCap, MAX_GENERIC_SELECTORS, MAX_PAGE_ROOT_SITE_RULES, checkListChange, checkCosmeticChange, protectedHits, revertLists,
     removeThreatRules, rebuildThreatRules,

@@ -96,6 +96,11 @@ Deno.test({
 // ($subdocument,xmlhttprequest under newrelic.com). Honouring them needs DNR
 // allow rules or splitting parent blocks; that is broader than the same-host,
 // unconditional case and too risky for this release.
+// 0.3.8: the refreshed rules carry such allow rules (update.js
+// exceptionAllows, test/list-exception-allow-rules.test.js), so after the
+// first list refresh these hosts load. The packed ruleset alone (before any
+// refresh) still blocks them: the packer has no allow rules yet, so this test
+// stays ignored until it does and the lists are packed again.
 const CASES = [
   { url: "https://alllaw.112.2o7.net/b/ss/x", type: "image", frames: ["www.alllaw.com"] },
   { url: "https://puma.112.2o7.net/b/ss/x", type: "image", frames: ["us.puma.com"] },
