@@ -114,6 +114,20 @@ Deno.test("the list status text carries no date of its own", () => {
   assert(!listStatusText({ dynamicActive: true, updatedAt: 0, domainCount: 5, lastErrors: { a: "x" } }, { ok: true }).includes(when), "date repeated");
 });
 
+// Lists that share a host (easylist and easyprivacy, and their mirrors) give
+// the same error parts; the popup shows each "host: reason" once.
+Deno.test("the list status text names each failed host and reason once", () => {
+  const fn = backgroundSource.match(/function listStatusText[\s\S]*?\r?\n}\r?\n/);
+  const listStatusText = new Function(fn[0] + "; return listStatusText;")();
+  const down = (h) => h + ": network error (Failed to fetch)";
+  const text = listStatusText({ dynamicActive: false, lastErrors: {
+    easylist: [down("easylist.to"), down("ublockorigin.github.io")].join("; "),
+    easyprivacy: [down("easylist.to"), down("ublockorigin.github.io")].join("; "),
+    adguard_base: "filters.adtidy.org: HTTP 403",
+  } }, { ok: false });
+  assert(text === "Using packed lists (refresh failed; will retry later). Problems: " + down("easylist.to") + "; " + down("ublockorigin.github.io") + "; filters.adtidy.org: HTTP 403.", "got: " + text);
+});
+
 const popupSender = { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" };
 const guard = (documentId) => ({ id: EXT, tab: { id: 7 }, frameId: 0, documentId, url: "https://news.example/" });
 const ping = { source: "adgecko-general", type: "guardEvent", kind: "clipboard" };

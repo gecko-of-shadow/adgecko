@@ -797,7 +797,11 @@ function listStatusText(state, result, writeError) {
   if (notes.length) console.log("adgecko: list mirrors used:", notes);
   if (errs.length || !result.ok) console.warn("adgecko: list refresh problems:", errs.length ? errs : result.reason);
   else console.log("adgecko: list refresh", result);
-  const errText = errs.length ? " Problems: " + errs.join("; ") + "." : (!result.ok && result.reason ? " Problem: " + result.reason + "." : "");
+  // One line per failed source host: lists that share a host and its mirrors
+  // (easylist and easyprivacy) give the same "host: reason" parts.
+  const parts = [];
+  for (const e of errs) for (const part of String(e).split("; ")) if (part && !parts.includes(part)) parts.push(part);
+  const errText = parts.length ? " Problems: " + parts.join("; ") + "." : (!result.ok && result.reason ? " Problem: " + result.reason + "." : "");
   const werr = writeError || state.lastError;
   const storageText = werr && werr.message ? " Storage error: " + werr.message + "." : "";
   return (state.dynamicActive
