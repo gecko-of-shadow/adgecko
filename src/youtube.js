@@ -1,11 +1,13 @@
 // Runs on YouTube at document_start. Ads are removed from the player
 // response so the same video keeps playing. Home-feed Sponsored cards
 // are stripped from browse JSON and hidden with CSS. Nothing here
-// replaces the picture with a blank frame. A SABR next-request policy
-// can still hold that player on a black loading spinner for the ad-length
-// backoff (often 10 seconds) after a click. The same wait is in the first
-// /initplayback response and in the start-buffer policy. Both are cleared
-// below, and player requests ask YouTube not to schedule the slot.
+// replaces the picture with a blank frame. YouTube can still hold the
+// player on a black loading spinner for a server-side wait (often 4 to 12
+// seconds) after the ad is removed. The code
+// that clears the SABR backoff, the start-buffer wait and the no-ad player
+// flag is kept below, but it is off by default (OPTS.umpBackoff,
+// STEALTH.zeroStartPolicies, OPTS.noAdFlag). When the uBO layer runs, the
+// fetch, XHR and JSON.parse hooks also stand down (OPTS.hooksUnderUbo).
 // Wrapped in one function so the page sees no globals from this file (L-18).
 (() => {
 function uboLayerPresent() {
