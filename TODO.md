@@ -1,12 +1,13 @@
 # To do
 
-Last update: 2026-11-20, after PRs 22 to 26 (five owner decisions).
+Last update: 2026-11-27, YouTube slow start documented.
 
 ## Where it stands
 
 - **Last release:** [v0.3.7](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.7), from commit `cc3e764`. Assets: `adgecko-0.3.7.zip` and `adgecko-0.3.7.zip.sha256`. The release before: v0.3.6 (`5cd4ab6`).
 - **A/B test on 2026-11-20 (signed out, Chrome for Testing):** no YouTube regression of 0.3.7 against 0.3.6 was found. The numbers are in `docs/youtube-ab-test-2026-11-20.md`.
 - **UNVERIFIED:** the behaviour of 0.3.7 in the owner's signed-in Chrome.
+- **YouTube spinner of 4 to 12 s before play:** accepted by the owner on 2026-11-27. It is YouTube's server-side wait. See `docs/youtube-slow-start.md`.
 - **Not released:** `main` has five changes after v0.3.7 (PRs 22 to 26). See `CHANGELOG.md`, section "Unreleased".
 
 ## Next steps
@@ -82,4 +83,5 @@ Older decisions that are open:
 
 - [ ] **Chrome Web Store:** nothing was submitted. Read [docs/STORE-REVIEW-NOTES.md](docs/STORE-REVIEW-NOTES.md) first.
 - [ ] Not covered today: YouTube Music, YouTube Kids, YouTube players in other websites, and ads that are part of the video.
+- [ ] Owner approval needed: correct the header comment of `src/youtube.js` (lines 4 to 8). It says the SABR waits are cleared, but that code is off when the uBO layer runs. The file is a gated playback file.
 - [ ] Work through `.planning/codebase/CONCERNS.md`. It is sorted by impact.
