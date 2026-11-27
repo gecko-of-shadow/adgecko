@@ -1011,7 +1011,7 @@ if (chrome.alarms && chrome.alarms.onAlarm) {
 }
 
 // An unanswered "Test with the ad lists off" ends after 24 hours (owner
-// decision 2026-11-22; FEAT.expireListTests). Checked at worker start, at
+// decision, confirmed 2026-11-27; FEAT.expireListTests). Checked at worker start, at
 // browser start, on each 3-hour refresh alarm and on each siteInfo (the popup
 // asks it when it opens), so it ends at most about 3 hours late, and at once
 // when the popup opens. The siteOverrides write starts syncFromSettings, which
