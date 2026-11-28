@@ -167,7 +167,7 @@ The engine is `src/general/update.js` (`GeneralAdblockUpdate`, alias `GU`). It c
 8. If all `cosmetic: true` sources have a parsed copy: `mergeCosmetic()`, then `writeCosmetic()` writes the hide-rule keys.
 9. `swap()` runs in one `dnrExclusive` section. `crossListRules()` applies `$badfilter` cancels and unconditional exceptions across all lists. One `updateDynamicRules` call removes the `isOurRule` ids and adds the new rules and the kept rules.
 10. `applyThreatRules()` rebuilds the threat range in a second call.
-11. `applyGeneralState()` applies the lists switch, the allow rules and the icon. Then the worker writes `generalListStatus` and `generalListUpdatedAt`.
+11. `applyGeneralState()` writes the user's threat allow-domain override first, then applies the lists switch, the allow rules and the icon. Then the worker writes `generalListStatus` and `generalListUpdatedAt`.
 
 Rules of the flow:
 
