@@ -243,9 +243,113 @@
     return { fix: out, overrides: o };
   }
 
+  // YouTube start times (opt-in diagnostics, off by default). One key in
+  // chrome.storage.local: ytStartTimes { v: 1, on: bool, log: [entry] }.
+  // src/youtube.js measures each watch-page start and sends only
+  // { kind, waitMs, ad, toast, timeout } over the private port;
+  // src/settings/flags.js adds the minute and the extension version and
+  // appends; the settings page shows, exports and clears the log. An entry
+  // holds no video id, address, title, channel or account data.
+  // test/youtube-start-times.test.js keeps these rules.
+  const ST_KEY = "ytStartTimes";
+  const ST_MAX = 300;
+  const ST_GIVE_UP_MS = 60000;
+  const ST_KINDS = ["first-load", "in-page"];
+
+  function stMinute(ms) {
+    const t = Math.floor(Number(ms) / 60000) * 60000;
+    if (!Number.isFinite(t) || t < 0) return "";
+    return new Date(t).toISOString().slice(0, 16) + "Z";
+  }
+
+  // Strict: anything else from the page is dropped, never coerced into text.
+  function stEntry(raw, nowMs, version) {
+    if (!raw || typeof raw !== "object") return null;
+    if (!ST_KINDS.includes(raw.kind)) return null;
+    for (const k of ["ad", "toast", "timeout"]) if (typeof raw[k] !== "boolean") return null;
+    const w = Number(raw.waitMs);
+    if (typeof raw.waitMs !== "number" || !Number.isFinite(w) || w < 0) return null;
+    const time = stMinute(nowMs);
+    if (!time) return null;
+    const ver = typeof version === "string" && /^\d{1,5}(\.\d{1,5}){0,3}$/.test(version) ? version : "";
+    return { time, version: ver, kind: raw.kind, waitMs: Math.min(ST_GIVE_UP_MS, Math.round(w)), ad: raw.ad, toast: raw.toast, timeout: raw.timeout };
+  }
+
+  // A stored entry is checked again on read: same fields, nothing more.
+  function stValid(e) {
+    return !!e && typeof e === "object" && typeof e.time === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\dZ$/.test(e.time) &&
+      typeof e.version === "string" && e.version.length <= 23 && ST_KINDS.includes(e.kind) &&
+      typeof e.waitMs === "number" && Number.isFinite(e.waitMs) && e.waitMs >= 0 && e.waitMs <= ST_GIVE_UP_MS &&
+      typeof e.ad === "boolean" && typeof e.toast === "boolean" && typeof e.timeout === "boolean";
+  }
+
+  function stNormalize(stored) {
+    const s = stored && typeof stored === "object" ? stored : {};
+    const log = (Array.isArray(s.log) ? s.log : []).filter(stValid)
+      .map((e) => ({ time: e.time, version: e.version, kind: e.kind, waitMs: e.waitMs, ad: e.ad, toast: e.toast, timeout: e.timeout }));
+    return { v: 1, on: s.on === true, log: log.slice(-ST_MAX) };
+  }
+
+  // Adds one entry and keeps the newest ST_MAX (the oldest go first).
+  function stAppend(stored, entry) {
+    const s = stNormalize(stored);
+    if (stValid(entry)) s.log.push(entry);
+    s.log = s.log.slice(-ST_MAX);
+    return s;
+  }
+
+  // Nearest-rank percentile over the starts that played (timeouts excluded):
+  // the value at rank ceil(p * n) of the sorted waits.
+  function stPercentile(sorted, p) {
+    if (!sorted.length) return null;
+    return sorted[Math.min(sorted.length, Math.max(1, Math.ceil(p * sorted.length))) - 1];
+  }
+
+  function stStats(logIn) {
+    const log = stNormalize({ log: logIn }).log;
+    const waits = log.filter((e) => !e.timeout).map((e) => e.waitMs).sort((a, b) => a - b);
+    return {
+      count: log.length,
+      played: waits.length,
+      timeouts: log.length - waits.length,
+      ads: log.filter((e) => e.ad).length,
+      toasts: log.filter((e) => e.toast).length,
+      median: stPercentile(waits, 0.5),
+      p90: stPercentile(waits, 0.9),
+    };
+  }
+
+  const stSec = (ms) => (ms == null ? "-" : (ms / 1000).toFixed(1) + " s");
+
+  function stSummary(logIn) {
+    const s = stStats(logIn);
+    if (!s.count) return "No video starts recorded.";
+    return s.count + " video starts recorded (" + s.timeouts + " gave up after 60 s). Median wait " + stSec(s.median) +
+      ", 90th percentile " + stSec(s.p90) + ". " + s.ads + " with an ad first, " + s.toasts + " with the \"Experiencing interruptions?\" popup.";
+  }
+
+  // Plain text table for the clipboard (fixed-width columns, UTC minutes).
+  function stText(logIn) {
+    const log = stNormalize({ log: logIn }).log;
+    const head = ["time (UTC)", "version", "kind", "wait_s", "ad", "toast", "timeout"];
+    const rows = log.map((e) => [e.time, e.version || "-", e.kind, e.timeout ? ">60.0" : (e.waitMs / 1000).toFixed(1),
+      e.ad ? "yes" : "no", e.toast ? "yes" : "no", e.timeout ? "yes" : "no"]);
+    const width = head.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
+    const line = (r) => r.map((c, i) => c.padEnd(width[i])).join("  ").trimEnd();
+    return ["Adgecko YouTube start times", stSummary(log), "", line(head), ...rows.map(line)].join("\n") + "\n";
+  }
+
+  // The hosts where src/youtube.js runs (manifest CS-4): www, m and the bare domain.
+  const stIsHost = (host) => /^(www\.|m\.)?youtube\.com$/.test(normalizeHost(host));
+
+  const startTimes = Object.freeze({
+    KEY: ST_KEY, MAX: ST_MAX, GIVE_UP_MS: ST_GIVE_UP_MS, KINDS: ST_KINDS,
+    isHost: stIsHost, minute: stMinute, entry: stEntry, normalize: stNormalize, append: stAppend, stats: stStats, summary: stSummary, text: stText,
+  });
+
   root.GeckoFeatures = Object.freeze({
     STREAM_SITES, FEATURES, IDS, byId, normalizeHost, isStreamHost, streamExcludeMatches,
     defaultSettings, normalizeSettings, normalizeOverrides, overrideFor, resolve, migrateLegacy, legacyMirror,
-    LIST_TEST_TTL_MS, expireListTests,
+    LIST_TEST_TTL_MS, expireListTests, startTimes,
   });
 })(typeof self !== "undefined" ? self : globalThis);

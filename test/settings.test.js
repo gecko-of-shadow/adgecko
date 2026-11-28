@@ -374,7 +374,8 @@ Deno.test({
     watch(latePort, late);
     await tick();
     // Site switch for www.youtube.com is off: every per-site helper is off there.
-    const off = { f: { youtubeWatchdog: false, youtubeCosmetic: false, kick: false, guardClipboard: false, guardPopups: false } };
+    // ytTiming: the YouTube start-time switch (top YouTube frame only), off by default.
+    const off = { f: { youtubeWatchdog: false, youtubeCosmetic: false, kick: false, guardClipboard: false, guardPopups: false, ytTiming: false } };
     assert(eq(early[0], off) && eq(late[0], off), JSON.stringify([early, late]));
 
     // After document_start (first task) a page script asking gets no port.
@@ -391,7 +392,7 @@ Deno.test({
     store.siteOverrides = {};
     changed[0]({ siteOverrides: { newValue: {} } }, "local");
     await tick();
-    const on = { f: { youtubeWatchdog: false, youtubeCosmetic: true, kick: true, guardClipboard: true, guardPopups: false } };
+    const on = { f: { youtubeWatchdog: false, youtubeCosmetic: true, kick: true, guardClipboard: true, guardPopups: false, ytTiming: false } };
     assert(eq(early.at(-1), on) && eq(late.at(-1), on), JSON.stringify([early, late]));
 
     let origin = null;

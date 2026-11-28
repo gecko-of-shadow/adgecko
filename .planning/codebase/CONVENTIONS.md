@@ -115,7 +115,7 @@ These rules apply to `src/youtube.js`, `src/kick.js`, `src/guards/clipboard.js` 
 | No output to the page console unless a debug switch is on. | `test/hardening.test.js` (for `src/youtube.js` and `src/kick.js`) |
 | No options from `localStorage` or other storage that the page can write. | `test/hardening.test.js` |
 | No `.innerHTML =`, `eval(`, `document.write(`, `new Function(`. Make DOM with `createElement` and `textContent`. | Gate section 3 |
-| Flags come only through the private port. A feature stays on until a flag says off. | `test/settings.test.js`, `test/guards.test.js`, `test/flags-port-window.test.js` |
+| Flags come only through the private port. A feature stays on until a flag says off. Exception: `ytTiming` (YouTube start times) sends a record only while its flag is on. | `test/settings.test.js`, `test/guards.test.js`, `test/flags-port-window.test.js` |
 | Capture built-ins and getters at the top of the file, before page scripts run. Call them with `Reflect.apply`. | `test/guards.test.js` (in part: the captured MessageEvent getters, and the clipboard guard with changed built-ins) |
 | Fail-open: an internal error lets the page call continue. Exceptions are in `ARCHITECTURE.md` section 16. | - |
 
