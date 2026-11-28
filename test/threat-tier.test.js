@@ -49,6 +49,13 @@ async function worldWith(opts = {}) {
   await w.send({ source: "adgecko-general", type: "applyGeneralState" });
   if (opts.overrides) {
     await new Promise((r) => w.chrome.storage.local.set({ threatAllowDomains: opts.overrides.slice() }, r));
+    // The override write waits its turn in the worker's DNR queue (behind
+    // the list work), so wait until the rules are there, not a fixed time.
+    const want = JSON.stringify(TC.buildUserAllowRules(opts.overrides, 950000, 1000));
+    const have = () => JSON.stringify(w.dnr.dynamic.filter((r) => r.id >= 950000 && r.id < 951000).sort((a, b) => a.id - b.id));
+    const until = Date.now() + 10000;
+    while (have() !== want && Date.now() < until) await settle(10);
+    assert(have() === want, "user allow-domain override rules not written within 10 s: " + have());
   }
   await settle(150);
   const dynamic = w.dnr.dynamic.concat(dynThreat);

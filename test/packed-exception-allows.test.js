@@ -89,6 +89,22 @@ Deno.test("packed only: lists switched off leaves no list-range rules", async ()
   assertEquals(d.dynamic.filter((x) => U.isOurRule(x.id)).length, 0);
 });
 
+// Review fix: the packed path reads the same cross-list fields as a refresh.
+// A scoped $important block or an @@...$badfilter line in a packed list's
+// data stops the allow rule. (The packer does not write these two fields
+// yet; this keeps the static path ready for them.)
+Deno.test("packed only: importantScoped and cancelAllow in the packed data stop the allow rule", async () => {
+  const U = fresh();
+  const lists = {
+    adguard_base: { allow: ["alllaw.112.2o7.net", "tracker.example", "free.example"] },
+    easylist: { importantScoped: ["tracker.example"] },
+    easyprivacy: { cancelAllow: ["alllaw.112.2o7.net\n"] },
+  };
+  const d = deps(Object.assign({}, bundled, { packedCross: { lists } }));
+  await U.applyEnabled(d, true);
+  assertEquals(d.dynamic.filter((x) => U.isOurRule(x.id)).length, 0);
+});
+
 Deno.test("packed only: the shipped packed data gives the 2o7.net subdomain allows", async () => {
   const U = fresh();
   const rules = JSON.parse(await Deno.readTextFile(new URL("../src/rules/general-network.json", import.meta.url)));

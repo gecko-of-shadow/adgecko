@@ -215,6 +215,10 @@ function installGeneralAdblockUpdate(target) {
   // `@@||host^` exceptions (no options at all); at merge time they lift the
   // whole-domain block of that same host only, unless a list marks that block
   // `$important` (out.important). Neither touches the threat tier.
+  // For the exception allow rules only (exceptionAllows): out.importantScoped,
+  // hosts of scoped `$important` blocks, and out.cancelAllow, the exceptions
+  // that an `@@...$badfilter` line withdraws ("host\nkey", key "" for a
+  // plain `@@||host^`).
   function parseEntriesFull(text) {
     const FO = filterOptions();
     const whole = [];
@@ -224,6 +228,8 @@ function installGeneralAdblockUpdate(target) {
     const allowScoped = [];
     const limit = new Set();
     const important = [];
+    const importantScoped = [];
+    const cancelAllow = new Set();
     const allDoc = [];
     const docExplicit = new Set();
     const cancelled = new Set();
@@ -236,8 +242,12 @@ function installGeneralAdblockUpdate(target) {
         const em = DOMAIN_RE.exec(line.slice(2));
         if (em && !em[2] && looksLikeDomain(em[1].toLowerCase())) allow.push(em[1].toLowerCase());
         else if (FO && FO.exceptionHost) {
+          // `@@||host^$badfilter` or `@@||host^$type,badfilter`: that
+          // exception gets no allow rule, in this list or any other.
+          const undo = em && looksLikeDomain(em[1].toLowerCase()) ? FO.convertOptions(em[2]) : null;
+          if (undo && undo.cancel) cancelAllow.add(em[1].toLowerCase() + "\n" + undo.key);
           // Only resource types (and party): kept for an allow rule.
-          const typed = em && looksLikeDomain(em[1].toLowerCase()) ? FO.convertOptions(em[2]) : null;
+          const typed = undo;
           const parts = typed && !typed.cancel && typed.key ? FO.parseKey(typed.key) : null;
           if (parts && parts.t && Object.entries(parts).every(([k, v]) => k === "p" || k === "t" || !v)) allowScoped.push([em[1].toLowerCase(), typed.key]);
           // A path / option exception: its host limits $domain= filters
@@ -275,6 +285,7 @@ function installGeneralAdblockUpdate(target) {
           }
         } else {
           scoped.push([d, key]);
+          if (m[2] && IMPORTANT_RE.test(m[2])) importantScoped.push([d, key]);
           if (FO && key === FO.DOCUMENT_KEY) docExplicit.add(d);
         }
         continue;
@@ -297,6 +308,9 @@ function installGeneralAdblockUpdate(target) {
     if (allowScoped.length) out.allowScoped = allowScoped;
     if (limit.size) out.limit = Array.from(limit).sort();
     if (important.length) out.important = important;
+    const impScoped = Array.from(new Set(importantScoped.filter(([d, k]) => !cancelled.has(d + "\n" + k)).map(([d]) => d)));
+    if (impScoped.length) out.importantScoped = impScoped;
+    if (cancelAllow.size) out.cancelAllow = Array.from(cancelAllow);
     // Only hosts whose page entry comes from `$all` alone: an explicit
     // `$document` filter for the same host shares that entry and stays.
     const allDocOnly = allDoc.filter((d) => !docExplicit.has(d));
@@ -313,6 +327,8 @@ function installGeneralAdblockUpdate(target) {
     delete out.allowScoped;
     delete out.limit;
     delete out.important;
+    delete out.importantScoped;
+    delete out.cancelAllow;
     delete out.alldoc;
     return out;
   }
@@ -343,6 +359,8 @@ function installGeneralAdblockUpdate(target) {
     const cancel = new Set();
     const allow = new Set();
     const important = new Set();
+    const importantScoped = new Set();
+    const cancelAllow = new Set();
     const allDoc = new Set();
     const docExplicit = new Set();
     const limit = new Set();
@@ -361,6 +379,8 @@ function installGeneralAdblockUpdate(target) {
       for (const e of Array.isArray(p.allowScoped) ? p.allowScoped : []) if (Array.isArray(e)) allowScoped.set(e[0] + "\n" + e[1], [String(e[0]), String(e[1])]);
       for (const h of Array.isArray(p.limit) ? p.limit : []) limit.add(String(h));
       for (const i of Array.isArray(p.important) ? p.important : []) important.add(String(i));
+      for (const i of Array.isArray(p.importantScoped) ? p.importantScoped : []) importantScoped.add(String(i));
+      for (const c of Array.isArray(p.cancelAllow) ? p.cancelAllow : []) cancelAllow.add(String(c));
       const own = new Set(Array.isArray(p.alldoc) ? p.alldoc.map(String) : []);
       for (const h of own) allDoc.add(h);
       for (const e of Array.isArray(p.scoped) ? p.scoped : []) if (e && e[1] === docKey && !own.has(e[0])) docExplicit.add(e[0]);
@@ -400,17 +420,24 @@ function installGeneralAdblockUpdate(target) {
       allow,
       allowScoped: Array.from(allowScoped.values()),
       important,
+      importantScoped,
+      cancelAllow,
     };
   }
 
   // List `@@` exceptions as DNR allow rules (priority 1, so they beat the
-  // priority-1 list blocks, dynamic and packed, and nothing above them: the
-  // threat tier, hand-written rules and user blocks keep winning).
+  // priority-1 list blocks, dynamic and packed). They also beat the bundled
+  // extra-tracker block, which is priority 1 too. The threat tier, the
+  // stream-site rules, the other hand-written rules above priority 1 and the
+  // user's rules keep winning.
   // keepWhole only drops a block of the SAME host. A subdomain of a blocked
   // parent (`@@||alllaw.112.2o7.net^` under `||2o7.net^`) and a type-only
   // exception (`@@||chart-embed.service.newrelic.com^$subdocument,xmlhttprequest`)
   // need an allow rule, as uBO applies them. Only for hosts that some block
-  // covers (the host or a parent), and never under a `$important` block.
+  // covers (the host or a parent). Never for a host with a `$important` block
+  // (whole-domain or scoped) on it, on a parent or on a subdomain: the allow
+  // rule covers the subdomains too. Never for an exception that a
+  // `@@...$badfilter` line withdraws (cross.cancelAllow).
   function exceptionAllows(cross, blockedHosts) {
     const covered = (h, set) => {
       for (let d = h; d;) {
@@ -421,10 +448,15 @@ function installGeneralAdblockUpdate(target) {
       }
       return false;
     };
-    const important = (cross && cross.important) || new Set();
-    const usable = (h) => looksLikeDomain(h) && covered(h, blockedHosts) && !covered(h, important);
-    const whole = Array.from((cross && cross.allow) || []).filter(usable).sort();
-    const scoped = ((cross && cross.allowScoped) || []).filter(([h]) => usable(h)).sort((a, b) => (a[1] + a[0] < b[1] + b[0] ? -1 : 1));
+    const important = new Set([...((cross && cross.important) || []), ...((cross && cross.importantScoped) || [])]);
+    const underIt = (h) => {
+      for (const i of important) if (i.endsWith("." + h)) return true;
+      return false;
+    };
+    const cancelled = (cross && cross.cancelAllow) || new Set();
+    const usable = (h) => looksLikeDomain(h) && covered(h, blockedHosts) && !covered(h, important) && !underIt(h);
+    const whole = Array.from((cross && cross.allow) || []).filter((h) => usable(h) && !cancelled.has(h + "\n")).sort();
+    const scoped = ((cross && cross.allowScoped) || []).filter(([h, k]) => usable(h) && !cancelled.has(h + "\n" + k)).sort((a, b) => (a[1] + a[0] < b[1] + b[0] ? -1 : 1));
     return { whole, scoped };
   }
 
@@ -984,7 +1016,7 @@ function installGeneralAdblockUpdate(target) {
           if (total < floor) throw new Error("parsed too few domains (" + total + " < " + floor + ")");
           const payload = { domains: parsed.domains, scoped: parsed.scoped, parser: PARSER_VERSION };
           if (parsed.popup) payload.popup = parsed.popup;
-          for (const k of ["cancel", "allow", "allowScoped", "limit", "important", "alldoc"]) if (parsed[k]) payload[k] = parsed[k];
+          for (const k of ["cancel", "allow", "allowScoped", "limit", "important", "importantScoped", "cancelAllow", "alldoc"]) if (parsed[k]) payload[k] = parsed[k];
           const sitesOnly = src.cosmetic === "sites";
           if (src.cosmetic && CP) payload.cosmetic = CP.parseCosmetic(text, sitesOnly ? { sitesOnly: true } : undefined);
           const hits = protectedHits(parsed);
