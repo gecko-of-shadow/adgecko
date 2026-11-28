@@ -1,13 +1,15 @@
 // Settings page (options_ui). Lists every feature from src/settings/features.js,
 // the threat feed status with "Pause threat feed", "Revert lists", the
-// "Allow this domain" box (threat tier and filter lists) and the per-site switches. Writes only
-// the small keys settings / siteOverrides / threatAllowDomains; the worker does
-// the rest. No remote code, no eval, text only (no innerHTML).
+// "Allow this domain" box (threat tier and filter lists), the per-site switches and
+// the YouTube start times (switch, summary, Copy as text, Download, Clear). Writes
+// only the small keys settings / siteOverrides / threatAllowDomains / uiTheme /
+// ytStartTimes; the worker does the rest. No remote code, no eval, text only (no innerHTML).
 (function () {
   const F = globalThis.GeckoFeatures;
   const TC = globalThis.GeckoThreatCompile;
   const $ = (id) => document.getElementById(id);
-  const KEYS = ["settings", "siteOverrides", "threatAllowDomains", "feedState", "generalListStatus", "generalListUpdatedAt", "uiTheme"];
+  const ST = F.startTimes;
+  const KEYS = ["settings", "siteOverrides", "threatAllowDomains", "feedState", "generalListStatus", "generalListUpdatedAt", "uiTheme", ST.KEY];
   const THEMES = ["auto", "purple", "contrast"];
   let stored = {};
 
@@ -256,12 +258,21 @@
     }));
   }
 
+  // YouTube start times: the switch and a one-line summary (text only).
+  function renderStartTimes() {
+    if (!$("yt-start-on")) return;
+    const st = ST.normalize(stored[ST.KEY]);
+    $("yt-start-on").checked = st.on;
+    $("yt-start-summary").textContent = (st.on ? "Recording. " : "Not recording. ") + ST.summary(st.log);
+  }
+
   async function load() {
     stored = await get();
     renderFeatures();
     renderFeed();
     renderAllow();
     renderSites();
+    renderStartTimes();
     if ($("ui-theme")) $("ui-theme").value = THEMES.includes(stored.uiTheme) ? stored.uiTheme : "auto";
     applyTheme(stored.uiTheme);
   }
@@ -329,6 +340,53 @@
     });
   }
   $("allow-add").addEventListener("click", allowDomain);
+
+  if ($("yt-start-on")) {
+    $("yt-start-on").addEventListener("change", () => {
+      const on = $("yt-start-on").checked;
+      return queued(async () => {
+        const st = ST.normalize(stored[ST.KEY]);
+        st.on = on;
+        await set({ [ST.KEY]: st });
+      });
+    });
+    $("yt-start-copy").addEventListener("click", async () => {
+      const st = ST.normalize((await get())[ST.KEY]);
+      const text = ST.text(st.log);
+      let ok = false;
+      try {
+        if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          await navigator.clipboard.writeText(text);
+          ok = true;
+        }
+      } catch {
+        ok = false;
+      }
+      $("yt-start-status").textContent = ok ? "Copied " + st.log.length + " video starts as text." : "Could not copy. Use Download instead.";
+      return ok;
+    });
+    $("yt-start-download").addEventListener("click", async () => {
+      const st = ST.normalize((await get())[ST.KEY]);
+      const json = JSON.stringify({ starts: st.log, summary: ST.stats(st.log) }, null, 2) + "\n";
+      try {
+        const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "adgecko-youtube-start-times.json";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        $("yt-start-status").textContent = "Downloaded " + st.log.length + " video starts.";
+      } catch {
+        $("yt-start-status").textContent = "Could not download. Use Copy as text instead.";
+      }
+      return json;
+    });
+    $("yt-start-clear").addEventListener("click", () => queued(async () => {
+      const st = ST.normalize(stored[ST.KEY]);
+      st.log = [];
+      if (await set({ [ST.KEY]: st })) $("yt-start-status").textContent = "Cleared the YouTube start times.";
+    }));
+  }
   // Enter in the box adds the domain too (the box is not in a form). Not
   // while an input method is still composing the text.
   $("allow-domain").addEventListener("keydown", (e) => {

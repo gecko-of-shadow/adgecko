@@ -206,6 +206,7 @@ All keys are in `chrome.storage.local`, but `tabSignals` is in `chrome.storage.s
 | `cosKeys` | Index of all hide-rule keys. Only the worker reads it. | worker |
 | `feedState`, `feedCache`, `feedPaused` | Feed status, two verified feed files, the derived pause switch. | worker |
 | `popupFix`, `popupWelcomed`, `uiTheme` | Pending **Fix this site** question, welcome card, popup theme. | popup, settings page |
+| `ytStartTimes` | YouTube start times, opt-in: `{ v: 1, on, log: [{ time, version, kind, waitMs, ad, toast, timeout }] }`. `on` is off by default. At most 300 entries, the oldest go first. `time` is UTC to the minute. No video id, URL, title, channel or account. Rules: `GeckoFeatures.startTimes` in `src/settings/features.js`. | `src/settings/flags.js` (append, top YouTube frame), settings page (switch, Clear) |
 | `tabSignals` (session) | The last guard event for each tab. | worker |
 
 - A file that uses a key of a different file repeats the string. Do not rename a key without a search of all files.
@@ -284,11 +285,12 @@ Add a stream host to `STREAM_SITES` and to the three `exclude_matches` lists tog
 4. `flags.js` answers `gk-r1` only until the first of these events: the parser inserts a `<script>` element, the first `readystatechange`, or the first task after injection. The limit is 8 ports for each frame.
 5. `flags.js` reads `settings` and `siteOverrides`, resolves the flags and posts `{ f: { id: bool } }` on each port. A storage change of these keys sends new flags.
 6. A page guard posts `{ g: "clipboard" }` or `{ g: "popup" }` when it blocks an action. `flags.js` then sends `guardEvent` to the worker, one time in 2 seconds maximum.
+7. In the top frame of `www.youtube.com`, `m.youtube.com` or `youtube.com` only, `src/youtube.js` posts `{ y: { kind, waitMs, ad, toast, timeout } }` after each measured video start, while the flag `ytTiming` is on. `flags.js` checks the record (`GeckoFeatures.startTimes.entry`), adds the minute and the extension version, and appends it to `ytStartTimes`, one record in 1 second maximum. No worker message. Best effort: the writes are in order inside one tab only, so two YouTube tabs at the same moment can lose one record, and a tab that read the log just before **Clear** can write old records back. `src/youtube.js` adds its poll and media listeners only while a start is pending, and drops a start at 60 s instead of a timeout when the player shows `.ytp-error` or `.ytp-offline-slate`, when the video never had metadata, or when it has data but sits paused with no spinner.
 
-- Flags sent: `youtubeWatchdog`, `youtubeCosmetic`, `kick`, `guardClipboard`, `guardPopups`.
+- Flags sent: `youtubeWatchdog`, `youtubeCosmetic`, `kick`, `guardClipboard`, `guardPopups`. In the top YouTube frame also `ytTiming` (`ytStartTimes.on`, off by default).
 - Receivers: `src/youtube.js`, `src/kick.js`, `src/guards/clipboard.js`, `src/guards/popups.js`.
 - A frame with no host of its own uses the origin of the site that made it.
-- If no port arrives, each page-world feature keeps its built-in default. The pop-up guard default is off. The other defaults are on.
+- If no port arrives, each page-world feature keeps its built-in default. The pop-up guard default is off. `ytTiming` (YouTube start times) is off: no record is sent without it. The other defaults are on.
 - An "off" flag stops the next action. It does not remove a patch.
 - UNVERIFIED: the run order of `document_start` scripts in Chrome. The code handles the two orders.
 

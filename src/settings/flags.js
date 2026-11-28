@@ -25,6 +25,14 @@
 // this script and took the first port; the order is not a documented Chrome
 // guarantee, so both orders are handled. Live Chrome on the owner's PC is
 // UNVERIFIED. Vendored scripts get no flags (always on, D-3).
+//
+// YouTube start times (opt-in, off by default): in the top frame of a
+// YouTube watch host only, the port also carries one message upstream,
+// {y: {kind, waitMs, ad, toast, timeout}} from src/youtube.js. This script
+// checks it strictly (GeckoFeatures.startTimes.entry), adds the minute and the
+// extension version, and appends it to chrome.storage.local ytStartTimes
+// (at most 300 entries). Nothing else is stored; nothing leaves the browser.
+// The switch (ytStartTimes.on) travels down as the flag "ytTiming".
 (function () {
   const PORT_EVENT = "gk-p1"; // same ids in src/youtube.js, src/kick.js, src/guards/*.js
   const REQ_EVENT = "gk-r1";
@@ -33,6 +41,14 @@
   const PAGE_FLAGS = ["youtubeWatchdog", "youtubeCosmetic", "kick", "guardClipboard", "guardPopups"];
   const F = typeof globalThis !== "undefined" ? globalThis.GeckoFeatures : null;
   if (!F || typeof chrome === "undefined" || !chrome.storage) return;
+  const ST = F.startTimes;
+  let ytTop = false;
+  try {
+    ytTop = !!ST && window.top === window && ST.isHost(location.hostname);
+  } catch {
+    // no start times here
+  }
+  let timingOn = false;
   let flags = null;
   const ports = [];
 
@@ -41,20 +57,23 @@
     try {
       const out = {};
       for (const id of PAGE_FLAGS) out[id] = flags[id] !== false;
+      if (ytTop) out.ytTiming = timingOn === true;
       port.postMessage({ f: out });
     } catch {
       // page-world features keep their defaults
     }
   }
 
-  // The only thing a page-world script may send back: "a page guard blocked
-  // something here" ({g: "clipboard" | "popup"}). Forwarded to the worker for
-  // the toolbar dot, at most once per 2 s per frame; anything else is ignored
-  // (flags never travel this way).
+  // What a page-world script may send back: "a page guard blocked something
+  // here" ({g: "clipboard" | "popup"}), forwarded to the worker for the
+  // toolbar dot, at most once per 2 s per frame; and, in the top YouTube frame
+  // only, one YouTube start-time record ({y: ...}, see onStartTime). Anything
+  // else is ignored (flags never travel this way).
   let lastPing = 0;
   function onGuardPing(m) {
     try {
       const d = m && m.data;
+      if (d && typeof d === "object" && d.y) return onStartTime(d.y);
       if (!d || typeof d !== "object" || (d.g !== "clipboard" && d.g !== "popup")) return;
       const now = Date.now();
       if (now - lastPing < 2000) return;
@@ -63,6 +82,48 @@
     } catch {
       // no dot
     }
+  }
+
+  // One YouTube start-time record: top YouTube frame only, switch on, at most
+  // one per second (read fresh, append, write). Best effort: the writes are in
+  // order inside this tab only. chrome.storage has no atomic append, so two
+  // YouTube tabs that end a start at the same moment can lose one of the two
+  // records, and a tab that read the log just before Clear on the settings
+  // page can write those old records back. Accepted for a diagnostics log.
+  let lastStart = 0;
+  let stWrites = Promise.resolve();
+  function onStartTime(raw) {
+    if (!ytTop || !timingOn) return;
+    const now = Date.now();
+    if (now - lastStart < 1000) return;
+    let version = "";
+    try {
+      version = String(chrome.runtime.getManifest().version || "");
+    } catch {
+      // no version
+    }
+    const entry = ST.entry(raw, now, version);
+    if (!entry) return;
+    lastStart = now;
+    stWrites = stWrites.then(() => new Promise((resolve) => {
+      try {
+        chrome.storage.local.get([ST.KEY], (stored) => {
+          void chrome.runtime.lastError;
+          try {
+            const cur = ST.normalize(stored && stored[ST.KEY]);
+            if (!cur.on) return resolve();
+            chrome.storage.local.set({ [ST.KEY]: ST.append(cur, entry) }, () => {
+              void chrome.runtime.lastError;
+              resolve();
+            });
+          } catch {
+            resolve();
+          }
+        });
+      } catch {
+        resolve();
+      }
+    }));
   }
 
   function handshake() {
@@ -98,9 +159,10 @@
 
   function load() {
     try {
-      chrome.storage.local.get(KEYS, (stored) => {
+      chrome.storage.local.get(ytTop ? KEYS.concat(ST.KEY) : KEYS, (stored) => {
         void chrome.runtime.lastError;
         try {
+          if (ytTop) timingOn = ST.normalize(stored && stored[ST.KEY]).on;
           flags = F.resolve(stored && stored.settings, stored && stored.siteOverrides, siteHost());
           for (const p of ports) send(p);
         } catch {
@@ -158,7 +220,16 @@
   load();
   try {
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== "local" || !changes || (!changes.settings && !changes.siteOverrides)) return;
+      if (area !== "local" || !changes) return;
+      if (ytTop && changes[ST.KEY]) {
+        // Only the switch matters here; a new log entry changes nothing.
+        const on = ST.normalize(changes[ST.KEY].newValue).on;
+        if (on !== timingOn) {
+          timingOn = on;
+          for (const p of ports) send(p);
+        }
+      }
+      if (!changes.settings && !changes.siteOverrides) return;
       load();
     });
   } catch {
