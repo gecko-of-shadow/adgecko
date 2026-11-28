@@ -1333,17 +1333,39 @@ function installGeneralAdblockUpdate(target) {
   // (exceptionAllows on the pack-time cross-list data). The type-only ones
   // are not in packed-cross.json, so they wait for the first download. Writes
   // only when the wanted rules differ from the list-range rules in place.
+  // The packed files do not change while the worker runs, so the wanted rules
+  // are worked out once per worker (loading the 5 MB packed ruleset costs
+  // about 40 ms), and only the excepted hosts and their parents are looked up
+  // in it.
+  let packedAllowRules = null;
+  async function wantedPackedAllows(deps) {
+    if (packedAllowRules) return packedAllowRules;
+    const bundled = await deps.loadBundled();
+    const cross = crossListRules({}, SOURCES.map((x) => x.name), bundled.packedCross);
+    const candidates = new Set();
+    for (const h of Array.from(cross.allow || []).concat((cross.allowScoped || []).map((e) => e[0]))) {
+      for (let d = h; d;) {
+        candidates.add(d);
+        const i = d.indexOf(".");
+        d = i < 0 ? "" : d.slice(i + 1);
+      }
+    }
+    const hosts = new Set();
+    if (candidates.size) {
+      const extra = new Set(bundled.extraIds || []);
+      for (const r of bundled.rules || []) {
+        if (!isPackedListRule(r, extra)) continue;
+        for (const d of r.condition.requestDomains || []) if (candidates.has(d)) hosts.add(d);
+      }
+    }
+    packedAllowRules = buildListRules([], [], exceptionAllows(cross, hosts));
+    return packedAllowRules;
+  }
+
   async function syncPackedAllows(deps) {
     if (!deps.loadBundled) return;
     try {
-      const bundled = await deps.loadBundled();
-      const extra = new Set(bundled.extraIds || []);
-      const hosts = new Set();
-      for (const r of bundled.rules || []) {
-        if (isPackedListRule(r, extra)) for (const d of r.condition.requestDomains || []) hosts.add(d);
-      }
-      const cross = crossListRules({}, SOURCES.map((x) => x.name), bundled.packedCross);
-      const want = buildListRules([], [], exceptionAllows(cross, hosts));
+      const want = await wantedPackedAllows(deps);
       const ours = ((await deps.getDynamicRules()) || []).filter((r) => isOurRule(r.id));
       const sig = (rules) => JSON.stringify(rules.map((r) => [r.id, r.action && r.action.type, r.condition]));
       if (sig(ours) === sig(want)) return;

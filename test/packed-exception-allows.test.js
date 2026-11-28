@@ -8,8 +8,13 @@ import "../src/threat/psl.js";
 import "../src/general/never-block-captcha.js";
 import updateSource from "../src/general/update.js" with { type: "text" };
 
-const U = {};
-new Function(`${updateSource}\nreturn installGeneralAdblockUpdate;`)()(U);
+const install = new Function(`${updateSource}\nreturn installGeneralAdblockUpdate;`)();
+// One worker each: the wanted rules are kept for the worker's life.
+function fresh() {
+  const U = {};
+  install(U);
+  return U;
+}
 
 function deps(bundled, dynamic = []) {
   const d = {
@@ -24,7 +29,8 @@ function deps(bundled, dynamic = []) {
       d.dynamic = d.dynamic.filter((r) => !removeRuleIds.includes(r.id)).concat(addRules);
     },
     setStaticEnabled: async (on) => { d.staticOn = on; },
-    loadBundled: async () => bundled,
+    loads: 0,
+    loadBundled: async () => { d.loads += 1; return bundled; },
     enabled: () => true,
     now: () => 0,
   };
@@ -41,6 +47,7 @@ const bundled = {
 };
 
 Deno.test("packed only: a subdomain exception under a packed block becomes a priority-1 allow rule", async () => {
+  const U = fresh();
   const d = deps(bundled);
   const r = await U.applyEnabled(d, true);
   assertEquals(r.mode, "static");
@@ -53,15 +60,18 @@ Deno.test("packed only: a subdomain exception under a packed block becomes a pri
   assertEquals(ours[0].condition.requestDomains, ["alllaw.112.2o7.net", "tracker.example"]);
 });
 
-Deno.test("packed only: a second run with the same data writes nothing", async () => {
+Deno.test("packed only: a second run writes nothing and does not load the packed rules again", async () => {
+  const U = fresh();
   const d = deps(bundled);
   await U.applyEnabled(d, true);
   const writes = d.writes;
   await U.applyEnabled(d, true);
   assertEquals(d.writes, writes);
+  assertEquals(d.loads, 1);
 });
 
 Deno.test("packed only: no exception for a blocked host means no list-range rules, and old ones go", async () => {
+  const U = fresh();
   const none = Object.assign({}, bundled, { packedCross: { lists: {} } });
   const stale = [{ id: U.LIST_RULE_ID_BASE, priority: 1, action: { type: "allow" }, condition: { requestDomains: ["old.example"] } }];
   const user = { id: U.ALLOW_RULE_ID_BASE, priority: 10000, action: { type: "allow" }, condition: { initiatorDomains: ["a.example"] } };
@@ -72,6 +82,7 @@ Deno.test("packed only: no exception for a blocked host means no list-range rule
 });
 
 Deno.test("packed only: lists switched off leaves no list-range rules", async () => {
+  const U = fresh();
   const d = deps(bundled);
   await U.applyEnabled(d, true);
   await U.applyEnabled(d, false);
@@ -79,6 +90,7 @@ Deno.test("packed only: lists switched off leaves no list-range rules", async ()
 });
 
 Deno.test("packed only: the shipped packed data gives the 2o7.net subdomain allows", async () => {
+  const U = fresh();
   const rules = JSON.parse(await Deno.readTextFile(new URL("../src/rules/general-network.json", import.meta.url)));
   const packedCross = JSON.parse(await Deno.readTextFile(new URL("../src/rules/packed-cross.json", import.meta.url)));
   const meta = JSON.parse(await Deno.readTextFile(new URL("../src/rules/meta.json", import.meta.url)));
