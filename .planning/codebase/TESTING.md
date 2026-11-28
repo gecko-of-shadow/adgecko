@@ -76,13 +76,13 @@ The worker model `loadWorker(opts)`:
 
 ## 4. Test inventory
 
-`test/` has 141 test files, all in one directory, and 26 fixture files.
+`test/` has 143 test files, all in one directory, and 26 fixture files.
 
 | Subject | Test files (each name has the suffix `.test.js`) |
 |---|---|
 | Twitch vendor script | `playlist`, `fixtures`, `twitch-playlist`, `vendor-pin` |
 | Twitch directory, Kick | `twitch-directory-ads`, `stream-hygiene`, `kick` |
-| YouTube script | `youtube`, `youtube-sim`, `youtube-decoy`, `youtube-decoy-nav`, `youtube-error-flash`, `youtube-fallback`, `youtube-layers`, `youtube-watchdog-playability`, `stall`, `stall-decoy`, `race`, `stealth` |
+| YouTube script | `youtube`, `youtube-sim`, `youtube-decoy`, `youtube-decoy-nav`, `youtube-error-flash`, `youtube-fallback`, `youtube-layers`, `youtube-watchdog-playability`, `youtube-start-times`, `stall`, `stall-decoy`, `race`, `stealth` |
 | uBlock Origin YouTube port | `ubo-youtube`, `ubo-youtube-edge`, `ubo-rpnt-payload` |
 | Network rules and packer | `dnr`, `filter-options`, `packer-options`, `navigation-scope`, `meta-counts`, `hcaptcha-never-block`, `imasdk-never-block`, `final-dnr-fields`, `final-lists-*` (6 files), `wave2-lists-network-options` |
 | Cosmetic filtering | `cosmetic`, `cosmetic-filters`, `cosmetic-adopted-sheet`, `cosmetic-feature-gate`, `cosmetic-generichide`, `cosmetic-parse-nesting`, `cosmetic-resync-cost`, `cosmetic-unscoped-root`, `pr12-cosmetic-parent-child-exclusion`, `wave2-lists-cosmetic-pack`, `wave2-perf-cosmetic-index`, `cosmetic-frame-generics`, `cosmetic-grouped-sheet` |
@@ -151,6 +151,7 @@ These tests do not check runtime behaviour. They can fail after an edit of a doc
 | `final-chrome-utf8`, `final-dnr-fields`, `dnr`, `hcaptcha-never-block` | Shipped files: UTF-8, DNR field limits, rule count, stream-site exclusions, the captcha list in each layer. |
 | `no-openphish`, `no-background-fetch`, `hardening` | Forbidden list sources, the fetch policy, page-world rules, by source scan. |
 | `icons`, `art-rules`, `contrast`, `popup-design` | Icon files, approved art, WCAG contrast from the CSS tokens, approved popup elements and wording. |
+| `youtube-start-times` | `ARCHITECTURE.md` section 9 (a key table row for `ytStartTimes`), `docs/permissions-and-privacy.md` (`ytStartTimes` and "off by default"), and `src/settings.html` (the **YouTube start times** section, the box unchecked, and the result line `yt-start-status` inside the section). |
 | `privacy-generic`, `privacy-mask` | `scripts/privacy-check.py`, the text of `checks.yml` (secret use, SHA pins, runner version), the retired workflow file. |
 
 Rule: after a change to `manifest.json`, the gate, a file in `src/rules/`, a vendor file, a CSS token, popup text, a workflow, `README.md` or a file in `docs/`, expect failures in this table.

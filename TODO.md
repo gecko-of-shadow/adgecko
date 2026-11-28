@@ -17,9 +17,9 @@ Last update: 2026-11-27, owner decisions 3 and PR 30 built; youtube.js comment c
 
 The automatic test was not signed in. The black screen of 6 to 21 s (`CHANGELOG.md`, section 0.3.7) was seen on a signed-in account; no click in the automatic chain test had it. The suspect that the automatic test could not reach (A) acts only after all recovery steps fail on one video.
 
-- [ ] In your own Chrome, signed in: open a video, then click 5 related videos one after the other in the same tab. For each click, write down the seconds of black screen.
-- [ ] Do this 4 times and change the version each time: 0.3.7, 0.3.6, 0.3.7, 0.3.6. For 0.3.6 load the `v036` folder in `adgecko-ab` (or `adgecko-0.3.6.zip`). Load only one Adgecko card at a time. Use the same Chrome profile. The stall rate of one profile changed a lot within one hour in the automatic test, so one block of 0.3.7 and then one block of 0.3.6 would measure the time, not the version.
-- [ ] If 0.3.7 is clearly longer: test the `noA` folder in `adgecko-ab` the same way. If noA is as fast as 0.3.6, suspect A is the cause. Record the result here.
+- [ ] In your own Chrome, signed in: open the Adgecko settings page and tick **YouTube start times**, **Record how long each YouTube video takes to start** (one time; it is off by default).
+- [ ] Watch YouTube as usual, then use Settings, YouTube start times, Copy as text and send it.
+- Note: only builds with this log (`main` after the "YouTube start times" change) record. v0.3.6, v0.3.7 and the `adgecko-ab` folders (`v036`, `noA`) do not have it, so the log shows the waits of the current build only. A comparison with 0.3.6 or noA needs the log in those builds too (not done).
 - [ ] Check that the "Experiencing interruptions?" popup does not show in 0.3.7, and that "Link copied to clipboard" still shows after Share, Copy link.
 
 ### 1. Test 0.3.6 by hand

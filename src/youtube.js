@@ -1044,6 +1044,67 @@ function installYoutubeAdblock(target) {
     return state.spinner === true || classes.includes("unstarted-mode") || classes.includes("buffering-mode");
   }
 
+  // YouTube start times (opt-in diagnostics; the switch is the flag
+  // "ytTiming", off unless the settings page turned it on). One pending
+  // measurement at a time: begin(kind, t0) at navigation start, sample() at
+  // each media event, tick() from a slow poll. It ends when the main video
+  // plays (played: more than 0.5 s of advance since its start position, not
+  // paused, no ad-showing class; the caller measures the advance) or after
+  // giveUpMs (timeout). A start seen in a hidden tab is dropped: a background
+  // tab does not play, so it would only add false timeouts. At the give-up
+  // time, skipGiveUp() (asked only then) may drop the start instead of a
+  // timeout record: a page that cannot or will not start (waiting room,
+  // error overlay, paused start) is not a stall. The record holds
+  // no video id, address or title: { kind, waitMs, ad, toast, timeout }.
+  // test/youtube-start-times.test.js drives it with a fake clock.
+  function createStartTimer(o) {
+    const now = o && typeof o.now === "function" ? o.now : () => Date.now();
+    const giveUpMs = o && o.giveUpMs > 0 ? o.giveUpMs : 60000;
+    const emit = o && typeof o.emit === "function" ? o.emit : () => {};
+    const skipGiveUp = o && typeof o.skipGiveUp === "function" ? o.skipGiveUp : () => false;
+    let cur = null;
+    function finish(timeout) {
+      const c = cur;
+      cur = null;
+      if (!c || c.hidden) return null;
+      if (timeout) {
+        let skip = false;
+        try { skip = skipGiveUp() === true; } catch { skip = false; }
+        if (skip) return null;
+      }
+      const waitMs = timeout ? giveUpMs : Math.max(0, Math.min(giveUpMs, Math.round(now() - c.t0)));
+      const rec = { kind: c.kind, waitMs, ad: c.ad, toast: c.toast, timeout: !!timeout };
+      try { emit(rec); } catch { /* optional */ }
+      return rec;
+    }
+    function note(s) {
+      if (!cur || !s) return;
+      if (s.adShowing === true) cur.ad = true;
+      if (s.toast === true) cur.toast = true;
+      if (s.hidden === true) cur.hidden = true;
+    }
+    return {
+      begin(kind, t0, hidden) {
+        cur = { kind, t0: Number(t0) || 0, ad: false, toast: false, hidden: hidden === true };
+      },
+      cancel() { cur = null; },
+      active: () => !!cur,
+      tick(s) {
+        if (!cur) return null;
+        note(s);
+        if (now() - cur.t0 >= giveUpMs) return finish(true);
+        return null;
+      },
+      sample(s) {
+        if (!cur || !s) return null;
+        note(s);
+        if (now() - cur.t0 >= giveUpMs) return finish(true);
+        if (s.adShowing !== true && s.paused === false && s.played > 0.5) return finish(false);
+        return null;
+      },
+    };
+  }
+
   function patchUmpBackoff(bytes) {
     const parser = createUmpBackoffParser();
     const head = parser.push(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0));
@@ -1090,6 +1151,7 @@ function installYoutubeAdblock(target) {
     syncInterruptionsSnackbar,
     installSnackbarGuard,
     shouldNudgeStart,
+    createStartTimer,
   });
 }
 
@@ -1123,6 +1185,9 @@ function startYoutubeAdblock() {
   function flagOn(id) {
     return FLAGS[id] !== false;
   }
+  // Upstream on the same port: only the start-time record (see createStartTimer).
+  let postUp = null;
+  let onTimingFlag = null;
   try {
     const PORT_EVENT = "gk-p1";
     let port = null;
@@ -1138,6 +1203,14 @@ function startYoutubeAdblock() {
     const dataGet = meGetter("data");
     const portsGet = meGetter("ports");
     const dataOf = dataGet ? (m) => applyFn(dataGet, m, []) : (m) => m && m.data;
+    const portPost = typeof MessagePort === "function" ? MessagePort.prototype.postMessage : null;
+    postUp = (msg) => {
+      try {
+        if (port) applyFn(portPost || port.postMessage, port, [msg]);
+      } catch {
+        // the record is optional
+      }
+    };
     const portsOf = portsGet ? (e) => applyFn(portsGet, e, []) : (e) => e && e.ports;
     const flagsOf = (m) => {
       const d = dataOf(m);
@@ -1152,7 +1225,8 @@ function startYoutubeAdblock() {
       p.addEventListener("message", (m) => {
         const next = flagsOf(m);
         if (!next || typeof next !== "object") return;
-        for (const key of ["youtubeWatchdog", "youtubeCosmetic"]) if (typeof next[key] === "boolean") FLAGS[key] = next[key];
+        for (const key of ["youtubeWatchdog", "youtubeCosmetic", "ytTiming"]) if (typeof next[key] === "boolean") FLAGS[key] = next[key];
+        try { if (typeof onTimingFlag === "function") onTimingFlag(); } catch { /* timing is optional */ }
         if (FLAGS.youtubeCosmetic === false && homeCssEl) {
           try { homeCssEl.remove(); } catch { /* already gone */ }
           homeCssEl = null;
@@ -2329,6 +2403,217 @@ function startYoutubeAdblock() {
     setTimeout(nudgeStart, 1000);
     setTimeout(nudgeStart, 3000);
   }, true);
+
+  // YouTube start times (see createStartTimer). Watch pages only. The first
+  // load measures until the flags arrive and stops if "ytTiming" is off; an
+  // in-page start begins only while it is on; a record is sent only while it
+  // is on. Cost while off and on other pages: no poll and no media listener
+  // (both exist only while a start is pending). While a start is pending: one
+  // 1 s poll (toast, hidden tab, give-up) and five media events, read only for
+  // the main player's <video>. At the give-up time (60 s) the start is dropped,
+  // not recorded as a timeout, when the player shows an error or a waiting room
+  // (.ytp-error, .ytp-offline-slate), when the video never got its metadata
+  // (readyState < 1) after it was armed, or when it has data but sits paused
+  // with no spinner (autoplay blocked, no click yet). UNVERIFIED in Chrome: the toast text
+  // match (English only), the two overlay class names, and the timing on a
+  // signed-in account.
+  (() => {
+    let perfNow = null;
+    try {
+      if (typeof performance === "object" && performance && typeof performance.now === "function") perfNow = () => performance.now();
+    } catch {
+      perfNow = null;
+    }
+    if (!perfNow) return;
+    // Per pending start: `armed` once the main <video> loaded the new video
+    // (an in-page start keeps the old video playing for a moment; first load
+    // has no old video), `media` once that video had metadata (readyState >= 1),
+    // `base` the position of the first non-ad, non-seek sample after that (a
+    // t= link or a resumed video starts past 0:00), `last` the previous sample
+    // (a jump of more than 1.5 s is a seek, not play: timeupdate comes about
+    // every 250 ms).
+    let pend = null;
+    const mainPlayer = () => {
+      try { return document.getElementById("movie_player"); } catch { return null; }
+    };
+    const mainVideo = (p) => {
+      try { return p && typeof p.querySelector === "function" ? p.querySelector("video") : null; } catch { return null; }
+    };
+    const shown = (el) => {
+      try {
+        if (!el) return false;
+        if (el.offsetWidth > 0 || el.offsetHeight > 0) return true;
+        return typeof el.getClientRects === "function" && el.getClientRects().length > 0;
+      } catch {
+        return false;
+      }
+    };
+    const noteMedia = (v) => {
+      if (pend && pend.armed && v && Number(v.readyState) >= 1) pend.media = true;
+    };
+    // Fallback when no load event is seen: the player reports the new video
+    // (compared only, never stored or sent).
+    const armByPlayer = (p) => {
+      if (pend && !pend.armed && pend.to && currentVideoId(p) === pend.to) {
+        pend.armed = true;
+        pend.base = null;
+        pend.last = null;
+      }
+    };
+    const skipGiveUp = () => {
+      if (!pend) return true;
+      const p = mainPlayer();
+      const q = (sel) => {
+        try { return p && typeof p.querySelector === "function" ? p.querySelector(sel) : null; } catch { return null; }
+      };
+      if (shown(q(".ytp-error")) || shown(q(".ytp-offline-slate"))) return true;
+      armByPlayer(p);
+      const v = mainVideo(p);
+      noteMedia(v);
+      // Armed but never had metadata. An in-page start that never armed (the
+      // player never took the new video) stays a timeout: that is a stall.
+      if (pend.armed && !pend.media) return true;
+      // Paused with data and no spinner: waiting for a click (autoplay
+      // blocked), not the black stall, which spins with a paused video (see
+      // shouldNudgeStart).
+      if (v && Number(v.readyState) >= 3 && v.paused === true) {
+        let buffering = false;
+        try { buffering = !!(p && p.classList && p.classList.contains("buffering-mode")); } catch { buffering = false; }
+        if (!buffering && !shown(q(".ytp-spinner"))) return true;
+      }
+      return false;
+    };
+    const timer = api.createStartTimer({
+      now: perfNow,
+      giveUpMs: 60000,
+      emit: (rec) => { if (FLAGS.ytTiming === true && typeof postUp === "function") postUp({ y: rec }); },
+      skipGiveUp,
+    });
+    let poll = 0;
+    const isHidden = () => {
+      try { return document.hidden === true; } catch { return false; }
+    };
+    const adNow = () => {
+      try {
+        const p = mainPlayer();
+        return !!(p && p.classList && p.classList.contains("ad-showing"));
+      } catch {
+        return false;
+      }
+    };
+    const toastNow = () => {
+      try {
+        const box = document.querySelector("snackbar-container");
+        if (box && api.isInterruptionsSnackbarText(box.textContent)) return true;
+        for (const n of document.querySelectorAll("yt-notification-action-renderer, tp-yt-paper-toast")) if (api.isInterruptionsToast(n)) return true;
+      } catch {
+        // no toast seen
+      }
+      return false;
+    };
+    const MEDIA_EVENTS = ["timeupdate", "playing", "loadstart", "emptied", "seeked"];
+    let listening = false;
+    let onMedia = null;
+    const listen = (on) => {
+      if (on === listening || !onMedia) return;
+      listening = on;
+      for (const type of MEDIA_EVENTS) {
+        try {
+          if (on) document.addEventListener(type, onMedia, true);
+          else document.removeEventListener(type, onMedia, true);
+        } catch {
+          // timing is optional
+        }
+      }
+    };
+    // One teardown for each end: played, timeout, dropped, cancel, flag off.
+    const stop = () => {
+      timer.cancel();
+      pend = null;
+      if (poll) clearInterval(poll);
+      poll = 0;
+      listen(false);
+    };
+    const begin = (kind, t0, to) => {
+      stop();
+      timer.begin(kind, t0, isHidden());
+      pend = { to: to || "", armed: kind === "first-load", media: false, base: null, last: null };
+      listen(true);
+      poll = setInterval(() => {
+        try {
+          const p = mainPlayer();
+          armByPlayer(p);
+          noteMedia(mainVideo(p));
+          timer.tick({ toast: toastNow(), hidden: isHidden(), adShowing: adNow() });
+          if (!timer.active()) stop();
+        } catch {
+          stop();
+        }
+      }, 1000);
+    };
+    onTimingFlag = () => { if (FLAGS.ytTiming === false) stop(); };
+    // The video id is compared here only; it is never stored or sent.
+    const watchId = (href) => {
+      try {
+        const u = new URL(String(href), location.href);
+        return u.pathname === "/watch" ? (u.searchParams.get("v") || "") : "";
+      } catch {
+        return "";
+      }
+    };
+    const rebase = () => {
+      pend.base = null;
+      pend.last = null;
+    };
+    onMedia = (event) => {
+      try {
+        if (!timer.active() || !pend) return;
+        const v = event && event.target;
+        if (!v || v.tagName !== "VIDEO") return;
+        // Only the main player's <video>; none yet (a hover preview): ignore.
+        const p = mainPlayer();
+        if (!p || typeof p.contains !== "function" || !p.contains(v)) return;
+        const type = event.type;
+        if (type === "loadstart" || type === "emptied") {
+          pend.armed = true;
+          pend.media = false;
+          rebase();
+          return;
+        }
+        armByPlayer(p);
+        if (!pend.armed) return;
+        noteMedia(v);
+        const ad = adNow();
+        const pos = Number(v.currentTime) || 0;
+        if (ad || v.seeking === true) rebase();
+        else {
+          if (pend.base === null || pos < pend.base || (pend.last !== null && pos - pend.last > 1.5)) pend.base = pos;
+          pend.last = pos;
+        }
+        timer.sample({ played: pend.base === null ? 0 : pos - pend.base, paused: v.paused !== false, adShowing: ad, toast: toastNow(), hidden: isHidden() });
+        if (!timer.active()) stop();
+      } catch {
+        // timing is optional
+      }
+    };
+    try {
+      if (FLAGS.ytTiming !== false && watchId(location.href)) begin("first-load", 0, "");
+    } catch {
+      stop();
+    }
+    // Registered after the main yt-navigate-start listener, so navPerfAt is new.
+    document.addEventListener("yt-navigate-start", (event) => {
+      try {
+        const to = watchId(event && event.detail && event.detail.url);
+        if (to && to === watchId(location.href)) return; // same video (timestamp link): keep
+        if (!to || FLAGS.ytTiming !== true) return stop();
+        begin("in-page", navPerfAt || perfNow(), to);
+      } catch {
+        stop();
+      }
+    }, true);
+  })();
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", watchDom, { once: true });
   } else {

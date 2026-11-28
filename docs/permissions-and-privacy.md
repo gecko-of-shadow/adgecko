@@ -10,7 +10,7 @@ In short: the extension does not send your browsing history anywhere. It downloa
 
 | Permission | Used for |
 | --- | --- |
-| `storage` | `chrome.storage.local` holds the ordinary-site on/off switch (`generalEnabled`, default on), allowed origins, a small list-refresh state key (`listState`: ETags, timestamps, counts, last errors), one payload key per list (`listData:<name>`: parsed domains and selectors, read only by the service worker), the status text, and cosmetic rules. |
+| `storage` | `chrome.storage.local` holds the ordinary-site on/off switch (`generalEnabled`, default on), allowed origins, a small list-refresh state key (`listState`: ETags, timestamps, counts, last errors), one payload key per list (`listData:<name>`: parsed domains and selectors, read only by the service worker), the status text, and cosmetic rules. It also holds `ytStartTimes`, the YouTube start-time log (off by default; see [Local only](#local-only)). |
 | `declarativeNetRequest` | Static rulesets `general` (`src/rules/general-network.json`), `ubo-youtube` (`src/rules/ubo-youtube-network.json`) and `threat` (`src/rules/threat-network.json`, see [threat-tier.md](threat-tier.md)). Dynamic rules hold a refreshed domain block list, refreshed threat rules, per-site allows, "Allow this domain" overrides, and an allow rule so list downloads are not blocked by those rules. |
 | `alarms` | Two alarms. `gecko-refresh` wakes the service worker every 3 hours to check the lists. `gecko-refresh-retry` is a one-shot alarm 31 minutes after a failed list refresh. |
 
@@ -45,6 +45,7 @@ If you limit **Site access** in `chrome://extensions` ("On click" or "On specifi
 - The clipboard and pop-up guards run inside the page and decide there; the text a page tries to copy is never sent anywhere.
 - When a guard blocks something, the extension's own service worker sets a small dot on that tab's toolbar icon (`chrome.action`, no permission) and keeps "what was blocked on which tab" in `chrome.storage.session` (cleared when the browser closes). Nothing leaves the browser.
 - The popup's "Fix this site" question and the one-time welcome card use two small keys in `chrome.storage.local` (`popupFix`, `popupWelcomed`); the popup theme is `uiTheme`.
+- **YouTube start times** (off by default). When you turn on **Record how long each YouTube video takes to start** on the settings page, the extension keeps a log in `chrome.storage.local` under `ytStartTimes`. For each video start on a youtube.com watch page (top frame only), it stores only these fields: the time rounded to the minute (UTC), the extension version, the kind (`first-load` or `in-page`), the wait in milliseconds from the navigation start to the first moment the video plays, whether an ad played first, whether the "Experiencing interruptions?" popup showed, and whether it gave up after 60 seconds. A page that cannot or will not start (a premiere or live waiting room, an error such as members-only or an age check, or a video that waits paused for a click) is not stored at all. It stores no video id, address, title, channel, account or other user data. It keeps at most 300 starts and drops the oldest. A start in a background tab is not stored. Nothing is sent anywhere: **Copy as text** and **Download** on the settings page give the log to you, and **Clear** empties it. UNVERIFIED in Chrome: the measurement on the owner's PC.
 
 ### Not requested
 
@@ -64,4 +65,4 @@ If a download fails, the packed rules stay in use.
 
 ### What it stores on this browser
 
-Settings, list metadata, parsed domains, and cosmetic selectors stay in `chrome.storage`. The extension has no account and no analytics call of its own. The popup does not fetch. The `@updateURL` line in the vendored userscript header is a comment; the file shipped in this repo is the one that runs.
+Settings, list metadata, parsed domains, and cosmetic selectors stay in `chrome.storage`. If you turn it on, the YouTube start-time log (`ytStartTimes`, described under [Local only](#local-only)) also stays there. The extension has no account and no analytics call of its own. The popup does not fetch. The `@updateURL` line in the vendored userscript header is a comment; the file shipped in this repo is the one that runs.

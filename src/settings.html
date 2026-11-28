@@ -99,6 +99,19 @@
       <ul id="site-list"></ul>
     </section>
 
+    <section aria-labelledby="h-ytstart">
+      <h2 id="h-ytstart">YouTube start times</h2>
+      <label><input id="yt-start-on" type="checkbox"> <span>Record how long each YouTube video takes to start (off by default)</span></label>
+      <p id="yt-start-summary"></p>
+      <div class="row">
+        <button id="yt-start-copy" type="button">Copy as text</button>
+        <button id="yt-start-download" type="button">Download</button>
+        <button id="yt-start-clear" type="button">Clear</button>
+      </div>
+      <p id="yt-start-status" role="status"></p>
+      <p class="note">For each video start on a youtube.com watch page, this stores only: the time (to the minute, UTC), the Adgecko version, first page load or in-page click, the wait in milliseconds until the video plays, whether an ad played first, whether the "Experiencing interruptions?" popup showed, and whether it gave up after 60 seconds (a waiting room, an error or a paused start is not counted). No video, address, title, channel or account. At most 300 starts, in this browser only. Nothing is sent anywhere; you copy or download it yourself.</p>
+    </section>
+
     <section aria-labelledby="h-look">
       <h2 id="h-look">Popup look</h2>
       <label for="ui-theme">Theme</label>

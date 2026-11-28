@@ -8,6 +8,10 @@ Dates in this file are the owner's local date (UTC-6). The dates stored on packe
 
 Five owner decisions of 2026-11-20. Not tested in real Chrome: the Kick and Twitch changes are UNVERIFIED until a run on the owner's PC proves them.
 
+### Added
+
+- Settings page: **YouTube start times**, off by default. When it is on, `src/youtube.js` measures each video start on a youtube.com watch page (first load and each in-page click to another video): the milliseconds from the navigation start to the first moment the main video plays (past 0.5 s, not paused, no ad), whether an ad played first, whether the "Experiencing interruptions?" popup showed, and a timeout after 60 s. A page that cannot or will not start is not counted as a timeout: a waiting room (`.ytp-offline-slate`), an error overlay (`.ytp-error`), a video with no metadata, or a video that has data but sits paused with no spinner. A seek (a resume or a `t=` link) is not counted as play. The poll and the media listeners exist only while a start is pending. `src/settings/flags.js` adds the minute (UTC) and the extension version and keeps at most 300 starts in `chrome.storage.local` under `ytStartTimes`. No video id, address, title, channel or account is stored. A start in a background tab is dropped. The section shows the count, the median and the 90th percentile, and has **Copy as text**, **Download** (JSON) and **Clear**, with the result shown in the section. The log is best effort: two YouTube tabs that end a start at the same moment can lose one record. No new permission, host or content script. Tests: `test/youtube-start-times.test.js`. UNVERIFIED in Chrome.
+
 ### Changed
 
 - Kick: the corrections in `docs/proposals/kick-0.3.5-fixes.patch` are applied to `src/kick.js` (owner decision 1). The banner path does not collapse a box that holds the video player. A box that the banner path collapsed is shown again when its ad frame goes or when the Kick switch goes off. While a cover or a box is hidden, a removed node also starts a new pass. The pin of `src/kick.js` in `scripts/frozen-pins.json` is updated. Three Kick tests that were ignored now run.
