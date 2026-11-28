@@ -9,7 +9,12 @@ const EXT = "abcdefghijklmnopabcdefghijklmnop";
 function loadWorker(rec = { badges: [], session: {} }) {
   const store = {};
   const listener = () => ({ addListener() {} });
-  const later = (f) => (rec.async ? setTimeout(f, 2) : f());
+  // rec.pending counts storage answers not yet given.
+  const later = (f) => {
+    if (!rec.async) return f();
+    rec.pending = (rec.pending || 0) + 1;
+    setTimeout(() => { try { f(); } finally { rec.pending--; } }, 2);
+  };
   let onMessage = null;
   const chrome = {
     runtime: {
@@ -160,6 +165,13 @@ Deno.test("background messages: bursts are per page, so a block right after navi
   assert(dots() === 2 && rec.shown[7] === " ", "new page, same tab: dot again");
 });
 
+// Wait until check() is true, or give up after 3 s and let the asserts report.
+// Windows timers fire about every 15 ms, so fixed short waits are not enough.
+async function waitFor(check, ms = 3000) {
+  const end = Date.now() + ms;
+  while (!check() && Date.now() < end) await new Promise((r) => setTimeout(r, 5));
+}
+
 // Blocks in several tabs at the same moment: each event is a read-modify-write
 // of one storage.session map. Overlapping, the last write kept only its own
 // tab (Chrome for Testing 155: 6 tabs, 1 to 3 events left), and the popup of
@@ -168,14 +180,14 @@ Deno.test("background messages: blocks in several tabs at once each keep their e
   const rec = { badges: [], session: {}, async: true };
   const onMessage = loadWorker(rec);
   for (let tab = 1; tab <= 6; tab++) onMessage(ping, { id: EXT, tab: { id: tab }, frameId: 0, documentId: "doc-" + tab, url: "https://news.example/" }, () => {});
-  await new Promise((r) => setTimeout(r, 120));
+  await waitFor(() => !rec.pending && Object.keys(rec.session.tabSignals || {}).length === 6);
   const kept = Object.keys(rec.session.tabSignals || {}).sort();
   assert(kept.join() === "1,2,3,4,5,6", "events kept: " + kept.join());
   // The popup of tab 3 takes its event while tab 7 blocks: both land.
-  const taken = send(onMessage, { source: "adgecko-general", type: "tabSignal", tabId: 3 }, popupSender);
+  const r = {};
+  onMessage({ source: "adgecko-general", type: "tabSignal", tabId: 3 }, popupSender, (answer) => { r.response = answer; });
   onMessage(ping, { id: EXT, tab: { id: 7 }, frameId: 0, documentId: "doc-7", url: "https://news.example/" }, () => {});
-  const r = await taken;
-  await new Promise((r) => setTimeout(r, 60));
+  await waitFor(() => !rec.pending && r.response && Object.keys(rec.session.tabSignals || {}).length === 6);
   assert(r.response && r.response.signal && r.response.signal.kind === "clipboard", "tab 3 got its event: " + JSON.stringify(r.response));
   const after = Object.keys(rec.session.tabSignals).sort().join();
   assert(after === "1,2,4,5,6,7", "after take: " + after);
