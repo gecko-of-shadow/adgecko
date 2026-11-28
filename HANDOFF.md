@@ -4,23 +4,35 @@ Last update: 2026-11-28.
 
 ## State
 
-- Last release: [v0.3.7](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.7), from commit `cc3e764`.
-- `main` has the changes of PRs 22 to 26 after v0.3.7 (merged on 2026-11-20). They are not released. See `CHANGELOG.md`, section "Unreleased".
-- Merged on 2026-11-27 (owner approved): #31 (YouTube slow start docs), #32 (`src/youtube.js` comment) and #34 (handoff).
-- Waiting for the owner's merge: #30, then #33. Both wait for the cnn.com popup check. A trial merge of #30, #33 and #34 on `main` had no conflict, and the Deno suite on it gave 936 passed, 0 failed.
-- #33 has the base `api-job/site-breakage`. Before you merge it, change its base to `main`, or merge #30 first. Else it merges into the old branch, not into `main`.
-- UNVERIFIED: the behaviour of 0.3.7 in the owner's signed-in Chrome, and the Kick, Twitch, PR 30 and PR 33 changes in any real Chrome.
+- Last release: [v0.3.7](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.7), from commit `cc3e764`. The manifest version on `main` is 0.3.7.
+- `main` has these changes after v0.3.7. They are not released. See `CHANGELOG.md`, section "Unreleased".
+  - PRs 22 to 26 (merged on 2026-11-20).
+  - #31, #32 and #34 (merged on 2026-11-27).
+  - #35, #36 and #37 (merged on 2026-11-27 and 2026-11-28, owner approved). See the next section.
+- Waiting for the owner's merge: #30, then #33. Both wait for the cnn.com popup check.
+  - #33 has the base `api-job/site-breakage`. Before you merge it, change its base to `main`, or merge #30 first. Else it merges into the old branch, not into `main`.
+  - After #36 and #37, both #30 and #33 have merge conflicts with `main` (a `git merge-tree` check on 2026-11-28). They need `main` merged into them, with the tests and the gate run again, before the merge. In #33, `onStartup` in `src/general-background.js` conflicts with #37.
+- UNVERIFIED: the behaviour of 0.3.7 in the owner's signed-in Chrome, and every change after it in any real Chrome.
 
-## Session 2026-11-28: PR 36 follow-up (branch `fix/packed-cross-and-threat-order`)
+## Last session (2026-11-27 evening to 2026-11-28): three PRs merged
 
-- The packer writes `importantScoped` and `cancelAllow` into `src/rules/packed-cross.json`, the same as `parseEntriesFull`. The file was made again by the packer's own functions from the list downloads of the current pack (all 8 SHA-256 values equal `meta.json`). The old packer gave the committed file byte for byte. The only new data: 8 `importantScoped` hosts of AdGuard Base.
-- `applyGeneralState` writes the user's Allow this domain override first, before the lists work and the packed ruleset load. `onStartup` no longer queues a second override write.
-- `@@||host^$badfilter` now also stops the same-host lift (`keepWhole`) and the `$all` page lift, in JS and in the packer. The current lists have no such line, so the packed rules do not change.
-- `test/settings.test.js`: one test waits for the allow rules, not 250 ms. It failed once in a full run under load.
-- PR #33 also changes `onStartup`. Expect a small conflict there.
-- UNVERIFIED: all of this in Chrome.
+| PR | What it does |
+|---|---|
+| #35 | The release gate writes the Deno log of section 5 to its own temporary file for each run (owner approved the gate change). The proposal file `docs/proposals/gate-deno-log.patch` stays as the record. |
+| #36 | The 26 commits of a bot branch (`improve/adgecko-2026-11-27`): list exceptions become allow rules, hide rules in frames, clipboard guard patterns, settings and popup changes, a Chrome smoke script. Plus 5 fix commits from a multi-agent review: no allow rule under a `$important` block or for an exception that `$badfilter` withdraws; the frame hide sheet follows the top site's Allow and `$generichide`; fewer clipboard false blocks (`ping -w 1`, Poetry, get-pip); two timing tests wait on a condition; the version is 0.3.7 again (the bot had set 0.3.8 without a release decision). |
+| #37 | The packer writes `importantScoped` and `cancelAllow` into `src/rules/packed-cross.json` (8 new AdGuard Base hosts). `applyGeneralState` writes the user's threat allow-domain override first, before the packed ruleset load. `@@||host^$badfilter` also stops the same-host lift. |
 
-## Session before (2026-11-27, afternoon): three owner decisions built
+Checked: on each PR, before the merge, the Deno suite (#36: 953 passed; #37: 962 passed; 0 failed), the release gate (`VERDICT: CLEAN`), the privacy check and CI. Independent reviewers checked #36 and #37; for #37 they found only nits.
+
+Not checked: any of this in real Chrome; CI on `main` after the last merge.
+
+Known nits (not fixed):
+- `onInstalled` writes the threat override two times. This is harmless.
+- The `onInstalled` test in `test/threat-allow-before-packed-allows.test.js` also passes with the old order.
+- `@@||host^$important,badfilter` also withdraws a plain `@@||host^`, because `$important` is an ignored option. No current list has such a line.
+- `scripts/pack-filter-lists.py` has no `--help` and no offline check mode. Any run, also with `--help`, downloads the lists and rewrites `src/rules/`. A review agent did this by mistake in a review worktree and restored the files.
+
+## Earlier session (2026-11-27, afternoon): three owner decisions built
 
 The owner gave three answers on 2026-11-27:
 
@@ -40,18 +52,18 @@ Known gap in #33: when the write of the ruleset fails, no timer retries it. The 
 
 Flaky runs, seen under load (other Deno runs were active on the PC): one full Deno run on #33 and one on this handoff branch each had 3 failures. On #33 the build agent traced them to an uncaught timer error in `test/race.test.js`; the names of the second run's failures were not read. Each rerun passed. The 6 ignored tests depend on the environment (list cache, zip tool, gate tools, Windows).
 
-## Earlier session (2026-11-27, morning): YouTube slow start, documented
+## Earlier session (2026-11-27, morning): YouTube slow start
 
 YouTube's server sends a "wait" reply (4,000, 8,800 or 12,000 ms) on a direct watch load when the ad is removed. The owner accepted the wait. Details: `docs/youtube-slow-start.md` (PR #31). The raw bench data is in `adgecko-ab/slow-start-2026-11-27`, outside the repository; it holds video links with network addresses, so do not copy it into the repository.
 
 ## Open
 
-- Scratch items outside the repository: the folder `adgecko-ab` with the worktrees `v036` and `v037`; the Chrome for Testing profiles `yt-bench-*` in the user's temporary folder; the worktrees `adgecko-wt-master`, `adgecko-wt-ytcomment` and `adgecko-wt-handoff` next to the repository folder (this session). Remove them only with the owner's approval.
+- Scratch items outside the repository: the folder `adgecko-ab` with the worktrees `v036` and `v037`; the Chrome for Testing profiles `yt-bench-*` in the user's temporary folder; the review worktree `adgecko-wt-pr37review` and this handoff worktree `adgecko-wt-handoff2` next to the repository folder. Remove them only with the owner's approval. The six worktrees of 2026-11-27 were removed with the owner's approval.
+- Merged branches that are still on GitHub: `fix/gate-deno-log`, `improve/adgecko-2026-11-27`, `fix/grok-review-2026-11-27`, `fix/packed-cross-and-threat-order` and the branches of #31, #32 and #34.
 - Old branches and worktrees from earlier sessions: `docs/cleanup-2026-11-16`, the merged branches of PRs 21 to 26, `.claude/worktrees/wf_15df4964-f50-*`, `adgecko-docs-wt`. Remove them only with the owner's approval.
 
 ## Next steps
 
-1. The owner: after the cnn.com check, merge #30 and then #33.
-2. The owner: the cnn.com popup check for PR 30 (steps 5 and 6).
-3. The owner: the signed-in YouTube test in `TODO.md`, section 0, and Kick and Twitch in real Chrome (`TODO.md`, section 1).
-4. Release 0.3.8 from `main` when the tests are done.
+1. The owner: the cnn.com popup check for PR 30 (steps 5 and 6). Then merge #30, and then #33.
+2. The owner: the signed-in YouTube test in `TODO.md`, section 0, and Kick and Twitch in real Chrome (`TODO.md`, section 1). Also the new hide rules in frames and the clipboard guard changes of #36.
+3. Release 0.3.8 from `main` when the tests are done.
