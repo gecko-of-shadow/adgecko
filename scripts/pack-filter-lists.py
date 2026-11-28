@@ -764,13 +764,19 @@ class ListEntries(tuple):
     unconditional `@@||host^` exceptions), .limit (hosts of every other
     `@@||host...` exception: a path or options), .important (whole-domain blocks
     marked $important, which an exception never lifts) and .alldoc (hosts
-    whose plain `$all` added a DOCUMENT_KEY entry)."""
+    whose plain `$all` added a DOCUMENT_KEY entry). For the runtime's
+    exception allow rules only (exceptionAllows in update.js):
+    .importantScoped (hosts of scoped $important blocks) and .cancelAllow
+    (the exceptions that an `@@...$badfilter` line withdraws, "host\nkey",
+    key "" for a plain `@@||host^`)."""
 
     cancel: set
     allow: set
     limit: set
     important: set
     alldoc: set
+    importantScoped: set
+    cancelAllow: set
 
 
 def extract_list(text: str) -> ListEntries:
@@ -791,6 +797,8 @@ def extract_list(text: str) -> ListEntries:
     allow: set[str] = set()
     limit: set[str] = set()
     important: set[str] = set()
+    important_scoped: list[list[str]] = []
+    cancel_allow: set[str] = set()
     alldoc: set[str] = set()
     doc_explicit: set[str] = set()
     dropping = False
@@ -805,6 +813,12 @@ def extract_list(text: str) -> ListEntries:
             if em and not em.group(2) and looks_like_domain(em.group(1).lower()):
                 allow.add(em.group(1).lower())
             else:
+                # `@@||host^$badfilter` or `@@||host^$type,badfilter`: that
+                # exception gets no allow rule, in this list or any other.
+                # Mirrors parseEntriesFull().
+                undo = convert_options(em.group(2) or "") if em and looks_like_domain(em.group(1).lower()) else None
+                if undo is not None and undo[1]:
+                    cancel_allow.add(em.group(1).lower() + "\n" + undo[0])
                 # A path / option exception: its host limits $domain=
                 # filters across lists (apply_cross_list). Mirrors parseEntriesFull().
                 h = exception_host(line[2:])
@@ -835,6 +849,8 @@ def extract_list(text: str) -> ListEntries:
                     alldoc.add(domain)
             else:
                 scoped.append([domain, key])
+                if m.group(2) and IMPORTANT_RE.search(m.group(2)):
+                    important_scoped.append([domain, key])
                 if key == DOCUMENT_KEY:
                     doc_explicit.add(domain)
             continue
@@ -855,6 +871,8 @@ def extract_list(text: str) -> ListEntries:
     out.allow = allow
     out.limit = limit
     out.important = important
+    out.importantScoped = {d for d, k in important_scoped if d + "\n" + k not in cancelled}
+    out.cancelAllow = cancel_allow
     # Only hosts whose page entry comes from `$all` alone (an explicit
     # `$document` for the same host shares the entry and keeps it).
     out.alldoc = alldoc - doc_explicit
@@ -874,6 +892,7 @@ def collect_cross(lists: list) -> dict:
     allow: set[str] = set()
     limit: set[str] = set()
     important: set[str] = set()
+    cancel_allow: set[str] = set()
     alldoc: set[str] = set()
     doc_explicit: set[str] = set()
     for entry in lists:
@@ -885,11 +904,15 @@ def collect_cross(lists: list) -> dict:
         allow |= set(get("allow", set()))
         limit |= set(get("limit", set()))
         important |= set(get("important", set()))
+        cancel_allow |= set(get("cancelAllow", set()))
         own = set(get("alldoc", set()))
         alldoc |= own
         if isinstance(entry, tuple) and len(entry) > 1:
             doc_explicit |= {e[0] for e in entry[1] if e[1] == DOCUMENT_KEY and e[0] not in own}
     allow -= important
+    # `@@||host^$badfilter` withdraws the exception itself: it lifts no
+    # same-host block and no `$all` page entry. Mirrors crossListRules().
+    allow -= {c[:-1] for c in cancel_allow if c.endswith("\n")}
     partial: dict[str, set] = {}
     for c in cancel:
         d, _, k = c.partition("\n")
@@ -956,7 +979,8 @@ def packed_cross_data(named) -> dict:
     """Per list (name -> extract_list result), that list's FULL cross-list
     data: every cancel ($badfilter), allow (unconditional `@@||host^`), limit
     (path / option exception hosts), important and alldoc entry (final
-    review #6, widened in 0.3.5). Written to src/rules/packed-cross.json; the
+    review #6, widened in 0.3.5), and importantScoped and cancelAllow (for
+    the runtime's exception allow rules only; same rules as parseEntriesFull). Written to src/rules/packed-cross.json; the
     runtime uses a list's part only while that list has no current parsed
     copy. Full data, not only the entries that changed something at pack
     time: a filter that another list adds after the pack must still be
@@ -976,7 +1000,7 @@ def packed_cross_data(named) -> dict:
     out: dict = {}
     for name, entry in named.items():
         part: dict = {}
-        for key in ("cancel", "allow", "limit", "important", "alldoc"):
+        for key in ("cancel", "allow", "limit", "important", "alldoc", "importantScoped", "cancelAllow"):
             values = getattr(entry, key, set()) or ()
             if key == "alldoc":
                 values = [h for h in values if h in allowed]

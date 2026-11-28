@@ -91,13 +91,25 @@ const wmHas = WeakMap.prototype.has;
 function installClipboardGuard(target) {
   // Commands people are tricked into running (patterns are case-insensitive).
   const PATTERNS = [
-    { id: "powershell-encoded", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s-(?:e|ec|en|enc|enco|encod|encode|encoded|encodedcommand)\s+[A-Za-z0-9+/=]{16,}/i },
+    // powershell.exe takes a switch after "/", "-", "--" or a Unicode dash
+    // (en dash, em dash, horizontal bar), and any prefix of its name
+    // (PowerShell CommandLineParameterParser: GetSwitchKey, MatchSwitch).
+    { id: "powershell-encoded", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s(?:\/|[-\u2013-\u2015]{1,2})(?:ec|e(?:n(?:c(?:o(?:d(?:e(?:d(?:c(?:o(?:m(?:m(?:a(?:n(?:d)?)?)?)?)?)?)?)?)?)?)?)?)?)\s+[A-Za-z0-9+/=]{16,}/i },
     { id: "powershell-download", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,400}(?:\biex\b|invoke-expression|downloadstring|downloadfile|invoke-webrequest|\biwr\b|\birm\b|invoke-restmethod|net\.webclient|start-bitstransfer|frombase64string)/i },
-    { id: "powershell-hidden", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s-(?:w|win|window|windowstyle)\s+(?:h|hid|hidden)\b/i },
+    { id: "powershell-hidden", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s(?:\/|[-\u2013-\u2015]{1,2})w(?:i(?:n(?:d(?:o(?:w(?:s(?:t(?:y(?:l(?:e)?)?)?)?)?)?)?)?)?)?\s+(?:h|hi|hid|hidd|hidde|hidden)\b/i },
+    // WindowStyle 1 is Hidden. "-w 1" is common inside a payload (ping -w 1),
+    // so here it counts only among powershell's own switches: before -c,
+    // -command, -file, -e/-enc..., or the first word that is not a switch.
+    // Only these take a value (any prefix of the name): -ExecutionPolicy,
+    // -Version, -WorkingDirectory, -InputFormat, -OutputFormat,
+    // -ConfigurationName, -SettingsFile, -CustomPipeName, -PSConsoleFile.
+    { id: "powershell-hidden", re: /\b(?:powershell|pwsh)(?:\.exe)?["']?(?:\s+(?:\/|[-\u2013-\u2015]{1,2})(?:(?:ep|ex[a-z]{0,13}|v[a-z]{0,6}|wd|wo[a-z]{0,14}|if|inp[a-z]{0,8}|o[a-z]{0,11}|con[a-z]{0,14}|se[a-z]{0,10}|cu[a-z]{0,12}|ps[a-z]{0,11})(?:\s+|:)(?:"[^"\n]{0,100}"|'[^'\n]{0,100}'|[^\s"']{1,100})|(?!(?:c|co|com|comm|comma|comman|command|f|fi|fil|file|e|ec|en[a-z]{0,12})\b)[a-z]{1,30}\b)){0,16}\s+(?:\/|[-\u2013-\u2015]{1,2})w(?:i(?:n(?:d(?:o(?:w(?:s(?:t(?:y(?:l(?:e)?)?)?)?)?)?)?)?)?)?\s+1\b/i },
     // Pipeline form "irm URL | iex" (curl/wget are PowerShell aliases too).
     { id: "download-pipe-iex", re: /\b(?:iwr|irm|invoke-webrequest|invoke-restmethod|curl|wget)\b[^\n|]{0,300}\|\s*(?:iex|invoke-expression)\b/i },
     { id: "iex-download", re: /\b(?:iex|invoke-expression)\b[^\n]{0,40}\(?\s*(?:iwr|irm|invoke-webrequest|invoke-restmethod|new-object\s+net\.webclient)/i },
-    { id: "cmd-chain", re: /\bcmd(?:\.exe)?\s+\/[ck]\b[^\n]{0,300}(?:mshta|curl|wget|bitsadmin|certutil|powershell|pwsh|rundll32|regsvr32|msiexec|start\s+\/min)/i },
+    // Other switches can come before /c (cmd /q /c, cmd.exe /v:on /c), and
+    // cmd/c needs no space.
+    { id: "cmd-chain", re: /\bcmd(?:\.exe)?(?:\s*\/[a-bd-jl-z](?::[a-z]{1,3})?){0,4}\s*\/[ck]\b[^\n]{0,300}(?:mshta|curl|wget|bitsadmin|certutil|powershell|pwsh|rundll32|regsvr32|msiexec|start\s+\/min)/i },
     { id: "mshta", re: /\bmshta(?:\.exe)?\s+["']?(?:https?:|vbscript:|javascript:|\\\\)/i },
     { id: "bitsadmin", re: /\bbitsadmin(?:\.exe)?\s+\/transfer\b/i },
     { id: "certutil", re: /\bcertutil(?:\.exe)?\s+[^\n]{0,80}-urlcache\b/i },
@@ -105,7 +117,7 @@ function installClipboardGuard(target) {
     // Remote files also come from a UNC path (\\host\share, WebDAV).
     { id: "regsvr32", re: /\bregsvr32(?:\.exe)?\s+[^\n]{0,40}\/i:\s*(?:https?:|\\\\)/i },
     { id: "msiexec-remote", re: /\bmsiexec(?:\.exe)?\s+[^\n]{0,40}\/(?:i|package)\s+["']?(?:https?:|\\\\)/i },
-    { id: "powershell-unc-file", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s-(?:f|fi|fil|file)\s+["']?\\\\/i },
+    { id: "powershell-unc-file", re: /\b(?:powershell|pwsh)(?:\.exe)?\b[^\n]{0,200}\s(?:\/|[-\u2013-\u2015]{1,2})(?:f|fi|fil|file)\s+["']?\\\\/i },
     // Pipe to a shell, also by path (/bin/bash) and after sudo / nohup / env
     // (with up to three flags each). Every gap is bounded (linear matching).
     { id: "curl-pipe-shell", re: /\b(?:curl|wget)\b[^\n|]{0,300}\|\s*(?:(?:[^\s|]{0,100}\/)?(?:sudo|nohup|env)\s+(?:-[\w-]{1,20}\s+){0,3}){0,3}(?:[^\s|]{0,100}\/)?(?:ba|z|da|k)?sh\b/i },
@@ -117,6 +129,25 @@ function installClipboardGuard(target) {
     { id: "shell-c-base64", re: /\b(?:ba|z|da)?sh\s+-c\s+["']?\$\([^)]{0,300}\bbase64\s+(?:-d|--decode|-D)\b/i },
     // Windows: finger user@host | cmd (the reply is run as commands).
     { id: "finger-pipe-cmd", re: /\bfinger(?:\.exe)?\b[^\n|]{0,100}\|\s*cmd\b/i },
+    // The DNS form (2026): the TXT/Name reply of nslookup is piped into a
+    // shell, or written to a %TEMP% file that is then run on the same line:
+    // after "&" or ";" comes that %TEMP% path, alone or after call, start,
+    // PowerShell's "&" or ".", cmd /c, powershell/pwsh (with switches),
+    // wscript, cscript or mshta. Opening it in notepad does not match. The
+    // gap after the redirect stops at the next such redirect, so each one is
+    // scanned once (linear, small constant).
+    { id: "nslookup-exec", re: /\bnslookup(?:\.exe)?\b[^\n]{0,300}(?:\|\s*(?:cmd|powershell|pwsh|iex)\b|>\s*["']?(?:%te?mp%|\$env:te?mp)(?:(?!>\s*["']?(?:%te?mp%|\$env:te?mp))[^\n]){0,200}[;&]\s*(?:(?:call|&|\.|start(?:-process)?(?:\s+(?:""|\/[a-z]{1,8}))*|cmd(?:\.exe)?\s+\/[ck]|(?:powershell|pwsh|wscript|cscript|mshta)(?:\.exe)?\b[^\n;&|]{0,100}?)\s+)?["']?(?:%te?mp%|\$env:te?mp))/i },
+    // Pipe to python, perl or ruby with no script argument (the download is
+    // the script), or with "-" (read the script from stdin) and then any
+    // arguments. "| python3 -m json.tool" does not match.
+    { id: "curl-pipe-interpreter", re: /\b(?:curl|wget)\b[^\n|]{0,300}\|\s*(?:sudo\s+)?(?:[^\s|]{0,100}\/)?(?:python[23]?(?:\.\d{1,2})?|perl|ruby)(?:\s+-(?:\s|$|[;&|)"'])|\s*(?:$|[;&|)"']))/im },
+    // Download into %TEMP% / %APPDATA% (or $env:...) and start it on the
+    // same line after "&" or ";": curl -o %TEMP%\a.exe URL && %TEMP%\a.exe, or
+    // ...; Start-Process. A "&" inside a URL query starts no command, so no match.
+    // The gap after the output switch stops at the next output into such a
+    // folder, so a text full of "-o %TEMP%" is not scanned again for each one
+    // (review 2026-11-27: seconds per MB before).
+    { id: "download-temp-run", re: /\b(?:curl|wget|iwr|invoke-webrequest)(?:\.exe)?\b[^\n]{0,300}\s(?:-o|--output|-outfile|-out)\s+["']?(?:%(?:te?mp|appdata|localappdata|public)%|\$env:(?:te?mp|appdata|localappdata|public))(?:(?!\s(?:-o|--output|-outfile|-out)\s+["']?(?:%(?:te?mp|appdata|localappdata|public)%|\$env:(?:te?mp|appdata|localappdata|public)))[^\n]){0,300}[;&]\s*(?:start(?:-process)?\s|["']?(?:%(?:te?mp|appdata|localappdata|public)%|\$env:(?:te?mp|appdata|localappdata|public)))/i },
     // A WebDAV path pasted into Run: \\host@SSL\..., \\host@80\..., DavWWWRoot.
     // A plain \\server\share path does not match.
     { id: "webdav-unc", re: /\\\\[^\\\s]{1,255}@(?:ssl|\d{1,5})(?:@\d{1,5})?\\|\bdavwwwroot\b/i },
@@ -133,6 +164,9 @@ function installClipboardGuard(target) {
     "developer.mozilla.org", "learn.microsoft.com", "docs.microsoft.com", "developer.apple.com", "docs.github.com",
     "npmjs.com", "pypi.org", "crates.io", "brew.sh", "rustup.rs", "deno.com", "deno.land", "nodejs.org", "python.org",
     "docker.com", "kubernetes.io", "archlinux.org", "debian.org", "ubuntu.com", "fedoraproject.org", "chocolatey.org",
+    // Poetry (install.python-poetry.org) and PyPA (bootstrap.pypa.io for
+    // get-pip, pip.pypa.io): their install commands pipe a download into python.
+    "python-poetry.org", "pypa.io",
   ];
   // How long a copy gesture authorises a write of the selected text.
   const KEY_WINDOW_MS = 1500;
@@ -941,7 +975,14 @@ function installClipboardGuard(target) {
 }
 
 // A small notice in the page (closed shadow root, removed after 12 s).
-function clipboardGuardNotice(doc) {
+// The notice goes into the top layer as a manual popover, so a page that
+// covers itself with a modal <dialog> or its own popover (a fake "verify you
+// are human" screen) cannot hide it. showPopover is captured before page
+// scripts run; without it the notice is a plain fixed box.
+const showPopoverFn = typeof HTMLElement === "function" && HTMLElement.prototype
+  ? HTMLElement.prototype.showPopover
+  : undefined;
+function clipboardGuardNotice(doc, showPopover = showPopoverFn) {
   let shown = 0;
   return () => {
     try {
@@ -953,9 +994,16 @@ function clipboardGuardNotice(doc) {
       const box = doc.createElement("div");
       box.setAttribute("role", "alert");
       box.style.cssText = "position:fixed;z-index:2147483647;right:16px;bottom:16px;max-width:360px;padding:12px 14px;border-radius:8px;background:#18181b;color:#efeff1;font:13px/1.4 sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.4);border:1px solid #f0a33a";
-      box.textContent = "Blocked: this page tried to put a command into your clipboard. If a page asks you to paste something into Run, PowerShell or a terminal to \"verify\" you, don't. If you meant to copy it yourself, select the text and press Ctrl+C.";
+      box.textContent = "Blocked: this page tried to put a command into your clipboard. If a page asks you to paste something into Run, PowerShell or a terminal to \"verify\" you, don't. If you meant to copy it yourself, select the text and press Ctrl+C (Cmd+C on a Mac).";
       root.appendChild(box);
+      if (typeof showPopover === "function") {
+        host.setAttribute("popover", "manual");
+        host.style.cssText = "position:fixed;inset:auto;margin:0;padding:0;border:0;background:transparent;overflow:visible;width:0;height:0";
+      }
       (doc.body || doc.documentElement).appendChild(host);
+      if (typeof showPopover === "function") {
+        try { apply(showPopover, host, []); } catch { /* stays a plain fixed box */ }
+      }
       setTimeout(() => {
         try { host.remove(); } catch { /* gone */ }
       }, 12000);

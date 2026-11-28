@@ -140,7 +140,7 @@ Section 5 lists items that were checked and are not a concern now.
 | The Twitch conflict version is a literal (`ourTwitchAdSolutionsVersion = 23`). | The update script does not edit the gate. The owner must change the line by hand. |
 | Three lines print PASS with no real check ("ad-server names permitted inside src/rules/ only", "youtube malformed JSON covered by deno suite", and the Kick video host line in section 2). | The output looks stronger than the checks are. |
 | Old comments ("General-adblock beta (Phase 0)", "YouTube is the beta script", "Manual list Update (popup fetch)"). | They describe an older design. |
-| Fixed file names in the system temp folder (`gate-popup.txt`, `gate-danger.txt`, `gate-deno.txt` and others). | Two gate runs at the same time on one machine can mix their results. |
+| Fixed file names in the system temp folder (`gate-popup.txt`, `gate-danger.txt` and others). The Deno log of section 5 has its own file for each run since 2026-11-27. | Two gate runs at the same time on one machine can mix their results. |
 | The Deno tests run two times in CI (job `tests` and gate section 5). | Longer CI time. |
 
 - **Action.** Read the conflict version from `scripts/vendor-pins.json`. Use `mktemp` for all scratch files. Remove or change the PASS lines that do not check. Update the comments.

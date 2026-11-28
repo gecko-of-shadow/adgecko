@@ -27,6 +27,7 @@ Get it: download `adgecko-0.3.7.zip` from the newest release, [Adgecko 0.3.7](ht
 - ❌ On Twitch, the picture can drop to lower quality for a moment during an ad break, and an ad can still show when no ad-free copy of the stream is available.
 - ❌ On Kick, some ads still play. Adgecko skips an ad only when it can do that safely.
 - ❌ YouTube Music and YouTube Kids are not covered.
+- ⏳ On YouTube, a video can show a loading spinner for 4 to 12 seconds before it plays. YouTube sets this wait when the ad is removed. [Details](docs/youtube-slow-start.md)
 - ❌ YouTube videos embedded in other websites are not covered: the YouTube ad scripts run only on the YouTube site itself. On those players, only the network block rules apply.
 
 ## Install
@@ -84,7 +85,7 @@ Full details: [docs/permissions-and-privacy.md](docs/permissions-and-privacy.md)
   - *Off – turned off in settings.* The master switch on the settings page is off (see "Toolbar icon" above for what keeps running).
   - *Open a normal http(s) page to allow it. Already on one? Reload it.* Chrome's own pages cannot be allowed. A normal page that was open before you installed or reloaded the extension must be reloaded.
   - *Malware blocking only – ad scripts don't run on this site.* Shown on YouTube Music, YouTube Studio, YouTube TV, YouTube Kids and youtube-nocookie pages.
-- **A copy button does not copy a command?** The clipboard guard stops pages from writing commands such as `powershell ...` or `curl ... | sh`. Select the text and press Ctrl+C yourself. Documentation sites such as GitHub are trusted. Or use **Fix this site** (on an allowed site, click **Block again** first, because Allow leaves the clipboard guard on).
+- **A copy button does not copy a command?** The clipboard guard stops pages from writing commands such as `powershell ...` or `curl ... | sh`. Select the text and press Ctrl+C (Cmd+C on a Mac) yourself. Documentation sites such as GitHub are trusted. Or use **Fix this site** (on an allowed site, click **Block again** first, because Allow leaves the clipboard guard on).
 - **A copy lost its formatting?** Since 0.3.6, the clipboard guard copies plain text only on ordinary sites, because it writes the exact text that it checked. Trusted documentation sites keep the formatting. For formatted copies on a site, use **Fix this site**, or turn off the clipboard guard on the settings page.
 - **Blocked things still missing after you allow a site?** Reload the page.
 - **Loading a new copy?** Remove the old one first, then allow your sites again.

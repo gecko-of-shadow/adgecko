@@ -124,7 +124,9 @@ Deno.test("L-5: an apply run that lands during 'Revert lists' cannot rebuild fro
   assert(res && res.ok, "revert: " + JSON.stringify(res));
   assert(w.dnr.errors.length === 0, "DNR errors: " + w.dnr.errors.join("; "));
   const st = w.store.listState;
-  assert(listRules(w) === 0, "dynamic list rules after revert: " + listRules(w));
+  // Only the packed lists' exception allow rules (syncPackedAllows) remain.
+  const left = w.dnr.dynamic.filter((r) => U.isOurRule(r.id) && r.id < U.KEPT_RULE_ID_BASE);
+  assert(left.every((r) => r.action.type === "allow" && r.priority === 1), "dynamic list block rules after revert: " + JSON.stringify(left.map((r) => [r.id, r.action.type])));
   assert(st.dynamicActive === false && Object.keys(st.lists || {}).length === 0, "state after revert: " + JSON.stringify({ dynamicActive: st.dynamicActive, lists: Object.keys(st.lists || {}) }));
   assert(w.dnr.staticOn, "packed lists on");
 });

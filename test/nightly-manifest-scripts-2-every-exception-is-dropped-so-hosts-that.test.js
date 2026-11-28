@@ -96,6 +96,15 @@ Deno.test({
 // ($subdocument,xmlhttprequest under newrelic.com). Honouring them needs DNR
 // allow rules or splitting parent blocks; that is broader than the same-host,
 // unconditional case and too risky for this release.
+// 0.3.8: the refreshed rules carry such allow rules (update.js
+// exceptionAllows, test/list-exception-allow-rules.test.js), so after the
+// first list refresh these hosts load. With the packed lists alone (before
+// the first download, after Revert lists), the worker writes allow rules for
+// the two 2o7.net hosts from packed-cross.json (update.js syncPackedAllows,
+// test/packed-exception-allows.test.js). The type-only chart-embed exception
+// is not in packed-cross.json, so it waits for the first download. This test
+// reads the shipped static ruleset only, which has no allow rules, so it
+// stays ignored until the packer writes them and the lists are packed again.
 const CASES = [
   { url: "https://alllaw.112.2o7.net/b/ss/x", type: "image", frames: ["www.alllaw.com"] },
   { url: "https://puma.112.2o7.net/b/ss/x", type: "image", frames: ["us.puma.com"] },

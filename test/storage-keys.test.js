@@ -12,7 +12,7 @@ const SRC = new URL("../src/", import.meta.url);
 const KNOWN = Object.freeze([
   "settings", "siteOverrides", "generalEnabled", "generalAllowedOrigins", "threatAllowDomains",
   "listState", "generalListRefresh", "generalListStatus", "generalListUpdatedAt", "generalListUpdateRequestAt",
-  "cosG", "cosMeta", "cosKeys", "feedState", "feedCache", "feedPaused",
+  "cosG", "cosGF", "cosMeta", "cosKeys", "feedState", "feedCache", "feedPaused",
   "popupFix", "popupWelcomed", "uiTheme", "tabSignals",
 ]);
 // Keys with a variable part: listData:<list>, cosS:<host>, cosE:<host>, cosNoG:<host>.

@@ -5,7 +5,7 @@ Commit: 5cd4ab6 (version 0.3.6)
 
 This document tells you how to run the checks, how the tests operate, and how to add a test.
 Checked in the session of the analysis date (Linux container, Deno 2.9.8): 884 tests passed, 0 failed, 9 ignored.
-UNVERIFIED: no test loads the extension in Chrome. The fake models are approximations.
+UNVERIFIED: no CI test loads the extension in Chrome. The fake models are approximations. `scripts/chrome-smoke.mjs` (section 1) loads it in Chrome for Testing by hand, offline.
 
 ## 1. Commands
 
@@ -29,6 +29,7 @@ python3 -I scripts/privacy-check.py
 - There is no `deno.json`, no lock file and no package manifest. Four test files import `jsr:@std/assert@1`, which Deno downloads one time.
 - The privacy check compares `origin/main` with `HEAD`. Thus run it after the commit and before the push. `BASE_SHA` and `HEAD_SHA` change the range (section 9).
 - After a change that can have an effect on a site, load the unpacked extension in Chrome and test the site by hand. No automated test plays a real stream.
+- Optional, not in CI: `CHROME_PATH=<Chrome for Testing> node scripts/chrome-smoke.mjs [--shots DIR]` (Node 22 or later). It loads the repository root as an unpacked extension in headless Chrome for Testing, sends every host name to a local server, and checks seven things: the service worker starts, the packed hide rules are installed, 4 ad and tracker scripts are blocked and 2 ordinary scripts load, 2 ad boxes are hidden, leftover `#AdContent` in a same-origin iframe is hidden (a longer `#Ad-Container` and the article stay visible), the toolbar popup names the page and offers Fix this site and Allow this site, and the clipboard guard refuses a PowerShell command on a real click and lets plain text through. No request leaves the machine. Google Chrome 137 and later ignores `--load-extension`; then the first check fails with that reason. About 11 s.
 
 ## 2. How tests load source code
 
@@ -75,7 +76,7 @@ The worker model `loadWorker(opts)`:
 
 ## 4. Test inventory
 
-`test/` has 137 test files, all in one directory, and 26 fixture files.
+`test/` has 145 test files, all in one directory, and 26 fixture files.
 
 | Subject | Test files (each name has the suffix `.test.js`) |
 |---|---|
@@ -84,15 +85,15 @@ The worker model `loadWorker(opts)`:
 | YouTube script | `youtube`, `youtube-sim`, `youtube-decoy`, `youtube-decoy-nav`, `youtube-error-flash`, `youtube-fallback`, `youtube-layers`, `youtube-watchdog-playability`, `stall`, `stall-decoy`, `race`, `stealth` |
 | uBlock Origin YouTube port | `ubo-youtube`, `ubo-youtube-edge`, `ubo-rpnt-payload` |
 | Network rules and packer | `dnr`, `filter-options`, `packer-options`, `navigation-scope`, `meta-counts`, `hcaptcha-never-block`, `imasdk-never-block`, `final-dnr-fields`, `final-lists-*` (6 files), `wave2-lists-network-options` |
-| Cosmetic filtering | `cosmetic`, `cosmetic-filters`, `cosmetic-adopted-sheet`, `cosmetic-feature-gate`, `cosmetic-generichide`, `cosmetic-parse-nesting`, `cosmetic-resync-cost`, `cosmetic-unscoped-root`, `pr12-cosmetic-parent-child-exclusion`, `wave2-lists-cosmetic-pack`, `wave2-perf-cosmetic-index` |
-| Worker and list refresh | `background-message`, `dnr-queue`, `general-race`, `list-guard`, `list-refresh`, `list-toggle-threat`, `storage-alarm`, `worker-restart`, `no-background-fetch`, `final-storage-budget` |
-| Settings and registry | `settings`, `settings-page`, `settings-page-writes`, `flags-port-window`, `wave2-perf-features-idempotent`, `wave2-ux-settings`, `final-upgrade-*` (2 files), `storage-keys` (each storage key literal is in one known list) |
-| Popup | `popup-allow-page`, `popup-design`, `popup-general`, `popup-ui-review`, `wave2-ux-popup`, `site-test-scope` (what the second test of "Something broke?" leaves on), `list-test-expiry` (an unanswered second test ends after 24 hours) |
+| Cosmetic filtering | `cosmetic`, `cosmetic-filters`, `cosmetic-adopted-sheet`, `cosmetic-feature-gate`, `cosmetic-generichide`, `cosmetic-parse-nesting`, `cosmetic-resync-cost`, `cosmetic-unscoped-root`, `pr12-cosmetic-parent-child-exclusion`, `wave2-lists-cosmetic-pack`, `wave2-perf-cosmetic-index`, `cosmetic-frame-generics`, `cosmetic-grouped-sheet` |
+| Worker and list refresh | `background-message`, `dnr-queue`, `general-race`, `list-guard`, `list-refresh`, `list-toggle-threat`, `storage-alarm`, `worker-restart`, `no-background-fetch`, `final-storage-budget`, `list-exception-allow-rules`, `packed-exception-allows` |
+| Settings and registry | `settings`, `settings-page`, `settings-page-writes`, `flags-port-window`, `wave2-perf-features-idempotent`, `wave2-ux-settings`, `final-upgrade-*` (2 files), `storage-keys` (each storage key literal is in one known list), `settings-narrow-layout` |
+| Popup | `popup-allow-page`, `popup-design`, `popup-general`, `popup-ui-review`, `wave2-ux-popup`, `site-test-scope` (what the second test of "Something broke?" leaves on), `list-test-expiry` (an unanswered second test ends after 24 hours), `popup-disabled-button` |
 | Page guards | `guards`, `clipboard-0.3.6`, `popup-guard-keydown`, `final-clipboard-8-9-cross-realm-and-nested-copy` |
 | Threat tier, public suffixes | `threat-tier`, `psl`, `no-openphish` |
 | Signed feed | `feed-core`, `feed-client`, `feed-robustness`, `feed-serial-recovery` |
 | Hardening, design | `hardening`, `art-rules`, `contrast`, `icons` |
-| Package, licence, docs, tools | `packaging`, `license`, `final-chrome-utf8`, `docs-claims`, `release-tooling` |
+| Package, licence, docs, tools | `packaging`, `license`, `final-chrome-utf8`, `docs-claims`, `release-tooling`, `gitignore-metadata` |
 | Privacy checker and CI | `privacy-generic`, `privacy-mask` |
 | One bug for each file (0.3.5 bug hunt, and two 0.3.6 files) | `nightly-<area>-<number>-<short title>` (40 files). Areas: `cosmetic`, `feed`, `guards`, `manifest-scripts`, `site-scripts`, `threat`, `ui`, `worker-refresh`. |
 

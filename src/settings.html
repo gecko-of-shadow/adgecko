@@ -37,12 +37,12 @@
     button { border: 1px solid var(--accent); border-radius: 8px; padding: 7px 12px; background: var(--accent); color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; }
     button:hover { background: var(--accent-hover); }
     input[type="text"], select { background: var(--field); color: var(--text); border: 1px solid var(--field-line); border-radius: 6px; padding: 6px 8px; font: inherit; }
-    input[type="text"] { min-width: 0; flex: 1; }
+    input[type="text"] { min-width: 0; flex: 1 1 18em; }
     input[type="text"]::placeholder { color: var(--placeholder); opacity: 1; }
     select { max-width: 100%; }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     ul { margin: 6px 0; padding-left: 18px; }
-    li { margin: 3px 0; word-break: break-all; }
+    li { margin: 3px 0; overflow-wrap: anywhere; }
     #status { min-height: 1.2em; color: var(--status); }
     :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
     @media (forced-colors: active) {

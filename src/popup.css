@@ -160,7 +160,7 @@ button.primary {
   color: var(--accent-text);
   box-shadow: var(--ring);
 }
-button.primary:hover { background: var(--accent-hover); }
+button.primary:hover:not(:disabled) { background: var(--accent-hover); }
 button.secondary {
   border: 1px solid var(--outline);
   background: transparent;
@@ -188,6 +188,16 @@ button.link {
 button:disabled {
   opacity: 0.5;
   cursor: default;
+}
+/* A disabled main button loses its fill and gets a dashed edge, so it does
+   not look like the filled button it was (the fill at half opacity still
+   read as clickable, and changed colour under the mouse) or like an
+   outlined secondary button. */
+button.primary:disabled {
+  border: 1px dashed var(--outline);
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
 }
 
 details { margin-top: 12px; }
@@ -232,6 +242,7 @@ details[open] > summary::after {
   button.primary, button.secondary { background: ButtonFace; color: ButtonText; }
   button.primary[data-allowed="true"] { border-width: 2px; color: ButtonText; }
   button.primary { box-shadow: none; }
+  button:disabled { border-style: dashed; color: GrayText; }
   .note, summary, button.link { color: CanvasText; }
   #brand-icon[data-glow="on"] { box-shadow: none; }
   :focus-visible { outline: 2px solid Highlight; }

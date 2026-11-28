@@ -7,6 +7,7 @@ function installCosmeticHide(api) {
   const STORAGE_KEY = "generalEnabled";
   const ALLOWED_ORIGINS_KEY = "generalAllowedOrigins";
   const CSS_PATH = "src/cosmetic-hide.css";
+  const SHEET_GROUP = 50; // selectors per rule in the stored-rules sheet
   const SETTINGS_KEY = "settings";
   const OVERRIDES_KEY = "siteOverrides";
 
@@ -46,6 +47,40 @@ function installCosmeticHide(api) {
     return allowedList.indexOf(origin) !== -1;
   }
 
+  // No window (unit tests without a DOM) counts as the top frame.
+  function isTopFrame() {
+    if (api.isTop != null) return api.isTop;
+    return typeof window === "undefined" || window.top === window;
+  }
+
+  // The top site's origin, seen from this frame. A child frame learns it from
+  // location.ancestorOrigins (its last entry is the top frame). Anything that
+  // is not an http(s) origin (for example "null") counts as not known: "".
+  // UNVERIFIED in Chrome: ancestorOrigins in a content script.
+  function topOrigin() {
+    let o = api.topOrigin;
+    if (o == null) {
+      try {
+        const list = typeof location !== "undefined" ? location.ancestorOrigins : null;
+        o = list && list.length ? list[list.length - 1] : "";
+      } catch {
+        o = "";
+      }
+    }
+    o = String(o || "");
+    return /^https?:\/\//.test(o) ? o : "";
+  }
+
+  function topHostname() {
+    const o = topOrigin();
+    if (!o) return "";
+    try {
+      return new URL(o).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  }
+
   let cssText = null;
   let styleEl = null;
   // The hide CSS lives in a constructed sheet in document.adoptedStyleSheets.
@@ -57,10 +92,14 @@ function installCosmeticHide(api) {
   let sheet = null;
   let sheetOn = false; // our sheet should be adopted now
   let sheetFailed = false;
-  // The CSS text now in our sheet or <style> node (null = none). An equal
-  // text is not written again: a write re-parses the whole sheet (about
-  // 500 KB) and restyles the page, in every frame of every tab.
+  // The CSS text now in our sheet (null = none). An equal text is not
+  // written again: a write re-parses the whole sheet (about 500 KB) and
+  // restyles the page, in every frame of every tab. When the frame is idle
+  // the text is swapped for its fingerprint (sheetKey): the text held about
+  // 1 MB of script memory in each top frame for the life of the page.
   let sheetText = null;
+  let sheetKey = null;
+  let keyTimer = false;
   let watchers = false;
   let styleObserver = null;
 
@@ -96,6 +135,7 @@ function installCosmeticHide(api) {
   function removeStyle() {
     sheetOn = false;
     sheetText = null;
+    sheetKey = null;
     if (sheet) {
       try {
         if (adoptedHas(sheet)) document.adoptedStyleSheets = Array.from(document.adoptedStyleSheets).filter((s) => s !== sheet);
@@ -127,12 +167,78 @@ function installCosmeticHide(api) {
     }
   }
 
-  function injectSheet(text) {
+  // Length plus two 32-bit hashes (FNV-1a and djb2) of the UTF-16 code units.
+  function textKey(text) {
+    let a = 0x811c9dc5;
+    let b = 5381;
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      a = Math.imul(a ^ c, 0x01000193);
+      b = (Math.imul(b, 33) + c) | 0;
+    }
+    return text.length + ":" + (a >>> 0) + ":" + (b >>> 0);
+  }
+
+  function sameSheetText(text) {
+    if (sheetText !== null) return sheetText === text;
+    return sheetKey !== null && sheetKey === textKey(text);
+  }
+
+  function forgetSheetTextWhenIdle() {
+    if (keyTimer) return;
+    keyTimer = true;
+    const run = () => {
+      keyTimer = false;
+      if (sheetText === null) return;
+      sheetKey = textKey(sheetText);
+      sheetText = null;
+    };
+    try {
+      if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 10000 });
+      else setTimeout(run, 0);
+    } catch {
+      keyTimer = false;
+    }
+  }
+
+  // Grouped sheet text (cosmetic-parse.js buildPageCss with a group size):
+  // one rule per line. A selector Chrome does not know drops its whole line,
+  // so when rules are missing, put the lines in one by one and split each
+  // dropped line back into single-selector rules.
+  function fillSheet(target, text, P) {
+    target.replaceSync(text);
+    let lines = 0;
+    for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) lines += 1;
+    const rules = target.cssRules;
+    if (!rules || rules.length >= lines) return;
+    target.replaceSync("");
+    for (const line of text.split("\n")) {
+      if (!line) continue;
+      try {
+        target.insertRule(line, target.cssRules.length);
+      } catch {
+        for (const one of line.slice(0, line.length - P.HIDE.length).split(P.GROUP_SEP)) {
+          try {
+            target.insertRule(one + P.HIDE, target.cssRules.length);
+          } catch {
+            // this selector only
+          }
+        }
+      }
+    }
+  }
+
+  function injectSheet(text, P) {
     if (sheetFailed || typeof CSSStyleSheet === "undefined" || !document.adoptedStyleSheets) return false;
     try {
       if (!sheet) sheet = new CSSStyleSheet();
-      if (sheetText !== text || !sheetOn) sheet.replaceSync(text);
-      sheetText = text;
+      if (!sheetOn || !sameSheetText(text)) {
+        if (P) fillSheet(sheet, text, P);
+        else sheet.replaceSync(text);
+        sheetText = text;
+        sheetKey = null;
+        forgetSheetTextWhenIdle();
+      }
       sheetOn = true;
       adoptSheet();
       watchAdopted();
@@ -141,6 +247,7 @@ function installCosmeticHide(api) {
       sheetFailed = true;
       sheetOn = false;
       sheetText = null;
+      sheetKey = null;
       sheet = null;
       return false;
     }
@@ -166,9 +273,12 @@ function installCosmeticHide(api) {
     }
   }
 
-  function injectStyle(text) {
+  // P: the text is grouped (see fillSheet). The <style> fallback gets one
+  // rule per selector again.
+  function injectStyle(text, P) {
     if (typeof document === "undefined") return;
-    if (injectSheet(text)) return;
+    if (injectSheet(text, P)) return;
+    if (P) text = text.split(P.GROUP_SEP).join(P.HIDE + "\n");
     if (!styleEl || !styleEl.isConnected) {
       styleEl = document.createElement("style");
       styleEl.id = STYLE_ID;
@@ -221,6 +331,21 @@ function installCosmeticHide(api) {
   // if no newer call ran meanwhile (master off, allowed site, per-host CSS).
   let applyGen = 0;
 
+  // May a child frame use the generic hides? Only when the top site is known,
+  // is not a stream site, hiding is on there, and it has no $generichide.
+  function frameGenericOk(stored, state, F, settings, P) {
+    const top = topHostname();
+    if (!top || hostExcluded(top)) return false;
+    if (F && settings && typeof settings === "object") {
+      if (!F.resolve(settings, stored[OVERRIDES_KEY], top).cosmetic) return false;
+    } else {
+      const allowed = state && typeof state === "object" ? state.allowedOrigins : undefined;
+      if (originAllowed(topOrigin(), allowed)) return false;
+    }
+    if (P && stored && P.noHideFlags && (P.noHideFlags(top, stored) & P.NO_HIDE_GENERIC)) return false;
+    return true;
+  }
+
   function applyState(state, fetcher) {
     const gen = ++applyGen;
     const hostname = api.hostname != null
@@ -259,18 +384,27 @@ function installCosmeticHide(api) {
         return Promise.resolve(false);
       }
     }
-    // Refreshed / installed rules in storage: generic sheet (top frame only)
-    // plus this host's site rules, minus its #@# exceptions. One <style>.
+    // Refreshed / installed rules in storage: the generic sheet in the top
+    // frame, the compact frame sheet in child frames, plus this host's site
+    // rules, minus its #@# exceptions. One <style>.
     const P = api.parse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
+    // A child frame drops the generic hides when the top site is allowed or
+    // has $generichide, or when the top site is not known.
+    const noFrameGeneric = !isTopFrame() && !frameGenericOk(stored, state, F, settings, P);
     if (P && stored && stored[P.KEY_META]) {
       try {
-        const top = api.isTop != null ? api.isTop : (typeof window !== "undefined" && window.top === window);
-        const view = top ? stored : Object.assign({}, stored, { [P.KEY_GENERIC]: "" });
-        injectStyle(P.buildPageCss(hostname, view));
+        const grouped = !!P.GROUP_SEP;
+        const view = noFrameGeneric ? Object.assign({}, stored, { [P.KEY_GENERIC]: "", [P.KEY_GENERIC_FRAME]: "" }) : stored;
+        injectStyle(P.buildPageCss(hostname, view, "", grouped ? SHEET_GROUP : 0), grouped ? P : null);
         return Promise.resolve(true);
       } catch {
         // fall back to the bundled sheet below
       }
+    }
+    // The bundled sheet holds only generic hides.
+    if (noFrameGeneric) {
+      removeStyle();
+      return Promise.resolve(false);
     }
     return loadCss(fetcher).then((text) => {
       if (gen !== applyGen) return false;
@@ -299,9 +433,10 @@ function installCosmeticHide(api) {
       try {
         const P = api.parse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
         const host = api.hostname != null ? api.hostname : (typeof location !== "undefined" ? location.hostname : "");
-        const top = api.isTop != null ? api.isTop : (typeof window !== "undefined" && window.top === window);
-        // Subframes only need their host's site rules, not the generic sheet.
-        const extra = P ? P.keysForHost(host, top) : [];
+        const top = isTopFrame();
+        // Subframes read the compact frame sheet (cosGF), not the full generic
+        // list, and the top site's page exceptions.
+        const extra = P ? P.keysForHost(host, top, top ? "" : topHostname()) : [];
         getter([STORAGE_KEY, ALLOWED_ORIGINS_KEY, SETTINGS_KEY, OVERRIDES_KEY].concat(extra), (result) => {
           if (typeof chrome !== "undefined") void chrome.runtime.lastError;
           resolve({
@@ -347,12 +482,14 @@ function installCosmeticHide(api) {
       };
       if (!valid(next.settings)) return false;
       const host = frameHost();
-      const before = F.resolve(seen.settings, seen.overrides, host).cosmetic;
-      const after = F.resolve(next.settings, next.overrides, host).cosmetic;
+      // A child frame also depends on the top site (frameGenericOk).
+      const top = isTopFrame() ? "" : topHostname();
+      const same = (h) => !h || F.resolve(seen.settings, seen.overrides, h).cosmetic === F.resolve(next.settings, next.overrides, h).cosmetic;
+      const unchanged = same(host) && same(top);
       seen = next;
       // With settings, generalEnabled / generalAllowedOrigins do not decide
       // (applyState), so a change to them alone changes nothing here.
-      return before === after;
+      return unchanged;
     };
 
     sync();
