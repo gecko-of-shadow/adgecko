@@ -199,6 +199,7 @@ All keys are in `chrome.storage.local`, but `tabSignals` is in `chrome.storage.s
 | `generalListStatus`, `generalListUpdatedAt` | Status text and time for the user interface. | worker |
 | `generalListUpdateRequestAt` | In the key table of `src/general-settings.js` only. No code uses it. | none |
 | `cosG` | Generic hide selectors. Top frames read it. | worker |
+| `cosGF` | Compact generic hide selectors for child frames (simple `#id` / `.class`, names up to 10 characters). | worker |
 | `cosS:<host>`, `cosE:<host>` | Site selectors and exception selectors for one host. | worker |
 | `cosNoG:<host>` | Bit mask for `$generichide`, `$specifichide` and `$elemhide` page exceptions. | worker |
 | `cosMeta` | Small gate record. All frames read it. A change starts the cosmetic script again. | worker |
