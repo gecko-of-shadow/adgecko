@@ -306,6 +306,34 @@ function setThreatRuleset(on) {
   });
 }
 
+// Owner decision 3, Option A (2026-11-27): the static `ubo-youtube` ruleset
+// follows the master switch (settings.enabled) only. The lists switch and a
+// per-site Allow leave it on. The uBO YouTube scriptlets and the two YouTube
+// hide sheets are content scripts and keep running (D-3). null = not written
+// by this worker yet, so each worker start writes it once. Chrome can put a
+// static ruleset back to its manifest default (enabled) on an update; the
+// first sync of the new worker and onInstalled / onStartup write it again.
+let uboYoutubeOn = null;
+// Called inside a DNR queue section only (syncFromSettings). Fail-open: on an
+// error the ruleset stays as it was, the value stays unknown and the next sync
+// tries again.
+function setUboYoutubeRuleset(on) {
+  return new Promise((resolve) => {
+    try {
+      chrome.declarativeNetRequest.updateEnabledRulesets(on ? { enableRulesetIds: ["ubo-youtube"], disableRulesetIds: [] } : { enableRulesetIds: [], disableRulesetIds: ["ubo-youtube"] }, () => {
+        const err = chrome.runtime.lastError;
+        if (err) {
+          console.warn("adgecko: ubo-youtube ruleset not switched:", err.message || String(err));
+          resolve(false);
+        } else resolve(true);
+      });
+    } catch (e) {
+      console.warn("adgecko: ubo-youtube ruleset not switched:", e && e.message);
+      resolve(false);
+    }
+  });
+}
+
 // The last rebuild installed refreshed threat rules (listState.threatRules,
 // which switching the tier off leaves as it was) but none is installed now.
 // Called inside a DNR queue section only (syncFromSettings).
@@ -352,6 +380,12 @@ function syncFromSettings() {
       // The feed's snapshot fallback follows the threat tier (review
       // 2026-11-16 WP-20). Not awaited: the feed queues its own DNR write.
       applyCachedFeed();
+    }
+    const nextUbo = s.enabled;
+    if (nextUbo !== uboYoutubeOn) {
+      const done = await dnrExclusive(() => setUboYoutubeRuleset(nextUbo));
+      // false, or DNR_TIMED_OUT: unknown, so the next sync writes again.
+      uboYoutubeOn = done === true ? nextUbo : null;
     }
   });
   settingsQueue = run.catch(() => {});
@@ -1072,7 +1106,15 @@ applyCachedFeed();
 // manifest icon back. Repaint from storage only: no DNR call, no queue.
 readListsState().then((s) => setIcon(s.enabled));
 
+// Install, update and browser start: write the ubo-youtube ruleset again
+// (Chrome may have put it back to the manifest default).
+function reapplyUboYoutube() {
+  uboYoutubeOn = null;
+  syncFromSettings();
+}
+
 chrome.runtime.onInstalled.addListener((details) => {
+  reapplyUboYoutube();
   ensureCosmetic();
   ensureRefreshAlarm();
   syncThreatAllowRules();
@@ -1094,6 +1136,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 // applyGeneralState writes the user's allow-domain override first, before the
 // lists work (test/threat-allow-before-packed-allows.test.js).
 chrome.runtime.onStartup.addListener(() => {
+  reapplyUboYoutube();
   expireListTestsNow();
   applyGeneralState();
 });

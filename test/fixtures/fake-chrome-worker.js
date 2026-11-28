@@ -12,7 +12,7 @@ export function loadWorker(opts = {}) {
   let onMessage = null;
   let lastError;
   const later = (fn, ms = 1) => setTimeout(fn, opts.jitter ? Math.floor(Math.random() * opts.jitter) : ms);
-  const dnr = { dynamic: [], session: [], staticOn: true, threatOn: true, updates: 0, errors: [] , gets: 0};
+  const dnr = { dynamic: [], session: [], staticOn: true, threatOn: true, uboYoutubeOn: true, rulesetCalls: [], updates: 0, errors: [] , gets: 0};
   const fetched = [];
   const iconCalls = [];
   let bytesRead = 0;
@@ -87,7 +87,14 @@ export function loadWorker(opts = {}) {
         dnr.session = dnr.session.filter((r) => !rm.has(r.id)).concat(structuredClone(o.addRules || []));
         later(() => withErr(undefined, cb));
       },
+      // opts.rulesetError(o) may return a message: the call then fails with
+      // lastError and changes nothing (like Chrome). dnr.rulesetCalls logs each call.
       updateEnabledRulesets(o, cb) {
+        dnr.rulesetCalls.push(structuredClone(o));
+        const failMsg = opts.rulesetError ? opts.rulesetError(o) : null;
+        if (failMsg) { later(() => withErr({ message: failMsg }, cb)); return; }
+        if ((o.enableRulesetIds || []).includes("ubo-youtube")) dnr.uboYoutubeOn = true;
+        if ((o.disableRulesetIds || []).includes("ubo-youtube")) dnr.uboYoutubeOn = false;
         if ((o.enableRulesetIds || []).includes("general")) dnr.staticOn = true;
         if ((o.disableRulesetIds || []).includes("general")) dnr.staticOn = false;
         if ((o.enableRulesetIds || []).includes("threat")) dnr.threatOn = true;

@@ -258,6 +258,68 @@ Deno.test("worker: threatTier off disables the threat ruleset and removes refres
   assert(w.dnr.threatOn === true && w.store.feedPaused === false, "back on");
 });
 
+// Owner decision 3, Option A (2026-11-27): the static `ubo-youtube` ruleset
+// follows the master switch only. The lists switch and a per-site Allow leave it.
+const names = (o) => (o.enableRulesetIds || []).concat(o.disableRulesetIds || []);
+const uboCalls = (w) => w.dnr.rulesetCalls.filter((o) => names(o).includes("ubo-youtube"));
+const setSettings = (w, items) => new Promise((r) => w.chrome.storage.local.set(items, r));
+
+Deno.test("worker: the master switch turns the ubo-youtube ruleset off and on again", async () => {
+  const w = await worker({ settings: { v: 1, enabled: true, features: {} } });
+  assert(w.dnr.uboYoutubeOn === true, "on at start");
+  await setSettings(w, { settings: { v: 1, enabled: false, features: {} } });
+  await settle(300);
+  assert(w.dnr.uboYoutubeOn === false, "master off disables ubo-youtube");
+  assert(uboCalls(w).every((o) => names(o).length === 1), "a ubo-youtube call names no other ruleset");
+  await setSettings(w, { settings: { v: 1, enabled: true, features: {} } });
+  await settle(300);
+  assert(w.dnr.uboYoutubeOn === true, "master on enables ubo-youtube again");
+});
+
+Deno.test("worker: the lists switch and a per-site Allow leave the ubo-youtube ruleset unchanged", async () => {
+  const w = await worker({ settings: { v: 1, enabled: true, features: {} } });
+  const before = uboCalls(w).length;
+  await setSettings(w, { settings: { v: 1, enabled: true, features: { network: false } } });
+  await settle(300);
+  assert(w.dnr.staticOn === false, "code fact: lists off disables the general ruleset");
+  assert(w.dnr.uboYoutubeOn === true && uboCalls(w).length === before, "lists off: ubo-youtube unchanged");
+  await setSettings(w, { settings: { v: 1, enabled: true, features: {} }, siteOverrides: { "news.example": { enabled: false }, "www.youtube.com": { enabled: false } } });
+  await settle(300);
+  assert(w.store.generalAllowedOrigins.includes("https://news.example"), "code fact: the Allow is in place");
+  assert(w.dnr.uboYoutubeOn === true && uboCalls(w).length === before, "per-site Allow: ubo-youtube unchanged");
+});
+
+Deno.test("worker: start-up, install, update and browser start with the master switch off disable ubo-youtube again", async () => {
+  const OFF = { settings: { v: 1, enabled: false, features: {} } };
+  const w = await worker(OFF);
+  assert(w.dnr.uboYoutubeOn === false, "worker start with master off");
+  // Chrome can put a static ruleset back to its manifest default on an update.
+  for (const [what, fire] of [["update", () => w.install({ reason: "update" })], ["install", () => w.install({ reason: "install" })], ["browser start", () => w.startup()]]) {
+    w.dnr.uboYoutubeOn = true;
+    fire();
+    await settle(300);
+    assert(w.dnr.uboYoutubeOn === false, what + ": ubo-youtube disabled again");
+  }
+});
+
+Deno.test("worker: a failed ubo-youtube switch logs a warning and is tried again at the next sync", async () => {
+  let fail = true;
+  const w = loadWorker({
+    store: { settings: { v: 1, enabled: true, features: {} } },
+    captureWarnings: true,
+    rulesetError: (o) => (fail && names(o).includes("ubo-youtube") && (o.disableRulesetIds || []).includes("ubo-youtube") ? "Internal error" : null),
+  });
+  await settle(250);
+  await setSettings(w, { settings: { v: 1, enabled: false, features: {} } });
+  await settle(300);
+  assert(w.dnr.uboYoutubeOn === true, "the failed call changed nothing");
+  assert(w.warnings.some((m) => /ubo-youtube/.test(m) && /Internal error/.test(m)), "warning: " + w.warnings.join(" | "));
+  fail = false;
+  await setSettings(w, { settings: { v: 1, enabled: false, features: { cosmetic: false } } });
+  await settle(300);
+  assert(w.dnr.uboYoutubeOn === false, "the next sync tries again");
+});
+
 Deno.test("worker: siteInfo answers the popup; the settings page may message the worker, content scripts may not", async () => {
   const w = await worker({ settings: { v: 1, enabled: true, features: {} }, siteOverrides: { "news.example": { features: { cosmetic: false } } } });
   const info = await w.send({ source: "adgecko-general", type: "siteInfo", origin: "https://news.example" });
@@ -325,7 +387,7 @@ Deno.test("safety net: no switch state removes a stream site's allows or blocks 
     const w = await worker(Object.assign({}, st));
     await w.send({ source: "adgecko-general", type: "applyGeneralState" });
     await settle(200);
-    const rules = (w.dnr.staticOn ? general : []).concat(uboYoutube, w.dnr.threatOn ? threat : [], w.dnr.dynamic, w.dnr.session);
+    const rules = (w.dnr.staticOn ? general : []).concat(w.dnr.uboYoutubeOn ? uboYoutube : [], w.dnr.threatOn ? threat : [], w.dnr.dynamic, w.dnr.session);
     assert(!w.dnr.dynamic.some((r) => r.priority === 10000 && F.isStreamHost(r.condition.initiatorDomains[0])), "allow-page rule for a stream host");
     for (const h of STREAM) for (const [name, frames] of Object.entries(pages)) for (const type of ["script", "xmlhttprequest", "media", "sub_frame", "image", "websocket"]) {
       const v = evaluate(rules, { url: "https://" + h + "/x", type, frames });

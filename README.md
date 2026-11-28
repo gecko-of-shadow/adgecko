@@ -62,7 +62,7 @@ It works as soon as it is installed. Click the gecko in the toolbar to open the 
 
 - Purple, with the pixel "ad" lit: blocking on ordinary sites is on.
 - Grey: blocking on ordinary sites is off. If only the list blocking switch is off, the Twitch, YouTube and Kick filters keep running.
-- The master switch on the settings page stops every switchable feature. The vendored Twitch stream swap, the uBlock Origin YouTube scripts, the YouTube network rules and the two YouTube hide sheets keep running until you turn the extension off in `chrome://extensions`.
+- The master switch on the settings page stops every switchable feature. It also stops the YouTube network rules. The vendored Twitch stream swap, the uBlock Origin YouTube scripts and the two YouTube hide sheets keep running until you turn the extension off in `chrome://extensions`.
 - A small magenta dot: a page guard blocked something on that tab. Open the popup to see what. The dot then goes away.
 
 How the art was chosen: [docs/design](docs/design/README.md).
