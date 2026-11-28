@@ -15,14 +15,16 @@ import path from "node:path";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function openChrome(executablePath, extraArgs = []) {
+// opts (optional): headless (default true), profilePrefix (temp folder name).
+export async function openChrome(executablePath, extraArgs = [], opts = {}) {
+  const headless = opts.headless !== false;
   if (!executablePath || !fs.existsSync(executablePath)) {
     throw new Error(`Chrome not found: ${executablePath || "(CHROME_PATH not set)"}`);
   }
   if (typeof WebSocket !== "function") throw new Error("needs a global WebSocket (Node 22+)");
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), "gecko-shot-"));
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), opts.profilePrefix || "gecko-shot-"));
   const proc = spawn(executablePath, [
-    "--headless=new",
+    ...(headless ? ["--headless=new"] : []),
     "--remote-debugging-port=0",
     `--user-data-dir=${profile}`,
     "--no-first-run",
@@ -39,20 +41,28 @@ export async function openChrome(executablePath, extraArgs = []) {
   for (let i = 0; i < 200 && !wsPath; i++) {
     await sleep(50);
     if (fs.existsSync(portFile)) {
-      const [port, p] = fs.readFileSync(portFile, "utf8").split(/\r?\n/);
+      // Chrome may still be writing the file (EBUSY on Windows): try again.
+      let text = "";
+      try { text = fs.readFileSync(portFile, "utf8"); } catch { continue; }
+      const [port, p] = text.split(/\r?\n/);
       if (port && p) wsPath = `ws://127.0.0.1:${port}${p}`;
     }
   }
-  if (!wsPath) {
+  // A failed start leaves no Chrome and no profile folder behind.
+  const giveUp = async (message) => {
     proc.kill();
-    throw new Error("Chrome did not open its DevTools port");
-  }
+    await sleep(300);
+    try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); } catch { /* Chrome may still hold a file */ }
+    throw new Error(message);
+  };
+  if (!wsPath) await giveUp("Chrome did not open its DevTools port");
 
   const ws = new WebSocket(wsPath);
-  await new Promise((res, rej) => {
-    ws.onopen = res;
-    ws.onerror = () => rej(new Error("DevTools connection failed"));
+  const connected = await new Promise((res) => {
+    ws.onopen = () => res(true);
+    ws.onerror = () => res(false);
   });
+  if (!connected) await giveUp("DevTools connection failed");
   let nextId = 1;
   const pending = new Map();
   const listeners = [];
@@ -123,5 +133,24 @@ export async function openChrome(executablePath, extraArgs = []) {
     try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* Chrome may still hold a file */ }
   }
 
-  return { render, send, waitEvent, newPage, close };
+  // Like close(), but asks Chrome to quit, waits for the process to end and
+  // reports whether the profile folder is really gone.
+  async function closeClean(ms = 10000) {
+    const running = () => proc.exitCode === null && proc.signalCode === null;
+    const exited = running() ? new Promise((r) => proc.once("exit", r)) : Promise.resolve();
+    try { await Promise.race([send("Browser.close"), sleep(2000)]); } catch { /* already closing */ }
+    await Promise.race([exited, sleep(ms)]);
+    if (running()) proc.kill();
+    try { ws.close(); } catch { /* already closed */ }
+    await Promise.race([exited, sleep(3000)]);
+    try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); } catch { /* checked below */ }
+    return { profile, removed: !fs.existsSync(profile) };
+  }
+
+  const on = (fn) => {
+    listeners.push(fn);
+    return () => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); };
+  };
+
+  return { render, send, waitEvent, newPage, close, closeClean, on, profile };
 }
