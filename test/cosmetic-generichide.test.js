@@ -19,7 +19,6 @@ new Function(`${updateSource}\nreturn installGeneralAdblockUpdate;`)()(U);
 function pageCss(stored, host, top = true) {
   const pick = {};
   for (const k of P.keysForHost(host, top)) if (k in stored) pick[k] = stored[k];
-  if (!top) pick[P.KEY_GENERIC] = "";
   return P.buildPageCss(host, pick);
 }
 
@@ -29,6 +28,8 @@ Deno.test("generichide: a listed host and its subdomains get no generic sheet", 
     assert(pageCss(st, h) === "", h + " must get no generic rules: " + JSON.stringify(pageCss(st, h)));
   }
   assert(pageCss(st, "example.com").includes(".ad-banner{display:none!important}"), "example.com keeps the generic sheet");
+  assert(pageCss(st, "example.com", false).includes(".ad-banner{display:none!important}"), "a subframe gets the compact generic sheet");
+  assert(pageCss(st, "mail.google.com", false) === "", "generichide also applies in a subframe");
   assert(pageCss(st, "google.com").includes(".ad-banner"), "the parent domain keeps the generic sheet");
   assert(pageCss(st, "notgithub.com").includes(".ad-banner"), "a look-alike host keeps the generic sheet");
 });

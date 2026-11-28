@@ -758,6 +758,21 @@ async function ensureCosmeticNow() {
       if (JSON.stringify(now[CP.KEY_META] || null) !== seen) return;
       await localSet({ [CP.KEY_META]: meta });
     };
+    // 0.3.8: a compact generic sheet for child frames. A stored copy from
+    // an earlier version has the full list (cosG) but not this key; add it
+    // without fetching the bundle or the lists. readCosmeticState only loads
+    // cosMeta and the index, so the index tells us whether the key exists.
+    if (CP.frameGenericList && !cosmeticIndexOf(state).includes(CP.KEY_GENERIC_FRAME)) {
+      const extra = await new Promise((resolve) => chrome.storage.local.get([CP.KEY_GENERIC, CP.KEY_GENERIC_FRAME], (s) => {
+        void chrome.runtime.lastError;
+        resolve(s || {});
+      }));
+      if (typeof extra[CP.KEY_GENERIC] === "string" && extra[CP.KEY_GENERIC_FRAME] == null) {
+        const frame = CP.frameGenericList(extra[CP.KEY_GENERIC].split("\n")).join("\n");
+        const index = cosmeticIndexOf(state).concat(CP.KEY_GENERIC_FRAME);
+        await localSet({ [CP.KEY_GENERIC_FRAME]: frame, [CP.KEY_INDEX]: index });
+      }
+    }
     const version = extensionVersion();
     if (meta && (meta.source === "refresh" || (version && meta.extVersion === version))) {
       await saveMeta();

@@ -335,15 +335,14 @@ function installCosmeticHide(api) {
         return Promise.resolve(false);
       }
     }
-    // Refreshed / installed rules in storage: generic sheet (top frame only)
-    // plus this host's site rules, minus its #@# exceptions. One <style>.
+    // Refreshed / installed rules in storage: the generic sheet in the top
+    // frame, the compact frame sheet in child frames, plus this host's site
+    // rules, minus its #@# exceptions. One <style>.
     const P = api.parse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
     if (P && stored && stored[P.KEY_META]) {
       try {
-        const top = api.isTop != null ? api.isTop : (typeof window !== "undefined" && window.top === window);
-        const view = top ? stored : Object.assign({}, stored, { [P.KEY_GENERIC]: "" });
         const grouped = !!P.GROUP_SEP;
-        injectStyle(P.buildPageCss(hostname, view, "", grouped ? SHEET_GROUP : 0), grouped ? P : null);
+        injectStyle(P.buildPageCss(hostname, stored, "", grouped ? SHEET_GROUP : 0), grouped ? P : null);
         return Promise.resolve(true);
       } catch {
         // fall back to the bundled sheet below
@@ -377,7 +376,7 @@ function installCosmeticHide(api) {
         const P = api.parse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
         const host = api.hostname != null ? api.hostname : (typeof location !== "undefined" ? location.hostname : "");
         const top = api.isTop != null ? api.isTop : (typeof window !== "undefined" && window.top === window);
-        // Subframes only need their host's site rules, not the generic sheet.
+        // Subframes read the compact frame sheet (cosGF), not the full generic list.
         const extra = P ? P.keysForHost(host, top) : [];
         getter([STORAGE_KEY, ALLOWED_ORIGINS_KEY, SETTINGS_KEY, OVERRIDES_KEY].concat(extra), (result) => {
           if (typeof chrome !== "undefined") void chrome.runtime.lastError;
