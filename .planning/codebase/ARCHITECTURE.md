@@ -72,7 +72,7 @@ A higher priority has precedence. Use a new id range only after you read this ta
 |---|---|---|---|---|
 | 1 | block | Packed list rules, and one extra tracker rule (the last id) | 100 to 2951 | static `general` |
 | 1 | block | Refreshed list rules (`LIST_RULE_ID_BASE`, maximum `MAX_LIST_RULES` = 25,000) | 100000 and up | dynamic |
-| 1 | allow | List `@@` exceptions for a host under a blocked parent, or type-only (`exceptionAllows`); after the refreshed blocks, same id series. Beat the priority-1 blocks of both stores. Not made under a `$important` block. | 100000 and up | dynamic |
+| 1 | allow | List `@@` exceptions for a host under a blocked parent, or type-only (`exceptionAllows`); after the refreshed blocks, same id series. With the packed lists alone, `syncPackedAllows` writes the packed lists' subdomain exceptions in the same range. Beat the priority-1 blocks of both stores. Not made under a `$important` block. | 100000 and up | dynamic |
 | 10,000 | allow | **Allow this site**: one rule for each host, matched by `initiatorDomains` | 900000 to 909999 | dynamic |
 | 2,000,000 | allowAllRequests, allow | Stream-site allow rules | 1 to 3 | static `general` |
 | same as source | same as source | Copies of the bundled rules that are not list rules (`KEPT_RULE_ID_BASE`) | 800000 and up | dynamic |

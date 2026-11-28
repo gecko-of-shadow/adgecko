@@ -1323,7 +1323,34 @@ function installGeneralAdblockUpdate(target) {
       }
     }
     await deps.setStaticEnabled(true);
+    await syncPackedAllows(deps);
     return { ok: true, mode: "static" };
+  }
+
+  // The packed ruleset alone (fresh install before the first download, after
+  // Revert lists, after a failed swap): the exception allow rules for its own
+  // lists' unconditional `@@||sub.host^` exceptions under a blocked parent
+  // (exceptionAllows on the pack-time cross-list data). The type-only ones
+  // are not in packed-cross.json, so they wait for the first download. Writes
+  // only when the wanted rules differ from the list-range rules in place.
+  async function syncPackedAllows(deps) {
+    if (!deps.loadBundled) return;
+    try {
+      const bundled = await deps.loadBundled();
+      const extra = new Set(bundled.extraIds || []);
+      const hosts = new Set();
+      for (const r of bundled.rules || []) {
+        if (isPackedListRule(r, extra)) for (const d of r.condition.requestDomains || []) hosts.add(d);
+      }
+      const cross = crossListRules({}, SOURCES.map((x) => x.name), bundled.packedCross);
+      const want = buildListRules([], [], exceptionAllows(cross, hosts));
+      const ours = ((await deps.getDynamicRules()) || []).filter((r) => isOurRule(r.id));
+      const sig = (rules) => JSON.stringify(rules.map((r) => [r.id, r.action && r.action.type, r.condition]));
+      if (sig(ours) === sig(want)) return;
+      await deps.updateDynamicRules({ removeRuleIds: ours.map((r) => r.id), addRules: want });
+    } catch {
+      // the packed blocks alone still apply; the next run tries again
+    }
   }
 
   async function removeThreatRules(deps) {
