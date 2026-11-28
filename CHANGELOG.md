@@ -22,6 +22,7 @@ Five owner decisions of 2026-11-20. Not tested in real Chrome: the Kick and Twit
 
 ### Tests
 
+- Release gate, section 5: each run writes its Deno log to its own temporary file (`mktemp`) and removes it at the end. Before, all runs used `/tmp/gate-deno.txt`, so two gate runs at the same time could mix their logs. The owner approved this gate change on 2026-11-27 (`docs/proposals/gate-deno-log.patch`).
 - Owner decision 16: `src/rules/ubo-youtube-network.json` blocks `ads.youtube.com` on purpose. The stream-host oracle test now also checks that ruleset, with a named exception for this one host. A test fails if the exception goes stale.
 
 ## 0.3.7 (2026-11-20)

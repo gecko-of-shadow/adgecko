@@ -85,5 +85,5 @@ Older decisions that are open:
 - [ ] **Chrome Web Store:** nothing was submitted. Read [docs/STORE-REVIEW-NOTES.md](docs/STORE-REVIEW-NOTES.md) first.
 - [ ] Not covered today: YouTube Music, YouTube Kids, YouTube players in other websites, and ads that are part of the video.
 - [x] Correct the header comment of `src/youtube.js` (lines 4 to 8). The owner let the agent decide on 2026-11-27. Done in PR 32 (comment only).
-- [ ] Owner approval needed: apply `docs/proposals/gate-deno-log.patch`. It gives each gate run its own Deno log file, so two runs at the same time do not mix their logs.
+- [x] Apply `docs/proposals/gate-deno-log.patch`. The owner approved it on 2026-11-27. Each gate run now has its own Deno log file.
 - [ ] Work through `.planning/codebase/CONCERNS.md`. It is sorted by impact.

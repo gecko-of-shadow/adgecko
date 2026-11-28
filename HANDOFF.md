@@ -6,8 +6,8 @@ Last update: 2026-11-27 (second session of the day).
 
 - Last release: [v0.3.7](https://github.com/gecko-of-shadow/adgecko/releases/tag/v0.3.7), from commit `cc3e764`.
 - `main` has the changes of PRs 22 to 26 after v0.3.7 (merged on 2026-11-20). They are not released. See `CHANGELOG.md`, section "Unreleased".
-- Merged on 2026-11-27 (owner approved): #31 (YouTube slow start docs) and #32 (`src/youtube.js` comment).
-- Waiting for the owner's merge: #30, then #33, and this handoff PR (#34). #30 and #33 wait for the cnn.com popup check. A trial merge of #30, #33 and #34 on `main` had no conflict, and the Deno suite on it gave 936 passed, 0 failed.
+- Merged on 2026-11-27 (owner approved): #31 (YouTube slow start docs), #32 (`src/youtube.js` comment) and #34 (handoff).
+- Waiting for the owner's merge: #30, then #33. Both wait for the cnn.com popup check. A trial merge of #30, #33 and #34 on `main` had no conflict, and the Deno suite on it gave 936 passed, 0 failed.
 - #33 has the base `api-job/site-breakage`. Before you merge it, change its base to `main`, or merge #30 first. Else it merges into the old branch, not into `main`.
 - UNVERIFIED: the behaviour of 0.3.7 in the owner's signed-in Chrome, and the Kick, Twitch, PR 30 and PR 33 changes in any real Chrome.
 
@@ -21,7 +21,7 @@ The owner gave three answers on 2026-11-27:
 | Header comment of `src/youtube.js` | The owner let the agent decide. | PR #32 corrects the comment. The SABR backoff, the start-buffer wait and the no-ad flag are off by default (`umpBackoff`, `zeroStartPolicies`, `noAdFlag` are false), with or without the uBO layer. Comment only. `src/youtube.js` is not a frozen file: it is not in `PLAYBACK_FILES` or in `scripts/frozen-pins.json`. |
 | Owner decision 3: master switch | Yes (Option A). | PR #33, stacked on #30. The master switch now also disables the static `ubo-youtube` DNR ruleset. The lists switch and a per-site Allow do not change it. `onInstalled` and `onStartup` write the state again. |
 
-Also: the fixed gate log path (`/tmp/gate-deno.txt`) has a proposed fix in `docs/proposals/gate-deno-log.patch`. It is not applied, because the gate needs the owner's approval.
+Also: the owner approved `docs/proposals/gate-deno-log.patch` on 2026-11-27, and it is applied to the gate. Each gate run now writes its Deno log to its own temporary file.
 
 Checked, on each branch: the Deno suite (PR 30: 932 passed; #32: 906 passed; #33: 936 passed; 0 failed on each), the release gate (`VERDICT: CLEAN`) and the privacy check. For #33: the new tests failed before the code change and pass after it, and three independent reviewers found no blocker. The proposal patch applies with `git apply --check`.
 
@@ -42,8 +42,7 @@ YouTube's server sends a "wait" reply (4,000, 8,800 or 12,000 ms) on a direct wa
 
 ## Next steps
 
-1. The owner: merge this handoff PR; after the cnn.com check, merge #30 and then #33.
+1. The owner: after the cnn.com check, merge #30 and then #33.
 2. The owner: the cnn.com popup check for PR 30 (steps 5 and 6).
-3. The owner: approve or reject `docs/proposals/gate-deno-log.patch`.
-4. The owner: the signed-in YouTube test in `TODO.md`, section 0, and Kick and Twitch in real Chrome (`TODO.md`, section 1).
-5. Release 0.3.8 from `main` when the tests are done.
+3. The owner: the signed-in YouTube test in `TODO.md`, section 0, and Kick and Twitch in real Chrome (`TODO.md`, section 1).
+4. Release 0.3.8 from `main` when the tests are done.
