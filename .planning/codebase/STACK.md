@@ -2,7 +2,7 @@
 
 Analysis date: 2026-11-16
 Commit: 5cd4ab6 (version 0.3.6)
-Updated 2026-11-20 for version 0.3.7: only the uAssets YouTube filters row in the vendored-code table. All other rows describe commit 5cd4ab6. Version 0.3.8 (2026-11-27, local commit, not released): the `.gitignore`, Node script and hide-sheet rows were updated.
+Updated 2026-11-20 for version 0.3.7: only the uAssets YouTube filters row in the vendored-code table. All other rows describe commit 5cd4ab6. Unreleased changes of 2026-11-27: the `.gitignore`, Node script and hide-sheet rows were updated.
 
 This document lists the languages, runtimes, browser APIs, tools and vendored code of Adgecko.
 UNVERIFIED: all behaviour in Chrome and on Windows. No script that downloads was run for this document.
@@ -123,7 +123,7 @@ Each script starts with a header that gives its purpose and its command line. Re
 |---|---|
 | `manifest.json` | The extension manifest. |
 | `.gitattributes` | `* text=auto eol=lf`. `*.png`, `*.ico` and `*.zip` are binary. |
-| `.gitignore` | `.DS_Store`, `Thumbs.db`, `*.zip`, the two packer caches, Python cache files, `.playwright-mcp/`, `_metadata/` (Chrome writes it when it loads the unpacked folder). |
+| `.gitignore` | `.DS_Store`, `Thumbs.db`, `*.zip`, the two packer caches, Python cache files, `.playwright-mcp/`, `_metadata/` (Chrome writes it when it loads the unpacked folder), `*.crx` (packed extension files). |
 | `scripts/vendor-pins.json`, `scripts/frozen-pins.json` | Pin records (section 7). |
 | `src/rules/never-block-captcha.json` | Source list of captcha host suffixes. Not in the zip. |
 | `src/feed/config.js`, `src/feed/keys.js` | Feed origin and public keys. Both are empty. |

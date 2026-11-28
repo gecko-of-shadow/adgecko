@@ -85,15 +85,15 @@ The worker model `loadWorker(opts)`:
 | YouTube script | `youtube`, `youtube-sim`, `youtube-decoy`, `youtube-decoy-nav`, `youtube-error-flash`, `youtube-fallback`, `youtube-layers`, `youtube-watchdog-playability`, `stall`, `stall-decoy`, `race`, `stealth` |
 | uBlock Origin YouTube port | `ubo-youtube`, `ubo-youtube-edge`, `ubo-rpnt-payload` |
 | Network rules and packer | `dnr`, `filter-options`, `packer-options`, `navigation-scope`, `meta-counts`, `hcaptcha-never-block`, `imasdk-never-block`, `final-dnr-fields`, `final-lists-*` (6 files), `wave2-lists-network-options` |
-| Cosmetic filtering | `cosmetic`, `cosmetic-filters`, `cosmetic-adopted-sheet`, `cosmetic-feature-gate`, `cosmetic-generichide`, `cosmetic-parse-nesting`, `cosmetic-resync-cost`, `cosmetic-unscoped-root`, `pr12-cosmetic-parent-child-exclusion`, `wave2-lists-cosmetic-pack`, `wave2-perf-cosmetic-index` |
-| Worker and list refresh | `background-message`, `dnr-queue`, `general-race`, `list-guard`, `list-refresh`, `list-toggle-threat`, `storage-alarm`, `worker-restart`, `no-background-fetch`, `final-storage-budget` |
-| Settings and registry | `settings`, `settings-page`, `settings-page-writes`, `flags-port-window`, `wave2-perf-features-idempotent`, `wave2-ux-settings`, `final-upgrade-*` (2 files) |
-| Popup | `popup-allow-page`, `popup-design`, `popup-general`, `popup-ui-review`, `wave2-ux-popup` |
+| Cosmetic filtering | `cosmetic`, `cosmetic-filters`, `cosmetic-adopted-sheet`, `cosmetic-feature-gate`, `cosmetic-generichide`, `cosmetic-parse-nesting`, `cosmetic-resync-cost`, `cosmetic-unscoped-root`, `pr12-cosmetic-parent-child-exclusion`, `wave2-lists-cosmetic-pack`, `wave2-perf-cosmetic-index`, `cosmetic-frame-generics`, `cosmetic-grouped-sheet` |
+| Worker and list refresh | `background-message`, `dnr-queue`, `general-race`, `list-guard`, `list-refresh`, `list-toggle-threat`, `storage-alarm`, `worker-restart`, `no-background-fetch`, `final-storage-budget`, `list-exception-allow-rules`, `packed-exception-allows` |
+| Settings and registry | `settings`, `settings-page`, `settings-page-writes`, `flags-port-window`, `wave2-perf-features-idempotent`, `wave2-ux-settings`, `final-upgrade-*` (2 files), `settings-narrow-layout` |
+| Popup | `popup-allow-page`, `popup-design`, `popup-general`, `popup-ui-review`, `wave2-ux-popup`, `popup-disabled-button` |
 | Page guards | `guards`, `clipboard-0.3.6`, `popup-guard-keydown`, `final-clipboard-8-9-cross-realm-and-nested-copy` |
 | Threat tier, public suffixes | `threat-tier`, `psl`, `no-openphish` |
 | Signed feed | `feed-core`, `feed-client`, `feed-robustness`, `feed-serial-recovery` |
 | Hardening, design | `hardening`, `art-rules`, `contrast`, `icons` |
-| Package, licence, docs, tools | `packaging`, `license`, `final-chrome-utf8`, `docs-claims`, `release-tooling` |
+| Package, licence, docs, tools | `packaging`, `license`, `final-chrome-utf8`, `docs-claims`, `release-tooling`, `gitignore-metadata` |
 | Privacy checker and CI | `privacy-generic`, `privacy-mask` |
 | One bug for each file (0.3.5 bug hunt, and two 0.3.6 files) | `nightly-<area>-<number>-<short title>` (40 files). Areas: `cosmetic`, `feed`, `guards`, `manifest-scripts`, `site-scripts`, `threat`, `ui`, `worker-refresh`. |
 
