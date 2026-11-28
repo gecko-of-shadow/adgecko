@@ -600,17 +600,27 @@
     return items;
   }
 
-  function keysForHost(hostname, withGeneric) {
+  // topHost: in a child frame, the top site. Its page exceptions are read
+  // too, so its $generichide can turn the frame sheet off.
+  function keysForHost(hostname, withGeneric, topHost) {
     const keys = withGeneric === false ? [KEY_META, KEY_GENERIC_FRAME] : [KEY_GENERIC, KEY_META];
     for (const h of candidateHosts(hostname)) keys.push(PREFIX_SITE + h, PREFIX_EXC + h);
-    for (const h of noHideHosts(hostname)) keys.push(PREFIX_NO_HIDE + h);
+    const noHide = new Set(noHideHosts(hostname));
+    if (withGeneric === false && topHost) for (const h of noHideHosts(topHost)) noHide.add(h);
+    for (const h of noHide) keys.push(PREFIX_NO_HIDE + h);
     return keys;
+  }
+
+  // The NO_HIDE_* bits that apply to a host, from what storage returned.
+  function noHideFlags(hostname, stored) {
+    let noHide = 0;
+    for (const h of noHideHosts(hostname)) noHide |= stored[PREFIX_NO_HIDE + h] | 0;
+    return noHide;
   }
 
   // Build the page's stylesheet from what storage returned for keysForHost().
   function buildPageCss(hostname, stored, fallbackGenericCss, group) {
-    let noHide = 0;
-    for (const h of noHideHosts(hostname)) noHide |= stored[PREFIX_NO_HIDE + h] | 0;
+    const noHide = noHideFlags(hostname, stored);
     const exc = new Set();
     const siteSels = [];
     for (const h of candidateHosts(hostname)) {
@@ -641,6 +651,6 @@
     FRAME_GENERIC_MAX_LEN, frameGenericList,
     NO_HIDE_GENERIC, NO_HIDE_SITE, MAX_NO_HIDE_HOSTS, GROUP_SEP,
     sanitizeSelector, normalizeHost, isUnscopedSelector, isPageRootSelector, parseCosmetic, mergeCosmetic, candidateHosts, noHideHosts,
-    cssForSelectors, toStorage, keysForHost, buildPageCss,
+    cssForSelectors, toStorage, keysForHost, noHideFlags, buildPageCss,
   };
 })(typeof self !== "undefined" ? self : globalThis);

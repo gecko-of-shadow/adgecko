@@ -47,6 +47,40 @@ function installCosmeticHide(api) {
     return allowedList.indexOf(origin) !== -1;
   }
 
+  // No window (unit tests without a DOM) counts as the top frame.
+  function isTopFrame() {
+    if (api.isTop != null) return api.isTop;
+    return typeof window === "undefined" || window.top === window;
+  }
+
+  // The top site's origin, seen from this frame. A child frame learns it from
+  // location.ancestorOrigins (its last entry is the top frame). Anything that
+  // is not an http(s) origin (for example "null") counts as not known: "".
+  // UNVERIFIED in Chrome: ancestorOrigins in a content script.
+  function topOrigin() {
+    let o = api.topOrigin;
+    if (o == null) {
+      try {
+        const list = typeof location !== "undefined" ? location.ancestorOrigins : null;
+        o = list && list.length ? list[list.length - 1] : "";
+      } catch {
+        o = "";
+      }
+    }
+    o = String(o || "");
+    return /^https?:\/\//.test(o) ? o : "";
+  }
+
+  function topHostname() {
+    const o = topOrigin();
+    if (!o) return "";
+    try {
+      return new URL(o).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  }
+
   let cssText = null;
   let styleEl = null;
   // The hide CSS lives in a constructed sheet in document.adoptedStyleSheets.
@@ -297,6 +331,21 @@ function installCosmeticHide(api) {
   // if no newer call ran meanwhile (master off, allowed site, per-host CSS).
   let applyGen = 0;
 
+  // May a child frame use the generic hides? Only when the top site is known,
+  // is not a stream site, hiding is on there, and it has no $generichide.
+  function frameGenericOk(stored, state, F, settings, P) {
+    const top = topHostname();
+    if (!top || hostExcluded(top)) return false;
+    if (F && settings && typeof settings === "object") {
+      if (!F.resolve(settings, stored[OVERRIDES_KEY], top).cosmetic) return false;
+    } else {
+      const allowed = state && typeof state === "object" ? state.allowedOrigins : undefined;
+      if (originAllowed(topOrigin(), allowed)) return false;
+    }
+    if (P && stored && P.noHideFlags && (P.noHideFlags(top, stored) & P.NO_HIDE_GENERIC)) return false;
+    return true;
+  }
+
   function applyState(state, fetcher) {
     const gen = ++applyGen;
     const hostname = api.hostname != null
@@ -339,14 +388,23 @@ function installCosmeticHide(api) {
     // frame, the compact frame sheet in child frames, plus this host's site
     // rules, minus its #@# exceptions. One <style>.
     const P = api.parse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
+    // A child frame drops the generic hides when the top site is allowed or
+    // has $generichide, or when the top site is not known.
+    const noFrameGeneric = !isTopFrame() && !frameGenericOk(stored, state, F, settings, P);
     if (P && stored && stored[P.KEY_META]) {
       try {
         const grouped = !!P.GROUP_SEP;
-        injectStyle(P.buildPageCss(hostname, stored, "", grouped ? SHEET_GROUP : 0), grouped ? P : null);
+        const view = noFrameGeneric ? Object.assign({}, stored, { [P.KEY_GENERIC]: "", [P.KEY_GENERIC_FRAME]: "" }) : stored;
+        injectStyle(P.buildPageCss(hostname, view, "", grouped ? SHEET_GROUP : 0), grouped ? P : null);
         return Promise.resolve(true);
       } catch {
         // fall back to the bundled sheet below
       }
+    }
+    // The bundled sheet holds only generic hides.
+    if (noFrameGeneric) {
+      removeStyle();
+      return Promise.resolve(false);
     }
     return loadCss(fetcher).then((text) => {
       if (gen !== applyGen) return false;
@@ -375,9 +433,10 @@ function installCosmeticHide(api) {
       try {
         const P = api.parse || (typeof globalThis !== "undefined" && globalThis.GeneralCosmeticParse);
         const host = api.hostname != null ? api.hostname : (typeof location !== "undefined" ? location.hostname : "");
-        const top = api.isTop != null ? api.isTop : (typeof window !== "undefined" && window.top === window);
-        // Subframes read the compact frame sheet (cosGF), not the full generic list.
-        const extra = P ? P.keysForHost(host, top) : [];
+        const top = isTopFrame();
+        // Subframes read the compact frame sheet (cosGF), not the full generic
+        // list, and the top site's page exceptions.
+        const extra = P ? P.keysForHost(host, top, top ? "" : topHostname()) : [];
         getter([STORAGE_KEY, ALLOWED_ORIGINS_KEY, SETTINGS_KEY, OVERRIDES_KEY].concat(extra), (result) => {
           if (typeof chrome !== "undefined") void chrome.runtime.lastError;
           resolve({
@@ -423,12 +482,14 @@ function installCosmeticHide(api) {
       };
       if (!valid(next.settings)) return false;
       const host = frameHost();
-      const before = F.resolve(seen.settings, seen.overrides, host).cosmetic;
-      const after = F.resolve(next.settings, next.overrides, host).cosmetic;
+      // A child frame also depends on the top site (frameGenericOk).
+      const top = isTopFrame() ? "" : topHostname();
+      const same = (h) => !h || F.resolve(seen.settings, seen.overrides, h).cosmetic === F.resolve(next.settings, next.overrides, h).cosmetic;
+      const unchanged = same(host) && same(top);
       seen = next;
       // With settings, generalEnabled / generalAllowedOrigins do not decide
       // (applyState), so a change to them alone changes nothing here.
-      return before === after;
+      return unchanged;
     };
 
     sync();

@@ -110,8 +110,10 @@ Deno.test("upgrade from 0.3.4 (refreshed set): index moved to cosKeys without a 
   for (const k of oldMeta.keys) assert(w.store.cosKeys.includes(k), "cosKeys has " + k);
   assert(w.store["cosS:gone.com"] && w.store["cosS:keep.com"], "no rule key touched by the slimming");
   const cosOrder = order.filter((ks) => ks.includes("cosKeys") || ks.includes("cosMeta"));
-  assert(cosOrder[0] && cosOrder[0].join() === "cosKeys", "index moved first: " + JSON.stringify(cosOrder));
-  assert(cosOrder.some((ks) => ks.join() === "cosMeta" || (ks.includes("cosMeta") && !ks.includes("cosG"))), "meta slimmed: " + JSON.stringify(cosOrder));
+  // Exactly three writes, in this order: the index moves, the frame sheet is
+  // backfilled (with its index entry), and cosMeta comes last, because a
+  // cosMeta change re-runs every frame and cosGF must exist by then.
+  assert(JSON.stringify(cosOrder) === JSON.stringify([["cosKeys"], ["cosGF", "cosKeys"], ["cosMeta"]]), "write order: " + JSON.stringify(cosOrder));
   assert(w.store.cosGF === ".x", "the compact frame sheet is backfilled from cosG");
   // A later cosmetic write (here: Revert to packed lists) removes the old keys.
   await w.send({ source: "adgecko-general", type: "revertLists" });
