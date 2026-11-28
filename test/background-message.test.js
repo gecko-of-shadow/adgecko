@@ -9,6 +9,12 @@ const EXT = "abcdefghijklmnopabcdefghijklmnop";
 function loadWorker(rec = { badges: [], session: {} }) {
   const store = {};
   const listener = () => ({ addListener() {} });
+  // rec.pending counts storage answers not yet given.
+  const later = (f) => {
+    if (!rec.async) return f();
+    rec.pending = (rec.pending || 0) + 1;
+    setTimeout(() => { try { f(); } finally { rec.pending--; } }, 2);
+  };
   let onMessage = null;
   const chrome = {
     runtime: {
@@ -24,8 +30,9 @@ function loadWorker(rec = { badges: [], session: {} }) {
         remove(_k, cb) { if (cb) cb(); },
       },
       session: {
-        get(k, cb) { const out = { listRefreshStarted: true }; for (const key of [].concat(k || [])) if (key in rec.session) out[key] = structuredClone(rec.session[key]); cb(out); },
-        set(o, cb) { Object.assign(rec.session, structuredClone(o)); if (cb) cb(); },
+        // rec.async: answer later, like Chrome, so overlapping reads show.
+        get(k, cb) { const out = { listRefreshStarted: true }; for (const key of [].concat(k || [])) if (key in rec.session) out[key] = structuredClone(rec.session[key]); later(() => cb(out)); },
+        set(o, cb) { later(() => { Object.assign(rec.session, structuredClone(o)); if (cb) cb(); }); },
       },
       onChanged: listener(),
     },
@@ -114,6 +121,20 @@ Deno.test("the list status text carries no date of its own", () => {
   assert(!listStatusText({ dynamicActive: true, updatedAt: 0, domainCount: 5, lastErrors: { a: "x" } }, { ok: true }).includes(when), "date repeated");
 });
 
+// Lists that share a host (easylist and easyprivacy, and their mirrors) give
+// the same error parts; the popup shows each "host: reason" once.
+Deno.test("the list status text names each failed host and reason once", () => {
+  const fn = backgroundSource.match(/function listStatusText[\s\S]*?\r?\n}\r?\n/);
+  const listStatusText = new Function(fn[0] + "; return listStatusText;")();
+  const down = (h) => h + ": network error (Failed to fetch)";
+  const text = listStatusText({ dynamicActive: false, lastErrors: {
+    easylist: [down("easylist.to"), down("ublockorigin.github.io")].join("; "),
+    easyprivacy: [down("easylist.to"), down("ublockorigin.github.io")].join("; "),
+    adguard_base: "filters.adtidy.org: HTTP 403",
+  } }, { ok: false });
+  assert(text === "Using packed lists (refresh failed; will retry later). Problems: " + down("easylist.to") + "; " + down("ublockorigin.github.io") + "; filters.adtidy.org: HTTP 403.", "got: " + text);
+});
+
 const popupSender = { id: EXT, url: "chrome-extension://" + EXT + "/src/popup.html" };
 const guard = (documentId) => ({ id: EXT, tab: { id: 7 }, frameId: 0, documentId, url: "https://news.example/" });
 const ping = { source: "adgecko-general", type: "guardEvent", kind: "clipboard" };
@@ -142,4 +163,32 @@ Deno.test("background messages: bursts are per page, so a block right after navi
   rec.shown[7] = ""; // navigated
   await send(onMessage, ping, guard("doc-2"));
   assert(dots() === 2 && rec.shown[7] === " ", "new page, same tab: dot again");
+});
+
+// Wait until check() is true, or give up after 3 s and let the asserts report.
+// Windows timers fire about every 15 ms, so fixed short waits are not enough.
+async function waitFor(check, ms = 3000) {
+  const end = Date.now() + ms;
+  while (!check() && Date.now() < end) await new Promise((r) => setTimeout(r, 5));
+}
+
+// Blocks in several tabs at the same moment: each event is a read-modify-write
+// of one storage.session map. Overlapping, the last write kept only its own
+// tab (Chrome for Testing 155: 6 tabs, 1 to 3 events left), and the popup of
+// the other tabs showed a dot with no message.
+Deno.test("background messages: blocks in several tabs at once each keep their event", async () => {
+  const rec = { badges: [], session: {}, async: true };
+  const onMessage = loadWorker(rec);
+  for (let tab = 1; tab <= 6; tab++) onMessage(ping, { id: EXT, tab: { id: tab }, frameId: 0, documentId: "doc-" + tab, url: "https://news.example/" }, () => {});
+  await waitFor(() => !rec.pending && Object.keys(rec.session.tabSignals || {}).length === 6);
+  const kept = Object.keys(rec.session.tabSignals || {}).sort();
+  assert(kept.join() === "1,2,3,4,5,6", "events kept: " + kept.join());
+  // The popup of tab 3 takes its event while tab 7 blocks: both land.
+  const r = {};
+  onMessage({ source: "adgecko-general", type: "tabSignal", tabId: 3 }, popupSender, (answer) => { r.response = answer; });
+  onMessage(ping, { id: EXT, tab: { id: 7 }, frameId: 0, documentId: "doc-7", url: "https://news.example/" }, () => {});
+  await waitFor(() => !rec.pending && r.response && Object.keys(rec.session.tabSignals || {}).length === 6);
+  assert(r.response && r.response.signal && r.response.signal.kind === "clipboard", "tab 3 got its event: " + JSON.stringify(r.response));
+  const after = Object.keys(rec.session.tabSignals).sort().join();
+  assert(after === "1,2,4,5,6,7", "after take: " + after);
 });

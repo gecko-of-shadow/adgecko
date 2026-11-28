@@ -528,18 +528,49 @@
 
   const HIDE = "{display:none!important}";
 
-  function cssForSelectors(selectors, skip) {
+  // Grouped form (group > 1): up to `group` selectors share one rule, joined
+  // by GROUP_SEP. Chrome parses the 13,635 packed generics about 3 times
+  // faster that way (4.8 ms -> 1.7 ms, 535 KB -> 214 KB of CSS). One invalid
+  // selector drops its whole rule, so the content script checks the rule
+  // count and splits a dropped group back (cosmetic.js fillSheet). A tab can
+  // never be part of a selector (sanitizeSelector rejects control
+  // characters), so ",\t" marks the joins exactly. Without `group`: one rule
+  // per selector, as before.
+  const GROUP_SEP = ",\t";
+
+  function cssForSelectors(selectors, skip, group) {
     let css = "";
+    let n = 0;
     for (const sel of selectors || []) {
       if (skip && skip.has(sel)) continue;
-      css += sel + HIDE + "\n";
+      if (group > 1) {
+        css += (n % group ? GROUP_SEP : (n ? HIDE + "\n" : "")) + sel;
+        n += 1;
+      } else {
+        css += sel + HIDE + "\n";
+      }
     }
-    return css;
+    return n ? css + HIDE + "\n" : css;
   }
 
   // Storage layout (chrome.storage.local): one key per host, so a page reads
   // only its own few keys plus the generic sheet.
   const KEY_GENERIC = "cosG";
+  // Compact generic sheet for child frames: simple #id / .class selectors
+  // no longer than FRAME_GENERIC_MAX_LEN. The full 13,635-selector sheet in
+  // every frame doubled renderer CPU on a 40-frame page.
+  const KEY_GENERIC_FRAME = "cosGF";
+  const FRAME_GENERIC_MAX_LEN = 10;
+
+  function frameGenericList(generic) {
+    const out = [];
+    for (const s of generic || []) {
+      if (s.length > FRAME_GENERIC_MAX_LEN) continue;
+      if ((s.charAt(0) === "#" || s.charAt(0) === ".") && /^[#.][A-Za-z_][\w-]*$/.test(s)) out.push(s);
+    }
+    return out;
+  }
+
   // cosMeta stays small: every frame reads it (it gates the stored sheet, and
   // a change to it re-runs the content script). The full key list (about
   // 8,300 names) lives in cosKeys, which only the worker reads, for stale-key
@@ -557,6 +588,8 @@
     // Generic selectors stored newline-joined (no rule text) to keep the
     // per-page read small; buildPageCss turns them into rules.
     items[KEY_GENERIC] = (data.generic || []).join("\n");
+    const frameList = frameGenericList(data.generic);
+    if (frameList.length) items[KEY_GENERIC_FRAME] = frameList.join("\n");
     for (const [h, sels] of Object.entries(data.sites || {})) items[PREFIX_SITE + h] = sels;
     for (const [h, sels] of Object.entries(data.exceptions || {})) items[PREFIX_EXC + h] = sels;
     for (const [h, f] of Object.entries(data.noHide || {})) if (f | 0) items[PREFIX_NO_HIDE + h] = f | 0;
@@ -567,17 +600,27 @@
     return items;
   }
 
-  function keysForHost(hostname, withGeneric) {
-    const keys = withGeneric === false ? [KEY_META] : [KEY_GENERIC, KEY_META];
+  // topHost: in a child frame, the top site. Its page exceptions are read
+  // too, so its $generichide can turn the frame sheet off.
+  function keysForHost(hostname, withGeneric, topHost) {
+    const keys = withGeneric === false ? [KEY_META, KEY_GENERIC_FRAME] : [KEY_GENERIC, KEY_META];
     for (const h of candidateHosts(hostname)) keys.push(PREFIX_SITE + h, PREFIX_EXC + h);
-    for (const h of noHideHosts(hostname)) keys.push(PREFIX_NO_HIDE + h);
+    const noHide = new Set(noHideHosts(hostname));
+    if (withGeneric === false && topHost) for (const h of noHideHosts(topHost)) noHide.add(h);
+    for (const h of noHide) keys.push(PREFIX_NO_HIDE + h);
     return keys;
   }
 
-  // Build the page's stylesheet from what storage returned for keysForHost().
-  function buildPageCss(hostname, stored, fallbackGenericCss) {
+  // The NO_HIDE_* bits that apply to a host, from what storage returned.
+  function noHideFlags(hostname, stored) {
     let noHide = 0;
     for (const h of noHideHosts(hostname)) noHide |= stored[PREFIX_NO_HIDE + h] | 0;
+    return noHide;
+  }
+
+  // Build the page's stylesheet from what storage returned for keysForHost().
+  function buildPageCss(hostname, stored, fallbackGenericCss, group) {
+    const noHide = noHideFlags(hostname, stored);
     const exc = new Set();
     const siteSels = [];
     for (const h of candidateHosts(hostname)) {
@@ -589,18 +632,25 @@
       // $generichide: no generic rule, and no fallback sheet either.
     } else if (typeof stored[KEY_GENERIC] === "string" && stored[KEY_GENERIC]) {
       let list = stored[KEY_GENERIC];
-      if (exc.size) list = list.split("\n").filter((sel) => !exc.has(sel)).join("\n");
-      if (list) generic = list.replaceAll("\n", HIDE + "\n") + HIDE + "\n";
+      if (group > 1) {
+        generic = cssForSelectors(list.split("\n").filter(Boolean), exc.size ? exc : null, group);
+      } else {
+        if (exc.size) list = list.split("\n").filter((sel) => !exc.has(sel)).join("\n");
+        if (list) generic = list.replaceAll("\n", HIDE + "\n") + HIDE + "\n";
+      }
+    } else if (typeof stored[KEY_GENERIC_FRAME] === "string" && stored[KEY_GENERIC_FRAME]) {
+      generic = cssForSelectors(stored[KEY_GENERIC_FRAME].split("\n").filter(Boolean), exc.size ? exc : null, group);
     } else if (fallbackGenericCss) {
       generic = fallbackGenericCss + "\n";
     }
-    return generic + (noHide & NO_HIDE_SITE ? "" : cssForSelectors(siteSels, exc));
+    return generic + (noHide & NO_HIDE_SITE ? "" : cssForSelectors(siteSels, exc, group));
   }
 
   root.GeneralCosmeticParse = {
-    MAX_SELECTOR_LEN, MAX_SELECTOR_DEPTH, KEY_GENERIC, KEY_META, KEY_INDEX, PREFIX_SITE, PREFIX_EXC, PREFIX_NO_HIDE, HIDE,
-    NO_HIDE_GENERIC, NO_HIDE_SITE, MAX_NO_HIDE_HOSTS,
+    MAX_SELECTOR_LEN, MAX_SELECTOR_DEPTH, KEY_GENERIC, KEY_GENERIC_FRAME, KEY_META, KEY_INDEX, PREFIX_SITE, PREFIX_EXC, PREFIX_NO_HIDE, HIDE,
+    FRAME_GENERIC_MAX_LEN, frameGenericList,
+    NO_HIDE_GENERIC, NO_HIDE_SITE, MAX_NO_HIDE_HOSTS, GROUP_SEP,
     sanitizeSelector, normalizeHost, isUnscopedSelector, isPageRootSelector, parseCosmetic, mergeCosmetic, candidateHosts, noHideHosts,
-    cssForSelectors, toStorage, keysForHost, buildPageCss,
+    cssForSelectors, toStorage, keysForHost, noHideFlags, buildPageCss,
   };
 })(typeof self !== "undefined" ? self : globalThis);

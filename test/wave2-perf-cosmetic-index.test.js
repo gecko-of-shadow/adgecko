@@ -22,7 +22,7 @@ async function until(fn, tries = 100) {
   return fn();
 }
 
-Deno.test("cosMeta size drop: a subframe read is under 2 KB, a top frame read is about cosG", () => {
+Deno.test("cosMeta size drop: a subframe read is the compact frame sheet, a top frame read is about cosG", () => {
   const meta = { source: "bundled", packedAt: bundle.packed_at_utc, extVersion: VERSION };
   const st = P.toStorage(bundle, meta);
   const oldMeta = oldMetaFor(st, meta);
@@ -37,7 +37,11 @@ Deno.test("cosMeta size drop: a subframe read is under 2 KB, a top frame read is
   assert(oldBytes > 100000, "the bundle gives a large old index: " + oldBytes);
   assert(newBytes < 300, "cosMeta is small: " + newBytes);
   assert(!("keys" in st[P.KEY_META]), "no key list in cosMeta");
-  assert(subRead < 2048, "subframe read under 2 KB: " + subRead);
+  assert(sub.includes(P.KEY_GENERIC_FRAME) && !sub.includes(P.KEY_GENERIC), "subframes read cosGF, not the full list");
+  assert(top.includes(P.KEY_GENERIC) && !top.includes(P.KEY_GENERIC_FRAME), "the top frame reads the full list only");
+  const frameBytes = JSON.stringify(st[P.KEY_GENERIC_FRAME] || "").length;
+  assert(subRead < 1.1 * frameBytes + 2048, "subframe read is the compact sheet plus a little: " + subRead + " vs " + frameBytes);
+  assert(subRead < 0.5 * JSON.stringify(st[P.KEY_GENERIC]).length, "the compact sheet is much smaller than the full list: " + subRead);
   assert(topRead < 1.1 * JSON.stringify(st[P.KEY_GENERIC]).length, "top read is about the generic sheet: " + topRead);
   assert(!sub.includes(P.KEY_INDEX) && !top.includes(P.KEY_INDEX), "pages never read cosKeys");
   // The index lists every stored key, itself and cosMeta included.
@@ -106,7 +110,11 @@ Deno.test("upgrade from 0.3.4 (refreshed set): index moved to cosKeys without a 
   for (const k of oldMeta.keys) assert(w.store.cosKeys.includes(k), "cosKeys has " + k);
   assert(w.store["cosS:gone.com"] && w.store["cosS:keep.com"], "no rule key touched by the slimming");
   const cosOrder = order.filter((ks) => ks.includes("cosKeys") || ks.includes("cosMeta"));
-  assert(cosOrder.length === 2 && cosOrder[0].join() === "cosKeys" && cosOrder[1].join() === "cosMeta", "cosKeys then cosMeta, two writes: " + JSON.stringify(cosOrder));
+  // Exactly three writes, in this order: the index moves, the frame sheet is
+  // backfilled (with its index entry), and cosMeta comes last, because a
+  // cosMeta change re-runs every frame and cosGF must exist by then.
+  assert(JSON.stringify(cosOrder) === JSON.stringify([["cosKeys"], ["cosGF", "cosKeys"], ["cosMeta"]]), "write order: " + JSON.stringify(cosOrder));
+  assert(w.store.cosGF === ".x", "the compact frame sheet is backfilled from cosG");
   // A later cosmetic write (here: Revert to packed lists) removes the old keys.
   await w.send({ source: "adgecko-general", type: "revertLists" });
   assert(await until(() => w.store.cosMeta && w.store.cosMeta.source === "bundled"), "reverted");
@@ -192,4 +200,18 @@ Deno.test("two ensureCosmetic calls at the same time share one run (one bundle f
   assert(await until(() => w.store.cosMeta && w.store.cosMeta.extVersion === VERSION), "seeded");
   await settle(200);
   assert(cosmeticFetches(w) === 1, "bundle fetches: " + cosmeticFetches(w));
+});
+
+Deno.test("ensureCosmetic backfills the compact frame sheet on a stored copy that lacks it", async () => {
+  const st = P.toStorage(bundle, { source: "bundled", packedAt: bundle.packed_at_utc, extVersion: VERSION });
+  const want = st[P.KEY_GENERIC_FRAME];
+  assert(want && want.includes("#AdContent") && want.includes(".ad-slot"), "packed list has the short selectors");
+  const store = Object.assign({}, st);
+  delete store[P.KEY_GENERIC_FRAME];
+  store[P.KEY_INDEX] = (store[P.KEY_INDEX] || []).filter((k) => k !== P.KEY_GENERIC_FRAME);
+  const w = loadWorker({ store });
+  await settle(20);
+  w.install({ reason: "update" });
+  assert(await until(() => w.store[P.KEY_GENERIC_FRAME] === want), "backfilled: " + String(w.store[P.KEY_GENERIC_FRAME]).slice(0, 80));
+  assert(cosmeticFetches(w) === 0, "no bundle fetch: " + cosmeticFetches(w));
 });

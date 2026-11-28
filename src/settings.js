@@ -308,7 +308,7 @@
     $("status").textContent = r && r.ok ? "Reverted to the packed lists." : "Revert failed.";
     await load();
   });
-  $("allow-add").addEventListener("click", async () => {
+  async function allowDomain() {
     const checked = TC.userDomainReason($("allow-domain").value);
     const d = checked.domain;
     if (!d) {
@@ -320,9 +320,19 @@
     $("allow-domain").value = "";
     await queued(async () => {
       const list = Array.isArray(stored.threatAllowDomains) ? stored.threatAllowDomains.slice() : [];
-      if (!list.includes(d)) list.push(d);
-      await set({ threatAllowDomains: list });
+      if (list.includes(d)) {
+        $("status").textContent = d + " is already allowed.";
+        return;
+      }
+      list.push(d);
+      if (await set({ threatAllowDomains: list })) $("status").textContent = "Allowed " + d + ". Reload the blocked page.";
     });
+  }
+  $("allow-add").addEventListener("click", allowDomain);
+  // Enter in the box adds the domain too (the box is not in a form). Not
+  // while an input method is still composing the text.
+  $("allow-domain").addEventListener("keydown", (e) => {
+    if (e && e.key === "Enter" && !e.isComposing) return allowDomain();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;

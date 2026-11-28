@@ -72,6 +72,7 @@ A higher priority has precedence. Use a new id range only after you read this ta
 |---|---|---|---|---|
 | 1 | block | Packed list rules, and one extra tracker rule (the last id) | 100 to 2951 | static `general` |
 | 1 | block | Refreshed list rules (`LIST_RULE_ID_BASE`, maximum `MAX_LIST_RULES` = 25,000) | 100000 and up | dynamic |
+| 1 | allow | List `@@` exceptions for a host under a blocked parent, or type-only (`exceptionAllows`); after the refreshed blocks, same id series. With the packed lists alone, `syncPackedAllows` writes the packed lists' subdomain exceptions in the same range. Beat the priority-1 blocks of both stores. Not made under a `$important` block on that host, a parent or a subdomain (whole-domain or scoped), or for an exception that an `@@...$badfilter` line withdraws. With the packed lists alone, `packed-cross.json` has no scoped `$important` or withdrawal data yet. | 100000 and up | dynamic |
 | 10,000 | allow | **Allow this site**: one rule for each host, matched by `initiatorDomains` | 900000 to 909999 | dynamic |
 | 2,000,000 | allowAllRequests, allow | Stream-site allow rules | 1 to 3 | static `general` |
 | same as source | same as source | Copies of the bundled rules that are not list rules (`KEPT_RULE_ID_BASE`) | 800000 and up | dynamic |
@@ -150,7 +151,7 @@ A sender with a tab can send only `cosmeticCss` and `guardEvent`, unless its URL
 | `revertLists` | settings page | The result of `GU.revertLists`. |
 | `pageOrigin` | popup, with `chrome.tabs.sendMessage` to frame 0 | `{ origin }` from the top-frame content script. This message has no `source` field. |
 
-The dot data is in `chrome.storage.session` under `tabSignals`, for 50 tabs maximum.
+The dot data is in `chrome.storage.session` under `tabSignals`, for 50 tabs maximum. The worker changes this map one event at a time (`editSignals`), so blocks in several tabs at once all keep their event.
 
 ## 8. List refresh
 
@@ -175,7 +176,7 @@ Rules of the flow:
 - The swap fails if the new set is smaller than 50 % of the bundled set. A failed swap calls `fallback()`: the dynamic list rules are removed and the static ruleset is enabled.
 - A failed run (`ran: true`, `ok: false`) makes the retry alarm.
 - If `listState.ruleCount` is above 0 but no list rule is installed, the next refresh builds the set again.
-- `PARSER_VERSION` is 5. A stored payload with a different version is downloaded again.
+- `PARSER_VERSION` is 6. A stored payload with a different version is downloaded again.
 - The parser drops ICANN public suffixes and non-public addresses. The merge step (`mergeDomains`, `mergeScoped`) removes never-block hosts.
 - `src/general/filter-options.js` converts filter options to a scope key. The packer uses the same table. An option with no exact DNR equivalent drops the filter.
 
@@ -198,8 +199,9 @@ All keys are in `chrome.storage.local`, but `tabSignals` is in `chrome.storage.s
 | `generalListStatus`, `generalListUpdatedAt` | Status text and time for the user interface. | worker |
 | `generalListUpdateRequestAt` | In the key table of `src/general-settings.js` only. No code uses it. | none |
 | `cosG` | Generic hide selectors. Top frames read it. | worker |
+| `cosGF` | Compact generic hide selectors for child frames (simple `#id` / `.class` selectors of at most 10 characters, the leading `#` or `.` included, so a name of at most 9 characters). | worker |
 | `cosS:<host>`, `cosE:<host>` | Site selectors and exception selectors for one host. | worker |
-| `cosNoG:<host>` | Bit mask for `$generichide`, `$specifichide` and `$elemhide` page exceptions. | worker |
+| `cosNoG:<host>` | Bit mask for `$generichide`, `$specifichide` and `$elemhide` page exceptions. A child frame also reads the key of the top site (`keysForHost(host, withGeneric, topHost)`). | worker |
 | `cosMeta` | Small gate record. All frames read it. A change starts the cosmetic script again. | worker |
 | `cosKeys` | Index of all hide-rule keys. Only the worker reads it. | worker |
 | `feedState`, `feedCache`, `feedPaused` | Feed status, two verified feed files, the derived pause switch. | worker |
@@ -208,6 +210,9 @@ All keys are in `chrome.storage.local`, but `tabSignals` is in `chrome.storage.s
 
 - A file that uses a key of a different file repeats the string. Do not rename a key without a search of all files.
 - `writeCosmetic()` writes the rule keys first, then `cosMeta`, then removes stale keys.
+- A child frame uses the generic hides (`cosGF`, and the bundled fallback sheet) only when all of these hold: the top site is known from `location.ancestorOrigins` (last entry, http or https only); the top site is not a stream site; cosmetic hiding is on for the top site (`F.resolve`, or the legacy allow list); the top site has no `$generichide`. UNVERIFIED in Chrome: what `location.ancestorOrigins` gives in a content script for cross-origin, nested, sandboxed or no-referrer frames. If it gives `"null"` or no entries, the frame drops only the generic hides.
+- A frame's own-host site rules (`cosS:`) do not follow an Allow on the top site.
+- `src/general/cosmetic-parse.js` exports `noHideFlags`.
 - Each worker write goes through `localSet` or `localRemove`. A failure is recorded in `listState.lastError` and shown in the list status.
 - The quota of `chrome.storage.local` is 10,485,760 bytes. The manifest does not request `unlimitedStorage`. See `CONCERNS.md`, H1.
 

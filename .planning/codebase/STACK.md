@@ -2,7 +2,7 @@
 
 Analysis date: 2026-11-16
 Commit: 5cd4ab6 (version 0.3.6)
-Updated 2026-11-20 for version 0.3.7: only the uAssets YouTube filters row in the vendored-code table. All other rows describe commit 5cd4ab6.
+Updated 2026-11-20 for version 0.3.7: only the uAssets YouTube filters row in the vendored-code table. All other rows describe commit 5cd4ab6. Unreleased changes of 2026-11-27: the `.gitignore`, Node script and hide-sheet rows were updated.
 
 This document lists the languages, runtimes, browser APIs, tools and vendored code of Adgecko.
 UNVERIFIED: all behaviour in Chrome and on Windows. No script that downloads was run for this document.
@@ -50,7 +50,7 @@ Extension APIs in use:
 
 The gate limits the `chrome.*` namespaces of each file: `CONVENTIONS.md` section 7.
 
-Web platform APIs: `fetch` in the worker (list downloads and reads of package files), `importScripts`, WebCrypto Ed25519 (`src/feed/verify.js`), `MessageChannel` between the worlds, streams and `TextDecoder` for a body read with a size limit, constructed style sheets in `document.adoptedStyleSheets` (`src/cosmetic.js`).
+Web platform APIs: `fetch` in the worker (list downloads and reads of package files), `importScripts`, WebCrypto Ed25519 (`src/feed/verify.js`), `MessageChannel` between the worlds, streams and `TextDecoder` for a body read with a size limit, constructed style sheets in `document.adoptedStyleSheets` (`src/cosmetic.js`; the stored-rules sheet has up to 50 selectors per rule, and `fillSheet` splits a rule that Chrome drops for an unknown selector).
 
 ## 4. Permissions
 
@@ -74,7 +74,7 @@ Web platform APIs: `fetch` in the worker (list downloads and reads of package fi
 | ripgrep (`rg`) | No pin. CI installs it only if it is absent. | The gate stops if `deno`, `python3` or `rg` is absent. Two tests are ignored without `rg`. |
 | `zip` (Info-ZIP), `unzip` | No pin | Packaging, the gate with `--zip`. Windows `tar.exe` is the fallback for `zip`. |
 | `git` | No pin | uBlock Origin sync, privacy scan, gate section 1b, reproducible zip time |
-| Node.js | 22 or later for `scripts/lib/chrome-shot.mjs` | `scripts/build-icons.mjs`, `scripts/bench-youtube.mjs` (not in CI) |
+| Node.js | 22 or later for `scripts/lib/chrome-shot.mjs` | `scripts/build-icons.mjs`, `scripts/bench-youtube.mjs`, `scripts/chrome-smoke.mjs` (not in CI) |
 | `gh` CLI | No pin | The release workflow |
 
 Remote module: four test files import `jsr:@std/assert@1`. Deno must download it one time. `--no-lock` means that no lockfile pins it.
@@ -123,7 +123,7 @@ Each script starts with a header that gives its purpose and its command line. Re
 |---|---|
 | `manifest.json` | The extension manifest. |
 | `.gitattributes` | `* text=auto eol=lf`. `*.png`, `*.ico` and `*.zip` are binary. |
-| `.gitignore` | `.DS_Store`, `Thumbs.db`, `*.zip`, the two packer caches, Python cache files, `.playwright-mcp/`. |
+| `.gitignore` | `.DS_Store`, `Thumbs.db`, `*.zip`, the two packer caches, Python cache files, `.playwright-mcp/`, `_metadata/` (Chrome writes it when it loads the unpacked folder), `*.crx` (packed extension files). |
 | `scripts/vendor-pins.json`, `scripts/frozen-pins.json` | Pin records (section 7). |
 | `src/rules/never-block-captcha.json` | Source list of captcha host suffixes. Not in the zip. |
 | `src/feed/config.js`, `src/feed/keys.js` | Feed origin and public keys. Both are empty. |

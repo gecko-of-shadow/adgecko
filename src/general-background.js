@@ -758,6 +758,21 @@ async function ensureCosmeticNow() {
       if (JSON.stringify(now[CP.KEY_META] || null) !== seen) return;
       await localSet({ [CP.KEY_META]: meta });
     };
+    // 0.3.8: a compact generic sheet for child frames. A stored copy from
+    // an earlier version has the full list (cosG) but not this key; add it
+    // without fetching the bundle or the lists. readCosmeticState only loads
+    // cosMeta and the index, so the index tells us whether the key exists.
+    if (CP.frameGenericList && !cosmeticIndexOf(state).includes(CP.KEY_GENERIC_FRAME)) {
+      const extra = await new Promise((resolve) => chrome.storage.local.get([CP.KEY_GENERIC, CP.KEY_GENERIC_FRAME], (s) => {
+        void chrome.runtime.lastError;
+        resolve(s || {});
+      }));
+      if (typeof extra[CP.KEY_GENERIC] === "string" && extra[CP.KEY_GENERIC_FRAME] == null) {
+        const frame = CP.frameGenericList(extra[CP.KEY_GENERIC].split("\n")).join("\n");
+        const index = cosmeticIndexOf(state).concat(CP.KEY_GENERIC_FRAME);
+        await localSet({ [CP.KEY_GENERIC_FRAME]: frame, [CP.KEY_INDEX]: index });
+      }
+    }
     const version = extensionVersion();
     if (meta && (meta.source === "refresh" || (version && meta.extVersion === version))) {
       await saveMeta();
@@ -797,7 +812,11 @@ function listStatusText(state, result, writeError) {
   if (notes.length) console.log("adgecko: list mirrors used:", notes);
   if (errs.length || !result.ok) console.warn("adgecko: list refresh problems:", errs.length ? errs : result.reason);
   else console.log("adgecko: list refresh", result);
-  const errText = errs.length ? " Problems: " + errs.join("; ") + "." : (!result.ok && result.reason ? " Problem: " + result.reason + "." : "");
+  // One line per failed source host: lists that share a host and its mirrors
+  // (easylist and easyprivacy) give the same "host: reason" parts.
+  const parts = [];
+  for (const e of errs) for (const part of String(e).split("; ")) if (part && !parts.includes(part)) parts.push(part);
+  const errText = parts.length ? " Problems: " + parts.join("; ") + "." : (!result.ok && result.reason ? " Problem: " + result.reason + "." : "");
   const werr = writeError || state.lastError;
   const storageText = werr && werr.message ? " Storage error: " + werr.message + "." : "";
   return (state.dynamicActive
@@ -1123,6 +1142,41 @@ function sessionArea() {
   return chrome.storage && chrome.storage.session ? chrome.storage.session : null;
 }
 
+// Read-modify-write of the stored events, one at a time: blocks in several
+// tabs at once each read the map before any wrote it, and the last write kept
+// only its own tab (Chrome for Testing 155: 6 tabs blocked together, 1 to 3
+// events left). edit(signals) changes the copy and returns true to save it.
+let signalQueue = Promise.resolve();
+function editSignals(area, edit) {
+  const run = signalQueue.then(() => new Promise((resolve) => {
+    try {
+      area.get(SIGNAL_KEY, (got) => {
+        void chrome.runtime.lastError;
+        const signals = Object.assign({}, got && got[SIGNAL_KEY]);
+        let save = false;
+        try {
+          save = edit(signals);
+        } catch {
+          save = false;
+        }
+        if (!save) return resolve();
+        try {
+          area.set({ [SIGNAL_KEY]: signals }, () => {
+            void chrome.runtime.lastError;
+            resolve();
+          });
+        } catch {
+          resolve();
+        }
+      });
+    } catch {
+      resolve();
+    }
+  }));
+  signalQueue = run;
+  return run;
+}
+
 function guardEvent(tabId, kind, documentId) {
   const now = Date.now();
   const burst = documentId || tabId; // a new page in the tab is a new burst
@@ -1137,21 +1191,16 @@ function guardEvent(tabId, kind, documentId) {
   }
   const area = sessionArea();
   if (!area) return;
-  try {
-    area.get(SIGNAL_KEY, (got) => {
-      void chrome.runtime.lastError;
-      const signals = Object.assign({}, got && got[SIGNAL_KEY]);
-      signals[tabId] = { kind, at: now };
-      const ids = Object.keys(signals);
-      if (ids.length > SIGNAL_TABS_MAX) {
-        ids.sort((a, b) => signals[a].at - signals[b].at);
-        for (const id of ids.slice(0, ids.length - SIGNAL_TABS_MAX)) delete signals[id];
-      }
-      area.set({ [SIGNAL_KEY]: signals }, () => void chrome.runtime.lastError);
-    });
-  } catch {
-    // the dot is still shown
-  }
+  // On failure the dot is still shown.
+  editSignals(area, (signals) => {
+    signals[tabId] = { kind, at: now };
+    const ids = Object.keys(signals);
+    if (ids.length > SIGNAL_TABS_MAX) {
+      ids.sort((a, b) => signals[a].at - signals[b].at);
+      for (const id of ids.slice(0, ids.length - SIGNAL_TABS_MAX)) delete signals[id];
+    }
+    return true;
+  });
 }
 
 // Popup: what was blocked on this tab, then clear the dot. The stored event is
@@ -1166,20 +1215,13 @@ function takeTabSignal(tabId) {
       }
       const area = sessionArea();
       if (!area) return resolve({ ok: true, signal: null });
-      try {
-        area.get(SIGNAL_KEY, (got) => {
-          void chrome.runtime.lastError;
-          const signals = Object.assign({}, got && got[SIGNAL_KEY]);
-          const signal = signals[tabId] || null;
-          if (signal) {
-            delete signals[tabId];
-            area.set({ [SIGNAL_KEY]: signals }, () => void chrome.runtime.lastError);
-          }
-          resolve({ ok: true, signal: dotShown ? signal : null });
-        });
-      } catch {
-        resolve({ ok: true, signal: null });
-      }
+      let signal = null;
+      editSignals(area, (signals) => {
+        signal = signals[tabId] || null;
+        if (!signal) return false;
+        delete signals[tabId];
+        return true;
+      }).then(() => resolve({ ok: true, signal: dotShown ? signal : null }));
     };
     try {
       chrome.action.getBadgeText({ tabId }, (text) => {
