@@ -59,9 +59,9 @@ Section 5 lists items that were checked and are not a concern now.
 ### H4. YouTube response patching depends on upstream shapes
 
 - **What.** Two layers change YouTube data in the page world: the generated uBlock Origin layer and `src/youtube.js`, which replaces `fetch`, XHR methods and `JSON.parse` of the page.
-- **Evidence.** The local patches in `scripts/sync-ubo-youtube.mjs` are text replacements. A patch that matches nothing gives only a warning, and the script exits with code 0. The weekly drift job only becomes red. It opens no issue. `CHANGELOG.md` records that one uAssets change already made a new local patch necessary.
+- **Evidence.** The local patches in `scripts/sync-ubo-youtube.mjs` are text replacements. The weekly drift job only becomes red. It opens no issue. `CHANGELOG.md` records that one uAssets change already made a new local patch necessary.
 - **Impact.** A YouTube change or an upstream filter change can break playback or let ads through, and a person must see the red job.
-- **Action.** Make the sync exit with a non-zero code when a patch matches nothing. Do a manual YouTube test before each release. Split `src/youtube.js` only together with tests, because many tests read its source text.
+- **Action.** DONE (site-breakage job, Unreleased): a patch that matches nothing now stops the sync with an error before it writes a file (`unmatchedPatchErrors`, test in `test/ubo-youtube.test.js`). OPEN: do a manual YouTube test before each release. Split `src/youtube.js` only together with tests, because many tests read its source text.
 
 ### H5. 0.3.6 changes behaviour in many places, and no live test was done
 
@@ -81,12 +81,12 @@ Section 5 lists items that were checked and are not a concern now.
 | Three `exclude_matches` blocks in `manifest.json` (kept by hand, no generator) | `test/settings.test.js`, `test/guards.test.js` |
 | `NEVER_BLOCK_SUFFIXES` in `src/general/update.js` and in `scripts/pack-filter-lists.py` | `test/settings.test.js` |
 | `SUFFIX` and `EXACT` in `src/threat/protected-hosts.js` | `test/settings.test.js` |
-| `SITE_DOMAINS` and `VIDEO_CDN_DOMAINS` in `scripts/merge-dnr-rules.py` | `test/dnr.test.js` (its own copy of the lists) |
+| `SITE_DOMAINS`, `VIDEO_CDN_DOMAINS` and `STREAM_SITES_NOT_ALLOWED` in `scripts/merge-dnr-rules.py` | The merger reads `STREAM_SITES` from `src/settings/features.js` and stops before it writes when a host is missing on either side (`check_stream_hosts`). `test/dnr.test.js` runs the same check and reads the merger lists from `dnr-merge-meta.json` (no own copy). |
 | Host fragments for the URL scan in `scripts/release-gate.sh` | None |
 | `test/fixtures/stream-hosts.txt` | Read by two tests |
 
-- The merger lists (6 site hosts and 7 CDN hosts) do not contain `twitchcdn.com`, `ext-twitch.tv`, `kick-streamer.com` and `kickusercontent.com`. `STREAM_SITES` contains them. The effect is UNVERIFIED.
-- **Action.** Make `scripts/merge-dnr-rules.py` read the hosts from one data file, as the captcha list does.
+- The merger lists (6 site hosts and 7 CDN hosts) do not contain `twitchcdn.com`, `ext-twitch.tv`, `kick-streamer.com` and `kickusercontent.com`. `STREAM_SITES` contains them. The merger now names them in `STREAM_SITES_NOT_ALLOWED`. The effect is UNVERIFIED. A move into an allow list changes the shipped rules: it is a decision, not a cleanup.
+- **Action.** DONE (site-breakage job, Unreleased): the merger checks its lists against the one list, so a new stream host stops the packer until somebody gives it a place. OPEN: the gate URL scan (gate: owner approval) and the place of the four hosts above.
 
 ### M2. One test is always ignored
 
@@ -96,16 +96,27 @@ Section 5 lists items that were checked and are not a concern now.
 
 ### M3. Legacy storage mirrors and migrations stay in the code
 
-- The keys `generalEnabled` and `generalAllowedOrigins` are derived mirrors of `settings` and `siteOverrides`. The DNR code and the popup read them. Since 0.3.6, `src/cosmetic.js` reads them only before the migration.
+- The keys `generalEnabled` and `generalAllowedOrigins` are derived mirrors of `settings` and `siteOverrides`. Up to 0.3.7, the DNR code and the popup read them. Since 0.3.6, `src/cosmetic.js` reads them only before the migration.
 - Migrations that run at each worker start: `migrateLegacy`, the old key `generalListRefresh`, `cosMeta.keys` to `cosKeys`. Each change of `PARSER_VERSION` forces a full download for all users. `RETIRED_LISTS` and `dropRetiredCosmetic` clean data of older builds.
 - **Impact.** Two sources hold the same settings. A missed mirror write gives a state where the popup and the rules disagree.
 - **Action.** Make the DNR code read `settings` and `siteOverrides` through `GeckoFeatures.resolve`, then remove the mirrors. Write next to each migration the version after which it can be deleted.
+- **Done** (site-breakage job, Unreleased):
+  - The DNR code (`applyGeneralState()`, the list refresh, the toolbar icon at start) reads `settings` and `siteOverrides` through `readListsState()` in `src/general-background.js`. It uses `legacyMirror()`, not `resolve()`: `resolve()` is for one host and cannot give the allow list.
+  - The popup reads the lists switch from `settings` (`listsOn()`).
+  - When `settings` exists, no code reads the mirror values. A stale mirror changes no rule and no popup text (`test/settings.test.js`, `test/popup-allow-page.test.js`). Thus the popup and the rules can no longer disagree because of a mirror value.
+  - The rule update still starts from the mirror write (`storage.onChanged`). A failed mirror write in `syncFromSettings()` gives no change event, so the rules keep the old state until the next apply (a popup click, a browser start). The settings page sends no apply message. This part of the impact stays.
+  - Each migration names the version that added it and the condition for its deletion: `migrateSettings`/`migrateLegacy`, `migrateListStorage` (`generalListRefresh`) and `RETIRED_LISTS` from 0.3.0; `cosMeta.keys` to `cosKeys` and `dropRetiredCosmetic` from 0.3.5. `PARSER_VERSION` is marked as not a one-time migration. A test checks the comments.
+- **Open:**
+  - The worker still writes the mirrors. Their storage change is the signal that starts `applyGeneralState()`. Their removal needs a new trigger, and `test/general-race.test.js` and `test/dnr-queue.test.js` pin the present one. Do it after the live test (H5).
+  - The cut-off version for each migration is a support policy: an owner decision.
 
 ### M4. Storage key strings are repeated in several files
 
 - `settings` and `siteOverrides` are literals in six files. The feed keys, `threatAllowDomains`, `uiTheme` and the list status keys are literals in two or three files each. `src/popup.js` has its own `KEYS` object, because the gate lets `popup.html` load only `popup.js`.
 - **Impact.** A typing error in one file gives a silent read of `undefined`. The features then use their defaults, and no error shows.
 - **Action.** Add one test that reads the source files and makes sure that each key literal is in one known list.
+- **Done** (site-breakage job, Unreleased): `test/storage-keys.test.js` reads each `.js` file below `src/` (not `src/vendor/`). It finds the key literals in key constants (`*_KEY`, `*_KEYS`, `KEYS`, `KEY_*`, `*_PREFIX`, `PREFIX_*`), in `DEFAULTS` objects, in literal lists of `get`/`remove` calls, in literal objects of `set`/`save` calls and in `changes.<key>`. Each one must be in `KNOWN` or `KNOWN_PREFIXES` (20 keys, 4 prefixes, the keys of `ARCHITECTURE.md` section 9). Each known key must still be in use. A third test proves that the scanner finds a typing error in each form.
+- **Limit.** Property access on a stored copy (`stored.<key>`, `patch.<key> = ...`) is not checked: the same form also reads ordinary object fields (for example `patch.lastError` in `src/feed/client.js`).
 
 ### M5. Very large files and functions
 
@@ -171,17 +182,21 @@ The owner approved the deletion on 2026-11-16. 95 old files (approximately 30 MB
 
 ### L3. References to a file that is not in the repository
 
-The name `BUILD-PROGRESS` is in `src/general/filter-options.js`, `scripts/lib/package_files.py`, `test/navigation-scope.test.js`, `test/no-openphish.test.js` and `test/fixtures/dnr-matcher.js`. No tracked file has that name. Move the necessary facts into the comments.
+The name `BUILD-PROGRESS` was in `src/general/filter-options.js`, `scripts/lib/package_files.py`, `test/navigation-scope.test.js`, `test/no-openphish.test.js` and `test/fixtures/dnr-matcher.js`. No tracked file has that name. Move the necessary facts into the comments.
+
+DONE (site-breakage job, Unreleased): the comments now hold the facts. The navigation exemptions name their evidence (from the commits that added them). The probe results stay in the header of `test/fixtures/dnr-matcher.js`. The Peter Lowe note points to owner decision 6 in `TODO.md`. The packaging docstring no longer names the dead modules (removed in 0.3.6). A test in `test/docs-claims.test.js` fails if a file in `src/`, `scripts/`, `test/` or `.github/` names the missing file again.
 
 ### L4. Generated `src/rules/README.md` and `meta.json` hints are old
 
 The packer writes `src/rules/README.md` with four files. The folder has 14 files. `manifest_hint` in `src/rules/meta.json` gives the ruleset id `general_network`. The manifest uses `general`. Correct the text in the packer, not in the generated files. These files ship in the zip, thus the correction belongs to a release.
 
+DONE in the packer (site-breakage job, Unreleased): `RULES_README_ROWS` and `rules_readme()` give one row for each of the 13 files in `src/rules/` (file, purpose, writer). `MANIFEST_HINT` has the id `general`. `test/packer-options.test.js` compares the rows with the folder and the hint with `manifest.json`. OPEN: the shipped `src/rules/README.md` and `meta.json` keep the old text until the next repack.
+
 ### L5. Small duplicates and one wrong workflow comment
 
-- Two default texts for the list status: "auto refresh after startup" (`src/general-settings.js`) and "checked every 3 hours" (`src/popup.js`).
-- The header of `.github/workflows/ubo-youtube-drift.yml` says that the sync "exits non-zero when a local patch no longer finds its upstream shape". The script gives only a warning (H4).
-- `src/vendor/LICENSE-uBlock.md` still shows `deno run -A` for the sync. It ships in the zip, thus it was not changed.
+- Two default texts for the list status: "auto refresh after startup" (`src/general-settings.js`) and "checked every 3 hours" (`src/popup.js`). DONE (site-breakage job, Unreleased): the popup, the settings page (`src/settings.js` had a third text, "Packed lists.") and `src/general-settings.js` now have the one text "Packed lists (checked every 3 hours)." `test/popup-general.test.js` keeps the three equal.
+- DONE (with H4): the header of `.github/workflows/ubo-youtube-drift.yml` says that the sync "exits non-zero when a local patch no longer finds its upstream shape". The script now does that also for the text patches.
+- `src/vendor/LICENSE-uBlock.md` still shows `deno run -A` for the sync. It ships in the zip, thus it was not changed (owner decision 25 in `TODO.md`).
 
 ## 5. Checked and not a concern now
 

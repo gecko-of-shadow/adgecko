@@ -43,12 +43,15 @@ Deno.test("the popup holds exactly the approved elements; the welcome card and t
     const id = m[2].match(/\bid="([^"]+)"/);
     return m[1] + (id ? "#" + id[1] : "");
   }).join(" ");
-  const want = "main header img#brand-icon h1#product button#open-settings section#welcome p#welcome-title p button#welcome-close p#site-host p#site-status section p#fix-title button#fix-site div#fix-ask p#fix-question button#fix-reload div button#fix-yes button#fix-no button#undo-fix p#fix-note button#allow-site button#reload-page p#page-status button#open-allow-domain details#more summary p#signal-line p#lists-status p#feed-status p#version-line p script";
+  // Site-breakage job (Unreleased): p#fix-scope (what the test turned off and
+  // what stays on) and button#fix-lists (the second test, with the ad lists
+  // off) were added on purpose.
+  const want = "main header img#brand-icon h1#product button#open-settings section#welcome p#welcome-title p button#welcome-close p#site-host p#site-status section p#fix-title button#fix-site div#fix-ask p#fix-question p#fix-scope button#fix-reload div button#fix-yes button#fix-no button#undo-fix p#fix-note button#fix-lists button#allow-site button#reload-page p#page-status button#open-allow-domain details#more summary p#signal-line p#lists-status p#feed-status p#version-line p script";
   assert(got === want, "popup elements changed: " + got);
   assert(/<section id="welcome"[^>]*\shidden>/.test(popupHtml), "welcome card starts hidden");
   assert(/<div id="fix-ask"[^>]*\shidden>/.test(popupHtml), "Did that fix it? starts hidden");
   // Wave 2 (ux): Reload page, Undo fix and Allow its domain show only when they apply.
-  for (const id of ["undo-fix", "reload-page", "open-allow-domain"]) assert(new RegExp('<button id="' + id + '"[^>]*\\shidden>').test(popupHtml), id + " starts hidden");
+  for (const id of ["undo-fix", "reload-page", "open-allow-domain", "fix-lists"]) assert(new RegExp('<button id="' + id + '"[^>]*\\shidden>').test(popupHtml), id + " starts hidden");
 });
 
 Deno.test("the fixed wording sits in the element people see, and the status line is not a card", () => {

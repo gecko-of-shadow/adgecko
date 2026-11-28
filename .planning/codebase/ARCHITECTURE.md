@@ -18,7 +18,7 @@ Adgecko is a Chrome Manifest V3 extension with no build step. Chrome loads the f
 | Session DNR rules | Written by `src/feed/client.js` through the worker | Rules of the signed threat feed. The feed is dormant. |
 | Content scripts | See section 2 | Hide rules, feature flags, site handlers, page guards. |
 | Service worker | `src/general-background.js` and its modules | All DNR writes, list refresh, settings sync, feed, toolbar icon, messages. |
-| Popup | `src/popup.html`, `popup.js`, `popup.css` | Site status, **Allow this site**, **Fix this site**. |
+| Popup | `src/popup.html`, `popup.js`, `popup.css` | Site status, **Allow this site**, **Fix this site** and its second test (**Test with the ad lists off**, section 13). |
 | Settings page | `src/settings.html`, `settings.js` (loads `settings/features.js`, `threat/psl.js`, `threat/compile.js`) | All switches, the per-site list, list update and revert, **Allow this domain**. |
 
 Permissions and hosts: `STACK.md` and `INTEGRATIONS.md`.
@@ -191,7 +191,7 @@ All keys are in `chrome.storage.local`, but `tabSignals` is in `chrome.storage.s
 |---|---|---|
 | `settings` | `{ v: 1, enabled, features: { id: bool } }`. Source of truth. | settings page, worker migration |
 | `siteOverrides` | `{ host: { enabled?: false, features?: { id: bool } } }`. Source of truth. | popup, settings page |
-| `generalEnabled`, `generalAllowedOrigins` | Legacy mirrors (section 10). | worker |
+| `generalEnabled`, `generalAllowedOrigins` | Legacy mirrors (section 10). Their change starts `applyGeneralState()`. When `settings` exists, no code reads their values. | worker |
 | `threatAllowDomains` | The **Allow this domain** list. | settings page |
 | `listState` | Small run metadata: lists, times, counts, errors, threat state. | worker |
 | `listData:<list>` | Parsed payload of one list. | worker |
@@ -205,11 +205,11 @@ All keys are in `chrome.storage.local`, but `tabSignals` is in `chrome.storage.s
 | `cosMeta` | Small gate record. All frames read it. A change starts the cosmetic script again. | worker |
 | `cosKeys` | Index of all hide-rule keys. Only the worker reads it. | worker |
 | `feedState`, `feedCache`, `feedPaused` | Feed status, two verified feed files, the derived pause switch. | worker |
-| `popupFix`, `popupWelcomed`, `uiTheme` | Pending **Fix this site** question, welcome card, popup theme. | popup, settings page |
+| `popupFix`, `popupWelcomed`, `uiTheme` | Pending **Fix this site** question (an entry with `lists: true` is the second test, **Test with the ad lists off**: an Allow of the host's own entry), welcome card, popup theme. | popup, settings page |
 | `ytStartTimes` | YouTube start times, opt-in: `{ v: 1, on, log: [{ time, version, kind, waitMs, ad, toast, timeout }] }`. `on` is off by default. At most 300 entries, the oldest go first. `time` is UTC to the minute. No video id, URL, title, channel or account. Rules: `GeckoFeatures.startTimes` in `src/settings/features.js`. | `src/settings/flags.js` (append, top YouTube frame), settings page (switch, Clear) |
 | `tabSignals` (session) | The last guard event for each tab. | worker |
 
-- A file that uses a key of a different file repeats the string. Do not rename a key without a search of all files.
+- A file that uses a key of a different file repeats the string. Do not rename a key without a search of all files. `test/storage-keys.test.js` checks each key literal in `src/` against one known list (the keys of this table). Add a new key to that list and to this table.
 - `writeCosmetic()` writes the rule keys first, then `cosMeta`, then removes stale keys.
 - A child frame uses the generic hides (`cosGF`, and the bundled fallback sheet) only when all of these hold: the top site is known from `location.ancestorOrigins` (last entry, http or https only); the top site is not a stream site; cosmetic hiding is on for the top site (`F.resolve`, or the legacy allow list); the top site has no `$generichide`. UNVERIFIED in Chrome: what `location.ancestorOrigins` gives in a content script for cross-origin, nested, sandboxed or no-referrer frames. If it gives `"null"` or no entries, the frame drops only the generic hides.
 - A frame's own-host site rules (`cosS:`) do not follow an Allow on the top site.
@@ -254,7 +254,9 @@ Legacy mirrors:
 - `syncFromSettings()` writes the mirrors from `legacyMirror()`. `generalEnabled` is true when the master switch and `network` are on. `generalAllowedOrigins` holds the origins of each host with the site off or `network` off. `feedPaused` is true unless the master switch and `threatFeed` are on.
 - The same function enables the static `threat` ruleset when the master switch and `threatTier` are on.
 - The mirror write changes storage. That change starts `applyGeneralState()`.
-- The DNR code reads the mirrors. `src/cosmetic.js` reads them only before the migration. When `settings` exists, only `resolve(...).cosmetic` decides.
+- The mirrors are only this change signal. `applyGeneralState()`, the list refresh and the toolbar icon read `settings` and `siteOverrides` through `readListsState()` (`legacyMirror()`). The popup reads the lists switch from `settings` (`listsOn()`). A stale mirror changes no rule and no popup text. `legacyMirror()` and not `resolve()`: `resolve()` is for one host and cannot give the allow list.
+- Only before the migration (no `settings` key) do the worker, the popup and `src/cosmetic.js` read the mirror values. When `settings` exists, only `resolve(...).cosmetic` decides in `src/cosmetic.js`.
+- Each migration has a comment with the version that added it and the condition for its deletion. A test checks it (`test/settings.test.js`).
 - Change `settings` or `siteOverrides` only. Let the worker write the mirrors.
 
 ## 11. Stream-site exclusion
@@ -267,13 +269,13 @@ Stream sites are Twitch, YouTube, Kick and their player and media hosts. The lis
 | 34 `exclude_matches` patterns on CS-7, CS-10 and CS-11. They must equal `streamExcludeMatches()`. A test compares them. | `manifest.json` |
 | Second guard: the cosmetic script stops on a stream host. With no registry, it hides nothing. | `src/cosmetic.js` |
 | The hide-rule parser keeps no rule for a stream host. | `src/general/cosmetic-parse.js` |
-| Static allow rules at 2,000,000, and dynamic copies after a list swap. | `scripts/merge-dnr-rules.py`, `src/general/update.js` |
+| Static allow rules at 2,000,000, and dynamic copies after a list swap. The merger checks its host lists against `STREAM_SITES` (`check_stream_hosts`); four stream hosts have no static allow (`STREAM_SITES_NOT_ALLOWED`). | `scripts/merge-dnr-rules.py`, `src/general/update.js` |
 | Never-block hosts in the list tier (`NEVER_BLOCK_SUFFIXES`; one exception: `imasdk.googleapis.com`). | `src/general/update.js` |
 | One stream host is blocked: the extra tracker rule blocks the Twitch ad host `ads.twitch.tv`. The Twitch allow rule excludes it. | `scripts/merge-dnr-rules.py` (`EXTRA_TRACKER_DOMAINS`) |
 | No **Allow this site** rule and no allowed origin for a stream host. | `src/general-background.js`, `src/general-settings.js`, `src/settings/features.js` |
 | A threat rule can never name a stream host. | `src/threat/protected-hosts.js` |
 
-Add a stream host to `STREAM_SITES` and to the three `exclude_matches` lists together. More copies of the host list: `CONCERNS.md`, M4.
+Add a stream host to `STREAM_SITES` and to the three `exclude_matches` lists together. Then give it a place in `scripts/merge-dnr-rules.py` (an allow list or `STREAM_SITES_NOT_ALLOWED`), or the merger and `test/dnr.test.js` fail. More copies of the host list: `CONCERNS.md`, M1.
 
 ## 12. Private flag channel
 
@@ -305,6 +307,13 @@ The manifest has no `tabs` permission, thus the popup gets no `tab.url` on a nor
 
 `popup.html` loads only `popup.js`. The popup cannot read the feature registry directly.
 A page with no content script gives no reply. The popup then shows its "open a normal page" text.
+
+"Something broke?" is a test in two steps. The popup cannot see which requests the rules blocked (that needs `activeTab` or `declarativeNetRequestFeedback`), so it gives a test, not a count.
+
+1. **Fix this site** turns off the `FIXABLE` features on the host's own entry. The line `fix-scope` (`scopeLine` in `src/popup.js`) is built from `siteInfo` `features[].on` for the page: what is off, what is still on (from `SCOPE_NAMES`), and `SCOPE_FRAMES`. It never names a filter as on that a switch turned off.
+2. After **No**, on an ordinary site where `network` is on, **Test with the ad lists off** writes `enabled: false` on the host's own entry (the same write as **Allow this site**) and a `popupFix` entry with `lists: true`. **Yes** keeps the Allow. **No** removes it again.
+3. The scope line of step 2 comes from the same `scopeLine`. On the page, threat rules (priority above the Allow rule) and the clipboard guard (`keepOnAllow`) normally stay on. Each frame resolves its own address: the Allow rule matches by `initiatorDomains`, and `cosmetic.js` and the guard flags read the frame's hostname. So a frame from an address outside the tested host, also a sibling subdomain, keeps the ad lists, hiding and the guards. A frame under the tested host (a child subdomain) follows the page, because `initiatorDomains` and `overrideFor` both cover subdomains. `SCOPE_FRAMES` and the last "No" name the host ("outside <host>"). The MAIN-world guards stay installed whatever the flags say, so the last "No" says "likely not the cause" and points to `chrome://extensions`. `test/site-test-scope.test.js` proves these sentences.
+4. An unanswered step 2 ends after `LIST_TEST_TTL_MS` (24 hours, owner decision 2026-11-22). `FEAT.expireListTests` (pure, in `src/settings/features.js`) removes `enabled: false` from the host's own entry (other fields stay) and drops the `lists` record. The worker runs it (`expireListTestsNow`) at worker start, on `onStartup`, on each `gecko-refresh` alarm and before each `siteInfo`; `siteInfo` then carries `listTestExpired: true` and the popup reads storage again. Until then the popup shows "Allowed – not blocking here" and **Block again**, which also ends the test. No new alarm.
 
 ## 14. Threat tier and protected hosts
 
@@ -375,6 +384,6 @@ The page-world scripts write to the page console only when a debug option is on.
 
 - Put each new DNR write in a `dnrExclusive` section. Do not nest sections. Do not download in a section.
 - Use a new rule id range only after a check of section 4.
-- Add a stream host to `STREAM_SITES` and to the three `exclude_matches` lists together.
+- Add a stream host to `STREAM_SITES` and to the three `exclude_matches` lists together, and give it a place in `scripts/merge-dnr-rules.py`.
 - Change `settings` or `siteOverrides` only. Let the worker write the legacy mirrors.
 - Do not edit generated files or frozen files. The lists are in `CONVENTIONS.md`.

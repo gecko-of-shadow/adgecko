@@ -13,7 +13,8 @@
 // initiator, e.g. a typed URL, counts as third-party), requestMethods (omitted
 // = all), excludedRequestMethods, regexFilter, simple urlFilter (||, ^, *, |).
 // The two Chrome behaviours above were checked in Chrome for Testing 155
-// (2026-11-03, throwaway probe extension, BUILD-PROGRESS "NEXT BUILD 2"):
+// (2026-11-03, a throwaway probe extension; its notes are not in the
+// repository, the results are these):
 // `excludedResourceTypes: ["script"]` alone blocked typed and clicked
 // navigations; `domainType: "thirdParty"` + `resourceTypes: ["main_frame"]`
 // blocked a typed URL.

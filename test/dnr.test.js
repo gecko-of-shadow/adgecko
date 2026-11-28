@@ -12,18 +12,20 @@ function assertEquals(actual, expected, label) {
   if (left !== right) throw new Error(`${label || "expected equal"}\n${left}\n${right}`);
 }
 
-// Stream page hosts and their video CDNs. These lists were in the dead module
-// src/general-exclude-hosts.js (removed in 0.3.6 with the owner's approval).
-// The packed high-priority allow rules (scripts/merge-dnr-rules.py) must still
-// cover them, and no block rule may target them. One exception: the Twitch ad
-// host ads.twitch.tv (owner decision 2026-11-20) is blocked, and only by the
-// merger's extra tracker rule (isApprovedStreamBlock).
+// Stream page hosts and their video CDNs: the lists the merger used
+// (scripts/merge-dnr-rules.py records them in dnr-merge-meta.json). The
+// merger checks them against STREAM_SITES in src/settings/features.js, the one
+// stream-host list (CONCERNS M1; the test below runs that check). The packed
+// high-priority allow rules must cover them, and no block rule may target
+// them. One exception: the Twitch ad host ads.twitch.tv (owner decision
+// 2026-11-20) is blocked, and only by the merger's extra tracker rule
+// (isApprovedStreamBlock).
 const APPROVED_STREAM_BLOCK = "ads.twitch.tv";
 function isApprovedStreamBlock(rule, domain) {
   return rule.id === mergeMeta.extra_tracker_rule_id && domain === APPROVED_STREAM_BLOCK;
 }
-const SITE_DOMAINS = Object.freeze(["twitch.tv", "youtube.com", "youtu.be", "youtube-nocookie.com", "youtubekids.com", "kick.com"]);
-const VIDEO_CDN_DOMAINS = Object.freeze(["ttvnw.net", "jtvnw.net", "twitchcdn.net", "googlevideo.com", "ytimg.com", "ggpht.com", "live-video.net"]);
+const SITE_DOMAINS = Object.freeze(mergeMeta.site_domains.slice());
+const VIDEO_CDN_DOMAINS = Object.freeze(mergeMeta.video_cdn_domains.slice());
 const ALL_EXCLUDED = Object.freeze([...new Set(SITE_DOMAINS.concat(VIDEO_CDN_DOMAINS))]);
 function isExcludedHost(host) {
   const h = String(host || "").toLowerCase().replace(/\.$/, "");
@@ -116,10 +118,10 @@ Deno.test("block rules never target protected stream hosts", () => {
   assert(mergeMeta.extra_tracker_domains.includes(APPROVED_STREAM_BLOCK), "merge meta names " + APPROVED_STREAM_BLOCK);
 });
 
-// Review 2026-11-16 WP-09 item 4: the check above uses the fixed lists at the
-// top of this file (from the removed module general-exclude-hosts.js).
-// Those lists do not have ext-twitch.tv, twitchcdn.com, kickusercontent.com
-// or kick-streamer.com. This test uses the live registry
+// Review 2026-11-16 WP-09 item 4: the check above uses the merger's allow
+// lists (dnr-merge-meta.json). Those lists do not have ext-twitch.tv,
+// twitchcdn.com, kickusercontent.com or kick-streamer.com (the merger names
+// them in STREAM_SITES_NOT_ALLOWED). This test uses the live registry
 // (GeckoFeatures.isStreamHost, src/settings/features.js) as the oracle.
 //
 // Owner decision 16 (2026-11-20): ubo-youtube-network.json rule 1 blocks
@@ -229,3 +231,67 @@ Deno.test("YouTube-only doubleclick block: outranks the YouTube frame allow, sco
   assertEquals(mergeMeta.youtube_ad_block_rules, 1);
   assertEquals(new Set(rules.map((x) => x.id)).size, rules.length, "unique ids");
 });
+
+// CONCERNS M1 (L-6): the merger's allow lists were a hand copy of the stream
+// hosts, and this file had a second copy. Now the merger checks its lists
+// against STREAM_SITES in src/settings/features.js (check_stream_hosts) and
+// stops before it writes when they differ; this file reads the merger's lists
+// from dnr-merge-meta.json.
+async function runPython(script) {
+  const root = new URL("..", import.meta.url);
+  const bins = Deno.build.os === "windows" ? [["py", "-3"], ["python"], ["python3"]] : [["python3"], ["python"]];
+  for (const [bin, ...pre] of bins) {
+    try {
+      const out = await new Deno.Command(bin, { args: [...pre, "-c", script], cwd: root, env: { PYTHONDONTWRITEBYTECODE: "1" } }).output();
+      if (out.code === 9009 || /Python was not found|Microsoft Store/.test(new TextDecoder().decode(out.stderr))) continue;
+      assert(out.code === 0, new TextDecoder().decode(out.stderr));
+      return new TextDecoder().decode(out.stdout);
+    } catch (_err) { /* next binary */ }
+  }
+  throw new Error("no usable Python 3");
+}
+const MERGER = [
+  "import importlib.util, json, io, contextlib",
+  "from pathlib import Path",
+  "spec = importlib.util.spec_from_file_location('mdr', Path('scripts/merge-dnr-rules.py'))",
+  "m = importlib.util.module_from_spec(spec)",
+  "spec.loader.exec_module(m)",
+  "def err(sites):",
+  "    try:",
+  "        m.check_stream_hosts(sites)",
+  "        return ''",
+  "    except ValueError as e:",
+  "        return str(e)",
+].join("\n");
+
+Deno.test("merger stream hosts: one list (STREAM_SITES), each host in an allow rule or named as not allowed, as recorded in the meta", async () => {
+  await import("../src/settings/features.js");
+  const F = globalThis.GeckoFeatures;
+  const out = JSON.parse(await runPython(MERGER + "\n" + [
+    "sites = m.read_stream_sites()",
+    "print(json.dumps({'sites': sites, 'site': m.SITE_DOMAINS, 'cdn': m.VIDEO_CDN_DOMAINS, 'not': m.STREAM_SITES_NOT_ALLOWED, 'err': err(None),",
+    "  'extra': err(sites + ['newstream.example']), 'gone': err([s for s in sites if s != 'kick.com'])}))",
+  ].join("\n")));
+  assertEquals(out.sites, [...F.STREAM_SITES], "the merger reads the live registry");
+  assertEquals(out.err, "", "the shipped lists agree");
+  assertEquals([out.site, out.cdn], [mergeMeta.site_domains, mergeMeta.video_cdn_domains], "the meta records the merger's lists");
+  assertEquals(new Set([...out.site, ...out.cdn, ...out.not]).size, F.STREAM_SITES.length, "every stream host has exactly one place");
+  assertEquals(out.not, ["twitchcdn.com", "ext-twitch.tv", "kickusercontent.com", "kick-streamer.com"], "the hosts that no static allow names stay named");
+  assert(out.extra.includes("STREAM_SITES host with no decision here: newstream.example"), "a new stream host stops the merger: " + out.extra);
+  assert(out.gone.includes("not in STREAM_SITES: kick.com"), "a removed stream host stops the merger: " + out.gone);
+});
+
+Deno.test("merger: main() stops before it reads or writes anything when the stream hosts differ", async () => {
+  const out = JSON.parse(await runPython(MERGER + "\n" + [
+    "real = m.read_stream_sites",
+    "m.read_stream_sites = lambda text=None: real() + ['newstream.example']",
+    "m.LIST_BLOCKS = Path('scripts/.no-such-dir/blocks.json')",
+    "buf = io.StringIO()",
+    "with contextlib.redirect_stderr(buf):",
+    "    code = m.main()",
+    "print(json.dumps({'code': code, 'stderr': buf.getvalue()}))",
+  ].join("\n")));
+  assertEquals(out.code, 2, "non-zero exit");
+  assert(out.stderr.includes("newstream.example") && !out.stderr.includes("missing block rules"), "stopped at the host check: " + out.stderr);
+});
+

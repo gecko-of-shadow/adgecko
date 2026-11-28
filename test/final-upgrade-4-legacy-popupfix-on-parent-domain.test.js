@@ -95,7 +95,9 @@ Deno.test("upgrade: a 0.3.4 popupFix on the parent still asks on the subdomain, 
   await settle();
   assertEquals(storage.siteOverrides["example.com"], { features: { network: true } }, "No turns the parent's Fix switches back on");
   assertEquals("popupFix" in storage, false, "the question is answered");
-  assertEquals(el["fix-note"].textContent, "Turned back on. If the site still breaks, use Allow this site.");
+  // Site-breakage job: on an ordinary site the next step is the second test.
+  assertEquals(el["fix-note"].textContent, "Turned back on. Still broken? Test with the ad lists off too.");
+  assertEquals(el["fix-lists"].hidden, false, "the second test is offered");
 });
 
 Deno.test("upgrade: Yes on the subdomain answers the parent's 0.3.4 question and keeps the Fix", async () => {

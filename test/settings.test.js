@@ -183,6 +183,68 @@ Deno.test("worker: migrates the old keys at start and derives the old keys back 
   assert(w.store.generalEnabled === false && !w.dnr.staticOn, "lists switch follows settings");
 });
 
+// CONCERNS M3: the lists switch and the per-site allows follow `settings` and
+// `siteOverrides` (legacyMirror). The generalEnabled / generalAllowedOrigins
+// mirrors stay only as the change signal: a stale mirror value changes no
+// rule. (A failed mirror write still delays the update: not tested here.)
+Deno.test("worker: a stale mirror changes no rule; the rules follow settings and siteOverrides", async () => {
+  const APPLY = { source: "adgecko-general", type: "applyGeneralState" };
+  const set = (w, patch) => new Promise((r) => w.chrome.storage.local.set(patch, r));
+  const allows = (w) => w.dnr.dynamic.filter((r) => r.priority === 10000).map((r) => r.condition.initiatorDomains[0]).sort();
+  const icon = (w) => w.iconCalls.at(-1).path[16];
+  const on = await worker({ settings: { v: 1, enabled: true, features: {} }, siteOverrides: { "news.example": { enabled: false } } });
+  // The allow rules wait behind the override and lists work in the DNR queue.
+  const until = Date.now() + 10000;
+  while (!eq(allows(on), ["news.example"]) && Date.now() < until) await settle(10);
+  assert(on.dnr.staticOn && eq(allows(on), ["news.example"]), "precondition: " + allows(on));
+  await set(on, { generalEnabled: false, generalAllowedOrigins: ["https://stale.example"] });
+  await on.send(APPLY);
+  await settle(250);
+  assert(on.dnr.staticOn && icon(on) === "../icons/icon16-working.png", "lists stay on: settings say on");
+  assert(eq(allows(on), ["news.example"]), "allows follow siteOverrides: " + allows(on));
+
+  const off = await worker({ settings: { v: 1, enabled: true, features: { network: false } } });
+  assert(!off.dnr.staticOn, "precondition: lists off");
+  await set(off, { generalEnabled: true });
+  await off.send(APPLY);
+  await settle(250);
+  assert(!off.dnr.staticOn && icon(off) === "../icons/icon16-off.png", "lists stay off: settings say off");
+
+  // A store with only the old keys (an upgrade from 0.2.x): the old key
+  // decides before the migration, the migrated settings after it.
+  const legacy = loadWorker({ store: { generalEnabled: false } });
+  const first = await legacy.send(APPLY);
+  assert(first && first.enabled === false, "lists off at once: " + JSON.stringify(first));
+  await settle(250);
+  assert(!legacy.dnr.staticOn && legacy.store.settings.features.network === false, "migrated with the lists off");
+});
+
+// CONCERNS M3: each one-time migration names the version that added it and
+// the condition for its deletion. Which old versions may still upgrade (the
+// cut-off) is an owner decision; the comment names only the condition.
+Deno.test("each migration names the version that added it and when it can go", () => {
+  const SITES = [
+    ["general-background.js", "async function migrateSettings(", "0.3.0", "0.2.21"],
+    ["settings/features.js", "function migrateLegacy(", "0.3.0", "0.2.21"],
+    ["general-background.js", "async function migrateListStorage(", "0.3.0", "0.2.21"],
+    ["general-background.js", "function cosmeticIndexOf(", "0.3.5", "0.3.4"],
+    ["general-background.js", "if (meta && Array.isArray(meta.keys)) {", "0.3.5", "0.3.4"],
+    ["general/update.js", "const RETIRED_LISTS = ", "0.3.0", "0.2.21"],
+    ["general/update.js", "async function dropRetiredCosmetic(", "0.3.5", "0.3.4"],
+  ];
+  const comment = (src, anchor) => {
+    const at = src.indexOf(anchor);
+    assert(at > 0 && src.indexOf(anchor, at + 1) === -1, "one " + anchor);
+    return src.slice(0, at).split("\n").slice(-6).join(" ").replace(/\s*\/\/\s*/g, " ");
+  };
+  for (const [file, anchor, added, oldest] of SITES) {
+    const c = comment(read(file), anchor);
+    assert(c.includes("Migration, added in " + added) && c.includes("upgrades from " + oldest + " or older are no longer supported"), file + " " + anchor + ": " + c);
+  }
+  const p = comment(read("general/update.js"), "const PARSER_VERSION = ");
+  assert(p.includes("Not a one-time migration: keep it.") && p.includes("fetch and parse every list again"), "PARSER_VERSION: " + p);
+});
+
 Deno.test("worker: threatTier off disables the threat ruleset and removes refreshed threat rules; threatFeed off pauses the feed", async () => {
   const w = await worker({ settings: { v: 1, enabled: true, features: {} } });
   w.dnr.dynamic.push({ id: 600000, priority: 2000010, action: { type: "block" }, condition: { requestDomains: ["t.example"] } });

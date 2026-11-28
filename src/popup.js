@@ -14,9 +14,11 @@
     listStatus: "generalListStatus",
     settings: "settings",
     overrides: "siteOverrides",
-    // { host, at, prev: { <feature id>: true | false | null }, others?: { <host>: { at, prev } } }
+    // { host, at, prev: { <feature id>: true | false | null }, lists?: true, others?: { <host>: { at, prev, lists? } } }
     // The newest unanswered Fix at the top level; earlier ones (other sites)
     // under `others`, so a Fix on a second site does not drop the first question.
+    // `lists: true` marks the second test ("Test with the ad lists off"): it
+    // wrote enabled:false on the host's own entry, and prev is empty.
     fix: "popupFix",
     welcomed: "popupWelcomed",
     theme: "uiTheme", // "auto" | "purple" | "contrast" (settings page)
@@ -28,6 +30,33 @@
     generalListStatus: "Packed lists (checked every 3 hours).",
   };
   const FIX_TTL_MS = 24 * 60 * 60 * 1000;
+  // "Something broke?" is a test in two steps. Each step says what is off and
+  // what stays on, so a "No" is not read as "not Adgecko". The line comes
+  // from the worker's siteInfo for this page (features[].on), never from a
+  // fixed text: a switch turned off before the test (the ad lists, the
+  // malware list, a guard) is not claimed to be on. Both steps match the
+  // page's own host only. Each frame resolves its own address (the worker's
+  // allow rule matches the request's initiator; cosmetic.js and the guard
+  // flags read the frame's hostname), so a frame from another address keeps
+  // its own filters, and the line says so. The page-world guards stay
+  // installed whatever the switches say (they read their flag at use time),
+  // so only chrome://extensions gives a page with no Adgecko at all.
+  const SCOPE_NAMES = [
+    ["network", "the ad lists"],
+    ["threatTier", "malware blocking"],
+    ["cosmetic", "ad box hiding"],
+    ["guardClipboard", "the clipboard guard"],
+    ["guardPopups", "the pop-up guard"],
+  ];
+  // A frame under the tested host (login.example.com under example.com)
+  // follows the page: the allow rule's initiatorDomains and overrideFor both
+  // cover subdomains. Only frames from addresses outside the host keep their
+  // own filters, so the line names the host.
+  const SCOPE_FRAMES = "Frames from addresses outside {host} keep their own filters.";
+  const SCOPE_FIX_STREAM = "Off here now: Adgecko's hiding helpers. The built-in ad blocking still runs.";
+  const NOTE_FIX_NO = "Turned back on. If the site still breaks, use Allow this site.";
+  const NOTE_FIX_NO_NEXT = "Turned back on. Still broken? Test with the ad lists off too.";
+  const NOTE_LISTS_NO = "Blocking is back on. The problem stayed with these filters off on this page, so they are likely not the cause. Frames from addresses outside {host} kept their own filters. To rule out Adgecko fully, turn it off in chrome://extensions and reload the page.";
   const FEED_STATE_KEY = "feedState";
   const FEED_PAUSE_KEY = "feedPaused";
 
@@ -70,6 +99,8 @@
   const undoFixButton = el("undo-fix");
   const reloadPage = el("reload-page");
   const openAllowDomain = el("open-allow-domain");
+  const fixScope = el("fix-scope");
+  const fixLists = el("fix-lists");
 
   let activeTab = null;
   let pageChecked = false;
@@ -82,6 +113,9 @@
   // popup: then the Reload page button shows. Nothing reloads by itself (a
   // reload can lose what was typed into a form).
   let offerReload = false;
+  // Set only by a "No" to the first test in this popup: then "Test with the
+  // ad lists off" shows (render() checks that it still applies).
+  let offerLists = false;
 
   function packagedVersion() {
     try {
@@ -121,6 +155,15 @@
     return !(s && typeof s === "object" && s.enabled === false);
   }
 
+  // The lists switch: the master switch and the "network" feature, read from
+  // `settings` as the worker reads them (the generalEnabled mirror is only
+  // its change signal). Before the worker migrated (no settings), the old key.
+  function listsOn() {
+    const s = all[KEYS.settings];
+    if (s && typeof s === "object") return s.enabled !== false && !(s.features && s.features.network === false);
+    return all[KEYS.enabled] !== false;
+  }
+
   // The site switch: this host's override says enabled:false. Before the
   // worker migrated, the legacy allowed-origins list still counts.
   function siteOff(origin) {
@@ -155,6 +198,47 @@
     return !!(host && info && info.host === host && info.stream === true);
   }
 
+  function joinNames(names) {
+    return names.length < 2 ? names.join("") : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  }
+
+  // The scope line under "Did that fix it?": what is off on this page now,
+  // what is still on, and that frames from other addresses keep their own
+  // filters. Built from siteInfo, so it follows every switch.
+  function scopeLine(host) {
+    if (streamHere(host)) return SCOPE_FIX_STREAM;
+    const list = info && info.host === host && Array.isArray(info.features) ? info.features : [];
+    const on = new Map(list.map((f) => [f.id, f.on === true]));
+    const named = SCOPE_NAMES.filter(([id]) => on.has(id));
+    const off = named.filter(([id]) => !on.get(id)).map(([, name]) => name);
+    const still = named.filter(([id]) => on.get(id)).map(([, name]) => name);
+    const parts = [];
+    if (off.length) parts.push("Off here now: " + joinNames(off) + ".");
+    if (still.length) parts.push("Still on: " + joinNames(still) + ".");
+    parts.push(SCOPE_FRAMES.replace("{host}", host));
+    return parts.join(" ");
+  }
+
+  // The second test applies where the ad lists act and are on: an ordinary
+  // site (the lists never act on stream sites), not allowed, lists switch on.
+  function listsTestable(origin, host) {
+    if (!origin || !host || !info || info.host !== host || info.limited === true) return false;
+    if (!extensionOn() || siteOff(origin) || streamHere(host) || !listsOn()) return false;
+    const list = Array.isArray(info.features) ? info.features : [];
+    return list.some((f) => f.id === "network" && f.on !== false);
+  }
+
+  // Ends the second test: takes its Allow off the host's own entry. Returns
+  // true when the entry changed.
+  function undoListsTest(o, host) {
+    if (!host || !o[host] || o[host].enabled !== false) return false;
+    const entry = Object.assign({}, o[host]);
+    delete entry.enabled;
+    if (Object.keys(entry).length) o[host] = entry;
+    else delete o[host];
+    return true;
+  }
+
   // Allow this site cannot stop the always-on vendored parts (owner decision
   // D-3): the uBO scriptlets and network rules on YouTube, the stream swap on
   // Twitch (README "How to use"). Returns the site name, or "".
@@ -177,7 +261,10 @@
     const add = (host, e) => {
       if (typeof host !== "string" || !host || !e || typeof e !== "object") return;
       if (typeof e.at !== "number" || Date.now() - e.at > FIX_TTL_MS) return;
-      if (!out[host] || out[host].at < e.at) out[host] = { at: e.at, prev: e.prev && typeof e.prev === "object" ? e.prev : {} };
+      if (!out[host] || out[host].at < e.at) {
+        out[host] = { at: e.at, prev: e.prev && typeof e.prev === "object" ? e.prev : {} };
+        if (e.lists === true) out[host].lists = true;
+      }
     };
     if (f.others && typeof f.others === "object") for (const [h, e] of Object.entries(f.others)) add(h, e);
     add(f.host, f);
@@ -191,6 +278,7 @@
     if (!hosts.length) return [patch, [KEYS.fix]];
     const [top, ...rest] = hosts;
     const value = { host: top, at: map[top].at, prev: map[top].prev };
+    if (map[top].lists === true) value.lists = true;
     if (rest.length) {
       value.others = {};
       for (const h of rest) value.others[h] = map[h];
@@ -230,10 +318,13 @@
   // The unanswered Fix for this page, or null. A Fix that was undone in the
   // meantime (settings page Undo fix or Reset: none of its switches is still
   // off in that entry) is stale: no question, Fix this site shows again.
+  // The second test is live while its Allow is still on the host's own entry
+  // (Block again on the popup or the settings page ends it).
   function fixIsLive(key, fixes) {
     if (!key || !fixes[key]) return false;
     const o = all[KEYS.overrides];
     const entry = o && typeof o === "object" ? o[key] : null;
+    if (fixes[key].lists === true) return !!entry && entry.enabled === false;
     const features = entry && entry.features && typeof entry.features === "object" ? entry.features : {};
     return Object.keys(fixes[key].prev).some((id) => features[id] === false);
   }
@@ -301,7 +392,7 @@
     const fixed = !!origin && on && !allowed && !limited && !pending && fixedHere(host);
     if (brandIcon) {
       // Same trigger as the toolbar icon: the master switch and list blocking.
-      const blocking = on && all[KEYS.enabled] !== false;
+      const blocking = on && listsOn();
       brandIcon.dataset.glow = blocking ? "on" : "off";
       brandIcon.src = blocking ? "../icons/icon48-working.png" : "../icons/icon48-off.png";
     }
@@ -312,10 +403,10 @@
     else if (!on) siteStatus.textContent = "Off – turned off in settings";
     else if (limited) siteStatus.textContent = threatHere() ? "Malware blocking only – ad scripts don't run on this site" : "Nothing runs on this site";
     else if (allowed) siteStatus.textContent = builtInBlocker(host) ? "Allowed – built-in " + builtInBlocker(host) + " ad blocking still runs" : "Allowed – not blocking here";
-    // The "Block ads and trackers (filter lists)" switch is off: the worker
-    // mirrors it to generalEnabled (same test as the icon above).
+    // The "Block ads and trackers (filter lists)" switch is off (listsOn, the
+    // same test as the icon above).
     // The lists never act on stream sites, so the line is for ordinary sites.
-    else if (all[KEYS.enabled] === false && !streamHere(host)) siteStatus.textContent = "Ad lists off – turned off in settings";
+    else if (!listsOn() && !streamHere(host)) siteStatus.textContent = "Ad lists off – turned off in settings";
     else if (fixed) siteStatus.textContent = "Protected – some filters off here (Fix this site)";
     else siteStatus.textContent = "✅ Protected";
 
@@ -345,6 +436,11 @@
       undoFixButton.disabled = busy;
     }
     fixAsk.hidden = !pending;
+    if (fixScope) fixScope.textContent = pending ? scopeLine(host) : "";
+    if (fixLists) {
+      fixLists.hidden = !(offerLists && !pending && listsTestable(origin, host));
+      fixLists.disabled = busy;
+    }
     fixNote.textContent = note;
 
     if (listsStatus) listsStatus.textContent = listText();
@@ -405,6 +501,11 @@
   async function refreshInfo() {
     const res = await notifyBackground("siteInfo", { origin: currentOrigin() || "" });
     info = res && res.ok ? res : null;
+    // The worker may have ended an unanswered "Test with the ad lists off"
+    // (24 hours, owner decision) since the popup read storage: on this
+    // siteInfo, at worker start or on its alarm. Read storage again every
+    // time, so a later popup write never puts the ended Allow back.
+    await load();
   }
 
   function queryActiveTab() {
@@ -518,6 +619,9 @@
       if (fixIsLive(host, fixes)) undoFix(o, host, fixes[host].prev);
       delete fixes[host];
     }
+    // Block again during the second test ends the test: no question is left.
+    if (off && fixes[key] && fixes[key].lists === true) delete fixes[key];
+    offerLists = false;
     const entry = Object.assign({}, o[key]);
     if (off) delete entry.enabled;
     else entry.enabled = false;
@@ -579,23 +683,51 @@
     }
   });
 
-  // "No": put back exactly the switches Fix changed (a change made on the
-  // settings page in between is kept), then point to Allow this site.
+  // "No" to the first test: put back exactly the switches Fix changed (a
+  // change made on the settings page in between is kept), then offer the
+  // second test where the ad lists act, else point to Allow this site.
+  // "No" to the second test: take its Allow off again and say what that
+  // shows, and what it does not show.
   fixNo.addEventListener("click", guarded(async () => {
     const fixes = fixMap();
     const host = fixKey(pageHost(), fixes);
     const o = overridesCopy();
-    const changed = host ? undoFix(o, host, fixes[host].prev) : false;
+    const lists = !!(host && fixes[host].lists === true);
+    const changed = !host ? false : lists ? undoListsTest(o, host) : undoFix(o, host, fixes[host].prev);
     delete fixes[host];
     const saved = await save(...fixWrite(fixes, { [KEYS.overrides]: o }));
-    note = saved && changed ? "Turned back on. If the site still breaks, use Allow this site." : "";
     // The filters are back on: the page needs another reload to show it.
     if (saved && changed) offerReload = true;
     await refreshInfo();
+    const origin = currentOrigin();
+    offerLists = saved && !lists && listsTestable(origin, pageHost());
+    if (lists) note = saved && changed ? NOTE_LISTS_NO.replace("{host}", host) : "";
+    else note = saved && changed ? (offerLists ? NOTE_FIX_NO_NEXT : NOTE_FIX_NO) : "";
     render();
     applyRules();
-    return allowSite;
+    if (offerLists) return fixLists;
+    return lists && saved && changed ? reloadPage : allowSite;
   }));
+
+  // The second test: an Allow of this page's own host, with the same
+  // question. Yes keeps the Allow; No takes it off again.
+  if (fixLists) {
+    fixLists.addEventListener("click", guarded(async () => {
+      const origin = currentOrigin();
+      const host = origin ? hostOfOrigin(origin) : "";
+      if (!listsTestable(origin, host)) return null;
+      const o = overridesCopy();
+      o[host] = Object.assign({}, o[host], { enabled: false });
+      const fixes = fixMap();
+      fixes[host] = { at: Date.now(), prev: {}, lists: true };
+      note = "";
+      if (await save(...fixWrite(fixes, { [KEYS.overrides]: o }))) offerLists = false;
+      await refreshInfo();
+      render();
+      applyRules();
+      return fixYes;
+    }));
+  }
 
   // "Undo fix": turns back on the extra filters a kept Fix switched off on
   // this host (its own entry only; an Allow on the entry stays).

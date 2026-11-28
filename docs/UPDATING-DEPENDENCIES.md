@@ -134,7 +134,7 @@ deno run --allow-read --allow-write --allow-net=raw.githubusercontent.com --allo
 
 Read the output of the sync:
 
-- `PATCHES[n] matched nothing` or `ARG_PATCHES[n] matched nothing` means that a local patch was NOT applied. The script still exits with code 0. Do not commit that result. Update the patch text in `scripts/sync-ubo-youtube.mjs` first, then run the sync again. `test/ubo-rpnt-payload.test.js` fails while a patch is missing.
+- `PATCHES[n] matched nothing` or `ARG_PATCHES[n] matched nothing` means that a local patch did not find its upstream text. The script stops with this error and exit code 1, and it writes no file. Update the patch text in `scripts/sync-ubo-youtube.mjs` first, then run the sync again. `test/ubo-rpnt-payload.test.js` fails while a patch is missing.
 - An error from `ensurePlayerAdsPruned` means that the player prune call changed. Update `scripts/lib/youtube-local-patches.mjs`.
 
 ### Change the uBlock Origin version (scriptlet code)

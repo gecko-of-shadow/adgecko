@@ -115,7 +115,7 @@
     $("feed-status").textContent = !s.enabled ? "Threat feed: off (extension turned off, packed threat list off too)."
       : tell(!s.features.threatFeed ? "Threat feed: paused (packed threat list still on)." : (st.text || "Threat feed: not set up (packed threat list in use)."));
     $("pause-feed").checked = !s.features.threatFeed;
-    let lists = stored.generalListStatus || "Packed lists.";
+    let lists = stored.generalListStatus || "Packed lists (checked every 3 hours).";
     if (stored.generalListUpdatedAt) lists += " Last update: " + new Date(stored.generalListUpdatedAt).toLocaleString() + ".";
     $("lists-status").textContent = lists;
   }

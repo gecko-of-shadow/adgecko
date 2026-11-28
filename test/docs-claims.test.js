@@ -142,3 +142,24 @@ Deno.test("how-it-works.md: pack numbers, $all and the YouTube Music popup match
     assert(/Malware blocking only/.test(doc), "how-it-works.md names the 'Malware blocking only' status");
   }
 });
+
+// CONCERNS L3: five comments pointed to a notes file that was never in the
+// repository. Their facts now stand in the comments. No source, script,
+// workflow or test file may point to that file again.
+Deno.test("no file points to the build notes that are not in the repository", () => {
+  const name = "BUILD" + "-PROGRESS";
+  const hits = [];
+  const walk = (rel) => {
+    for (const e of Deno.readDirSync(new URL(rel, ROOT))) {
+      const r = rel + e.name;
+      if (e.isDirectory) {
+        if (!e.name.startsWith(".")) walk(r + "/");
+      } else if (/\.(js|mjs|py|sh|yml|html|css|md)$/.test(e.name) && read(r).includes(name)) hits.push(r);
+    }
+  };
+  for (const dir of ["src/", "scripts/", "test/", ".github/"]) walk(dir);
+  assert(!hits.length, "files that point to the missing notes: " + hits.join(", "));
+  const fo = read("src/general/filter-options.js");
+  assert(/Evidence: redirectingat\.com \(Skimlinks\)/.test(fo) && /linksprf\.com is the redirect that deal sites/.test(fo), "the navigation exemptions keep their evidence in the comment");
+});
+

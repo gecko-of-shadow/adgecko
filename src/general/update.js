@@ -145,6 +145,9 @@ function installGeneralAdblockUpdate(target) {
   // 6 (0.3.8): a type-only exception (`@@||host^$xmlhttprequest`) is kept as
   // payload.allowScoped, so every stored copy is parsed again (see
   // exceptionAllows).
+  // Not a one-time migration: keep it. Each bump makes every install fetch
+  // and parse every list again (staleParserLists); until then the packed
+  // rules stand in for those lists. Bump only when the stored payload changes.
   const PARSER_VERSION = 6;
 
   // Shared with the packer: general/filter-options.js (loaded before this file).
@@ -840,6 +843,9 @@ function installGeneralAdblockUpdate(target) {
   // 2026-11-02: OpenPhish-derived) but are still cached on existing installs:
   // drop their payload and metadata. Returns the dropped names; the caller
   // rebuilds the dynamic rules so their domains stop being blocked.
+  // Migration, added in 0.3.0 (the curben_phishing entry): delete when
+  // upgrades from 0.2.21 or older are no longer supported. dropRetiredLists
+  // stays: it also drops each list that leaves SOURCES later.
   const RETIRED_LISTS = ["curben_phishing"];
   async function dropRetiredLists(deps, state) {
     const known = new Set(SOURCES.map((s) => s.name));
@@ -868,6 +874,10 @@ function installGeneralAdblockUpdate(target) {
   // working copy of state.lists (changed in place). Returns the names
   // changed; the caller rewrites the hide sheet, and writeCosmetic removes
   // the list's stale cos* keys. Never throws.
+  // Migration, added in 0.3.5: delete when upgrades from 0.3.4 or older are
+  // no longer supported. Only development builds before the 0.3.5 release
+  // stored AdGuard Base hide rules (CHANGELOG 0.3.5). Keep it if another list
+  // stops being a hide-rule source.
   async function dropRetiredCosmetic(deps, lists) {
     const names = SOURCES.filter((s) => !s.cosmetic && lists[s.name] && lists[s.name].cosmetic).map((s) => s.name);
     if (!names.length) return [];

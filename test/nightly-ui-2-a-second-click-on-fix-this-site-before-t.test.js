@@ -115,5 +115,6 @@ Deno.test("a double-click on Fix keeps the original prev, so No turns the filter
   for (let i = 0; i < 4; i++) await settle();
   const left = (storage.siteOverrides || {})["news.example.com"];
   assertEquals(left && left.features, undefined, "No turns every switch Fix changed back on");
-  assertEquals(p.el["fix-note"].textContent, "Turned back on. If the site still breaks, use Allow this site.");
+  // Site-breakage job: on an ordinary site the note points to the second test.
+  assertEquals(p.el["fix-note"].textContent, "Turned back on. Still broken? Test with the ad lists off too.");
 });
