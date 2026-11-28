@@ -10,3 +10,11 @@ Deno.test("git ignores the _metadata folder that Chrome writes into the unpacked
   }).output();
   assert(out.code === 0, "git check-ignore exit code " + out.code + " (0 = ignored)");
 });
+
+Deno.test("git ignores packed .crx files", async () => {
+  const out = await new Deno.Command("git", {
+    args: ["check-ignore", "--no-index", "-q", "adgecko.crx"],
+    cwd: new URL("..", import.meta.url),
+  }).output();
+  assert(out.code === 0, "git check-ignore exit code " + out.code + " (0 = ignored)");
+});
