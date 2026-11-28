@@ -44,7 +44,7 @@ Five owner decisions of 2026-11-20. Not tested in real Chrome: the Kick and Twit
 ### Tests
 
 - Owner decision 16: `src/rules/ubo-youtube-network.json` blocks `ads.youtube.com` on purpose. The stream-host oracle test now also checks that ruleset, with a named exception for this one host. A test fails if the exception goes stale.
-- New maintainer script `scripts/chrome-smoke.mjs` (not in CI): loads the unpacked extension in headless Chrome for Testing, offline, and checks the service worker, the packed hide rules, the network rules, the hide sheet, the toolbar popup and the clipboard guard (6 checks, about 11 s). A copy without the clipboard guard fails its check.
+- New maintainer script `scripts/chrome-smoke.mjs` (not in CI): loads the unpacked extension in headless Chrome for Testing, offline, and checks the service worker, the packed hide rules, the network rules, the hide sheet, leftover `#AdContent` in a same-origin iframe (a longer `#Ad-Container` and the article stay visible), the toolbar popup and the clipboard guard (7 checks, about 11 s). A copy without the clipboard guard fails its check.
 
 ## 0.3.7 (2026-11-20)
 

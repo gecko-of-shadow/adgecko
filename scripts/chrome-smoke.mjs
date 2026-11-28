@@ -10,9 +10,11 @@
 //   2. the network rules block four ad and tracker scripts and keep two
 //      ordinary scripts;
 //   3. the hide sheet hides two ad boxes and keeps the article box;
-//   4. the clipboard guard refuses a PowerShell command written on a click,
+//   4. a leftover `#AdContent` box inside a same-origin iframe is hidden,
+//      while a longer name (`#Ad-Container`) and the article stay visible;
+//   5. the clipboard guard refuses a PowerShell command written on a click,
 //      and lets plain text through;
-//   5. the toolbar popup opens on the page, names its host and offers
+//   6. the toolbar popup opens on the page, names its host and offers
 //      Fix this site and Allow this site.
 // No request leaves the machine: the list refresh fails (no network), and the
 // packed lists stay in use. Each check prints PASS or FAIL; the exit code is
@@ -52,6 +54,16 @@ for (const [k, u] of Object.entries(urls)) {
 }
 </script></body></html>`;
 
+const FRAMES_PAGE = `<!doctype html><html><body>
+<p id="main-article">article</p>
+<iframe id="f" src="/adcontent.html" width="300" height="120"></iframe>
+</body></html>`;
+const FRAME_INNER = `<!doctype html><html><body>
+<div id="AdContent">frame ad</div>
+<div id="Ad-Container">long</div>
+<p>ok</p>
+</body></html>`;
+
 const CLIP_PAGE = `<!doctype html><html><body>
 <button id="bad" style="width:200px;height:40px">Verify</button>
 <button id="ok" style="width:200px;height:40px">Copy</button>
@@ -72,7 +84,7 @@ function check(name, ok, detail) {
 async function main() {
   const server = http.createServer((req, res) => {
     const p = new URL(req.url, "http://x").pathname;
-    const page = p === "/ads.html" ? ADS_PAGE : p === "/clip.html" ? CLIP_PAGE : null;
+    const page = p === "/ads.html" ? ADS_PAGE : p === "/clip.html" ? CLIP_PAGE : p === "/adframes.html" ? FRAMES_PAGE : p === "/adcontent.html" ? FRAME_INNER : null;
     res.writeHead(200, { "content-type": page ? "text/html" : p.endsWith(".js") ? "text/javascript" : "text/plain" });
     res.end(page || (p.endsWith(".js") ? "/* ok */" : "ok"));
   });
@@ -139,7 +151,26 @@ async function main() {
     check("hide sheet: 2 ad boxes hidden, the article box shown", shown[0] === "none" && shown[1] === "none" && shown[2] !== "none", shown.join(", "));
     await shot(ads, "ads");
 
-    // 5. Popup on the ads page (the active tab).
+    // 4. Compact generic hides in a same-origin iframe (cosGF).
+    const frames = await open("http://news.smoke.test/adframes.html");
+    const frameShown = await evalIn(frames.sessionId, `(() => {
+      const cs = (el) => el ? getComputedStyle(el).display : "missing";
+      const d = document.getElementById("f").contentDocument;
+      return [
+        cs(document.getElementById("main-article")),
+        d ? cs(d.getElementById("AdContent")) : "no-doc",
+        d ? cs(d.getElementById("Ad-Container")) : "no-doc",
+        d ? cs(d.querySelector("p")) : "no-doc",
+      ];
+    })()`);
+    check(
+      "hide sheet in iframe: #AdContent hidden, longer names and the article shown",
+      frameShown[0] !== "none" && frameShown[1] === "none" && frameShown[2] !== "none" && frameShown[3] !== "none",
+      frameShown.join(", "),
+    );
+    await shot(frames, "adframes");
+
+    // 6. Popup on the ads page (the active tab).
     await send("Target.activateTarget", { targetId: ads.targetId });
     await evalIn(sw, "chrome.action.openPopup().then(() => true)");
     let popup = null;
@@ -159,7 +190,7 @@ async function main() {
       check("popup: names the page host, Fix this site and Allow this site enabled", false, "the popup did not open");
     }
 
-    // 4. Clipboard guard, with real mouse clicks (a user gesture).
+    // 5. Clipboard guard, with real mouse clicks (a user gesture).
     await send("Browser.grantPermissions", { origin: "http://verify.smoke.test", permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"] });
     const clip = await open(CLIP);
     const click = async (id) => {
