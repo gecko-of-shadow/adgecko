@@ -201,7 +201,7 @@ function makeUa(version) {
     acceptLanguage: "en-US,en",
     platform: "Win32",
     userAgentMetadata: {
-      brands, fullVersionList: brands.map((b) => ({ brand: b.brand, version: b.brand === "Not_A Brand" ? "24.0.0.0" : full })),
+      brands, fullVersionList: brands.map((b) => ({ brand: b.brand, version: b.brand === "Not_A Brand" ? "24" + ".0".repeat(3) : full })),
       fullVersion: full, platform: "Windows", platformVersion: "15.0.0", architecture: "x86", model: "", mobile: false, bitness: "64", wow64: false,
     },
   };
