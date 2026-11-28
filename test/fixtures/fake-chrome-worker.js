@@ -22,9 +22,10 @@ export function loadWorker(opts = {}) {
     getURL: (p) => "chrome-extension://" + EXT + "/" + p,
     getManifest: () => JSON.parse(Deno.readTextFileSync(new URL("../../manifest.json", import.meta.url))),
     onMessage: { addListener(f) { onMessage = f; } },
-    onInstalled: { addListener(f) { installListeners.push(f); } }, onStartup: { addListener() {} },
+    onInstalled: { addListener(f) { installListeners.push(f); } }, onStartup: { addListener(f) { startupListeners.push(f); } },
   };
   const installListeners = [];
+  const startupListeners = [];
   const withErr = (err, cb, ...args) => { lastError = err; try { cb && cb(...args); } finally { lastError = undefined; } };
   // Storage size like Chrome counts it (key + JSON value). opts.quotaBytes makes a
   // set that would exceed it fail with Chrome's quota message; opts.setError(items)
@@ -145,8 +146,9 @@ export function loadWorker(opts = {}) {
   });
   const fireAlarm = (name) => { for (const f of alarmListeners) f({ name, scheduledTime: Date.now() }); };
   const install = (details = { reason: "update" }) => { for (const f of installListeners) f(details); };
+  const startup = () => { for (const f of startupListeners) f(); };
   return {
-    chrome, store, dnr, send, iconCalls, alarms, alarmCreates, fireAlarm, install, fetched, warnings,
+    chrome, store, dnr, send, iconCalls, alarms, alarmCreates, fireAlarm, install, startup, fetched, warnings,
     get alarmListenerCount() { return alarmListeners.length; },
     get bytesRead() { return bytesRead; }, resetBytes() { bytesRead = 0; },
     get peakBytes() { return peakBytes; }, totalBytes,

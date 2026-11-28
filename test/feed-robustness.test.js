@@ -74,7 +74,10 @@ Deno.test("(2) worker: threat tier off and feed on: the snapshot is not installe
     assert(w.store.feedPaused === false, "feed not paused");
     assert(w.dnr.session.length === 0, "tier off: snapshot rules installed: " + w.dnr.session.length);
     await new Promise((r) => w.chrome.storage.local.set({ settings: settings(true, true) }, r));
-    await settle(400);
+    // The snapshot write waits behind the settings sync and the DNR queue:
+    // wait for it, not a fixed time (a fixed 400 ms failed once under load).
+    const until = Date.now() + 10000;
+    while (w.dnr.session.length !== snapshot.dnr.length && Date.now() < until) await settle(10);
     assert(w.dnr.session.length === snapshot.dnr.length, "tier on: " + w.dnr.session.length);
   } finally {
     globalThis.GeckoFeedConfig = saved.cfg;

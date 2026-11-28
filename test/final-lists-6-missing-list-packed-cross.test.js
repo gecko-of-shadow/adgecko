@@ -187,7 +187,7 @@ Deno.test("#6: the shipped PACKED_CROSS block is well formed and names only know
   for (const [n, part] of Object.entries(p.lists)) {
     assert(names.has(n), "unknown list " + n);
     for (const [k, v] of Object.entries(part)) {
-      assert(["cancel", "allow", "limit", "important", "alldoc"].includes(k), n + ": field " + k);
+      assert(["cancel", "allow", "limit", "important", "alldoc", "importantScoped", "cancelAllow"].includes(k), n + ": field " + k);
       assert(Array.isArray(v) && v.every((x) => typeof x === "string"), n + "." + k);
     }
   }
@@ -214,4 +214,90 @@ Deno.test("#6: the worker's loadBundled fetches src/rules/packed-cross.json", ()
   const bg = Deno.readTextFileSync(new URL("../src/general-background.js", import.meta.url));
   assert(/getURL\("src\/rules\/packed-cross\.json"\)/.test(bg) && /packedCross/.test(bg), "loadBundled reads packed-cross.json");
   assert(/crossListRules\(payloads, missing, bundled\.packedCross\)/.test(updateSource), "swap passes it on");
+});
+
+// Review fix (PR 36 follow-up): the packer also writes importantScoped (hosts
+// of scoped `$important` blocks) and cancelAllow (exceptions that an
+// `@@...$badfilter` line withdraws), as parseEntriesFull() does. Without them
+// a missing list's scoped $important block or withdrawn exception was lost,
+// and an exception from another list could still get an allow rule.
+const PARITY = {
+  easylist: [
+    "||adsfoo.example^$script,third-party,important",
+    "||deep.tracksite.example^$image,important",
+    "||gone.example^$script,important",
+    "||gone.example^$script,important,badfilter",
+    "||wholeimp.example^$important",
+  ].join("\n"),
+  easyprivacy: [
+    "@@||c.nrfoo.example^$xmlhttprequest,badfilter",
+    "@@||w.nrfoo.example^$badfilter",
+    "@@||k.nrfoo.example^$subdocument,xmlhttprequest,badfilter",
+    "@@||keep.nrfoo.example^",
+  ].join("\n"),
+};
+
+Deno.test("packer parity: importantScoped and cancelAllow match parseEntriesFull()", async () => {
+  const data = await packedFor(PARITY);
+  for (const [name, text] of Object.entries(PARITY)) {
+    const js = U.parseEntriesFull(text);
+    const py = data.lists[name] || {};
+    for (const k of ["importantScoped", "cancelAllow"]) {
+      const a = JSON.stringify((js[k] || []).slice().sort());
+      const b = JSON.stringify(py[k] || []);
+      assert(a === b, name + " " + k + ": JS " + a + ", packer " + b);
+    }
+  }
+  assert(JSON.stringify(data.lists.easylist.importantScoped) === '["adsfoo.example","deep.tracksite.example"]', "importantScoped: " + JSON.stringify(data.lists.easylist));
+  assert(data.lists.easyprivacy.cancelAllow.length === 3, "cancelAllow: " + JSON.stringify(data.lists.easyprivacy));
+});
+
+Deno.test("packed importantScoped and cancelAllow of a missing list stop the allow rules of a present list", async () => {
+  const packed = await packedFor(PARITY);
+  const adguard = U.parseEntriesFull("@@||x.adsfoo.example^\n@@||c.nrfoo.example^$xmlhttprequest\n@@||w.nrfoo.example^\n@@||keep2.nrfoo.example^");
+  const blocked = new Set(["adsfoo.example", "nrfoo.example"]);
+  const without = U.exceptionAllows(U.crossListRules({ adguard_base: adguard }, [], { lists: {} }), blocked);
+  assert(JSON.stringify(without.whole) === JSON.stringify(["keep2.nrfoo.example", "w.nrfoo.example", "x.adsfoo.example"]) && without.scoped.length === 1, "control: " + JSON.stringify(without));
+  const cross = U.crossListRules({ adguard_base: adguard }, ["easylist", "easyprivacy"], packed);
+  const allows = U.exceptionAllows(cross, blocked);
+  assert(JSON.stringify(allows.whole) === JSON.stringify(["keep.nrfoo.example", "keep2.nrfoo.example"]), "whole: " + JSON.stringify(allows.whole));
+  assert(allows.scoped.length === 0, "scoped: " + JSON.stringify(allows.scoped));
+});
+
+// `@@||host^$badfilter` withdraws the exception: keepWhole no longer lifts the
+// same-host block for it, and the `$all` page entry stays. JS and packer.
+const WITHDRAWN = {
+  easylist: "||wf.example^\n||wfall.example^$all\n||kept.example^",
+  adguard_base: "@@||wf.example^\n@@||wfall.example^\n@@||kept.example^",
+  easyprivacy: "@@||wf.example^$badfilter\n@@||wfall.example^$badfilter",
+};
+
+Deno.test("keepWhole: an exception withdrawn by @@||host^$badfilter lifts no block (JS and packer)", async () => {
+  const payloads = Object.fromEntries(Object.entries(WITHDRAWN).map(([n, t]) => [n, U.parseEntriesFull(t)]));
+  const control = U.crossListRules({ easylist: payloads.easylist, adguard_base: payloads.adguard_base }, [], { lists: {} });
+  assert(!control.keepWhole("wf.example") && !control.keepScoped("wfall.example", DOC), "control: the exception lifts the blocks");
+  const cross = U.crossListRules(payloads, [], { lists: {} });
+  assert(cross.keepWhole("wf.example"), "withdrawn exception still lifts the whole-domain block");
+  assert(cross.keepWhole("wfall.example") && cross.keepScoped("wfall.example", DOC), "withdrawn exception still lifts the $all page entry");
+  assert(!cross.keepWhole("kept.example"), "an exception with no $badfilter still lifts its block");
+  // A missing list's packed cancelAllow does the same.
+  const packed = await packedFor(WITHDRAWN);
+  const fromPacked = U.crossListRules({ easylist: payloads.easylist, adguard_base: payloads.adguard_base }, ["easyprivacy"], packed);
+  assert(fromPacked.keepWhole("wf.example") && fromPacked.keepScoped("wfall.example", DOC), "packed cancelAllow ignored");
+  const out = JSON.parse(await runPython([
+    "import importlib.util, json",
+    "from collections import OrderedDict",
+    "from pathlib import Path",
+    "spec = importlib.util.spec_from_file_location('pfl', Path('scripts/pack-filter-lists.py'))",
+    "mod = importlib.util.module_from_spec(spec)",
+    "spec.loader.exec_module(mod)",
+    `texts = json.loads(${JSON.stringify(JSON.stringify(WITHDRAWN))})`,
+    "ex = [mod.extract_list(t) for t in texts.values()]",
+    "b = OrderedDict((n, e[0]) for n, e in zip(texts, ex))",
+    "s = OrderedDict((n, e[1]) for n, e in zip(texts, ex))",
+    "nb, ns = mod.apply_cross_list(b, s, ex)",
+    "print(json.dumps({'whole': nb['easylist'], 'scoped': ns['easylist']}))",
+  ].join("\n")));
+  assert(JSON.stringify(out.whole) === JSON.stringify(["wf.example", "wfall.example"]), "packer whole: " + JSON.stringify(out.whole));
+  assert(JSON.stringify(out.scoped) === JSON.stringify([["wfall.example", DOC]]), "packer scoped: " + JSON.stringify(out.scoped));
 });

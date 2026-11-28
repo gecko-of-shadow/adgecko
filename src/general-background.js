@@ -441,6 +441,10 @@ function applyGeneralState() {
 
 async function applyGeneralStateNow() {
   await ensureListAllowRule();
+  // The user's "Allow this domain" override first: the lists work below can
+  // load the 5 MB packed ruleset (syncPackedAllows), and the override must not
+  // wait for that. Independent of the lists switch. Never rejects.
+  await syncThreatAllowRulesNow();
   const settings = await getSettings();
   const enabled = settings.generalEnabled !== false;
   currentEnabled = enabled;
@@ -1043,9 +1047,10 @@ chrome.runtime.onInstalled.addListener((details) => {
   });
 });
 
+// applyGeneralState writes the user's allow-domain override first, before the
+// lists work (test/threat-allow-before-packed-allows.test.js).
 chrome.runtime.onStartup.addListener(() => {
   applyGeneralState();
-  syncThreatAllowRules();
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
