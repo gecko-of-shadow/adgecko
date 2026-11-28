@@ -8,13 +8,41 @@ Last update: 2026-11-28.
 - `main` has these changes after v0.3.7. They are not released. See `CHANGELOG.md`, section "Unreleased".
   - PRs 22 to 26 (merged on 2026-11-20).
   - #31, #32 and #34 (merged on 2026-11-27).
-  - #35, #36 and #37 (merged on 2026-11-27 and 2026-11-28, owner approved). See the next section.
-- Waiting for the owner's merge: #30, then #33. Both wait for the cnn.com popup check.
-  - #33 has the base `api-job/site-breakage`. Before you merge it, change its base to `main`, or merge #30 first. Else it merges into the old branch, not into `main`.
-  - After #36 and #37, both #30 and #33 have merge conflicts with `main` (a `git merge-tree` check on 2026-11-28). They need `main` merged into them, with the tests and the gate run again, before the merge. In #33, `onStartup` in `src/general-background.js` conflicts with #37.
-- UNVERIFIED: the behaviour of 0.3.7 in the owner's signed-in Chrome, and every change after it in any real Chrome.
+  - #35 to #40 (merged on 2026-11-27 and 2026-11-28, owner approved).
+- Waiting for the owner's merge: #30, then #33.
+  - #30 (`api-job/site-breakage`) has `main` up to #40 merged in. The owner's Chrome loads this branch's folder unpacked.
+  - #33 has the base `api-job/site-breakage`. Before you merge it, change its base to `main`, or merge #30 first. Else it merges into the old branch, not into `main`. #33 does not have `main` merged in yet. In #33, `onStartup` in `src/general-background.js` conflicts with #37.
+- UNVERIFIED: the behaviour of 0.3.7 in the owner's signed-in Chrome, and every change after it in the owner's Chrome. `scripts/chrome-live.mjs` checked `main` up to #40 on live sites in Chrome for Testing 155, signed out (see below).
 
-## Last session (2026-11-27 evening to 2026-11-28): three PRs merged
+## Last session (2026-11-28): live test run and YouTube start-time log
+
+| PR | What it does |
+|---|---|
+| #39 | An opt-in YouTube start-time log. `src/youtube.js` times each watch-page start; `src/settings/flags.js` keeps the newest 300 entries in `ytStartTimes` (minute, version, kind, wait, ad, popup, timeout; no video id or URL). Off by default. Settings page: **YouTube start times** with the switch, a summary, **Copy as text**, **Download** and **Clear**. |
+| #40 | `scripts/chrome-live.mjs`: an automatic live-site run. Two headless Chrome for Testing browsers, one with Adgecko and one baseline, each with a throwaway profile. It writes `report.md`, `report.json` and screenshots. Not in CI. About 8 minutes. |
+
+The owner does not want to run manual tests that the agent can automate. Use `scripts/chrome-live.mjs` before you ask the owner to test in Chrome. Command (Node 22+, Chrome for Testing):
+
+```bash
+CHROME_PATH=<chrome-for-testing exe> node scripts/chrome-live.mjs --dir <extension folder> --out <output folder>
+```
+
+Results of the run on 2026-11-28 (three runs, the same status for every check): 24 PASS, 1 FAIL, 1 SKIP.
+- FAIL `B-cnn-loop`, a real finding: with Adgecko, cnn.com requests the blocked file `cdn-media.brightline.tv/config/v3/1018.json` about 10,000 to 14,000 times in 15 s. Without Adgecko, the page makes about 112 requests in total. Not fixed. A possible fix is a stand-in reply for this file instead of a block.
+- SKIP `B-cnn`: cnn.com holds its ads until the consent banner is accepted. The run never clicks a consent wall.
+- PASS: the popup on cnn.com, foxnews.com and nbcnews.com in under 1 s (after the load, while the page loads, and while the cnn.com loop runs). This does not reproduce the owner's cnn.com popup report of 2026-11-23; the run uses a clean, signed-out profile.
+- PASS: ad blocking on foxnews.com and nbcnews.com, popup Allow, Block again and Fix, ordinary sites, the clipboard guard, YouTube (start, five clicks, buttons), Twitch, Kick, no service worker errors.
+- YouTube with Adgecko: the first video played after 6.8 s (2.0 s without); later clicks 1.8 to 4.3 s (about 1.5 s without). This is the accepted slow start.
+
+What the run does not cover: a signed-in profile, a real toolbar click (it uses `chrome.action.openPopup()`), ads on Twitch and Kick (no ad marker in the baseline), ad blocking on cnn.com.
+
+Checked: on #39 and #40, before the merge, the Deno suite (#39: 976 passed, 0 failed), the release gate (`VERDICT: CLEAN`), the privacy check and CI. Independent reviewers checked both; all findings were fixed.
+
+Not checked: the start-time log in real Chrome; the run on the owner's PC.
+
+Leftover folders in the user's temporary folder from the build of #40 (remove them only with the owner's approval): `adgecko-live-2026-11-28T09-00-49`, `adgecko-live-e8O53q`, `adgecko-probe-TFxiLF`, `adgecko-probe-i4HAgL`, `adgecko-probe-jEwWwF`.
+
+## Earlier session (2026-11-27 evening to 2026-11-28): three PRs merged
 
 | PR | What it does |
 |---|---|
@@ -58,12 +86,13 @@ YouTube's server sends a "wait" reply (4,000, 8,800 or 12,000 ms) on a direct wa
 
 ## Open
 
-- Scratch items outside the repository: the folder `adgecko-ab` with the worktrees `v036` and `v037`; the Chrome for Testing profiles `yt-bench-*` in the user's temporary folder; the review worktree `adgecko-wt-pr37review` and this handoff worktree `adgecko-wt-handoff2` next to the repository folder. Remove them only with the owner's approval. The six worktrees of 2026-11-27 were removed with the owner's approval.
-- Merged branches that are still on GitHub: `fix/gate-deno-log`, `improve/adgecko-2026-11-27`, `fix/grok-review-2026-11-27`, `fix/packed-cross-and-threat-order` and the branches of #31, #32 and #34.
+- Scratch items outside the repository: the folder `adgecko-ab` with the worktrees `v036` and `v037`; the Chrome for Testing profiles `yt-bench-*` in the user's temporary folder. Remove them only with the owner's approval. The six worktrees of 2026-11-27, `adgecko-wt-pr37review`, `adgecko-wt-handoff2` and the worktrees of #39 and #40 were removed with the owner's approval.
+- Merged branches that are still on GitHub: `fix/gate-deno-log`, `improve/adgecko-2026-11-27`, `fix/grok-review-2026-11-27`, `fix/packed-cross-and-threat-order`, `feat/youtube-start-timing`, `test/chrome-live-run` and the branches of #31, #32, #34 and #38.
 - Old branches and worktrees from earlier sessions: `docs/cleanup-2026-11-16`, the merged branches of PRs 21 to 26, `.claude/worktrees/wf_15df4964-f50-*`, `adgecko-docs-wt`. Remove them only with the owner's approval.
 
 ## Next steps
 
-1. The owner: the cnn.com popup check for PR 30 (steps 5 and 6). Then merge #30, and then #33.
-2. The owner: the signed-in YouTube test in `TODO.md`, section 0, and Kick and Twitch in real Chrome (`TODO.md`, section 1). Also the new hide rules in frames and the clipboard guard changes of #36.
-3. Release 0.3.8 from `main` when the tests are done.
+1. The owner: tick **YouTube start times** in Settings, watch YouTube as usual, then send **Copy as text** (`TODO.md`, section 0).
+2. Decide on the cnn.com `brightline.tv` request loop (stand-in reply or leave it).
+3. The owner: the cnn.com popup check for PR 30, in the signed-in Chrome. Then merge #30, and then #33 (merge `main` into #33 first).
+4. Release 0.3.8 from `main` when the tests are done.
