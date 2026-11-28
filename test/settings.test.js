@@ -169,12 +169,17 @@ Deno.test("worker: migrates the old keys at start and derives the old keys back 
   assert(w.store.settings && w.store.siteOverrides && w.store.siteOverrides["news.example"].enabled === false, JSON.stringify(w.store.siteOverrides));
   assert(eq(w.store.generalAllowedOrigins, ["http://news.example", "https://news.example"]), "mirror " + JSON.stringify(w.store.generalAllowedOrigins));
   await new Promise((r) => w.chrome.storage.local.set({ siteOverrides: { "shop.example": { enabled: false } } }, r));
-  await settle(250);
+  // The allow rules wait their turn in the worker's DNR queue (behind the
+  // override and lists work of applyGeneralState): wait for them, not a fixed time.
+  const allowHosts = () => w.dnr.dynamic.filter((r) => r.priority === 10000).map((r) => r.condition.initiatorDomains[0]);
+  const until = Date.now() + 10000;
+  while (!(allowHosts().includes("shop.example") && !allowHosts().includes("news.example")) && Date.now() < until) await settle(10);
   assert(eq(w.store.generalAllowedOrigins, ["http://shop.example", "https://shop.example"]), JSON.stringify(w.store.generalAllowedOrigins));
-  const allows = w.dnr.dynamic.filter((r) => r.priority === 10000).map((r) => r.condition.initiatorDomains[0]);
+  const allows = allowHosts();
   assert(allows.includes("shop.example") && !allows.includes("news.example"), "allow rules follow: " + allows);
   await new Promise((r) => w.chrome.storage.local.set({ settings: { v: 1, enabled: true, features: { network: false } } }, r));
-  await settle(300);
+  const until2 = Date.now() + 10000;
+  while (!(w.store.generalEnabled === false && !w.dnr.staticOn) && Date.now() < until2) await settle(10);
   assert(w.store.generalEnabled === false && !w.dnr.staticOn, "lists switch follows settings");
 });
 

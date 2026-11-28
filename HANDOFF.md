@@ -1,6 +1,6 @@
 # Handoff
 
-Last update: 2026-11-27 (second session of the day).
+Last update: 2026-11-28.
 
 ## State
 
@@ -11,7 +11,16 @@ Last update: 2026-11-27 (second session of the day).
 - #33 has the base `api-job/site-breakage`. Before you merge it, change its base to `main`, or merge #30 first. Else it merges into the old branch, not into `main`.
 - UNVERIFIED: the behaviour of 0.3.7 in the owner's signed-in Chrome, and the Kick, Twitch, PR 30 and PR 33 changes in any real Chrome.
 
-## Last session (2026-11-27, afternoon): three owner decisions built
+## Session 2026-11-28: PR 36 follow-up (branch `fix/packed-cross-and-threat-order`)
+
+- The packer writes `importantScoped` and `cancelAllow` into `src/rules/packed-cross.json`, the same as `parseEntriesFull`. The file was made again by the packer's own functions from the list downloads of the current pack (all 8 SHA-256 values equal `meta.json`). The old packer gave the committed file byte for byte. The only new data: 8 `importantScoped` hosts of AdGuard Base.
+- `applyGeneralState` writes the user's Allow this domain override first, before the lists work and the packed ruleset load. `onStartup` no longer queues a second override write.
+- `@@||host^$badfilter` now also stops the same-host lift (`keepWhole`) and the `$all` page lift, in JS and in the packer. The current lists have no such line, so the packed rules do not change.
+- `test/settings.test.js`: one test waits for the allow rules, not 250 ms. It failed once in a full run under load.
+- PR #33 also changes `onStartup`. Expect a small conflict there.
+- UNVERIFIED: all of this in Chrome.
+
+## Session before (2026-11-27, afternoon): three owner decisions built
 
 The owner gave three answers on 2026-11-27:
 
@@ -31,7 +40,7 @@ Known gap in #33: when the write of the ruleset fails, no timer retries it. The 
 
 Flaky runs, seen under load (other Deno runs were active on the PC): one full Deno run on #33 and one on this handoff branch each had 3 failures. On #33 the build agent traced them to an uncaught timer error in `test/race.test.js`; the names of the second run's failures were not read. Each rerun passed. The 6 ignored tests depend on the environment (list cache, zip tool, gate tools, Windows).
 
-## Session before (2026-11-27, morning): YouTube slow start, documented
+## Earlier session (2026-11-27, morning): YouTube slow start, documented
 
 YouTube's server sends a "wait" reply (4,000, 8,800 or 12,000 ms) on a direct watch load when the ad is removed. The owner accepted the wait. Details: `docs/youtube-slow-start.md` (PR #31). The raw bench data is in `adgecko-ab/slow-start-2026-11-27`, outside the repository; it holds video links with network addresses, so do not copy it into the repository.
 

@@ -386,6 +386,9 @@ function installGeneralAdblockUpdate(target) {
       for (const e of Array.isArray(p.scoped) ? p.scoped : []) if (e && e[1] === docKey && !own.has(e[0])) docExplicit.add(e[0]);
     }
     for (const i of important) allow.delete(i);
+    // `@@||host^$badfilter` withdraws the exception itself: it lifts no
+    // same-host block (keepWhole) and no `$all` page entry either.
+    for (const c of cancelAllow) if (c.endsWith("\n")) allow.delete(c.slice(0, -1));
     for (const h of docExplicit) allDoc.delete(h);
     // "domain\nkey without i=" -> initiators its $badfilter removes.
     const partial = new Map();
